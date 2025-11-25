@@ -30,7 +30,7 @@ const exchangeRates: { [key: string]: number } = {
 
 interface CardTransaction {
   id: string;
-  type: "charge" | "payment";
+  type: "charge" | "payment"; // Monto mensual si es a meses, o monto total si es pago único
   amount: number;
   description: string;
   date: string;
@@ -402,17 +402,17 @@ const Dashboard = () => {
 
       {cardHealthStatus.status === "critical" ? (
         <Card className="border-blue-600 bg-blue-50 text-blue-800">
-          <CardHeader className="relative flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-blue-800">Estado de Tarjetas</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col items-center pr-4 md:block md:pr-48"> {/* Flex column on mobile, block on desktop */}
             <img 
               src={piggyBankImageSrc} 
               alt="Conchinito en problemas" 
-              className="absolute top-[-49px] right-[-34px] h-[100px] w-[100px] z-10 md:top-[5px] md:right-[50px] md:h-[120px] md:w-[120px]"
+              className="h-[180px] w-[180px] mb-4 mx-auto md:absolute md:top-4 md:right-4 md:z-10"
             />
-          </CardHeader>
-          <CardContent>
-            <div className="text-lg font-bold">Oye, pon atención en tus saldos</div>
-            <p className="text-xs text-blue-700">
+            <div className="text-lg font-bold text-center md:text-left">Oye, pon atención en tus saldos</div>
+            <p className="text-xs text-blue-700 mt-1 text-center md:text-left">
               Hay problemas críticos con las siguientes tarjetas:
               <ul className="list-disc pl-5 mt-1">
                 {cardHealthStatus.cards.map((msg, index) => (
@@ -426,11 +426,15 @@ const Dashboard = () => {
         <Card className="border-orange-600 bg-orange-50 text-orange-800">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-orange-800">Estado de Tarjetas</CardTitle>
-            <Meh className="h-4 w-4 text-orange-600" />
           </CardHeader>
-          <CardContent>
-            <div className="text-lg font-bold">Atención: Algo no cuadra</div>
-            <p className="text-xs text-orange-700">
+          <CardContent className="flex flex-col items-center pr-4 md:block md:pr-48"> {/* Flex column on mobile, block on desktop */}
+            <img 
+              src={piggyBankImageSrc} 
+              alt="Conchinito en advertencia" 
+              className="h-[180px] w-[180px] mb-4 mx-auto md:absolute md:top-4 md:right-4 md:z-10"
+            />
+            <div className="text-lg font-bold text-center md:text-left">Atención: Algo no cuadra</div>
+            <p className="text-xs text-orange-700 mt-1 text-center md:text-left">
               Revisa tus tarjetas, hay eventos próximos:
               <ul className="list-disc pl-5 mt-1">
                 {cardHealthStatus.cards.map((msg, index) => (
@@ -442,17 +446,17 @@ const Dashboard = () => {
         </Card>
       ) : (
         <Card className="border-green-600 bg-green-50 text-green-800">
-          <CardHeader className="relative flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-green-800">Estado de Tarjetas</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col items-center pr-4 md:block md:pr-48"> {/* Flex column on mobile, block on desktop */}
             <img 
               src={piggyBankImageSrc} 
               alt="Conchinito feliz" 
-              className="absolute top-[-49px] right-[-34px] h-[100px] w-[100px] z-10 md:top-[5px] md:right-[50px] md:h-[120px] md:w-[120px]"
+              className="h-[180px] w-[180px] mb-4 mx-auto md:absolute md:top-4 md:right-4 md:z-10"
             />
-          </CardHeader>
-          <CardContent>
-            <div className="text-lg font-bold">¡Todo está en orden aquí!</div>
-            <p className="text-xs text-green-700">Tus tarjetas están al día y dentro de los límites.</p>
+            <div className="text-lg font-bold text-center md:text-left">¡Todo está en orden aquí!</div>
+            <p className="text-xs text-green-700 mt-1 text-center md:text-left">Tus tarjetas están al día y dentro de los límites.</p>
           </CardContent>
         </Card>
       )}
