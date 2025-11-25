@@ -22,8 +22,6 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { exportToCsv, exportToPdf } from "@/utils/export";
 import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import ChallengeCard, { ChallengeData } from "@/components/ChallengeCard"; // Importar ChallengeCard
-import ChallengeCreationDialog from "@/components/ChallengeCreationDialog"; // Importar ChallengeCreationDialog
 import FeedbackOverlay from "@/components/FeedbackOverlay"; // Importar el componente genérico
 
 interface Saving {
@@ -39,11 +37,9 @@ interface Saving {
 const Savings = () => {
   const { user } = useSession();
   const [savings, setSavings] = useState<Saving[]>([]);
-  const [activeChallenge, setActiveChallenge] = useState<ChallengeData | null>(null); // Estado para el reto activo
   const [isAddSavingDialogOpen, setIsAddSavingDialogOpen] = useState(false);
   const [isEditSavingDialogOpen, setIsEditSavingDialogOpen] = useState(false);
   const [isTransactionDialogOpen, setIsTransactionDialogOpen] = useState(false);
-  const [isChallengeCreationDialogOpen, setIsChallengeCreationDialogOpen] = useState(false); // Estado para el diálogo de creación de reto
   const [selectedSavingId, setSelectedSavingId] = useState<string | null>(null);
   const [editingSaving, setEditingSaving] = useState<Saving | null>(null);
   const [newSaving, setNewSaving] = useState({
@@ -88,32 +84,9 @@ const Savings = () => {
     }
   };
 
-  const fetchActiveChallenge = async () => {
-    if (!user) {
-      setActiveChallenge(null);
-      return;
-    }
-    const { data, error } = await supabase
-      .from('challenges')
-      .select('*')
-      .eq('user_id', user.id)
-      .eq('status', 'active')
-      .single();
-
-    if (error && error.code !== 'PGRST116') { // PGRST116 means no rows found
-      showError('Error al cargar reto activo: ' + error.message);
-      setActiveChallenge(null);
-    } else if (data) {
-      setActiveChallenge(data as ChallengeData);
-    } else {
-      setActiveChallenge(null);
-    }
-  };
-
   useEffect(() => {
     if (user) {
       fetchSavings();
-      fetchActiveChallenge();
     }
   }, [user]);
 
@@ -180,7 +153,7 @@ const Savings = () => {
       setFeedbackOverlay({
         isVisible: true,
         message: "¡Muy bien! ¡Cumpliremos esa meta!",
-        imageSrc: "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/cochinito%20love.png", // Corregido aquí
+        imageSrc: "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/cochinito%20love.png",
         bgColor: "bg-pink-100",
         textColor: "text-pink-800",
       });
@@ -408,12 +381,6 @@ const Savings = () => {
   return (
     <div className="flex flex-col gap-6 p-4">
       <h1 className="text-3xl font-bold">Tus Metas</h1>
-
-      <ChallengeCard
-        challenge={activeChallenge}
-        onStartNewChallenge={() => setIsChallengeCreationDialogOpen(true)}
-        onViewBadges={() => { /* TODO: Navigate to badges page */ }}
-      />
 
       <Card>
         <CardHeader>
@@ -770,11 +737,6 @@ const Savings = () => {
           onClose={handleFeedbackClose}
         />
       )}
-      <ChallengeCreationDialog
-        isOpen={isChallengeCreationDialogOpen}
-        onClose={() => setIsChallengeCreationDialogOpen(false)}
-        onChallengeStarted={fetchActiveChallenge} // Refrescar el reto activo al iniciar uno nuevo
-      />
     </div>
   );
 };

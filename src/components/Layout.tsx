@@ -17,6 +17,7 @@ import {
   Tag,
   LogOut,
   Wallet, // Nuevo icono para ahorros
+  Lightbulb, // Icono para retos
 } from "lucide-react";
 import MobileNavbar from "./MobileNavbar";
 import { useSession } from "@/context/SessionContext";
@@ -52,6 +53,11 @@ const navItems = [
     name: "Tus Metas", // Título actualizado
     path: "/savings",
     icon: Wallet, // Icono para ahorros
+  },
+  {
+    name: "Tus Retos", // Nuevo elemento de navegación
+    path: "/challenges",
+    icon: Lightbulb, // Icono para retos
   },
   {
     name: "Categorías",
