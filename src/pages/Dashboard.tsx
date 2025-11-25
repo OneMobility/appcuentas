@@ -143,11 +143,19 @@ const Dashboard = () => {
         .from('creditors')
         .select('*')
         .eq('user_id', user.id);
-      if (creditorError) throw creditorError;
-      setCreditors(creditorData || []);
+      
+      // --- START DEBUG LOGS ---
+      console.log("Supabase creditors response - data:", creditorsData);
+      console.log("Supabase creditors response - error:", creditorError);
+      // --- END DEBUG LOGS ---
 
+      if (creditorError) {
+        throw creditorError;
+      }
+      setCreditors(creditorsData || []); // Ensure it's always an array
     } catch (error: any) {
-      showError('Error al cargar datos del dashboard: ' + error.message);
+      console.error("Error al cargar datos del dashboard:", error); // Log the full error object
+      showError('Error al cargar datos del dashboard: ' + (error?.message || 'Error desconocido'));
     }
   };
 
