@@ -188,7 +188,7 @@ const CardDetailsPage: React.FC = () => {
       }
     } else { // Credit card
       if (newTransaction.type === "charge") {
-        // Modificación aquí: Permitir que el saldo exceda el límite, pero mostrar una notificación
+        // Permitir que el saldo exceda el límite, pero mostrar una notificación
         if (card.credit_limit !== undefined && newBalance + transactionAmountToStore > card.credit_limit) {
           toast.info(`Tu tarjeta de crédito ha excedido su límite. Saldo actual: $${(newBalance + transactionAmountToStore).toFixed(2)}`, {
             style: { backgroundColor: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))' },
@@ -331,7 +331,7 @@ const CardDetailsPage: React.FC = () => {
       }
     } else { // Credit card
       if (newType === "charge") {
-        // Modificación aquí: Permitir que el saldo exceda el límite, pero mostrar una notificación
+        // Permitir que el saldo exceda el límite, pero mostrar una notificación
         if (card.credit_limit !== undefined && newCardBalance + newEffectiveAmount > card.credit_limit) {
           toast.info(`Tu tarjeta de crédito ha excedido su límite. Saldo actual: $${(newCardBalance + newEffectiveAmount).toFixed(2)}`, {
             style: { backgroundColor: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))' },
@@ -774,6 +774,43 @@ const CardDetailsPage: React.FC = () => {
                   </SelectItem>
                 ))}
               </SelectContent>
+            </Select>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  id="date"
+                  variant={"outline"}
+                  className={cn(
+                    "w-[300px] justify-start text-left font-normal",
+                    !dateRange && "text-muted-foreground"
+                  )}
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {dateRange?.from ? (
+                    dateRange.to ? (
+                      <>
+                        {format(dateRange.from, "dd/MM/yyyy", { locale: es })} -{" "}
+                        {format(dateRange.to, "dd/MM/yyyy", { locale: es })}
+                      </>
+                    ) : (
+                      format(dateRange.from, "dd/MM/yyyy", { locale: es })
+                    )
+                  ) : (
+                    <span>Filtrar por fecha</span>
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0">
+                <Calendar
+                  initialFocus
+                  mode="range"
+                  defaultMonth={dateRange?.from}
+                  selected={dateRange}
+                  onSelect={setDateRange}
+                  numberOfMonths={2}
+                  locale={es}
+                />
+              </PopoverContent>
             </Popover>
           </div>
           <div className="overflow-x-auto">
