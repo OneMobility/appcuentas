@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { RefreshCw, Trophy } from "lucide-react";
+import { RefreshCw, Trophy, XCircle } from "lucide-react"; // Importar XCircle para el álbum
 import { useSession } from "@/context/SessionContext";
 import { supabase } from "@/integrations/supabase/client";
 import { showError, showSuccess } from "@/utils/toast";
@@ -11,6 +11,7 @@ import ChallengeCard, { ChallengeData } from "@/components/ChallengeCard";
 import ChallengeCreationDialog from "@/components/ChallengeCreationDialog";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import { isAfter, isSameDay, format } from "date-fns";
+import { es } from "date-fns/locale"; // Importar el objeto de localización 'es'
 import { useCategoryContext } from "@/context/CategoryContext"; // Importar useCategoryContext
 import DynamicLucideIcon from "@/components/DynamicLucideIcon"; // Importar DynamicLucideIcon
 import { cn } from "@/lib/utils";
@@ -103,7 +104,7 @@ const Challenges: React.FC<ChallengesProps> = ({ challengeRefreshKey, setChallen
       .from('challenges')
       .select('*, savings(id, name, current_balance, target_amount, color), badges(id, name, description, image_url)')
       .eq('user_id', user.id)
-      .in('status', ['completed', 'failed'])
+      .in('status', ['completed', 'failed', 'regular']) // Incluir 'regular' en retos pasados
       .order('end_date', { ascending: false });
 
     if (pastChallengesError) {
