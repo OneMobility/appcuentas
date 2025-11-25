@@ -97,7 +97,12 @@ const CardDetailsPage: React.FC = () => {
         showError('Error al cargar detalles de la tarjeta: ' + error.message);
         navigate('/cards'); // Redirigir si la tarjeta no se encuentra o hay un error
       } else {
-        setCard(data as CardData);
+        // Asegurar que transactions sea siempre un array
+        const formattedCard = {
+          ...(data as CardData), // Cast to CardData
+          transactions: (data as any).card_transactions || [] // Usar card_transactions de Supabase, por defecto array vacío
+        };
+        setCard(formattedCard);
       }
       setIsLoading(false);
     };
@@ -213,7 +218,7 @@ const CardDetailsPage: React.FC = () => {
       return {
         ...prevCard,
         current_balance: newBalance,
-        transactions: [...prevCard.transactions, transactionData[0]],
+        transactions: [...(prevCard.transactions || []), transactionData[0]], // Asegurar que transactions sea un array
       };
     });
     setNewTransaction({ type: "charge", amount: "", description: "", date: undefined, installments_count: undefined });
@@ -340,7 +345,7 @@ const CardDetailsPage: React.FC = () => {
       return {
         ...prevCard,
         current_balance: newCardBalance,
-        transactions: prevCard.transactions.map(t => t.id === editingTransaction.id ? updatedTransactionData[0] : t),
+        transactions: (prevCard.transactions || []).map(t => t.id === editingTransaction.id ? updatedTransactionData[0] : t), // Asegurar que transactions sea un array
       };
     });
 

@@ -100,7 +100,12 @@ const Cards = () => {
     if (error) {
       showError('Error al cargar tarjetas: ' + error.message);
     } else {
-      setCards(data || []);
+      // Asegurar que transactions sea siempre un array
+      const formattedCards = (data || []).map(card => ({
+        ...card,
+        transactions: card.card_transactions || [] // Usar card_transactions de Supabase, por defecto array vacío
+      }));
+      setCards(formattedCards);
     }
   };
 
@@ -351,7 +356,7 @@ const Cards = () => {
           return {
             ...card,
             current_balance: newBalance,
-            transactions: [...card.transactions, transactionData[0]],
+            transactions: [...(card.transactions || []), transactionData[0]], // Asegurar que transactions sea un array
           };
         }
         return card;
@@ -450,7 +455,7 @@ const Cards = () => {
       showError('Error al actualizar tarjeta: ' + error.message);
     } else {
       setCards((prev) =>
-        prev.map((card) => (card.id === editingCard.id ? { ...data[0], transactions: card.transactions } : card))
+        prev.map((card) => (card.id === editingCard.id ? { ...data[0], transactions: card.transactions || [] } : card)) // Asegurar que transactions sea un array
       );
       setEditingCard(null);
       setNewCard({ name: "", bank_name: "", last_four_digits: "", expiration_date: "", type: "debit", initial_balance: "", credit_limit: "", cut_off_day: undefined, days_to_pay_after_cut_off: undefined, color: "#3B82F6" });
