@@ -361,6 +361,14 @@ const Dashboard = () => {
     }
   }, [cards]);
 
+  const cardStatusChartData = useMemo(() => {
+    return cards.map(card => ({
+      name: card.name,
+      LimiteOInicial: card.type === "credit" ? (card.credit_limit || 0) : card.initial_balance,
+      SaldoActualODeuda: card.current_balance,
+    }));
+  }, [cards]);
+
   return (
     <div className="flex flex-col gap-6 p-4">
       <div className="flex items-center justify-between">
