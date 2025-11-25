@@ -596,6 +596,7 @@ const Savings: React.FC = () => {
               <TableBody>
                 {filteredSavings.map((saving) => {
                   const progress = saving.target_amount ? (saving.current_balance / saving.target_amount) * 100 : 0;
+                  const isLinkedToChallenge = !!saving.challenge_id;
                   return (
                     <TableRow key={saving.id}>
                       <TableCell className="font-medium">
@@ -621,7 +622,7 @@ const Savings: React.FC = () => {
                           size="sm"
                           onClick={() => handleOpenTransactionDialog(saving.id)}
                           className="h-8 gap-1"
-                          disabled={!!saving.challenge_id} // Disable if linked to a challenge
+                          disabled={isLinkedToChallenge} // Disable if linked to a challenge
                         >
                           <DollarSign className="h-3.5 w-3.5" />
                           Transacción
@@ -631,7 +632,7 @@ const Savings: React.FC = () => {
                           size="sm"
                           onClick={() => handleOpenEditSavingDialog(saving)}
                           className="h-8 w-8 p-0"
-                          disabled={!!saving.challenge_id} // Disable if linked to a challenge
+                          disabled={isLinkedToChallenge} // Disable if linked to a challenge
                         >
                           <Edit className="h-3.5 w-3.5" />
                           <span className="sr-only">Editar</span>
@@ -642,7 +643,7 @@ const Savings: React.FC = () => {
                               variant="destructive"
                               size="sm"
                               className="h-8 w-8 p-0"
-                              disabled={!!saving.challenge_id} // Disable if linked to a challenge
+                              disabled={isLinkedToChallenge} // Disable if linked to a challenge
                             >
                               <Trash2 className="h-3.5 w-3.5" />
                             </Button>
@@ -653,12 +654,12 @@ const Savings: React.FC = () => {
                               <AlertDialogDescription>
                                 Esta acción no se puede deshacer. Esto eliminará permanentemente la cuenta de ahorro 
                                 **{saving.name}** y todos sus registros.
-                                {saving.challenge_id && <p className="mt-2 text-red-500">Esta cuenta de ahorro está vinculada a un reto. Eliminarla podría afectar el reto.</p>}
+                                {isLinkedToChallenge && <p className="mt-2 text-red-500">Esta cuenta de ahorro está vinculada a un reto. No puedes eliminarla mientras el reto esté activo.</p>}
                               </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>
                               <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                              <AlertDialogAction onClick={() => handleDeleteSaving(saving.id)}>
+                              <AlertDialogAction onClick={() => handleDeleteSaving(saving.id)} disabled={isLinkedToChallenge}>
                                 Eliminar
                               </AlertDialogAction>
                             </AlertDialogFooter>

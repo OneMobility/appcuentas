@@ -178,26 +178,51 @@ const ChallengeCreationDialog: React.FC<ChallengeCreationDialogProps> = ({ isOpe
 
     setIsSubmitting(true);
 
+    // Check for existing active challenge
+    const { data: activeChallenges, error: activeChallengeError } = await supabase
+      .from('challenges')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('status', 'active');
+
+    if (activeChallengeError) {
+      showError("Error al verificar retos activos: " + activeChallengeError.message);
+      setIsSubmitting(false);
+      return;
+    }
+
+    if (activeChallenges && activeChallenges.length > 0) {
+      showError("Ya tienes un reto activo. Completa o falla el actual antes de empezar uno nuevo.");
+      setIsSubmitting(false);
+      return;
+    }
+
+    // Check for completed/failed challenges with the same template ID
+    const { data: pastChallenges, error: pastChallengeError } = await supabase
+      .from('challenges')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('challenge_template_id', selectedTemplate.id)
+      .in('status', ['completed', 'failed']);
+
+    if (pastChallengeError) {
+      showError("Error al verificar retos anteriores: " + pastChallengeError.message);
+      setIsSubmitting(false);
+      return;
+    }
+
+    if (pastChallenges && pastChallenges.length > 0) {
+      showError("Ya has intentado este reto antes. Por favor, elige un reto diferente.");
+      setIsSubmitting(false);
+      return;
+    }
+
+
     const startDate = new Date();
     startDate.setHours(0, 0, 0, 0);
     const endDate = addDays(startDate, 7); // Reto dura 7 días
 
     try {
-      // Check if user already has an active challenge
-      const { data: activeChallenges, error: activeChallengeError } = await supabase
-        .from('challenges')
-        .select('id')
-        .eq('user_id', user.id)
-        .eq('status', 'active');
-
-      if (activeChallengeError) throw activeChallengeError;
-
-      if (activeChallenges && activeChallenges.length > 0) {
-        showError("Ya tienes un reto activo. Completa o falla el actual antes de empezar uno nuevo.");
-        setIsSubmitting(false);
-        return;
-      }
-
       let challengeData: any = {
         user_id: user.id,
         challenge_template_id: selectedTemplate.id,

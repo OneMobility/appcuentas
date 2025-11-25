@@ -12,6 +12,13 @@ import { Category } from "@/context/CategoryContext"; // Importar Category
 import { Badge } from "@/components/ui/badge"; // Importar Badge
 import DynamicLucideIcon from "./DynamicLucideIcon"; // Importar DynamicLucideIcon
 
+interface BadgeData {
+  id: string;
+  name: string;
+  description?: string;
+  image_url?: string;
+}
+
 export interface ChallengeData {
   id: string;
   name: string;
@@ -32,6 +39,7 @@ export interface ChallengeData {
     color: string;
   } | null;
   expense_categories?: Category[]; // Para mostrar nombres de categorías prohibidas
+  badge?: BadgeData | null; // Añadir detalles de la insignia
 }
 
 interface ChallengeCardProps {
@@ -88,8 +96,7 @@ const ChallengeCard: React.FC<ChallengeCardProps> = ({ challenge, onStartNewChal
 
   // Determinar si hay un reto activo y en curso (no finalizado ni evaluado)
   const isChallengeOngoing = challenge && challenge.status === "active" && (isAfter(new Date(challenge.end_date), today) || isSameDay(new Date(challenge.end_date), today));
-
-  console.log("ChallengeCard received challenge:", challenge); // Debug log
+  const isChallengeFinished = challenge && (challenge.status === "completed" || challenge.status === "failed" || challenge.status === "regular");
 
   if (challenge) {
     const { statusText, cardClasses, icon } = getStatusDisplay(challenge);
@@ -98,23 +105,30 @@ const ChallengeCard: React.FC<ChallengeCardProps> = ({ challenge, onStartNewChal
 
     let progress = 0;
     const savingGoal = challenge.saving_goal;
-    console.log("Saving Goal in ChallengeCard:", savingGoal); // Debug log
     if (isSavingGoal && savingGoal && savingGoal.target_amount !== null && savingGoal.target_amount !== undefined && savingGoal.target_amount > 0) {
       progress = (savingGoal.current_balance / savingGoal.target_amount) * 100;
-      console.log("Calculated progress:", progress); // Debug log
     }
 
     return (
       <Card className={cn("relative p-4 shadow-md", cardClasses)}>
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium">
+          <CardTitle className={cn(
+            "text-sm font-medium",
+            isChallengeFinished && "line-through"
+          )}>
             Reto Activo: {challenge.name}
           </CardTitle>
           {icon}
         </CardHeader>
         <CardContent>
-          <div className="text-lg font-bold mb-1">{statusText}</div>
-          <p className="text-xs text-muted-foreground">
+          <div className={cn(
+            "text-lg font-bold mb-1",
+            isChallengeFinished && "line-through"
+          )}>{statusText}</div>
+          <p className={cn(
+            "text-xs text-muted-foreground",
+            isChallengeFinished && "line-through"
+          )}>
             Inició: {format(new Date(challenge.start_date), "dd/MM/yyyy", { locale: es })} | Finaliza: {format(new Date(challenge.end_date), "dd/MM/yyyy", { locale: es })}
           </p>
 
@@ -149,6 +163,16 @@ const ChallengeCard: React.FC<ChallengeCardProps> = ({ challenge, onStartNewChal
             </div>
           )}
 
+          {challenge.badge && challenge.status === "completed" && (
+            <div className="mt-4 flex items-center gap-2">
+              <img src={challenge.badge.image_url} alt={challenge.badge.name} className="h-12 w-12" />
+              <div className="flex flex-col">
+                <span className="text-base font-medium">¡Insignia Obtenida!</span>
+                <span className="text-sm text-muted-foreground">{challenge.badge.name}</span>
+              </div>
+            </div>
+          )}
+
           {isChallengeOngoing ? (
             <Button className="mt-4 w-full" disabled>
               Ya tienes un reto activo
@@ -158,11 +182,6 @@ const ChallengeCard: React.FC<ChallengeCardProps> = ({ challenge, onStartNewChal
               Empezar otro reto
             </Button>
           )}
-          {/* {challenge.status === "completed" && (
-            <Button onClick={onViewBadges} className="mt-4 w-full">
-              Ver mis insignias
-            </Button>
-          )} */}
         </CardContent>
       </Card>
     );
