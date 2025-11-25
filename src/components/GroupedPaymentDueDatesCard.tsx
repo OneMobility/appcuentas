@@ -54,17 +54,17 @@ const GroupedPaymentDueDatesCard: React.FC<GroupedPaymentDueDatesCardProps> = ({
   if (upcomingPayments.length === 0) {
     return (
       <Card className="relative p-4 shadow-md border-l-4 border-green-500 bg-green-50 text-green-800">
-        <CardHeader className="relative flex flex-row items-center justify-between space-y-0 pb-2">
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
           <CardTitle className="text-lg font-bold text-green-800">
             ¡Vas bien!
           </CardTitle>
-          <img
-            src="https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Conchinito%20Good.png"
-            alt="Cochinito Feliz"
-            className="absolute top-[-49px] right-[-34px] h-[100px] w-[100px] z-10 md:top-[5px] md:right-[50px] md:h-[120px] md:w-[120px]"
-          />
         </CardHeader>
-        <CardContent>
+        <img
+          src="https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Calendario.png"
+          alt="Calendario"
+          className="absolute top-4 right-4 h-20 w-20 z-10"
+        />
+        <CardContent className="pr-24"> {/* Añadido padding-right */}
           <div className="text-lg font-bold">No hay pagos de tarjetas programados para los próximos 30 días.</div>
           <p className="text-xs text-green-700 mt-1">
             ¡Sigue así con tus finanzas!
@@ -76,17 +76,17 @@ const GroupedPaymentDueDatesCard: React.FC<GroupedPaymentDueDatesCardProps> = ({
 
   return (
     <Card className="relative p-4 shadow-md border-l-4 border-blue-500 bg-blue-50 text-blue-800">
-      <CardHeader className="relative flex flex-row items-center justify-between space-y-0 pb-2">
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <CardTitle className="text-lg font-bold text-blue-800">
           Tu calendario de pagos
         </CardTitle>
-        <img
-          src="https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Calendario.png"
-          alt="Calendario de Pagos"
-          className="absolute top-[211px] left-[-39px] h-[100px] w-[100px] z-10 md:top-[50px] md:right-[25px] md:h-[150px] md:w-[150px] md:left-auto"
-        />
       </CardHeader>
-      <CardContent>
+      <img
+        src="https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Calendario.png"
+        alt="Calendario de Pagos"
+        className="absolute top-4 right-4 h-20 w-20 z-10"
+      />
+      <CardContent className="pr-24"> {/* Añadido padding-right */}
         {upcomingPayments.map((payment, index) => {
           if (!payment) return null; // Double check for nulls
 
