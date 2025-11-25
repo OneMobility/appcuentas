@@ -666,7 +666,7 @@ const Savings: React.FC = () => {
                       <TableCell>
                         {saving.target_amount ? (
                           <div className="flex items-center gap-2">
-                            <Progress value={progress} className="w-[100px]" />
+                            <Progress value={progress} className="w-[100px]" style={{ backgroundColor: saving.color }} />
                             <span className="text-sm">{progress.toFixed(0)}%</span>
                           </div>
                         ) : "N/A"}

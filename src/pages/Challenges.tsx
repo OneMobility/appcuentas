@@ -153,7 +153,7 @@ const Challenges: React.FC<ChallengesProps> = ({ challengeRefreshKey, setChallen
 
     let newStatus: "completed" | "failed" | "regular" = "failed";
     let awardedBadgeId: string | null = null;
-    const evaluationDate = format(new Date(), "yyyy-MM-dd");
+    const evaluationDate = format(new Date(), "yyyy-MM-dd"); // Usar fecha local del dispositivo
 
     if (challenge.challenge_template_id.startsWith("no-spend")) {
       const { data: expenseTransactions, error: txError } = await supabase

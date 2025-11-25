@@ -136,7 +136,7 @@ const ChallengeCard: React.FC<ChallengeCardProps> = ({ challenge, onStartNewChal
             <div className="mt-4">
               <p className="text-sm font-medium mb-1">Progreso de Ahorro:</p>
               <div className="flex items-center gap-2">
-                <Progress value={progress} className="w-full" indicatorColor={savingGoal.color} />
+                <Progress value={progress} className="w-full" style={{ backgroundColor: savingGoal.color }} />
                 <span className="text-sm font-semibold">{progress.toFixed(0)}%</span>
               </div>
               <p className="text-xs text-muted-foreground mt-1">

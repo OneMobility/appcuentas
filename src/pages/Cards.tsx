@@ -436,6 +436,41 @@ const Cards = () => {
     showSuccess("Transacción registrada exitosamente.");
     console.log("--- Transacción registrada exitosamente ---");
     console.log("Saldo final de la tarjeta:", newBalance);
+
+    // Check for active no-spend challenge if this is a charge
+    if (newTransaction.type === "charge" && categoryId) {
+      const { data: activeChallenge, error: challengeError } = await supabase
+        .from('challenges')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('status', 'active')
+        .single();
+
+      if (challengeError && challengeError.code !== 'PGRST116') {
+        console.error("Error fetching active challenge:", challengeError.message);
+      } else if (activeChallenge && activeChallenge.challenge_template_id.startsWith("no-spend")) {
+        const endDate = new Date(activeChallenge.end_date);
+        endDate.setHours(23, 59, 59, 999);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        if (today >= new Date(activeChallenge.start_date) && today <= endDate) {
+          if (activeChallenge.forbidden_category_ids.includes(categoryId)) {
+            const { error: updateChallengeError } = await supabase
+              .from('challenges')
+              .update({ status: 'failed' })
+              .eq('id', activeChallenge.id)
+              .eq('user_id', user.id);
+
+            if (updateChallengeError) {
+              showError('Error al actualizar el reto de cero gastos: ' + updateChallengeError.message);
+            } else {
+              showError(`¡Reto '${activeChallenge.name}' fallido! Registraste un gasto en una categoría prohibida.`);
+            }
+          }
+        }
+      }
+    }
   };
 
   const handleOpenEditCardDialog = (card: CardData) => {
