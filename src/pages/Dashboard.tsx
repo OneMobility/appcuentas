@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
-import { Home, Users, DollarSign, CreditCard } from "lucide-react";
+import { Home, Users, DollarSign, CreditCard, Smile, AlertTriangle } from "lucide-react"; // Importar Smile y AlertTriangle
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -11,10 +11,10 @@ import { useCategoryContext } from "@/context/CategoryContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/context/SessionContext";
 import { showError } from "@/utils/toast";
-import { format } from "date-fns";
+import { format, isBefore, isSameDay } from "date-fns"; // Importar isBefore y isSameDay
 import { es } from "date-fns/locale";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"; // Importar componentes de tabla
-import { getUpcomingPaymentDueDate } from "@/utils/date-helpers"; // Importar la función de ayuda para fechas
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { getUpcomingPaymentDueDate } from "@/utils/date-helpers";
 
 // Tasas de cambio de ejemplo (MXN como base)
 const exchangeRates: { [key: string]: number } = {
@@ -49,9 +49,9 @@ interface CardData {
   current_balance: number;
   credit_limit?: number;
   cut_off_day?: number;
-  days_to_pay_after_cut_off?: number; // Añadido este campo
+  days_to_pay_after_cut_off?: number;
   color: string;
-  transactions: CardTransaction[]; // Incluir transacciones directamente
+  transactions: CardTransaction[];
   user_id?: string;
 }
 
@@ -99,7 +99,6 @@ const Dashboard = () => {
   const [cashTransactions, setCashTransactions] = useState<CashTransaction[]>([]);
   const [debtors, setDebtors] = useState<DebtorData[]>([]);
   const [creditors, setCreditors] = useState<CreditorData[]>([]);
-  // Eliminado: const [cardTransactions, setCardTransactions] = useState<CardTransaction[]>([]);
 
   const fetchDashboardData = async () => {
     if (!user) {
@@ -114,7 +113,7 @@ const Dashboard = () => {
       // Fetch Cards with their transactions
       const { data: cardsData, error: cardsError } = await supabase
         .from('cards')
-        .select('*, card_transactions(*)') // Seleccionar transacciones junto con las tarjetas
+        .select('*, card_transactions(*)')
         .eq('user_id', user.id);
       if (cardsError) throw cardsError;
       setCards(cardsData || []);
@@ -249,33 +248,32 @@ const Dashboard = () => {
   }, [cashTransactions]);
 
   const monthlyCardSpendingData = useMemo(() => {
-    if (!cards.length) return []; // Usar 'cards' directamente
+    if (!cards.length) return [];
 
     const monthlyDataMap = new Map<string, { [key: string]: any }>(); // Key: YYYY-MM
 
     cards.forEach(card => {
-      (card.transactions || []).forEach(tx => { // Asegurarse de que transactions sea un array
+      (card.transactions || []).forEach(tx => {
         if (tx.type === "charge") {
           const monthKey = format(new Date(tx.date), "yyyy-MM");
-          const monthName = format(new Date(tx.date), "MMM", { locale: es }); // Short month name
+          const monthName = format(new Date(tx.date), "MMM", { locale: es });
 
           if (!monthlyDataMap.has(monthKey)) {
             monthlyDataMap.set(monthKey, { name: monthName });
           }
 
           const currentMonthData = monthlyDataMap.get(monthKey)!;
-          const cardName = card.name; // Usar el nombre de la tarjeta
-          currentMonthData[cardName] = (currentMonthData[cardName] || 0) + (tx.installments_total_amount || tx.amount); // Sumar el monto total si es a meses
+          const cardName = card.name;
+          currentMonthData[cardName] = (currentMonthData[cardName] || 0) + (tx.installments_total_amount || tx.amount);
           monthlyDataMap.set(monthKey, currentMonthData);
         }
       });
     });
 
-    // Sort by month key to ensure chronological order
     return Array.from(monthlyDataMap.entries())
       .sort(([keyA], [keyB]) => keyA.localeCompare(keyB))
       .map(([, value]) => value);
-  }, [cards]); // Dependencia de 'cards'
+  }, [cards]);
 
   const uniqueCardNames = useMemo(() => {
     const names = new Set<string>();
@@ -291,10 +289,9 @@ const Dashboard = () => {
         ? getUpcomingPaymentDueDate(card.cut_off_day, card.days_to_pay_after_cut_off)
         : null;
 
-      // Calculate total spent for the card (sum of all 'charge' transactions)
-      const totalSpent = (card.transactions || []) // Ensure transactions is an array
+      const totalSpent = (card.transactions || [])
         .filter(tx => tx.type === "charge")
-        .reduce((sum, tx) => sum + (tx.installments_total_amount || tx.amount), 0); // Usar monto total si es a meses
+        .reduce((sum, tx) => sum + (tx.installments_total_amount || tx.amount), 0);
 
       return {
         ...card,
@@ -306,9 +303,73 @@ const Dashboard = () => {
     });
   }, [cards]);
 
+  const cardStatusChartData = useMemo(() => {
+    return cards.map(card => {
+      const isCredit = card.type === "credit";
+      return {
+        name: card.name,
+        LimiteOInicial: isCredit ? (card.credit_limit || 0) : card.initial_balance,
+        SaldoActualODeuda: card.current_balance,
+        color: card.color,
+        type: card.type,
+      };
+    });
+  }, [cards]);
+
+  const allCardsInOrder = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // Normalizar today al inicio del día
+
+    for (const card of cards) {
+      if (card.type === "credit") {
+        // Check if current balance exceeds credit limit
+        if (card.credit_limit !== undefined && card.current_balance > card.credit_limit) {
+          return false;
+        }
+        // Check for overdue payments (if payment due date is in the past and not today)
+        if (card.cut_off_day !== undefined && card.days_to_pay_after_cut_off !== undefined) {
+          const paymentDueDate = getUpcomingPaymentDueDate(card.cut_off_day, card.days_to_pay_after_cut_off, today);
+          if (isBefore(paymentDueDate, today) && !isSameDay(paymentDueDate, today)) {
+            return false;
+          }
+        }
+      } else { // Debit card
+        // Check if debit card balance is negative
+        if (card.current_balance < 0) {
+          return false;
+        }
+      }
+    }
+    return true;
+  }, [cards]);
+
   return (
     <div className="flex flex-col gap-6 p-4">
       <h1 className="text-3xl font-bold">Dashboard</h1>
+
+      {allCardsInOrder ? (
+        <Card className="border-green-600 bg-green-50 text-green-800">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-green-800">Estado de Tarjetas</CardTitle>
+            <Smile className="h-4 w-4 text-green-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-lg font-bold">¡Todo está en orden aquí!</div>
+            <p className="text-xs text-green-700">Tus tarjetas están al día y dentro de los límites.</p>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card className="border-destructive bg-destructive/10 text-destructive-foreground">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-destructive">Estado de Tarjetas</CardTitle>
+            <AlertTriangle className="h-4 w-4 text-destructive" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-lg font-bold">Atención: Revisa tus tarjetas</div>
+            <p className="text-xs text-destructive-foreground">Algunas tarjetas pueden tener saldos negativos o pagos próximos/vencidos.</p>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
@@ -459,6 +520,35 @@ const Dashboard = () => {
 
       <Card>
         <CardHeader>
+          <CardTitle>Estado Actual de Tarjetas</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="h-[300px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={cardStatusChartData}
+                margin={{
+                  top: 5,
+                  right: 30,
+                  left: 20,
+                  bottom: 5,
+                }}
+              >
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="name" />
+                <YAxis />
+                <Tooltip formatter={(value: number) => `$${value.toFixed(2)}`} />
+                <Legend />
+                <Bar dataKey="LimiteOInicial" fill="#8884d8" name="Límite / Saldo Inicial" />
+                <Bar dataKey="SaldoActualODeuda" fill="#82ca9d" name="Saldo Actual / Deuda" />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle>Resumen de Ingresos y Egresos (Efectivo)</CardTitle>
         </CardHeader>
         <CardContent>
@@ -511,7 +601,7 @@ const Dashboard = () => {
                   <Bar
                     key={cardName}
                     dataKey={cardName}
-                    fill={cards.find(c => c.name === cardName)?.color || `#${Math.floor(Math.random()*16777215).toString(16)}`} // Fallback a color aleatorio
+                    fill={cards.find(c => c.name === cardName)?.color || `#${Math.floor(Math.random()*16777215).toString(16)}`}
                     name={cardName}
                   />
                 ))}
