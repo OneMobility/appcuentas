@@ -141,6 +141,7 @@ const Challenges: React.FC<ChallengesProps> = ({ challengeRefreshKey, setChallen
 
     let newStatus: "completed" | "failed" | "regular" = "failed";
     let awardedBadgeId: string | null = null;
+    const evaluationDate = format(new Date(), "yyyy-MM-dd"); // Fecha actual del sistema
 
     if (challenge.challenge_template_id.startsWith("no-spend")) {
       // No-Spend Challenge evaluation
@@ -214,10 +215,10 @@ const Challenges: React.FC<ChallengesProps> = ({ challengeRefreshKey, setChallen
       }
     }
 
-    // Update challenge status and badge_id in DB
+    // Update challenge status, badge_id, and end_date in DB
     const { error: updateError } = await supabase
       .from('challenges')
-      .update({ status: newStatus, badge_id: awardedBadgeId })
+      .update({ status: newStatus, badge_id: awardedBadgeId, end_date: evaluationDate }) // Actualizar end_date
       .eq('id', challenge.id)
       .eq('user_id', user.id);
 
