@@ -49,7 +49,7 @@ const FAILED_CHALLENGE_IMAGE = `${SUPABASE_STORAGE_BASE_URL}Fallido.png`;
 const GENERIC_COMPLETED_IMAGE = `${SUPABASE_STORAGE_BASE_URL}Meta%202.png`;
 const GENERIC_REGULAR_IMAGE = `${SUPABASE_STORAGE_BASE_URL}Cochinito%20Calendario.png`;
 
-// IDs de las insignias de recompensa genéricas que se crearán en la base de datos
+// Nombres de las insignias de recompensa genéricas que se crearán en la base de datos
 const GENERIC_REWARD_BADGE_NAMES = [
   'Recompensa de Reto 1',
   'Recompensa de Reto 2',
