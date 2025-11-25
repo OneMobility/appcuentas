@@ -554,6 +554,12 @@ const CardDetailsPage: React.FC = () => {
   const isCredit = card.type === "credit";
   const creditAvailable = isCredit && card.credit_limit !== undefined ? card.credit_limit - card.current_balance : 0;
 
+  console.log("--- Valores de la tarjeta antes de renderizar ---");
+  console.log("card.current_balance:", card.current_balance);
+  console.log("card.credit_limit:", card.credit_limit);
+  console.log("creditAvailable (calculado):", creditAvailable);
+  console.log("-------------------------------------------------");
+
   return (
     <div className="flex flex-col gap-6 p-4">
       <div className="flex items-center gap-4">
@@ -904,6 +910,10 @@ const CardDetailsPage: React.FC = () => {
                               src="https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/cochinito_love.png"
                               alt="Cochinito Love"
                               className="h-8 w-8"
+                              onError={(e) => {
+                                console.error("Error al cargar la imagen del cochinito:", e.currentTarget.src);
+                                e.currentTarget.style.display = 'none'; // Ocultar la imagen si falla
+                              }}
                             />
                           )}
                         </TableCell>
