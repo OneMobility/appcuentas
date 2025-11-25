@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
-import { Home, Users, DollarSign, CreditCard, AlertTriangle, Meh, RefreshCw, PiggyBank } from "lucide-react"; // Eliminar Smile
+import { Home, Users, DollarSign, CreditCard, AlertTriangle, Meh, RefreshCw, PiggyBank, Settings } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -16,8 +16,11 @@ import { es } from "date-fns/locale";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { getUpcomingPaymentDueDate } from "@/utils/date-helpers";
 import { Button } from "@/components/ui/button";
-import GroupedPaymentDueDatesCard from "@/components/GroupedPaymentDueDatesCard"; // Importar el nuevo componente
-import { cn } from "@/lib/utils"; // Importar cn para combinar clases
+import GroupedPaymentDueDatesCard from "@/components/GroupedPaymentDueDatesCard";
+import { cn } from "@/lib/utils";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from "@/components/ui/dialog";
+import ImagePicker from "@/components/ImagePicker";
+import * as LucideIcons from "lucide-react"; // Importar todos los iconos de Lucide
 
 // Tasas de cambio de ejemplo (MXN como base)
 const exchangeRates: { [key: string]: number } = {
@@ -93,7 +96,7 @@ interface MonthlySummary {
 
 const Dashboard = () => {
   const { user } = useSession();
-  const { incomeCategories, expenseCategories, isLoadingCategories } = useCategoryContext();
+  const { incomeCategories, expenseCategories, isLoadingCategories, getCategoryById } = useCategoryContext();
   const [amountToConvert, setAmountToConvert] = useState<string>("");
   const [fromCurrency, setFromCurrency] = useState<string>("USD");
   const [toCurrency, setToCurrency] = useState<string>("MXN");
@@ -102,7 +105,9 @@ const Dashboard = () => {
   const [cashTransactions, setCashTransactions] = useState<CashTransaction[]>([]);
   const [debtors, setDebtors] = useState<DebtorData[]>([]);
   const [creditors, setCreditors] = useState<CreditorData[]>([]);
-  const [refreshKey, setRefreshKey] = useState(0); // Nuevo estado para forzar el refresco
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [customPiggyBankImageUrl, setCustomPiggyBankImageUrl] = useState<string | null>(null);
+  const [isSettingsDialogOpen, setIsSettingsDialogOpen] = useState(false);
 
   const fetchDashboardData = async () => {
     if (!user) {
@@ -110,6 +115,7 @@ const Dashboard = () => {
       setCashTransactions([]);
       setDebtors([]);
       setCreditors([]);
+      setCustomPiggyBankImageUrl(null);
       return;
     }
 
@@ -147,9 +153,25 @@ const Dashboard = () => {
       if (creditorError) {
         throw creditorError;
       }
-      setCreditors(creditorsData || []); // Ensure it's always an array
+      setCreditors(creditorsData || []);
+
+      // Fetch user profile for custom image
+      const { data: profileData, error: profileError } = await supabase
+        .from('profiles')
+        .select('custom_piggy_bank_image_url')
+        .eq('id', user.id)
+        .single();
+
+      if (profileError && profileError.code !== 'PGRST116') {
+        showError('Error al cargar la imagen personalizada del perfil: ' + profileError.message);
+      } else if (profileData) {
+        setCustomPiggyBankImageUrl(profileData.custom_piggy_bank_image_url);
+      } else {
+        setCustomPiggyBankImageUrl(null);
+      }
+
     } catch (error: any) {
-      console.error("Error al cargar datos del dashboard:", error); // Log the full error object
+      console.error("Error al cargar datos del dashboard:", error);
       showError('Error al cargar datos del dashboard: ' + (error?.message || 'Error desconocido'));
     }
   };
@@ -158,10 +180,10 @@ const Dashboard = () => {
     if (user && !isLoadingCategories) {
       fetchDashboardData();
     }
-  }, [user, isLoadingCategories, refreshKey]); // Añadir refreshKey a las dependencias
+  }, [user, isLoadingCategories, refreshKey]);
 
   const handleRefreshData = () => {
-    setRefreshKey(prevKey => prevKey + 1); // Incrementar para forzar el re-fetch
+    setRefreshKey(prevKey => prevKey + 1);
     showSuccess("Datos del dashboard actualizados.");
   };
 
@@ -209,20 +231,18 @@ const Dashboard = () => {
     }, 0);
   }, [cards]);
 
-  // Nuevo cálculo para el saldo total de tarjetas de débito
   const totalDebitCardsBalance = useMemo(() => {
     return cards.filter(card => card.type === "debit").reduce((sum, card) => sum + card.current_balance, 0);
   }, [cards]);
 
-  // Nuevo cálculo para el balance total
   const totalOverallBalance = useMemo(() => {
     return totalCashBalance + totalDebitCardsBalance + totalDebtorsBalance - totalCreditorsBalance;
   }, [totalCashBalance, totalDebitCardsBalance, totalDebtorsBalance, totalCreditorsBalance]);
 
 
   const incomeCategoryData = useMemo(() => {
-    const dataMap = new Map<string, { name: string; value: number; color: string }>();
-    incomeCategories.forEach(cat => dataMap.set(cat.id, { name: cat.name, value: 0, color: cat.color }));
+    const dataMap = new Map<string, { name: string; value: number; color: string; icon: string }>();
+    incomeCategories.forEach(cat => dataMap.set(cat.id, { name: cat.name, value: 0, color: cat.color, icon: cat.icon }));
 
     cashTransactions.filter(tx => tx.type === "ingreso").forEach(tx => {
       const current = dataMap.get(tx.category_id);
@@ -234,8 +254,8 @@ const Dashboard = () => {
   }, [cashTransactions, incomeCategories]);
 
   const expenseCategoryData = useMemo(() => {
-    const dataMap = new Map<string, { name: string; value: number; color: string }>();
-    expenseCategories.forEach(cat => dataMap.set(cat.id, { name: cat.name, value: 0, color: cat.color }));
+    const dataMap = new Map<string, { name: string; value: number; color: string; icon: string }>();
+    expenseCategories.forEach(cat => dataMap.set(cat.id, { name: cat.name, value: 0, color: cat.color, icon: cat.icon }));
 
     cashTransactions.filter(tx => tx.type === "egreso").forEach(tx => {
       const current = dataMap.get(tx.category_id);
@@ -247,11 +267,11 @@ const Dashboard = () => {
   }, [cashTransactions, expenseCategories]);
 
   const monthlySummaryData = useMemo(() => {
-    const summaryMap = new Map<string, MonthlySummary>(); // Key: YYYY-MM
+    const summaryMap = new Map<string, MonthlySummary>();
 
     cashTransactions.forEach(tx => {
       const monthKey = format(new Date(tx.date), "yyyy-MM");
-      const monthName = format(new Date(tx.date), "MMMM", { locale: es }); // Full month name
+      const monthName = format(new Date(tx.date), "MMMM", { locale: es });
 
       if (!summaryMap.has(monthKey)) {
         summaryMap.set(monthKey, { name: monthName, ingresos: 0, egresos: 0 });
@@ -264,7 +284,6 @@ const Dashboard = () => {
       }
     });
 
-    // Sort by month key to ensure correct order
     return Array.from(summaryMap.entries())
       .sort(([keyA], [keyB]) => keyA.localeCompare(keyB))
       .map(([, value]) => value);
@@ -273,7 +292,7 @@ const Dashboard = () => {
   const monthlyCardSpendingData = useMemo(() => {
     if (!cards.length) return [];
 
-    const monthlyDataMap = new Map<string, { [key: string]: any }>(); // Key: YYYY-MM
+    const monthlyDataMap = new Map<string, { [key: string]: any }>();
 
     cards.forEach(card => {
       (card.transactions || []).forEach(tx => {
@@ -340,26 +359,22 @@ const Dashboard = () => {
       const isCredit = card.type === "credit";
 
       if (isCredit) {
-        // Check if current balance is at or exceeds credit limit
         if (card.credit_limit !== undefined && card.current_balance >= card.credit_limit) {
           hasCriticalIssue = true;
           criticalCards.push(`${card.name} (límite alcanzado o excedido)`);
         }
 
-        // Check for overdue payments
         if (card.cut_off_day !== undefined && card.days_to_pay_after_cut_off !== undefined) {
           const paymentDueDate = getUpcomingPaymentDueDate(card.cut_off_day, card.days_to_pay_after_cut_off, today);
           if (isBefore(paymentDueDate, today) && !isSameDay(paymentDueDate, today)) {
             hasCriticalIssue = true;
             criticalCards.push(`${card.name} (pago vencido el ${format(paymentDueDate, "dd/MM/yyyy", { locale: es })})`);
           } else if ((isBefore(paymentDueDate, twoDaysFromNow) || isSameDay(paymentDueDate, twoDaysFromNow)) && !isSameDay(paymentDueDate, today)) {
-            // Upcoming payment within 2 days, but not today and not overdue
             hasWarningIssue = true;
             warningCards.push(`${card.name} (pago próximo el ${format(paymentDueDate, "dd/MM/yyyy", { locale: es })})`);
           }
         }
-      } else { // Debit card
-        // Check if debit card balance is negative
+      } else {
         if (card.current_balance < 0) {
           hasCriticalIssue = true;
           criticalCards.push(`${card.name} (saldo negativo)`);
@@ -384,20 +399,99 @@ const Dashboard = () => {
     }));
   }, [cards]);
 
-  const piggyBankImageSrc = cardHealthStatus.status === "critical"
+  const defaultPiggyBankImageSrc = cardHealthStatus.status === "critical"
     ? "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Cochinito%20Fuego.png"
     : "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Conchinito%20Good.png";
 
-  const userFirstName = user?.user_metadata?.first_name || user?.email?.split('@')[0] || 'Usuario'; // Fallback a email o 'Usuario'
+  const finalPiggyBankImageSrc = customPiggyBankImageUrl || defaultPiggyBankImageSrc;
+
+  const userFirstName = user?.user_metadata?.first_name || user?.email?.split('@')[0] || 'Usuario';
+
+  const handleSelectPiggyBankImage = async (imageUrl: string) => {
+    if (!user) {
+      showError("Debes iniciar sesión para guardar la imagen.");
+      return;
+    }
+    const { error } = await supabase
+      .from('profiles')
+      .update({ custom_piggy_bank_image_url: imageUrl })
+      .eq('id', user.id);
+
+    if (error) {
+      showError('Error al guardar la imagen personalizada: ' + error.message);
+    } else {
+      setCustomPiggyBankImageUrl(imageUrl);
+      showSuccess("Imagen del cerdito actualizada exitosamente.");
+    }
+  };
+
+  const renderIconForChart = (iconString: string) => {
+    if (iconString.startsWith('http://') || iconString.startsWith('https://')) {
+      return <img src={iconString} alt="Category Icon" className="h-4 w-4 object-contain inline-block mr-2" />;
+    } else {
+      const IconComponent = (LucideIcons as any)[iconString];
+      return IconComponent ? <IconComponent className="h-4 w-4 inline-block mr-2" /> : <LucideIcons.Tag className="h-4 w-4 inline-block mr-2" />;
+    }
+  };
+
+  const CustomPieChartLegend = (props: any) => {
+    const { payload } = props;
+    return (
+      <ul className="flex flex-wrap justify-center gap-x-4 gap-y-2 text-sm">
+        {payload.map((entry: any, index: number) => {
+          const category = getCategoryById(entry.name, entry.payload.category_type); // Asumiendo que category_type está en payload
+          const icon = category?.icon || "Tag"; // Fallback a 'Tag' si no hay icono
+          return (
+            <li key={`item-${index}`} className="flex items-center">
+              <div className="h-3 w-3 rounded-full mr-2" style={{ backgroundColor: entry.color }} />
+              {renderIconForChart(icon)}
+              {entry.value}
+            </li>
+          );
+        })}
+      </ul>
+    );
+  };
 
   return (
     <div className="flex flex-col gap-6 p-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold">Hola, {userFirstName}</h1> {/* Saludo personalizado */}
-        <Button variant="outline" size="sm" onClick={handleRefreshData}>
-          <RefreshCw className="h-4 w-4 mr-2" />
-          Actualizar Datos
-        </Button>
+        <h1 className="text-3xl font-bold">Hola, {userFirstName}</h1>
+        <div className="flex gap-2">
+          <Dialog open={isSettingsDialogOpen} onOpenChange={setIsSettingsDialogOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline" size="sm">
+                <Settings className="h-4 w-4 mr-2" />
+                Configuración
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[425px]">
+              <DialogHeader>
+                <DialogTitle>Configuración del Dashboard</DialogTitle>
+              </DialogHeader>
+              <div className="grid gap-4 py-4">
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="piggyBankImage" className="text-right">
+                    Imagen del Cerdito
+                  </Label>
+                  <div className="col-span-3">
+                    <ImagePicker
+                      selectedImage={customPiggyBankImageUrl}
+                      onSelectImage={handleSelectPiggyBankImage}
+                    />
+                  </div>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button onClick={() => setIsSettingsDialogOpen(false)}>Cerrar</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+          <Button variant="outline" size="sm" onClick={handleRefreshData}>
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Actualizar Datos
+          </Button>
+        </div>
       </div>
 
       {cardHealthStatus.status === "critical" ? (
@@ -405,7 +499,7 @@ const Dashboard = () => {
           <CardHeader className="relative flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-blue-800">Estado de Tarjetas</CardTitle>
             <img 
-              src={piggyBankImageSrc} 
+              src={finalPiggyBankImageSrc} 
               alt="Conchinito en problemas" 
               className="absolute top-[-49px] right-[-34px] h-[100px] w-[100px] z-10 md:top-[5px] md:right-[50px] md:h-[120px] md:w-[120px]"
             />
@@ -445,7 +539,7 @@ const Dashboard = () => {
           <CardHeader className="relative flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-green-800">Estado de Tarjetas</CardTitle>
             <img 
-              src={piggyBankImageSrc} 
+              src={finalPiggyBankImageSrc} 
               alt="Conchinito feliz" 
               className="absolute top-[-49px] right-[-34px] h-[100px] w-[100px] z-10 md:top-[5px] md:right-[50px] md:h-[120px] md:w-[120px]"
             />
@@ -457,11 +551,9 @@ const Dashboard = () => {
         </Card>
       )}
 
-      {/* Tarjeta agrupada de cuenta regresiva para fechas de pago */}
       <GroupedPaymentDueDatesCard cards={cards} />
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {/* Tarjetas Verdes */}
         <Card className={cn("border-l-4 border-green-600 bg-green-50 text-green-800")}>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-green-800">TU DINERITO</CardTitle>
@@ -469,7 +561,7 @@ const Dashboard = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">${totalCashBalance.toFixed(2)}</div>
-            <p className="text-xs text-green-700">+20.1% desde el mes pasado</p> {/* Placeholder */}
+            <p className="text-xs text-green-700">+20.1% desde el mes pasado</p>
           </CardContent>
         </Card>
         <Card className={cn("border-l-4 border-green-600 bg-green-50 text-green-800")}>
@@ -479,7 +571,7 @@ const Dashboard = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">${totalDebtorsBalance.toFixed(2)}</div>
-            <p className="text-xs text-green-700">-5.2% desde el mes pasado</p> {/* Placeholder */}
+            <p className="text-xs text-green-700">-5.2% desde el mes pasado</p>
           </CardContent>
         </Card>
         <Card className={cn("border-l-4 border-green-600 bg-green-50 text-green-800")}>
@@ -493,7 +585,6 @@ const Dashboard = () => {
           </CardContent>
         </Card>
 
-        {/* Tarjetas Amarillas */}
         <Card className={cn("border-l-4 border-yellow-500 bg-yellow-50 text-yellow-800")}>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-yellow-800">A QUIEN LE DEBES</CardTitle>
@@ -501,7 +592,7 @@ const Dashboard = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">${totalCreditorsBalance.toFixed(2)}</div>
-            <p className="text-xs text-yellow-700">+10.5% desde el mes pasado</p> {/* Placeholder */}
+            <p className="text-xs text-yellow-700">+10.5% desde el mes pasado</p>
           </CardContent>
         </Card>
         <Card className={cn("border-l-4 border-yellow-500 bg-yellow-50 text-yellow-800")}>
@@ -511,11 +602,10 @@ const Dashboard = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">${totalCardsBalance.toFixed(2)}</div>
-            <p className="text-xs text-yellow-700">+1.8% desde el mes pasado</p> {/* Placeholder */}
+            <p className="text-xs text-yellow-700">+1.8% desde el mes pasado</p>
           </CardContent>
         </Card>
 
-        {/* Tarjeta Rosa */}
         <Card className={cn("border-l-4 border-pink-500 bg-pink-50 text-pink-800")}>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-pink-800">BALANCE TOTAL</CardTitle>
@@ -653,8 +743,8 @@ const Dashboard = () => {
                 <YAxis />
                 <Tooltip formatter={(value: number) => `$${value.toFixed(2)}`} />
                 <Legend />
-                <Bar dataKey="LimiteOInicial" fill="#87CEEB" name="Límite / Saldo Inicial" /> {/* Azul Celeste */}
-                <Bar dataKey="SaldoActualODeuda" fill="#FFB6C1" name="Saldo Actual / Deuda" /> {/* Rosa Claro */}
+                <Bar dataKey="LimiteOInicial" fill="#87CEEB" name="Límite / Saldo Inicial" />
+                <Bar dataKey="SaldoActualODeuda" fill="#FFB6C1" name="Saldo Actual / Deuda" />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -682,8 +772,8 @@ const Dashboard = () => {
                 <YAxis />
                 <Tooltip />
                 <Legend />
-                <Bar dataKey="ingresos" fill="#87CEEB" name="Ingresos" /> {/* Azul Celeste */}
-                <Bar dataKey="egresos" fill="#FFB6C1" name="Egresos" /> {/* Rosa Claro */}
+                <Bar dataKey="ingresos" fill="#87CEEB" name="Ingresos" />
+                <Bar dataKey="egresos" fill="#FFB6C1" name="Egresos" />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -748,7 +838,7 @@ const Dashboard = () => {
                     ))}
                   </Pie>
                   <Tooltip />
-                  <Legend />
+                  <Legend content={<CustomPieChartLegend />} />
                 </PieChart>
               </ResponsiveContainer>
             </div>
@@ -777,7 +867,7 @@ const Dashboard = () => {
                     ))}
                   </Pie>
                   <Tooltip />
-                  <Legend />
+                  <Legend content={<CustomPieChartLegend />} />
                 </PieChart>
               </ResponsiveContainer>
             </div>

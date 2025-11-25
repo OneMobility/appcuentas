@@ -280,6 +280,15 @@ const Cash = () => {
     }
   };
 
+  const renderIcon = (iconString: string) => {
+    if (iconString.startsWith('http://') || iconString.startsWith('https://')) {
+      return <img src={iconString} alt="Category Icon" className="h-4 w-4 object-contain" />;
+    } else {
+      const IconComponent = (LucideIcons as any)[iconString];
+      return IconComponent ? <IconComponent className="h-4 w-4" /> : <LucideIcons.Tag className="h-4 w-4" />;
+    }
+  };
+
   return (
     <div className="flex flex-col gap-6 p-4">
       <h1 className="text-3xl font-bold">Gestión de Efectivo</h1>
@@ -334,17 +343,14 @@ const Cash = () => {
                         <SelectValue placeholder="Selecciona categoría" />
                       </SelectTrigger>
                       <SelectContent>
-                        {availableCategories.map((cat) => {
-                          const IconComponent = (LucideIcons as any)[cat.icon];
-                          return (
-                            <SelectItem key={cat.id} value={cat.id}>
-                              <div className="flex items-center gap-2">
-                                {IconComponent ? <IconComponent className="h-4 w-4" /> : null}
-                                {cat.name}
-                              </div>
-                            </SelectItem>
-                          );
-                        })}
+                        {availableCategories.map((cat) => (
+                          <SelectItem key={cat.id} value={cat.id}>
+                            <div className="flex items-center gap-2">
+                              {renderIcon(cat.icon)}
+                              {cat.name}
+                            </div>
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
@@ -426,17 +432,14 @@ const Cash = () => {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todas las Categorías</SelectItem>
-                {allCategories.map((cat) => {
-                  const IconComponent = (LucideIcons as any)[cat.icon];
-                  return (
-                    <SelectItem key={cat.id} value={cat.id}>
-                      <div className="flex items-center gap-2">
-                        {IconComponent ? <IconComponent className="h-4 w-4" /> : null}
-                        {cat.name} ({cat.id.startsWith("inc") ? "Ingreso" : "Egreso"})
-                      </div>
-                    </SelectItem>
-                  );
-                })}
+                {allCategories.map((cat) => (
+                  <SelectItem key={cat.id} value={cat.id}>
+                    <div className="flex items-center gap-2">
+                      {renderIcon(cat.icon)}
+                      {cat.name} ({cat.id.startsWith("inc") ? "Ingreso" : "Egreso"})
+                    </div>
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
             <Popover>
@@ -492,7 +495,6 @@ const Cash = () => {
               <TableBody>
                 {filteredTransactions.map((tx) => {
                   const category = getCategoryById(tx.category_id, tx.category_type);
-                  const IconComponent = category ? (LucideIcons as any)[category.icon] : null;
                   return (
                     <TableRow key={tx.id}>
                       <TableCell>{format(new Date(tx.date), "dd/MM/yyyy", { locale: es })}</TableCell>
@@ -501,7 +503,7 @@ const Cash = () => {
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
-                          {IconComponent ? <IconComponent className="h-4 w-4" /> : null}
+                          {category ? renderIcon(category.icon) : null}
                           {category?.name || "Desconocida"}
                         </div>
                       </TableCell>
@@ -581,17 +583,14 @@ const Cash = () => {
                       <SelectValue placeholder="Selecciona categoría" />
                     </SelectTrigger>
                     <SelectContent>
-                      {availableCategories.map((cat) => {
-                        const IconComponent = (LucideIcons as any)[cat.icon];
-                        return (
-                          <SelectItem key={cat.id} value={cat.id}>
-                            <div className="flex items-center gap-2">
-                              {IconComponent ? <IconComponent className="h-4 w-4" /> : null}
-                              {cat.name}
-                            </div>
-                          </SelectItem>
-                        );
-                      })}
+                      {availableCategories.map((cat) => (
+                        <SelectItem key={cat.id} value={cat.id}>
+                          <div className="flex items-center gap-2">
+                            {renderIcon(cat.icon)}
+                            {cat.name}
+                          </div>
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
