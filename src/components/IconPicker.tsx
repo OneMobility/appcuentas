@@ -63,8 +63,9 @@ interface IconPickerProps {
 
 const IconPicker: React.FC<IconPickerProps> = ({ selectedIcon, onSelectIcon }) => {
   const [search, setSearch] = useState("");
+  const [open, setOpen] = useState(false); // Manage popover open state
 
-  const CurrentIcon = selectedIcon ? lucideIconMap[selectedIcon] : null;
+  const CurrentIcon = selectedIcon ? lucideIconMap[selectedIcon] : LucideIcons.Tag; // Fallback to Tag icon
 
   const filteredIcons = useMemo(() => {
     return availableIcons.filter(iconName =>
@@ -72,15 +73,20 @@ const IconPicker: React.FC<IconPickerProps> = ({ selectedIcon, onSelectIcon }) =
     );
   }, [search, availableIcons]);
 
+  const handleSelect = (iconName: string) => {
+    onSelectIcon(iconName);
+    setOpen(false); // Close popover after selection
+  };
+
   return (
-    <Popover>
+    <Popover open={open} onOpenChange={setOpen}> {/* Control popover state */}
       <PopoverTrigger asChild>
         <Button variant="outline" className="w-full justify-start">
-          {CurrentIcon ? <CurrentIcon className="mr-2 h-4 w-4" /> : null}
+          <CurrentIcon className="mr-2 h-4 w-4" /> {/* Always show an icon */}
           {selectedIcon || "Seleccionar Icono"}
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[300px] p-0">
+      <PopoverContent className="w-[300px] p-0 z-50"> {/* Added z-50 */}
         <Input
           placeholder="Buscar icono..."
           className="mb-2"
@@ -98,8 +104,11 @@ const IconPicker: React.FC<IconPickerProps> = ({ selectedIcon, onSelectIcon }) =
                   key={iconName}
                   variant="ghost"
                   size="icon"
-                  onClick={() => onSelectIcon(iconName)}
-                  className={cn(selectedIcon === iconName && "bg-accent")}
+                  onClick={() => handleSelect(iconName)} // Use handleSelect
+                  className={cn(
+                    selectedIcon === iconName && "bg-accent",
+                    "hover:bg-muted" // Added hover state for better UX
+                  )}
                 >
                   <IconComponent className="h-4 w-4" />
                 </Button>
