@@ -84,6 +84,9 @@ const ChallengeCard: React.FC<ChallengeCardProps> = ({ challenge, onStartNewChal
     return { statusText, cardClasses, icon };
   };
 
+  // Determinar si hay un reto activo y en curso (no finalizado ni evaluado)
+  const isChallengeOngoing = challenge && challenge.status === "active" && (isAfter(new Date(challenge.end_date), today) || isSameDay(new Date(challenge.end_date), today));
+
   if (challenge) {
     const { statusText, cardClasses, icon } = getStatusDisplay(challenge);
     const isSavingGoal = challenge.challenge_template_id.startsWith("saving-goal");
@@ -132,7 +135,11 @@ const ChallengeCard: React.FC<ChallengeCardProps> = ({ challenge, onStartNewChal
             </div>
           )}
 
-          {(challenge.status === "failed" || challenge.status === "completed" || challenge.status === "regular") && (
+          {isChallengeOngoing ? (
+            <Button className="mt-4 w-full" disabled>
+              Ya tienes un reto activo
+            </Button>
+          ) : (
             <Button onClick={onStartNewChallenge} className="mt-4 w-full">
               Empezar otro reto
             </Button>
