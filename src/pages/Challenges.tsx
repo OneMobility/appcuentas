@@ -55,6 +55,9 @@ const GENERIC_REWARD_BADGE_NAMES = [
   'Recompensa de Reto 2',
   'Recompensa de Reto 3',
   'Recompensa de Reto 4',
+  'Recompensa de Reto 5', // Nueva
+  'Recompensa de Reto 6', // Nueva
+  'Recompensa de Reto 7', // Nueva
 ];
 
 
