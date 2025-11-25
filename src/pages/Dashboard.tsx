@@ -3,20 +3,20 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
-import { Home, Users, DollarSign, CreditCard, Smile, AlertTriangle, Meh, RefreshCw } from "lucide-react";
+import { Home, Users, DollarSign, CreditCard, AlertTriangle, Meh, RefreshCw } from "lucide-react"; // Eliminar Smile
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useCategoryContext } from "@/context/CategoryContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/context/SessionContext";
-import { showError, showSuccess } from "@/utils/toast"; // Importar showSuccess
+import { showError, showSuccess } from "@/utils/toast";
 import { format, isBefore, isSameDay, addDays } from "date-fns";
 import { es } from "date-fns/locale";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { getUpcomingPaymentDueDate } from "@/utils/date-helpers";
 import { Button } from "@/components/ui/button";
-import PaymentDueDateCard from "@/components/PaymentDueDateCard"; // Importar el nuevo componente
+import PaymentDueDateCard from "@/components/PaymentDueDateCard";
 
 // Tasas de cambio de ejemplo (MXN como base)
 const exchangeRates: { [key: string]: number } = {
@@ -311,19 +311,6 @@ const Dashboard = () => {
     });
   }, [cards]);
 
-  const cardStatusChartData = useMemo(() => {
-    return cards.map(card => {
-      const isCredit = card.type === "credit";
-      return {
-        name: card.name,
-        LimiteOInicial: isCredit ? (card.credit_limit || 0) : card.initial_balance,
-        SaldoActualODeuda: card.current_balance,
-        color: card.color,
-        type: card.type,
-      };
-    });
-  }, [cards]);
-
   const cardHealthStatus = useMemo(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -424,7 +411,7 @@ const Dashboard = () => {
         <Card className="border-green-600 bg-green-50 text-green-800">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-green-800">Estado de Tarjetas</CardTitle>
-            <Smile className="h-4 w-4 text-green-600" />
+            <img src="https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Conchinito%20feliz.png" alt="Conchinito feliz" className="h-4 w-4" />
           </CardHeader>
           <CardContent>
             <div className="text-lg font-bold">¡Todo está en orden aquí!</div>
