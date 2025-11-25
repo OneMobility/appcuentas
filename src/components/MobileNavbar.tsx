@@ -33,7 +33,7 @@ const navItems = [
     icon: UserRound,
   },
   {
-    name: "Le Debes",
+  name: "Le Debes",
     path: "/creditors",
     icon: Landmark,
   },
@@ -70,7 +70,7 @@ const MobileNavbar = () => {
               className={cn(
                 "flex flex-col items-center justify-center gap-1 px-2 py-1 text-xs font-medium transition-all duration-200 shrink-0",
                 isActive
-                  ? "text-primary bg-primary/20 rounded-md scale-105"
+                  ? "text-pink-800 bg-pink-200 rounded-md scale-110" // Rosa pastel y más grande
                   : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
               )}
             >

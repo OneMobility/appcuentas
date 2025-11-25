@@ -59,7 +59,7 @@ const GroupedPaymentDueDatesCard: React.FC<GroupedPaymentDueDatesCardProps> = ({
         <img
           src="https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Calendario.png"
           alt="Calendario de Pagos"
-          className="absolute top-4 right-4 h-[100px] w-[100px] z-10 -mt-2 md:top-0 md:right-[50px] md:h-[150px] md:w-[150px] md:-mt-8"
+          className="absolute top-[166px] right-[-9px] h-[100px] w-[100px] z-10 md:top-[150px] md:right-[25px] md:h-[150px] md:w-[150px]"
         />
       </CardHeader>
       <CardContent>
