@@ -10,6 +10,7 @@ export interface Category {
   id: string;
   name: string;
   color: string;
+  icon: string; // Añadido el campo icon
   user_id?: string;
 }
 
@@ -101,7 +102,7 @@ export const CategoryProvider = ({ children }: { children: ReactNode }) => {
     const tableName = type === "income" ? "income_categories" : "expense_categories";
     const { data, error } = await supabase
       .from(tableName)
-      .update({ name: updatedCategory.name, color: updatedCategory.color })
+      .update({ name: updatedCategory.name, color: updatedCategory.color, icon: updatedCategory.icon }) // Actualizado para incluir icon
       .eq('id', updatedCategory.id)
       .eq('user_id', user.id)
       .select();

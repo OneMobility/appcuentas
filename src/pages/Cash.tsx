@@ -22,6 +22,7 @@ import { useSession } from "@/context/SessionContext";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { exportToCsv, exportToPdf } from "@/utils/export";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import * as LucideIcons from "lucide-react"; // Importar todos los iconos de Lucide
 
 interface Transaction {
   id: string;
@@ -240,7 +241,8 @@ const Cash = () => {
     const matchesSearch = tx.description.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesType = filterType === "all" || tx.type === filterType;
     
-    const categoryName = getCategoryById(tx.category_id, tx.category_type)?.name || "";
+    const category = getCategoryById(tx.category_id, tx.category_type);
+    const categoryName = category?.name || "";
     const matchesCategory = filterCategory === "all" || tx.category_id === filterCategory || categoryName.toLowerCase().includes(filterCategory.toLowerCase());
     
     const txDate = new Date(tx.date);
@@ -332,11 +334,17 @@ const Cash = () => {
                         <SelectValue placeholder="Selecciona categoría" />
                       </SelectTrigger>
                       <SelectContent>
-                        {availableCategories.map((cat) => (
-                          <SelectItem key={cat.id} value={cat.id}>
-                            {cat.name}
-                          </SelectItem>
-                        ))}
+                        {availableCategories.map((cat) => {
+                          const IconComponent = (LucideIcons as any)[cat.icon];
+                          return (
+                            <SelectItem key={cat.id} value={cat.id}>
+                              <div className="flex items-center gap-2">
+                                {IconComponent ? <IconComponent className="h-4 w-4" /> : null}
+                                {cat.name}
+                              </div>
+                            </SelectItem>
+                          );
+                        })}
                       </SelectContent>
                     </Select>
                   </div>
@@ -418,11 +426,17 @@ const Cash = () => {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todas las Categorías</SelectItem>
-                {allCategories.map((cat) => (
-                  <SelectItem key={cat.id} value={cat.id}>
-                    {cat.name} ({cat.id.startsWith("inc") ? "Ingreso" : "Egreso"})
-                  </SelectItem>
-                ))}
+                {allCategories.map((cat) => {
+                  const IconComponent = (LucideIcons as any)[cat.icon];
+                  return (
+                    <SelectItem key={cat.id} value={cat.id}>
+                      <div className="flex items-center gap-2">
+                        {IconComponent ? <IconComponent className="h-4 w-4" /> : null}
+                        {cat.name} ({cat.id.startsWith("inc") ? "Ingreso" : "Egreso"})
+                      </div>
+                    </SelectItem>
+                  );
+                })}
               </SelectContent>
             </Select>
             <Popover>
@@ -478,13 +492,19 @@ const Cash = () => {
               <TableBody>
                 {filteredTransactions.map((tx) => {
                   const category = getCategoryById(tx.category_id, tx.category_type);
+                  const IconComponent = category ? (LucideIcons as any)[category.icon] : null;
                   return (
                     <TableRow key={tx.id}>
                       <TableCell>{format(new Date(tx.date), "dd/MM/yyyy", { locale: es })}</TableCell>
                       <TableCell className={tx.type === "ingreso" ? "text-green-600" : "text-red-600"}>
                         {tx.type === "ingreso" ? "Ingreso" : "Egreso"}
                       </TableCell>
-                      <TableCell>{category?.name || "Desconocida"}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          {IconComponent ? <IconComponent className="h-4 w-4" /> : null}
+                          {category?.name || "Desconocida"}
+                        </div>
+                      </TableCell>
                       <TableCell>{tx.description}</TableCell>
                       <TableCell className="text-right">
                         {tx.type === "ingreso" ? "+" : "-"}${tx.amount.toFixed(2)}
@@ -561,11 +581,17 @@ const Cash = () => {
                       <SelectValue placeholder="Selecciona categoría" />
                     </SelectTrigger>
                     <SelectContent>
-                      {availableCategories.map((cat) => (
-                        <SelectItem key={cat.id} value={cat.id}>
-                          {cat.name}
-                        </SelectItem>
-                      ))}
+                      {availableCategories.map((cat) => {
+                        const IconComponent = (LucideIcons as any)[cat.icon];
+                        return (
+                          <SelectItem key={cat.id} value={cat.id}>
+                            <div className="flex items-center gap-2">
+                              {IconComponent ? <IconComponent className="h-4 w-4" /> : null}
+                              {cat.name}
+                            </div>
+                          </SelectItem>
+                        );
+                      })}
                     </SelectContent>
                   </Select>
                 </div>
