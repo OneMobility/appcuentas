@@ -21,22 +21,26 @@ import ColorPicker from "@/components/ColorPicker";
 import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/context/SessionContext";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { getUpcomingPaymentDueDate } from "@/utils/date-helpers"; // Importar la nueva función
+import { getUpcomingPaymentDueDate } from "@/utils/date-helpers";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { exportToCsv, exportToPdf } from "@/utils/export";
-import CardTransferDialog from "@/components/CardTransferDialog"; // Importar el nuevo componente
+import CardTransferDialog from "@/components/CardTransferDialog";
+import { useCategoryContext } from "@/context/CategoryContext"; // Importar useCategoryContext
+import { checkChallengeStatus } from "@/utils/challenge-helpers"; // Importar el helper de retos
 
 interface CardTransaction {
   id: string;
-  type: "charge" | "payment"; // Monto mensual si es a meses, o monto total si es pago único
+  type: "charge" | "payment";
   amount: number;
   description: string;
   date: string;
   card_id?: string;
   user_id?: string;
-  installments_total_amount?: number; // Monto total del cargo original si es a meses
-  installments_count?: number; // Número total de meses si es a meses
-  installment_number?: number; // Número de cuota actual (1, 2, 3...)
+  installments_total_amount?: number;
+  installments_count?: number;
+  installment_number?: number;
+  category_id?: string; // Nuevo campo
+  category_type?: "income" | "expense"; // Nuevo campo
 }
 
 interface CardData {
@@ -50,7 +54,7 @@ interface CardData {
   current_balance: number;
   credit_limit?: number;
   cut_off_day?: number;
-  days_to_pay_after_cut_off?: number; // Nuevo campo
+  days_to_pay_after_cut_off?: number;
   color: string;
   transactions: CardTransaction[];
   user_id?: string;
@@ -58,11 +62,12 @@ interface CardData {
 
 const Cards = () => {
   const { user } = useSession();
+  const { expenseCategories, isLoadingCategories } = useCategoryContext(); // Usar categorías de egresos
   const [cards, setCards] = useState<CardData[]>([]);
   const [isAddCardDialogOpen, setIsAddCardDialogOpen] = useState(false);
   const [isEditCardDialogOpen, setIsEditCardDialogOpen] = useState(false);
   const [isAddTransactionDialogOpen, setIsAddTransactionDialogOpen] = useState(false);
-  const [isTransferDialogOpen, setIsTransferDialogOpen] = useState(false); // Nuevo estado para el diálogo de transferencia
+  const [isTransferDialogOpen, setIsTransferDialogOpen] = useState(false);
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [editingCard, setEditingCard] = useState<CardData | null>(null);
   const [newCard, setNewCard] = useState({
@@ -74,7 +79,7 @@ const Cards = () => {
     initial_balance: "",
     credit_limit: "",
     cut_off_day: undefined as number | undefined,
-    days_to_pay_after_cut_off: undefined as number | undefined, // Nuevo campo
+    days_to_pay_after_cut_off: undefined as number | undefined,
     color: "#3B82F6",
   });
   const [newTransaction, setNewTransaction] = useState({
@@ -82,7 +87,8 @@ const Cards = () => {
     amount: "",
     description: "",
     date: undefined as Date | undefined,
-    installments_count: undefined as number | undefined, // Nuevo campo para meses
+    installments_count: undefined as number | undefined,
+    category_id: "", // Nuevo campo
   });
 
   const [searchTerm, setSearchTerm] = useState("");
@@ -102,20 +108,19 @@ const Cards = () => {
     if (error) {
       showError('Error al cargar tarjetas: ' + error.message);
     } else {
-      // Asegurar que transactions sea siempre un array
       const formattedCards = (data || []).map(card => ({
         ...card,
-        transactions: card.card_transactions || [] // Usar card_transactions de Supabase, por defecto array vacío
+        transactions: card.card_transactions || []
       }));
       setCards(formattedCards);
     }
   };
 
   useEffect(() => {
-    if (user) {
+    if (user && !isLoadingCategories) {
       fetchCards();
     }
-  }, [user]);
+  }, [user, isLoadingCategories]);
 
   const totalCardsBalance = cards.reduce((sum, card) => {
     return sum + (card.type === "credit" ? -card.current_balance : card.current_balance);
@@ -127,10 +132,10 @@ const Cards = () => {
   };
 
   const handleNewCardTypeChange = (value: "credit" | "debit") => {
-    setNewCard((prev) => ({ ...prev, type: value, credit_limit: "", cut_off_day: undefined, days_to_pay_after_cut_off: undefined })); // Resetear días de pago
+    setNewCard((prev) => ({ ...prev, type: value, credit_limit: "", cut_off_day: undefined, days_to_pay_after_cut_off: undefined }));
   };
 
-  const handleNewCardDayChange = (field: "cut_off_day", date: Date | undefined) => { // Solo para cut_off_day
+  const handleNewCardDayChange = (field: "cut_off_day", date: Date | undefined) => {
     setNewCard((prev) => ({ ...prev, [field]: date ? date.getDate() : undefined }));
   };
 
@@ -198,7 +203,7 @@ const Cards = () => {
         current_balance: initialBalance,
         credit_limit: newCard.type === "credit" ? creditLimit : undefined,
         cut_off_day: newCard.type === "credit" ? cutOffDay : undefined,
-        days_to_pay_after_cut_off: newCard.type === "credit" ? daysToPayAfterCutOff : undefined, // Guardar nuevo campo
+        days_to_pay_after_cut_off: newCard.type === "credit" ? daysToPayAfterCutOff : undefined,
         color: newCard.color,
       })
       .select();
@@ -235,7 +240,7 @@ const Cards = () => {
 
   const handleOpenAddTransactionDialog = (cardId: string) => {
     setSelectedCardId(cardId);
-    setNewTransaction({ type: "charge", amount: "", description: "", date: undefined, installments_count: undefined });
+    setNewTransaction({ type: "charge", amount: "", description: "", date: undefined, installments_count: undefined, category_id: "" }); // Resetear category_id
     setIsAddTransactionDialogOpen(true);
   };
 
@@ -245,7 +250,7 @@ const Cards = () => {
   };
 
   const handleTransactionTypeChange = (value: "charge" | "payment") => {
-    setNewTransaction((prev) => ({ ...prev, type: value, installments_count: undefined }));
+    setNewTransaction((prev) => ({ ...prev, type: value, installments_count: undefined, category_id: "" })); // Resetear category_id
   };
 
   const handleTransactionDateChange = (date: Date | undefined) => {
@@ -256,13 +261,17 @@ const Cards = () => {
     setNewTransaction((prev) => ({ ...prev, installments_count: parseInt(value) || undefined }));
   };
 
+  const handleCategorySelectChange = (value: string) => {
+    setNewTransaction((prev) => ({ ...prev, category_id: value }));
+  };
+
   const handleSubmitTransaction = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) {
       showError("Debes iniciar sesión para registrar transacciones.");
       return;
     }
-    if (!selectedCardId) { // Explicit check for selectedCardId
+    if (!selectedCardId) {
       showError("No se ha seleccionado una tarjeta para la transacción.");
       return;
     }
@@ -274,6 +283,10 @@ const Cards = () => {
     }
     if (!newTransaction.date) {
       showError("Por favor, selecciona una fecha para la transacción.");
+      return;
+    }
+    if (newTransaction.type === "charge" && !newTransaction.category_id) { // Categoría requerida solo para cargos
+      showError("Por favor, selecciona una categoría para el cargo.");
       return;
     }
 
@@ -291,7 +304,7 @@ const Cards = () => {
     if (newTransaction.type === "charge" && newTransaction.installments_count && newTransaction.installments_count > 1) {
       installmentsTotalAmount = amount;
       installmentsCount = newTransaction.installments_count;
-      transactionAmountToStore = amount / installmentsCount; // Monto mensual
+      transactionAmountToStore = amount / installmentsCount;
     }
 
     if (currentCard.type === "debit") {
@@ -320,6 +333,10 @@ const Cards = () => {
       }
     }
 
+    const categoryType = newTransaction.type === "charge" && newTransaction.category_id
+      ? expenseCategories.find(cat => cat.id === newTransaction.category_id)?.user_id?.startsWith("inc") ? "income" : "expense"
+      : undefined;
+
     const { data: transactionData, error: transactionError } = await supabase
       .from('card_transactions')
       .insert({
@@ -331,7 +348,9 @@ const Cards = () => {
         date: format(newTransaction.date, "yyyy-MM-dd"),
         installments_total_amount: installmentsTotalAmount,
         installments_count: installmentsCount,
-        installment_number: installmentsCount ? 1 : undefined, // Siempre la primera cuota al registrar
+        installment_number: installmentsCount ? 1 : undefined,
+        category_id: newTransaction.type === "charge" ? newTransaction.category_id : undefined, // Guardar category_id solo para cargos
+        category_type: newTransaction.type === "charge" ? categoryType : undefined, // Guardar category_type solo para cargos
       })
       .select();
 
@@ -358,16 +377,21 @@ const Cards = () => {
           return {
             ...card,
             current_balance: newBalance,
-            transactions: [...(card.transactions || []), transactionData[0]], // Asegurar que transactions sea un array
+            transactions: [...(card.transactions || []), transactionData[0]],
           };
         }
         return card;
       })
     );
-    setNewTransaction({ type: "charge", amount: "", description: "", date: undefined, installments_count: undefined });
+    setNewTransaction({ type: "charge", amount: "", description: "", date: undefined, installments_count: undefined, category_id: "" });
     setSelectedCardId(null);
     setIsAddTransactionDialogOpen(false);
     showSuccess("Transacción registrada exitosamente.");
+
+    // Verificar el estado del reto si es un cargo
+    if (user && newTransaction.type === "charge" && newTransaction.category_id) {
+      await checkChallengeStatus(user.id, newTransaction.category_id, fetchCards); // Pasar fetchCards para refrescar datos si el reto falla
+    }
   };
 
   const handleOpenEditCardDialog = (card: CardData) => {
@@ -381,7 +405,7 @@ const Cards = () => {
       initial_balance: card.initial_balance.toString(),
       credit_limit: card.credit_limit?.toString() || "",
       cut_off_day: card.cut_off_day,
-      days_to_pay_after_cut_off: card.days_to_pay_after_cut_off, // Cargar nuevo campo
+      days_to_pay_after_cut_off: card.days_to_pay_after_cut_off,
       color: card.color,
     });
     setIsEditCardDialogOpen(true);
@@ -446,7 +470,7 @@ const Cards = () => {
         current_balance: parseFloat(newCard.initial_balance),
         credit_limit: newCard.type === "credit" ? creditLimit : null,
         cut_off_day: newCard.type === "credit" ? cutOffDay : null,
-        days_to_pay_after_cut_off: newCard.type === "credit" ? daysToPayAfterCutOff : null, // Actualizar nuevo campo
+        days_to_pay_after_cut_off: newCard.type === "credit" ? daysToPayAfterCutOff : null,
         color: newCard.color,
       })
       .eq('id', editingCard.id)
@@ -457,7 +481,7 @@ const Cards = () => {
       showError('Error al actualizar tarjeta: ' + error.message);
     } else {
       setCards((prev) =>
-        prev.map((card) => (card.id === editingCard.id ? { ...data[0], transactions: card.transactions || [] } : card)) // Asegurar que transactions sea un array
+        prev.map((card) => (card.id === editingCard.id ? { ...data[0], transactions: card.transactions || [] } : card))
       );
       setEditingCard(null);
       setNewCard({ name: "", bank_name: "", last_four_digits: "", expiration_date: "", type: "debit", initial_balance: "", credit_limit: "", cut_off_day: undefined, days_to_pay_after_cut_off: undefined, color: "#3B82F6" });
@@ -472,7 +496,6 @@ const Cards = () => {
     card.last_four_digits.includes(searchTerm)
   );
 
-  // Obtener la tarjeta actual para el diálogo de transacción, si selectedCardId está definido
   const currentCardForDialog = selectedCardId ? cards.find(c => c.id === selectedCardId) : null;
 
   return (
@@ -704,7 +727,7 @@ const Cards = () => {
             isOpen={isTransferDialogOpen}
             onClose={() => setIsTransferDialogOpen(false)}
             cards={cards}
-            onTransferSuccess={fetchCards} // Refresh cards after successful transfer
+            onTransferSuccess={fetchCards}
           />
 
           <Dialog open={isAddTransactionDialogOpen} onOpenChange={setIsAddTransactionDialogOpen}>
@@ -727,6 +750,25 @@ const Cards = () => {
                     </SelectContent>
                   </Select>
                 </div>
+                {newTransaction.type === "charge" && ( // Mostrar selector de categoría solo para cargos
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="transactionCategory" className="text-right">
+                      Categoría
+                    </Label>
+                    <Select value={newTransaction.category_id} onValueChange={handleCategorySelectChange}>
+                      <SelectTrigger className="col-span-3">
+                        <SelectValue placeholder="Selecciona categoría" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {expenseCategories.map((cat) => (
+                          <SelectItem key={cat.id} value={cat.id}>
+                            {cat.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
                 <div className="grid grid-cols-4 items-center gap-4">
                   <Label htmlFor="transactionAmount" className="text-right">
                     Monto

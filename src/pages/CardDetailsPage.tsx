@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { DollarSign, History, Trash2, Edit, CalendarIcon, ArrowLeft, FileText, FileDown, Heart } from "lucide-react"; // Importar Heart
+import { DollarSign, History, Trash2, Edit, CalendarIcon, ArrowLeft, FileText, FileDown, Heart } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
@@ -25,7 +25,9 @@ import { getUpcomingPaymentDueDate } from "@/utils/date-helpers";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { exportToCsv, exportToPdf } from "@/utils/export";
 import LoadingSpinner from "@/components/LoadingSpinner";
-import PaymentDueDateCard from "@/components/PaymentDueDateCard"; // Importar el nuevo componente
+import PaymentDueDateCard from "@/components/PaymentDueDateCard";
+import { useCategoryContext } from "@/context/CategoryContext"; // Importar useCategoryContext
+import { checkChallengeStatus } from "@/utils/challenge-helpers"; // Importar el helper de retos
 
 interface CardTransaction {
   id: string;
@@ -38,6 +40,8 @@ interface CardTransaction {
   installments_total_amount?: number;
   installments_count?: number;
   installment_number?: number;
+  category_id?: string; // Nuevo campo
+  category_type?: "income" | "expense"; // Nuevo campo
 }
 
 interface CardData {
@@ -61,6 +65,7 @@ const CardDetailsPage: React.FC = () => {
   const { cardId } = useParams<{ cardId: string }>();
   const navigate = useNavigate();
   const { user } = useSession();
+  const { expenseCategories, getCategoryById, isLoadingCategories } = useCategoryContext(); // Usar categorías de egresos
   const [card, setCard] = useState<CardData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isAddTransactionDialogOpen, setIsAddTransactionDialogOpen] = useState(false);
@@ -72,6 +77,7 @@ const CardDetailsPage: React.FC = () => {
     description: "",
     date: undefined as Date | undefined,
     installments_count: undefined as number | undefined,
+    category_id: "", // Nuevo campo
   });
 
   // Filter states
@@ -79,37 +85,38 @@ const CardDetailsPage: React.FC = () => {
   const [filterType, setFilterType] = useState<"all" | "charge" | "payment">("all");
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
 
-  useEffect(() => {
-    const fetchCardDetails = async () => {
-      if (!user || !cardId) {
-        setIsLoading(false);
-        return;
-      }
-
-      setIsLoading(true);
-      const { data, error } = await supabase
-        .from('cards')
-        .select('*, card_transactions(*)')
-        .eq('id', cardId)
-        .eq('user_id', user.id)
-        .single();
-
-      if (error) {
-        showError('Error al cargar detalles de la tarjeta: ' + error.message);
-        navigate('/cards'); // Redirigir si la tarjeta no se encuentra o hay un error
-      } else {
-        // Asegurar que transactions sea siempre un array
-        const formattedCard = {
-          ...(data as CardData), // Cast to CardData
-          transactions: (data as any).card_transactions || [] // Usar card_transactions de Supabase, por defecto array vacío
-        };
-        setCard(formattedCard);
-      }
+  const fetchCardDetails = async () => {
+    if (!user || !cardId) {
       setIsLoading(false);
-    };
+      return;
+    }
 
-    fetchCardDetails();
-  }, [cardId, user, navigate]);
+    setIsLoading(true);
+    const { data, error } = await supabase
+      .from('cards')
+      .select('*, card_transactions(*)')
+      .eq('id', cardId)
+      .eq('user_id', user.id)
+      .single();
+
+    if (error) {
+      showError('Error al cargar detalles de la tarjeta: ' + error.message);
+      navigate('/cards');
+    } else {
+      const formattedCard = {
+        ...(data as CardData),
+        transactions: (data as any).card_transactions || []
+      };
+      setCard(formattedCard);
+    }
+    setIsLoading(false);
+  };
+
+  useEffect(() => {
+    if (user && !isLoadingCategories) {
+      fetchCardDetails();
+    }
+  }, [cardId, user, navigate, isLoadingCategories]);
 
   const handleTransactionInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -117,7 +124,7 @@ const CardDetailsPage: React.FC = () => {
   };
 
   const handleTransactionTypeChange = (value: "charge" | "payment") => {
-    setNewTransaction((prev) => ({ ...prev, type: value, installments_count: undefined }));
+    setNewTransaction((prev) => ({ ...prev, type: value, installments_count: undefined, category_id: "" })); // Resetear category_id
   };
 
   const handleTransactionDateChange = (date: Date | undefined) => {
@@ -126,6 +133,10 @@ const CardDetailsPage: React.FC = () => {
 
   const handleInstallmentsChange = (value: string) => {
     setNewTransaction((prev) => ({ ...prev, installments_count: parseInt(value) || undefined }));
+  };
+
+  const handleCategorySelectChange = (value: string) => {
+    setNewTransaction((prev) => ({ ...prev, category_id: value }));
   };
 
   const handleSubmitTransaction = async (e: React.FormEvent) => {
@@ -144,6 +155,10 @@ const CardDetailsPage: React.FC = () => {
       showError("Por favor, selecciona una fecha para la transacción.");
       return;
     }
+    if (newTransaction.type === "charge" && !newTransaction.category_id) { // Categoría requerida solo para cargos
+      showError("Por favor, selecciona una categoría para el cargo.");
+      return;
+    }
 
     let newBalance = card.current_balance;
     let transactionAmountToStore = amount;
@@ -153,7 +168,7 @@ const CardDetailsPage: React.FC = () => {
     if (newTransaction.type === "charge" && newTransaction.installments_count && newTransaction.installments_count > 1) {
       installmentsTotalAmount = amount;
       installmentsCount = newTransaction.installments_count;
-      transactionAmountToStore = amount / installmentsCount; // Monto mensual
+      transactionAmountToStore = amount / installmentsCount;
     }
 
     if (card.type === "debit") {
@@ -182,6 +197,10 @@ const CardDetailsPage: React.FC = () => {
       }
     }
 
+    const categoryType = newTransaction.type === "charge" && newTransaction.category_id
+      ? expenseCategories.find(cat => cat.id === newTransaction.category_id)?.user_id?.startsWith("inc") ? "income" : "expense"
+      : undefined;
+
     const { data: transactionData, error: transactionError } = await supabase
       .from('card_transactions')
       .insert({
@@ -193,7 +212,9 @@ const CardDetailsPage: React.FC = () => {
         date: format(newTransaction.date, "yyyy-MM-dd"),
         installments_total_amount: installmentsTotalAmount,
         installments_count: installmentsCount,
-        installment_number: installmentsCount ? 1 : undefined, // Siempre la primera cuota al registrar
+        installment_number: installmentsCount ? 1 : undefined,
+        category_id: newTransaction.type === "charge" ? newTransaction.category_id : undefined, // Guardar category_id solo para cargos
+        category_type: newTransaction.type === "charge" ? categoryType : undefined, // Guardar category_type solo para cargos
       })
       .select();
 
@@ -219,12 +240,17 @@ const CardDetailsPage: React.FC = () => {
       return {
         ...prevCard,
         current_balance: newBalance,
-        transactions: [...(prevCard.transactions || []), transactionData[0]], // Asegurar que transactions sea un array
+        transactions: [...(prevCard.transactions || []), transactionData[0]],
       };
     });
-    setNewTransaction({ type: "charge", amount: "", description: "", date: undefined, installments_count: undefined });
+    setNewTransaction({ type: "charge", amount: "", description: "", date: undefined, installments_count: undefined, category_id: "" });
     setIsAddTransactionDialogOpen(false);
     showSuccess("Transacción registrada exitosamente.");
+
+    // Verificar el estado del reto si es un cargo
+    if (user && newTransaction.type === "charge" && newTransaction.category_id) {
+      await checkChallengeStatus(user.id, newTransaction.category_id, fetchCardDetails); // Pasar fetchCardDetails para refrescar datos si el reto falla
+    }
   };
 
   const handleOpenEditTransactionDialog = (transaction: CardTransaction) => {
@@ -235,6 +261,7 @@ const CardDetailsPage: React.FC = () => {
       description: transaction.description,
       date: new Date(transaction.date),
       installments_count: transaction.installments_count,
+      category_id: transaction.category_id || "", // Cargar category_id
     });
     setIsEditTransactionDialogOpen(true);
   };
@@ -250,6 +277,7 @@ const CardDetailsPage: React.FC = () => {
     const oldType = editingTransaction.type;
     const oldInstallmentsTotalAmount = editingTransaction.installments_total_amount;
     const oldInstallmentsCount = editingTransaction.installments_count;
+    const oldCategoryId = editingTransaction.category_id; // Guardar old category_id
 
     const newAmountTotal = parseFloat(newTransaction.amount);
     const newType = newTransaction.type;
@@ -261,6 +289,10 @@ const CardDetailsPage: React.FC = () => {
     }
     if (!newTransaction.date) {
       showError("Por favor, selecciona una fecha para la transacción.");
+      return;
+    }
+    if (newType === "charge" && !newTransaction.category_id) { // Categoría requerida solo para cargos
+      showError("Por favor, selecciona una categoría para el cargo.");
       return;
     }
 
@@ -309,6 +341,10 @@ const CardDetailsPage: React.FC = () => {
       }
     }
 
+    const newCategoryType = newType === "charge" && newTransaction.category_id
+      ? expenseCategories.find(cat => cat.id === newTransaction.category_id)?.user_id?.startsWith("inc") ? "income" : "expense"
+      : undefined;
+
     const { data: updatedTransactionData, error: transactionError } = await supabase
       .from('card_transactions')
       .update({
@@ -319,6 +355,8 @@ const CardDetailsPage: React.FC = () => {
         installments_total_amount: newInstallmentsTotalAmount,
         installments_count: newInstallmentsCount,
         installment_number: newInstallmentNumber,
+        category_id: newType === "charge" ? newTransaction.category_id : null, // Actualizar category_id
+        category_type: newType === "charge" ? newCategoryType : null, // Actualizar category_type
       })
       .eq('id', editingTransaction.id)
       .eq('user_id', user.id)
@@ -346,14 +384,19 @@ const CardDetailsPage: React.FC = () => {
       return {
         ...prevCard,
         current_balance: newCardBalance,
-        transactions: (prevCard.transactions || []).map(t => t.id === editingTransaction.id ? updatedTransactionData[0] : t), // Asegurar que transactions sea un array
+        transactions: (prevCard.transactions || []).map(t => t.id === editingTransaction.id ? updatedTransactionData[0] : t),
       };
     });
 
-    setNewTransaction({ type: "charge", amount: "", description: "", date: undefined, installments_count: undefined });
+    setNewTransaction({ type: "charge", amount: "", description: "", date: undefined, installments_count: undefined, category_id: "" });
     setEditingTransaction(null);
     setIsEditTransactionDialogOpen(false);
     showSuccess("Transacción actualizada exitosamente.");
+
+    // Verificar el estado del reto si es un cargo y la categoría cambió o es nueva
+    if (user && newType === "charge" && newTransaction.category_id) {
+      await checkChallengeStatus(user.id, newTransaction.category_id, fetchCardDetails);
+    }
   };
 
   const handleDeleteCardTransaction = async (transactionId: string, transactionAmount: number, transactionType: "charge" | "payment", installmentsTotalAmount?: number, installmentsCount?: number) => {
@@ -404,7 +447,6 @@ const CardDetailsPage: React.FC = () => {
 
   const filteredTransactions = useMemo(() => {
     if (!card) return [];
-    // Asegurarse de que card.transactions sea un array antes de llamar a filter
     return (card.transactions || []).filter((tx) => {
       const matchesSearch = tx.description.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesType = filterType === "all" || tx.type === filterType;
@@ -413,7 +455,7 @@ const CardDetailsPage: React.FC = () => {
       const matchesDate = !dateRange?.from || (txDate >= dateRange.from && (!dateRange.to || txDate <= dateRange.to));
 
       return matchesSearch && matchesType && matchesDate;
-    }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()); // Ordenar por fecha descendente
+    }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [card, searchTerm, filterType, dateRange]);
 
   const handleExportCardTransactions = (formatType: 'csv' | 'pdf') => {
@@ -422,19 +464,23 @@ const CardDetailsPage: React.FC = () => {
       return;
     }
 
-    const dataToExport = filteredTransactions.map(tx => ({
-      Fecha: format(new Date(tx.date), "dd/MM/yyyy", { locale: es }),
-      Tipo: tx.type === "charge" ? "Cargo" : "Pago",
-      Descripcion: tx.description,
-      Monto: `${tx.type === "charge" ? "-" : "+"}${tx.amount.toFixed(2)}`,
-      Cuotas: tx.installments_count && tx.installment_number && tx.installments_count > 1
-        ? `${tx.installment_number}/${tx.installments_count}`
-        : "Pago único",
-    }));
+    const dataToExport = filteredTransactions.map(tx => {
+      const category = tx.category_id ? getCategoryById(tx.category_id, tx.category_type || "expense") : null;
+      return {
+        Fecha: format(new Date(tx.date), "dd/MM/yyyy", { locale: es }),
+        Tipo: tx.type === "charge" ? "Cargo" : "Pago",
+        Categoria: category?.name || "N/A", // Mostrar categoría
+        Descripcion: tx.description,
+        Monto: `${tx.type === "charge" ? "-" : "+"}${tx.amount.toFixed(2)}`,
+        Cuotas: tx.installments_count && tx.installment_number && tx.installments_count > 1
+          ? `${tx.installment_number}/${tx.installments_count}`
+          : "Pago único",
+      };
+    });
 
     const filename = `estado_cuenta_${card.name.replace(/\s/g, '_')}_${format(new Date(), "yyyyMMdd_HHmmss")}`;
     const title = `Estado de Cuenta: ${card.name} (${card.bank_name})`;
-    const headers = ["Fecha", "Tipo", "Descripción", "Monto", "Cuotas"];
+    const headers = ["Fecha", "Tipo", "Categoría", "Descripción", "Monto", "Cuotas"]; // Añadir Categoría
     const pdfData = dataToExport.map(row => Object.values(row));
 
     if (formatType === 'csv') {
@@ -472,7 +518,6 @@ const CardDetailsPage: React.FC = () => {
         <h1 className="text-3xl font-bold">Detalles de la Tarjeta: {card.name}</h1>
       </div>
 
-      {/* Tarjeta de cuenta regresiva para la fecha de pago */}
       <PaymentDueDateCard card={card} />
 
       <Card className="p-6" style={{ backgroundColor: card.color, color: 'white' }}>
@@ -574,6 +619,25 @@ const CardDetailsPage: React.FC = () => {
                       </SelectContent>
                     </Select>
                   </div>
+                  {newTransaction.type === "charge" && ( // Mostrar selector de categoría solo para cargos
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="transactionCategory" className="text-right">
+                        Categoría
+                      </Label>
+                      <Select value={newTransaction.category_id} onValueChange={handleCategorySelectChange}>
+                        <SelectTrigger className="col-span-3">
+                          <SelectValue placeholder="Selecciona categoría" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {expenseCategories.map((cat) => (
+                            <SelectItem key={cat.id} value={cat.id}>
+                              {cat.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
                   <div className="grid grid-cols-4 items-center gap-4">
                     <Label htmlFor="transactionAmount" className="text-right">
                       Monto
@@ -741,6 +805,7 @@ const CardDetailsPage: React.FC = () => {
                   <TableRow>
                     <TableHead>Fecha</TableHead>
                     <TableHead>Tipo</TableHead>
+                    <TableHead>Categoría</TableHead> {/* Nueva columna */}
                     <TableHead>Descripción</TableHead>
                     <TableHead className="text-right">Monto</TableHead>
                     <TableHead className="text-right">Acciones</TableHead>
@@ -749,6 +814,7 @@ const CardDetailsPage: React.FC = () => {
                 <TableBody>
                   {filteredTransactions.map((transaction) => {
                     const isPaymentToCreditCard = card.type === "credit" && transaction.type === "payment";
+                    const category = transaction.category_id ? getCategoryById(transaction.category_id, transaction.category_type || "expense") : null;
                     return (
                       <TableRow 
                         key={transaction.id}
@@ -764,6 +830,7 @@ const CardDetailsPage: React.FC = () => {
                           {transaction.installments_count && transaction.installment_number && transaction.installments_count > 1 &&
                             ` (${transaction.installment_number}/${transaction.installments_count})`}
                         </TableCell>
+                        <TableCell>{category?.name || "N/A"}</TableCell> {/* Mostrar categoría */}
                         <TableCell>{transaction.description}</TableCell>
                         <TableCell className="text-right">${transaction.amount.toFixed(2)}</TableCell>
                         <TableCell className="text-right flex gap-2 justify-end">
@@ -837,6 +904,25 @@ const CardDetailsPage: React.FC = () => {
                     </SelectContent>
                   </Select>
                 </div>
+                {newTransaction.type === "charge" && ( // Mostrar selector de categoría solo para cargos
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="editTransactionCategory" className="text-right">
+                      Categoría
+                    </Label>
+                    <Select value={newTransaction.category_id} onValueChange={handleCategorySelectChange}>
+                      <SelectTrigger id="editTransactionCategory" className="col-span-3">
+                        <SelectValue placeholder="Selecciona categoría" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {expenseCategories.map((cat) => (
+                          <SelectItem key={cat.id} value={cat.id}>
+                            {cat.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
                 <div className="grid grid-cols-4 items-center gap-4">
                   <Label htmlFor="editTransactionAmount" className="text-right">
                     Monto
