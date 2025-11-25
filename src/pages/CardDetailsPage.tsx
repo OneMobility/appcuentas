@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { DollarSign, History, Trash2, Edit, CalendarIcon, ArrowLeft, FileText, FileDown } from "lucide-react";
+import { DollarSign, History, Trash2, Edit, CalendarIcon, ArrowLeft, FileText, FileDown, Heart } from "lucide-react"; // Importar Heart
 import { showSuccess, showError } from "@/utils/toast";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
@@ -747,60 +747,70 @@ const CardDetailsPage: React.FC = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredTransactions.map((transaction) => (
-                    <TableRow key={transaction.id}>
-                      <TableCell>{format(new Date(transaction.date), "dd/MM/yyyy", { locale: es })}</TableCell>
-                      <TableCell className={transaction.type === "charge" ? "text-red-600" : "text-green-600"}>
-                        {transaction.type === "charge" ? "Cargo" : "Pago"}
-                        {transaction.installments_count && transaction.installment_number && transaction.installments_count > 1 &&
-                          ` (${transaction.installment_number}/${transaction.installments_count})`}
-                      </TableCell>
-                      <TableCell>{transaction.description}</TableCell>
-                      <TableCell className="text-right">${transaction.amount.toFixed(2)}</TableCell>
-                      <TableCell className="text-right flex gap-2 justify-end">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleOpenEditTransactionDialog(transaction)}
-                          className="h-8 w-8 p-0"
-                        >
-                          <Edit className="h-3.5 w-3.5" />
-                          <span className="sr-only">Editar</span>
-                        </Button>
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button
-                              variant="destructive"
-                              size="sm"
-                              className="h-8 w-8 p-0"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                              <span className="sr-only">Eliminar</span>
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>¿Estás absolutamente seguro?</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                Esta acción no se puede deshacer. Esto eliminará permanentemente la transacción de {transaction.type === "charge" ? "cargo" : "pago"} por ${transaction.amount.toFixed(2)}: "{transaction.description}".
-                                {transaction.installments_count && transaction.installments_count > 1 && (
-                                  <p className="mt-2 text-sm text-red-500">
-                                    Nota: Esta es una cuota de una transacción a meses. Eliminarla afectará el saldo de la tarjeta.
-                                  </p>
-                                )}
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                              <AlertDialogAction onClick={() => handleDeleteCardTransaction(transaction.id, transaction.amount, transaction.type, transaction.installments_total_amount, transaction.installments_count)}>
-                                Eliminar
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {filteredTransactions.map((transaction) => {
+                    const isPaymentToCreditCard = card.type === "credit" && transaction.type === "payment";
+                    return (
+                      <TableRow 
+                        key={transaction.id}
+                        className={cn(isPaymentToCreditCard && "bg-blue-50 text-blue-800")}
+                      >
+                        <TableCell>{format(new Date(transaction.date), "dd/MM/yyyy", { locale: es })}</TableCell>
+                        <TableCell className={cn(
+                          transaction.type === "charge" ? "text-red-600" : "text-green-600",
+                          isPaymentToCreditCard && "text-blue-800 font-medium"
+                        )}>
+                          {isPaymentToCreditCard && <Heart className="h-4 w-4 inline-block mr-1 text-blue-500" />}
+                          {transaction.type === "charge" ? "Cargo" : "Pago"}
+                          {transaction.installments_count && transaction.installment_number && transaction.installments_count > 1 &&
+                            ` (${transaction.installment_number}/${transaction.installments_count})`}
+                        </TableCell>
+                        <TableCell>{transaction.description}</TableCell>
+                        <TableCell className="text-right">${transaction.amount.toFixed(2)}</TableCell>
+                        <TableCell className="text-right flex gap-2 justify-end">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleOpenEditTransactionDialog(transaction)}
+                            className="h-8 w-8 p-0"
+                          >
+                            <Edit className="h-3.5 w-3.5" />
+                            <span className="sr-only">Editar</span>
+                          </Button>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button
+                                variant="destructive"
+                                size="sm"
+                                className="h-8 w-8 p-0"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                                <span className="sr-only">Eliminar</span>
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>¿Estás absolutamente seguro?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Esta acción no se puede deshacer. Esto eliminará permanentemente la transacción de {transaction.type === "charge" ? "cargo" : "pago"} por ${transaction.amount.toFixed(2)}: "{transaction.description}".
+                                  {transaction.installments_count && transaction.installments_count > 1 && (
+                                    <p className="mt-2 text-sm text-red-500">
+                                      Nota: Esta es una cuota de una transacción a meses. Eliminarla afectará el saldo de la tarjeta.
+                                    </p>
+                                  )}
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                <AlertDialogAction onClick={() => handleDeleteCardTransaction(transaction.id, transaction.amount, transaction.type, transaction.installments_total_amount, transaction.installments_count)}>
+                                  Eliminar
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             ) : (

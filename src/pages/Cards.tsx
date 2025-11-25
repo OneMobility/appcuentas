@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { PlusCircle, DollarSign, History, Trash2, Edit, CalendarIcon } from "lucide-react";
+import { PlusCircle, DollarSign, History, Trash2, Edit, CalendarIcon, ArrowRightLeft, FileText, FileDown } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
@@ -24,6 +24,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { getUpcomingPaymentDueDate } from "@/utils/date-helpers"; // Importar la nueva función
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { exportToCsv, exportToPdf } from "@/utils/export";
+import CardTransferDialog from "@/components/CardTransferDialog"; // Importar el nuevo componente
 
 interface CardTransaction {
   id: string;
@@ -61,6 +62,7 @@ const Cards = () => {
   const [isAddCardDialogOpen, setIsAddCardDialogOpen] = useState(false);
   const [isEditCardDialogOpen, setIsEditCardDialogOpen] = useState(false);
   const [isAddTransactionDialogOpen, setIsAddTransactionDialogOpen] = useState(false);
+  const [isTransferDialogOpen, setIsTransferDialogOpen] = useState(false); // Nuevo estado para el diálogo de transferencia
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [editingCard, setEditingCard] = useState<CardData | null>(null);
   const [newCard, setNewCard] = useState({
@@ -489,185 +491,193 @@ const Cards = () => {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>Mis Tarjetas</CardTitle>
-          <Dialog open={isAddCardDialogOpen} onOpenChange={setIsAddCardDialogOpen}>
-            <DialogTrigger asChild>
-              <Button size="sm" className="h-8 gap-1">
-                <PlusCircle className="h-3.5 w-3.5" />
-                <span className="sr-only sm:not-sr-only sm:whitespace-nowrap">
-                  Añadir Tarjeta
-                </span>
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-[425px]">
-              <DialogHeader>
-                <DialogTitle>Añadir Nueva Tarjeta</DialogTitle>
-              </DialogHeader>
-              <form onSubmit={handleSubmitNewCard} className="grid gap-4 py-4">
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="name" className="text-right">
-                    Nombre (Opcional)
-                  </Label>
-                  <Input
-                    id="name"
-                    name="name"
-                    value={newCard.name}
-                    onChange={handleNewCardChange}
-                    className="col-span-3"
-                    placeholder="Ej. Visa Principal"
-                  />
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="bank_name" className="text-right">
-                    Banco
-                  </Label>
-                  <Input
-                    id="bank_name"
-                    name="bank_name"
-                    value={newCard.bank_name}
-                    onChange={handleNewCardChange}
-                    className="col-span-3"
-                    required
-                  />
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="last_four_digits" className="text-right">
-                    Últimos 4 Dígitos
-                  </Label>
-                  <Input
-                    id="last_four_digits"
-                    name="last_four_digits"
-                    value={newCard.last_four_digits}
-                    onChange={handleNewCardChange}
-                    maxLength={4}
-                    pattern="\d{4}"
-                    inputMode="numeric"
-                    className="col-span-3"
-                    required
-                  />
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="expiration_date" className="text-right">
-                    Fecha de Expiración (MM/AA)
-                  </Label>
-                  <Input
-                    id="expiration_date"
-                    name="expiration_date"
-                    value={newCard.expiration_date}
-                    onChange={handleNewCardChange}
-                    maxLength={5}
-                    placeholder="MM/AA"
-                    className="col-span-3"
-                    required
-                  />
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="type" className="text-right">
-                    Tipo
-                  </Label>
-                  <Select value={newCard.type} onValueChange={handleNewCardTypeChange}>
-                    <SelectTrigger className="col-span-3">
-                      <SelectValue placeholder="Selecciona tipo" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="debit">Débito</SelectItem>
-                      <SelectItem value="credit">Crédito</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="initial_balance" className="text-right">
-                    Saldo Inicial
-                  </Label>
-                  <Input
-                    id="initial_balance"
-                    name="initial_balance"
-                    type="number"
-                    step="0.01"
-                    value={newCard.initial_balance}
-                    onChange={handleNewCardChange}
-                    className="col-span-3"
-                    required
-                  />
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="cardColor" className="text-right">
-                    Color de Tarjeta
-                  </Label>
-                  <div className="col-span-3">
-                    <ColorPicker selectedColor={newCard.color} onSelectColor={handleNewCardColorSelect} />
+          <div className="flex gap-2">
+            <Dialog open={isAddCardDialogOpen} onOpenChange={setIsAddCardDialogOpen}>
+              <DialogTrigger asChild>
+                <Button size="sm" className="h-8 gap-1">
+                  <PlusCircle className="h-3.5 w-3.5" />
+                  <span className="sr-only sm:not-sr-only sm:whitespace-nowrap">
+                    Añadir Tarjeta
+                  </span>
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[425px]">
+                <DialogHeader>
+                  <DialogTitle>Añadir Nueva Tarjeta</DialogTitle>
+                </DialogHeader>
+                <form onSubmit={handleSubmitNewCard} className="grid gap-4 py-4">
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="name" className="text-right">
+                      Nombre (Opcional)
+                    </Label>
+                    <Input
+                      id="name"
+                      name="name"
+                      value={newCard.name}
+                      onChange={handleNewCardChange}
+                      className="col-span-3"
+                      placeholder="Ej. Visa Principal"
+                    />
                   </div>
-                </div>
-                {newCard.type === "credit" && (
-                  <>
-                    <div className="grid grid-cols-4 items-center gap-4">
-                      <Label htmlFor="credit_limit" className="text-right">
-                        Límite de Crédito
-                      </Label>
-                      <Input
-                        id="credit_limit"
-                        name="credit_limit"
-                        type="number"
-                        step="0.01"
-                        value={newCard.credit_limit}
-                        onChange={handleNewCardChange}
-                        className="col-span-3"
-                        required
-                      />
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="bank_name" className="text-right">
+                      Banco
+                    </Label>
+                    <Input
+                      id="bank_name"
+                      name="bank_name"
+                      value={newCard.bank_name}
+                      onChange={handleNewCardChange}
+                      className="col-span-3"
+                      required
+                    />
+                  </div>
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="last_four_digits" className="text-right">
+                      Últimos 4 Dígitos
+                    </Label>
+                    <Input
+                      id="last_four_digits"
+                      name="last_four_digits"
+                      value={newCard.last_four_digits}
+                      onChange={handleNewCardChange}
+                      maxLength={4}
+                      pattern="\d{4}"
+                      inputMode="numeric"
+                      className="col-span-3"
+                      required
+                    />
+                  </div>
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="expiration_date" className="text-right">
+                      Fecha de Expiración (MM/AA)
+                    </Label>
+                    <Input
+                      id="expiration_date"
+                      name="expiration_date"
+                      value={newCard.expiration_date}
+                      onChange={handleNewCardChange}
+                      maxLength={5}
+                      placeholder="MM/AA"
+                      className="col-span-3"
+                      required
+                    />
+                  </div>
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="type" className="text-right">
+                      Tipo
+                    </Label>
+                    <Select value={newCard.type} onValueChange={handleNewCardTypeChange}>
+                      <SelectTrigger className="col-span-3">
+                        <SelectValue placeholder="Selecciona tipo" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="debit">Débito</SelectItem>
+                        <SelectItem value="credit">Crédito</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="initial_balance" className="text-right">
+                      Saldo Inicial
+                    </Label>
+                    <Input
+                      id="initial_balance"
+                      name="initial_balance"
+                      type="number"
+                      step="0.01"
+                      value={newCard.initial_balance}
+                      onChange={handleNewCardChange}
+                      className="col-span-3"
+                      required
+                    />
+                  </div>
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="cardColor" className="text-right">
+                      Color de Tarjeta
+                    </Label>
+                    <div className="col-span-3">
+                      <ColorPicker selectedColor={newCard.color} onSelectColor={handleNewCardColorSelect} />
                     </div>
-                    <div className="grid grid-cols-4 items-center gap-4">
-                      <Label htmlFor="cut_off_day" className="text-right">
-                        Día de Corte
-                      </Label>
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <Button
-                            variant={"outline"}
-                            className={cn(
-                              "col-span-3 justify-start text-left font-normal",
-                              !newCard.cut_off_day && "text-muted-foreground"
-                            )}
-                          >
-                            <CalendarIcon className="mr-2 h-4 w-4" />
-                            {newCard.cut_off_day ? `Día ${newCard.cut_off_day} de cada mes` : <span>Selecciona un día</span>}
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0">
-                          <Calendar
-                            mode="single"
-                            selected={newCard.cut_off_day ? new Date(new Date().setDate(newCard.cut_off_day)) : undefined}
-                            onSelect={(date) => handleNewCardDayChange("cut_off_day", date)}
-                            initialFocus
-                            captionLayout="dropdown-buttons"
-                            fromYear={1900}
-                            toYear={2100}
-                            locale={es}
-                          />
-                        </PopoverContent>
-                      </Popover>
-                    </div>
-                    <div className="grid grid-cols-4 items-center gap-4">
-                      <Label htmlFor="days_to_pay_after_cut_off" className="text-right">
-                        Días para pagar después del corte
-                      </Label>
-                      <Input
-                        id="days_to_pay_after_cut_off"
-                        name="days_to_pay_after_cut_off"
-                        type="number"
-                        min="0"
-                        value={newCard.days_to_pay_after_cut_off?.toString() || ""}
-                        onChange={handleNewCardChange}
-                        className="col-span-3"
-                        required
-                      />
-                    </div>
-                  </>
-                )}
-                <DialogFooter>
-                  <Button type="submit">Guardar Tarjeta</Button>
-                </DialogFooter>
-              </form>
-            </DialogContent>
-          </Dialog>
+                  </div>
+                  {newCard.type === "credit" && (
+                    <>
+                      <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="credit_limit" className="text-right">
+                          Límite de Crédito
+                        </Label>
+                        <Input
+                          id="credit_limit"
+                          name="credit_limit"
+                          type="number"
+                          step="0.01"
+                          value={newCard.credit_limit}
+                          onChange={handleNewCardChange}
+                          className="col-span-3"
+                          required
+                        />
+                      </div>
+                      <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="cut_off_day" className="text-right">
+                          Día de Corte
+                        </Label>
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant={"outline"}
+                              className={cn(
+                                "col-span-3 justify-start text-left font-normal",
+                                !newCard.cut_off_day && "text-muted-foreground"
+                              )}
+                            >
+                              <CalendarIcon className="mr-2 h-4 w-4" />
+                              {newCard.cut_off_day ? `Día ${newCard.cut_off_day} de cada mes` : <span>Selecciona un día</span>}
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0">
+                            <Calendar
+                              mode="single"
+                              selected={newCard.cut_off_day ? new Date(new Date().setDate(newCard.cut_off_day)) : undefined}
+                              onSelect={(date) => handleNewCardDayChange("cut_off_day", date)}
+                              initialFocus
+                              captionLayout="dropdown-buttons"
+                              fromYear={1900}
+                              toYear={2100}
+                              locale={es}
+                            />
+                          </PopoverContent>
+                        </Popover>
+                      </div>
+                      <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="days_to_pay_after_cut_off" className="text-right">
+                          Días para pagar después del corte
+                        </Label>
+                        <Input
+                          id="days_to_pay_after_cut_off"
+                          name="days_to_pay_after_cut_off"
+                          type="number"
+                          min="0"
+                          value={newCard.days_to_pay_after_cut_off?.toString() || ""}
+                          onChange={handleNewCardChange}
+                          className="col-span-3"
+                          required
+                        />
+                      </div>
+                    </>
+                  )}
+                  <DialogFooter>
+                    <Button type="submit">Guardar Tarjeta</Button>
+                  </DialogFooter>
+                </form>
+              </DialogContent>
+            </Dialog>
+            <Button size="sm" className="h-8 gap-1" onClick={() => setIsTransferDialogOpen(true)}>
+              <ArrowRightLeft className="h-3.5 w-3.5" />
+              <span className="sr-only sm:not-sr-only sm:whitespace-nowrap">
+                Transferir
+              </span>
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="mb-4">
@@ -689,6 +699,13 @@ const Cards = () => {
               />
             ))}
           </div>
+
+          <CardTransferDialog
+            isOpen={isTransferDialogOpen}
+            onClose={() => setIsTransferDialogOpen(false)}
+            cards={cards}
+            onTransferSuccess={fetchCards} // Refresh cards after successful transfer
+          />
 
           <Dialog open={isAddTransactionDialogOpen} onOpenChange={setIsAddTransactionDialogOpen}>
             <DialogContent className="sm:max-w-[425px]">
