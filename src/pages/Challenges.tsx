@@ -276,17 +276,18 @@ const Challenges: React.FC<ChallengesProps> = ({ challengeRefreshKey, setChallen
     const isFailed = challenge.status === "failed";
     const isRegular = challenge.status === "regular";
 
+    let imageUrl = GENERIC_REGULAR_IMAGE; // Default fallback
+
     if (isCompleted) {
-      // Si hay una insignia asignada (que ahora será una de las aleatorias), usa su imagen
-      return challenge.badge?.image_url || GENERIC_COMPLETED_IMAGE;
+      imageUrl = challenge.badge?.image_url || GENERIC_COMPLETED_IMAGE;
     } else if (isFailed) {
-      return FAILED_CHALLENGE_IMAGE;
+      imageUrl = FAILED_CHALLENGE_IMAGE;
     } else if (isRegular) {
-      return GENERIC_REGULAR_IMAGE;
+      imageUrl = GENERIC_REGULAR_IMAGE;
     }
-    // Para retos activos o sin estado específico en el álbum, no debería llegar aquí si se filtra bien.
-    // Como fallback, podemos usar la imagen genérica de "regular" o una específica para "activo".
-    return GENERIC_REGULAR_IMAGE; 
+    
+    console.log(`Challenge: ${challenge.name}, Status: ${challenge.status}, Badge ID: ${challenge.badge_id}, Image URL: ${imageUrl}`);
+    return imageUrl;
   };
 
   if (isLoadingChallenges) {
@@ -326,26 +327,25 @@ const Challenges: React.FC<ChallengesProps> = ({ challengeRefreshKey, setChallen
         <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {userPastChallenges.length > 0 ? (
             userPastChallenges.map((challenge) => (
-              <TooltipProvider key={challenge.id}>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <div className="relative w-full h-[200px] flex items-center justify-center rounded-lg shadow-md bg-white p-4 cursor-pointer">
-                      <img
-                        src={getFrontImageSrc(challenge)}
-                        alt={challenge.name}
-                        className="max-h-full max-w-full object-contain"
-                        onError={(e) => {
-                          console.error("Error al cargar la imagen del reto:", e.currentTarget.src);
-                          e.currentTarget.src = FAILED_CHALLENGE_IMAGE; // Fallback a una imagen de error
-                        }}
-                      />
-                    </div>
-                  </TooltipTrigger>
-                  <TooltipContent className="w-[300px] p-0 z-50">
-                    <ChallengeAlbumBackContent challenge={challenge} />
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+              // Eliminado TooltipProvider redundante
+              <Tooltip key={challenge.id} delayDuration={300}> {/* Añadido delayDuration */}
+                <TooltipTrigger asChild>
+                  <div className="relative w-full h-[200px] flex items-center justify-center rounded-lg shadow-md bg-white p-4 cursor-pointer">
+                    <img
+                      src={getFrontImageSrc(challenge)}
+                      alt={challenge.name}
+                      className="max-h-full max-w-full object-contain"
+                      onError={(e) => {
+                        console.error(`Error al cargar la imagen del reto "${challenge.name}":`, e.currentTarget.src);
+                        e.currentTarget.src = FAILED_CHALLENGE_IMAGE; // Fallback a una imagen de error
+                      }}
+                    />
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent className="w-[300px] p-0 z-50">
+                  <ChallengeAlbumBackContent challenge={challenge} />
+                </TooltipContent>
+              </Tooltip>
             ))
           ) : (
             <p className="col-span-full text-center text-muted-foreground">
