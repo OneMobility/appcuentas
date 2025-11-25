@@ -42,14 +42,23 @@ const badgeMapping: { [key: string]: string } = {
   "saving-goal-500": "Ahorrador Nivel 3",
 };
 
-const FAILED_CHALLENGE_IMAGE = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Fallido.png";
+const SUPABASE_STORAGE_BASE_URL = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/";
+
+const FAILED_CHALLENGE_IMAGE = `${SUPABASE_STORAGE_BASE_URL}Fallido.png`;
+const GENERIC_COMPLETED_IMAGE = `${SUPABASE_STORAGE_BASE_URL}Meta%202.png`;
+const GENERIC_REGULAR_IMAGE = `${SUPABASE_STORAGE_BASE_URL}Cochinito%20Calendario.png`;
+
+// Mapeo explícito de IDs de retos a URLs de imágenes específicas para retos COMPLETADOS
 const COMPLETED_CHALLENGE_IMAGES: { [key: string]: string } = {
-  "saving-goal-150": "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Reto%20150%20pesos.png",
-  "no-netflix-more-books": "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Reto%20menos%20netflix.png",
-  // Añadir otras imágenes específicas para retos completados aquí
+  "no-netflix-more-books": `${SUPABASE_STORAGE_BASE_URL}Reto%20menos%20netflix.png`,
+  "no-more-blouses": `${SUPABASE_STORAGE_BASE_URL}Reto%20Blusa.png`,
+  "no-entertainment": `${SUPABASE_STORAGE_BASE_URL}Reto%20Entretenimiento.png`,
+  "no-apps": `${SUPABASE_STORAGE_BASE_URL}Reto%20Apps.png`,
+  "saving-goal-150": `${SUPABASE_STORAGE_BASE_URL}Reto%20150%20pesos.png`,
+  "saving-goal-300": `${SUPABASE_STORAGE_BASE_URL}Reto%20300%20pesos.png`,
+  "saving-goal-200": `${SUPABASE_STORAGE_BASE_URL}Reto%20200%20pesos.png`,
+  "saving-goal-500": `${SUPABASE_STORAGE_BASE_URL}Reto%20500%20pesos.png`,
 };
-const GENERIC_COMPLETED_IMAGE = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Meta%202.png";
-const GENERIC_REGULAR_IMAGE = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Cochinito%20Calendario.png";
 
 
 const Challenges: React.FC<ChallengesProps> = ({ challengeRefreshKey, setChallengeRefreshKey }) => {
@@ -153,9 +162,7 @@ const Challenges: React.FC<ChallengesProps> = ({ challengeRefreshKey, setChallen
 
     let newStatus: "completed" | "failed" | "regular" = "failed";
     let awardedBadgeId: string | null = null;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0); // Establecer a inicio del día local
-    const evaluationDate = format(today, "yyyy-MM-dd");
+    const evaluationDate = format(new Date(), "yyyy-MM-dd"); // Usar fecha local del dispositivo
 
     if (challenge.challenge_template_id.startsWith("no-spend")) {
       const { data: expenseTransactions, error: txError } = await supabase
@@ -260,6 +267,7 @@ const Challenges: React.FC<ChallengesProps> = ({ challengeRefreshKey, setChallen
     let imageUrl: string | undefined;
 
     if (isCompleted) {
+      // Priorizar la imagen específica del reto completado, luego la del badge, luego la genérica
       imageUrl = COMPLETED_CHALLENGE_IMAGES[challenge.challenge_template_id] || challenge.badge?.image_url || GENERIC_COMPLETED_IMAGE;
     } else if (isFailed) {
       imageUrl = FAILED_CHALLENGE_IMAGE;
