@@ -461,8 +461,8 @@ const Savings: React.FC = () => {
       Nombre: saving.name,
       "Saldo Actual": saving.current_balance.toFixed(2),
       "Monto Objetivo": saving.target_amount?.toFixed(2) || "N/A",
-      "Fecha Objetivo": saving.target_date ? format(parseISO(saving.target_date), "dd/MM/yyyy", { locale: es }) : "N/A", // Usar parseISO
-      "Fecha Cumplimiento": saving.completion_date ? format(parseISO(saving.completion_date), "dd/MM/yyyy", { locale: es }) : "N/A", // Usar parseISO
+      "Fecha Objetivo": saving.target_date ? format(parseISO(saving.target_date), "dd/MM/yyyy", { locale: es }) : "N/A",
+      "Fecha Cumplimiento": saving.completion_date ? format(parseISO(saving.completion_date), "dd/MM/yyyy", { locale: es }) : "N/A", // Añadido
       "Progreso (%)": saving.target_amount ? ((saving.current_balance / saving.target_amount) * 100).toFixed(2) : "N/A",
     }));
 
@@ -501,7 +501,7 @@ const Savings: React.FC = () => {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>Mis Cuentas de Ahorro</CardTitle>
-          <div className="flex gap-2">
+        <div className="flex gap-2">
             <Dialog open={isAddSavingDialogOpen} onOpenChange={setIsAddSavingDialogOpen}>
               <DialogTrigger asChild>
                 <Button size="sm" className="h-8 gap-1">
@@ -667,7 +667,7 @@ const Savings: React.FC = () => {
                       <TableCell>
                         {saving.target_amount ? (
                           <div className="flex items-center gap-2">
-                            <Progress value={progress} className="w-[100px]" indicatorColor={saving.color} />
+                            <Progress value={progress} className="w-[100px]" style={{ backgroundColor: saving.color }} />
                             <span className="text-sm">{progress.toFixed(0)}%</span>
                           </div>
                         ) : "N/A"}
