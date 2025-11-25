@@ -392,7 +392,7 @@ const Dashboard = () => {
             <img 
               src={piggyBankImageSrc} 
               alt="Conchinito en problemas" 
-              className="absolute top-0 right-[50px] h-[120px] w-[120px] z-10 -mt-4"
+              className="absolute top-4 right-4 h-20 w-20 z-10" // Ajustado para móvil
             />
           </CardHeader>
           <CardContent>
@@ -432,7 +432,7 @@ const Dashboard = () => {
             <img 
               src={piggyBankImageSrc} 
               alt="Conchinito feliz" 
-              className="absolute top-0 right-[50px] h-[120px] w-[120px] z-10 -mt-4"
+              className="absolute top-4 right-4 h-20 w-20 z-10" // Ajustado para móvil
             />
           </CardHeader>
           <CardContent>
