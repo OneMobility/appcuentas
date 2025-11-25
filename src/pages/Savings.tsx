@@ -24,7 +24,7 @@ import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import ChallengeCard, { ChallengeData } from "@/components/ChallengeCard"; // Importar ChallengeCard
 import ChallengeCreationDialog from "@/components/ChallengeCreationDialog"; // Importar ChallengeCreationDialog
-import SavingFeedbackOverlay from "@/components/SavingFeedbackOverlay"; // Importar el nuevo componente
+import FeedbackOverlay from "@/components/FeedbackOverlay"; // Importar el componente genérico
 
 interface Saving {
   id: string;
@@ -58,7 +58,13 @@ const Savings = () => {
     amount: "",
     description: "",
   });
-  const [feedbackState, setFeedbackState] = useState<{ type: 'deposit' | 'withdrawal' | null; isVisible: boolean }>({ type: null, isVisible: false });
+  const [feedbackOverlay, setFeedbackOverlay] = useState<{
+    isVisible: boolean;
+    message: string;
+    imageSrc: string;
+    bgColor: string;
+    textColor: string;
+  } | null>(null);
 
 
   const [searchTerm, setSearchTerm] = useState("");
@@ -171,6 +177,13 @@ const Savings = () => {
       setNewSaving({ name: "", initial_balance: "", target_amount: "", target_date: undefined, color: "#22C55E" });
       setIsAddSavingDialogOpen(false);
       showSuccess("Cuenta de ahorro registrada exitosamente.");
+      setFeedbackOverlay({
+        isVisible: true,
+        message: "¡Muy bien! ¡Cumpliremos esa meta!",
+        imageSrc: "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Cochinito%20Ahorro.png",
+        bgColor: "bg-pink-100",
+        textColor: "text-pink-800",
+      });
     }
   };
 
@@ -242,13 +255,25 @@ const Savings = () => {
     if (error) {
       showError('Error al actualizar cuenta de ahorro: ' + error.message);
     } else {
+      const updatedSaving = data[0];
       setSavings((prev) =>
-        prev.map((saving) => (saving.id === editingSaving.id ? data[0] : saving))
+        prev.map((saving) => (saving.id === editingSaving.id ? updatedSaving : saving))
       );
       setEditingSaving(null);
       setNewSaving({ name: "", initial_balance: "", target_amount: "", target_date: undefined, color: "#22C55E" });
       setIsEditSavingDialogOpen(false);
       showSuccess("Cuenta de ahorro actualizada exitosamente.");
+
+      // Check if goal is reached after update
+      if (updatedSaving.target_amount && updatedSaving.current_balance >= updatedSaving.target_amount) {
+        setFeedbackOverlay({
+          isVisible: true,
+          message: "¡Lo has logrado! ¡Felicidades por alcanzar tu meta!",
+          imageSrc: "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Meta.png",
+          bgColor: "bg-green-100",
+          textColor: "text-green-800",
+        });
+      }
     }
   };
 
@@ -309,19 +334,48 @@ const Savings = () => {
     if (error) {
       showError('Error al registrar transacción: ' + error.message);
     } else {
+      const updatedSaving = data[0];
       setSavings((prev) =>
-        prev.map((saving) => (saving.id === selectedSavingId ? data[0] : saving))
+        prev.map((saving) => (saving.id === selectedSavingId ? updatedSaving : saving))
       );
       setNewTransaction({ type: "deposit", amount: "", description: "" });
       setSelectedSavingId(null);
       setIsTransactionDialogOpen(false);
       showSuccess("Transacción registrada exitosamente.");
-      setFeedbackState({ type: transactionType, isVisible: true }); // Mostrar feedback
+
+      // Show feedback overlay based on transaction type
+      if (transactionType === "deposit") {
+        setFeedbackOverlay({
+          isVisible: true,
+          message: "¡Felicidades! ¡Un paso más cerca de tus metas!",
+          imageSrc: "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Cochinito%20Ahorro.png",
+          bgColor: "bg-pink-100",
+          textColor: "text-pink-800",
+        });
+        // Check if goal is reached after deposit
+        if (updatedSaving.target_amount && updatedSaving.current_balance >= updatedSaving.target_amount) {
+          setFeedbackOverlay({
+            isVisible: true,
+            message: "¡Lo has logrado! ¡Felicidades por alcanzar tu meta!",
+            imageSrc: "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Meta.png",
+            bgColor: "bg-green-100",
+            textColor: "text-green-800",
+          });
+        }
+      } else { // withdrawal
+        setFeedbackOverlay({
+          isVisible: true,
+          message: "Pensé que éramos amigos... ¡No te rindas!",
+          imageSrc: "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Cochinito%20Ahorro%20Triste.png",
+          bgColor: "bg-blue-100",
+          textColor: "text-blue-800",
+        });
+      }
     }
   };
 
   const handleFeedbackClose = () => {
-    setFeedbackState({ type: null, isVisible: false });
+    setFeedbackOverlay(null);
   };
 
   const filteredSavings = savings.filter((saving) =>
@@ -707,9 +761,12 @@ const Savings = () => {
           </Dialog>
         </CardContent>
       </Card>
-      {feedbackState.isVisible && (
-        <SavingFeedbackOverlay
-          type={feedbackState.type!}
+      {feedbackOverlay?.isVisible && (
+        <FeedbackOverlay
+          message={feedbackOverlay.message}
+          imageSrc={feedbackOverlay.imageSrc}
+          bgColor={feedbackOverlay.bgColor}
+          textColor={feedbackOverlay.textColor}
           onClose={handleFeedbackClose}
         />
       )}
