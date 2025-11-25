@@ -13,6 +13,8 @@ import { useSession } from "@/context/SessionContext";
 import { showError } from "@/utils/toast";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"; // Importar componentes de tabla
+import { getUpcomingPaymentDueDate } from "@/utils/date-helpers"; // Importar la función de ayuda para fechas
 
 // Tasas de cambio de ejemplo (MXN como base)
 const exchangeRates: { [key: string]: number } = {
@@ -22,6 +24,19 @@ const exchangeRates: { [key: string]: number } = {
   COP: 0.0045, // Peso Colombiano
   BOB: 2.7,  // Boliviano Boliviano
 };
+
+interface CardTransaction {
+  id: string;
+  type: "charge" | "payment";
+  amount: number;
+  description: string;
+  date: string;
+  card_id?: string;
+  user_id?: string;
+  installments_total_amount?: number;
+  installments_count?: number;
+  installment_number?: number;
+}
 
 interface CardData {
   id: string;
@@ -34,8 +49,9 @@ interface CardData {
   current_balance: number;
   credit_limit?: number;
   cut_off_day?: number;
-  payment_due_day?: number;
+  days_to_pay_after_cut_off?: number; // Añadido este campo
   color: string;
+  transactions: CardTransaction[]; // Incluir transacciones directamente
   user_id?: string;
 }
 
@@ -66,19 +82,6 @@ interface CreditorData {
   user_id?: string;
 }
 
-interface CardTransaction {
-  id: string;
-  type: "charge" | "payment";
-  amount: number;
-  description: string;
-  date: string;
-  card_id?: string;
-  user_id?: string;
-  installments_total_amount?: number;
-  installments_count?: number;
-  installment_number?: number;
-}
-
 interface MonthlySummary {
   name: string; // Month name
   ingresos: number;
@@ -96,7 +99,7 @@ const Dashboard = () => {
   const [cashTransactions, setCashTransactions] = useState<CashTransaction[]>([]);
   const [debtors, setDebtors] = useState<DebtorData[]>([]);
   const [creditors, setCreditors] = useState<CreditorData[]>([]);
-  const [cardTransactions, setCardTransactions] = useState<CardTransaction[]>([]);
+  // Eliminado: const [cardTransactions, setCardTransactions] = useState<CardTransaction[]>([]);
 
   const fetchDashboardData = async () => {
     if (!user) {
@@ -104,15 +107,14 @@ const Dashboard = () => {
       setCashTransactions([]);
       setDebtors([]);
       setCreditors([]);
-      setCardTransactions([]);
       return;
     }
 
     try {
-      // Fetch Cards
+      // Fetch Cards with their transactions
       const { data: cardsData, error: cardsError } = await supabase
         .from('cards')
-        .select('*')
+        .select('*, card_transactions(*)') // Seleccionar transacciones junto con las tarjetas
         .eq('user_id', user.id);
       if (cardsError) throw cardsError;
       setCards(cardsData || []);
@@ -140,15 +142,6 @@ const Dashboard = () => {
         .eq('user_id', user.id);
       if (creditorsError) throw creditorsError;
       setCreditors(creditorsData || []);
-
-      // Fetch Card Transactions
-      const { data: cardTxData, error: cardTxError } = await supabase
-        .from('card_transactions')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('date', { ascending: true });
-      if (cardTxError) throw cardTxError;
-      setCardTransactions(cardTxData || []);
 
     } catch (error: any) {
       showError('Error al cargar datos del dashboard: ' + error.message);
@@ -256,37 +249,61 @@ const Dashboard = () => {
   }, [cashTransactions]);
 
   const monthlyCardSpendingData = useMemo(() => {
-    if (!cards.length || !cardTransactions.length) return [];
+    if (!cards.length) return []; // Usar 'cards' directamente
 
     const monthlyDataMap = new Map<string, { [key: string]: any }>(); // Key: YYYY-MM
 
-    cardTransactions.forEach(tx => {
-      if (tx.type === "charge") {
-        const monthKey = format(new Date(tx.date), "yyyy-MM");
-        const monthName = format(new Date(tx.date), "MMM", { locale: es }); // Short month name
+    cards.forEach(card => {
+      (card.transactions || []).forEach(tx => { // Asegurarse de que transactions sea un array
+        if (tx.type === "charge") {
+          const monthKey = format(new Date(tx.date), "yyyy-MM");
+          const monthName = format(new Date(tx.date), "MMM", { locale: es }); // Short month name
 
-        if (!monthlyDataMap.has(monthKey)) {
-          monthlyDataMap.set(monthKey, { name: monthName });
+          if (!monthlyDataMap.has(monthKey)) {
+            monthlyDataMap.set(monthKey, { name: monthName });
+          }
+
+          const currentMonthData = monthlyDataMap.get(monthKey)!;
+          const cardName = card.name; // Usar el nombre de la tarjeta
+          currentMonthData[cardName] = (currentMonthData[cardName] || 0) + (tx.installments_total_amount || tx.amount); // Sumar el monto total si es a meses
+          monthlyDataMap.set(monthKey, currentMonthData);
         }
-
-        const currentMonthData = monthlyDataMap.get(monthKey)!;
-        const cardName = cards.find(c => c.id === tx.card_id)?.name || `Tarjeta ${tx.card_id?.substring(0, 4)}`;
-
-        currentMonthData[cardName] = (currentMonthData[cardName] || 0) + tx.amount;
-        monthlyDataMap.set(monthKey, currentMonthData);
-      }
+      });
     });
 
     // Sort by month key to ensure chronological order
     return Array.from(monthlyDataMap.entries())
       .sort(([keyA], [keyB]) => keyA.localeCompare(keyB))
       .map(([, value]) => value);
-  }, [cards, cardTransactions]);
+  }, [cards]); // Dependencia de 'cards'
 
   const uniqueCardNames = useMemo(() => {
     const names = new Set<string>();
     cards.forEach(card => names.add(card.name));
     return Array.from(names);
+  }, [cards]);
+
+  const cardSummaryData = useMemo(() => {
+    return cards.map(card => {
+      const isCredit = card.type === "credit";
+      const creditAvailable = isCredit && card.credit_limit !== undefined ? card.credit_limit - card.current_balance : 0;
+      const upcomingPaymentDueDate = isCredit && card.cut_off_day !== undefined && card.days_to_pay_after_cut_off !== undefined
+        ? getUpcomingPaymentDueDate(card.cut_off_day, card.days_to_pay_after_cut_off)
+        : null;
+
+      // Calculate total spent for the card (sum of all 'charge' transactions)
+      const totalSpent = (card.transactions || []) // Ensure transactions is an array
+        .filter(tx => tx.type === "charge")
+        .reduce((sum, tx) => sum + (tx.installments_total_amount || tx.amount), 0); // Usar monto total si es a meses
+
+      return {
+        ...card,
+        isCredit,
+        creditAvailable,
+        upcomingPaymentDueDate,
+        totalSpent,
+      };
+    });
   }, [cards]);
 
   return (
@@ -389,6 +406,53 @@ const Dashboard = () => {
                 {convertedAmount} {toCurrency}
               </div>
             </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Resumen Detallado de Tarjetas</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Tarjeta</TableHead>
+                  <TableHead>Tipo</TableHead>
+                  <TableHead>Límite / Saldo Inicial</TableHead>
+                  <TableHead>Deuda Actual / Saldo Disponible</TableHead>
+                  <TableHead>Crédito Disponible</TableHead>
+                  <TableHead>Total Gastado (Histórico)</TableHead>
+                  <TableHead>Próx. Pago (Crédito)</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {cardSummaryData.map((card) => (
+                  <TableRow key={card.id}>
+                    <TableCell className="font-medium">
+                      <div className="flex items-center gap-2">
+                        <div className="h-4 w-4 rounded-full" style={{ backgroundColor: card.color }} />
+                        <span>{card.name}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell>{card.isCredit ? "Crédito" : "Débito"}</TableCell>
+                    <TableCell>${(card.isCredit ? card.credit_limit : card.initial_balance)?.toFixed(2) || "N/A"}</TableCell>
+                    <TableCell>${card.current_balance.toFixed(2)}</TableCell>
+                    <TableCell className={card.isCredit && card.creditAvailable < 0 ? "text-red-600" : ""}>
+                      {card.isCredit ? `$${card.creditAvailable.toFixed(2)}` : "N/A"}
+                    </TableCell>
+                    <TableCell>${card.totalSpent.toFixed(2)}</TableCell>
+                    <TableCell>
+                      {card.isCredit && card.upcomingPaymentDueDate
+                        ? format(card.upcomingPaymentDueDate, "dd/MM/yyyy", { locale: es })
+                        : "N/A"}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           </div>
         </CardContent>
       </Card>
