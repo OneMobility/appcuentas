@@ -102,6 +102,7 @@ const CardDetailsPage: React.FC = () => {
         .single();
 
       if (error) {
+        console.error("Error fetching card details:", error); // Log the error
         showError('Error al cargar detalles de la tarjeta: ' + error.message);
         navigate('/cards');
       } else {
@@ -140,22 +141,31 @@ const CardDetailsPage: React.FC = () => {
 
   const handleSubmitTransaction = async (e: React.FormEvent) => {
     e.preventDefault();
+    console.log("handleSubmitTransaction called.");
+    console.log("Current user:", user);
+    console.log("Current card:", card);
+    console.log("New transaction data:", newTransaction);
+
     if (!user || !card) {
       showError("Debes iniciar sesión o la tarjeta no está cargada.");
+      console.error("User or card not loaded.");
       return;
     }
 
     const amount = parseFloat(newTransaction.amount);
     if (isNaN(amount) || amount <= 0) {
       showError("El monto de la transacción debe ser un número positivo.");
+      console.error("Invalid amount:", newTransaction.amount);
       return;
     }
     if (!newTransaction.date) {
       showError("Por favor, selecciona una fecha para la transacción.");
+      console.error("No date selected.");
       return;
     }
     if (newTransaction.type === "charge" && !newTransaction.category_id) {
       showError("Por favor, selecciona una categoría para el cargo.");
+      console.error("No category selected for charge transaction.");
       return;
     }
 
@@ -186,6 +196,7 @@ const CardDetailsPage: React.FC = () => {
       if (newTransaction.type === "charge") {
         if (newBalance < transactionAmountToStore) {
           showError("Saldo insuficiente en la tarjeta de débito.");
+          console.error("Insufficient debit card balance.");
           return;
         }
         newBalance -= transactionAmountToStore;
@@ -205,6 +216,7 @@ const CardDetailsPage: React.FC = () => {
       } else { // Payment
         if (newBalance < transactionAmountToStore) {
           showError("El pago excede la deuda pendiente.");
+          console.error("Payment exceeds outstanding debt.");
           return;
         }
         newBalance -= transactionAmountToStore;
@@ -239,6 +251,7 @@ const CardDetailsPage: React.FC = () => {
 
     if (transactionError) {
       showError('Error al registrar transacción: ' + transactionError.message);
+      console.error("Supabase transaction insert error:", transactionError);
       return;
     }
 
@@ -251,6 +264,7 @@ const CardDetailsPage: React.FC = () => {
 
     if (cardError) {
       showError('Error al actualizar saldo de la tarjeta: ' + cardError.message);
+      console.error("Supabase card balance update error:", cardError);
       return;
     }
 
@@ -398,6 +412,7 @@ const CardDetailsPage: React.FC = () => {
 
     if (transactionError) {
       showError('Error al actualizar transacción: ' + transactionError.message);
+      console.error("Supabase transaction update error:", transactionError);
       return;
     }
 
@@ -410,6 +425,7 @@ const CardDetailsPage: React.FC = () => {
 
     if (cardError) {
       showError('Error al actualizar saldo de la tarjeta: ' + cardError.message);
+      console.error("Supabase card balance update error:", cardError);
       return;
     }
 
@@ -460,6 +476,7 @@ const CardDetailsPage: React.FC = () => {
 
     if (transactionError) {
       showError('Error al eliminar transacción: ' + transactionError.message);
+      console.error("Supabase transaction delete error:", transactionError);
       return;
     }
 
@@ -471,6 +488,7 @@ const CardDetailsPage: React.FC = () => {
 
     if (cardError) {
       showError('Error al actualizar saldo de la tarjeta después de eliminar transacción: ' + cardError.message);
+      console.error("Supabase card balance update error after delete:", cardError);
       return;
     }
 
@@ -907,7 +925,7 @@ const CardDetailsPage: React.FC = () => {
                         <TableCell className="w-12 flex items-center justify-center"> {/* Celda para el icono */}
                           {isPaymentToCreditCard && (
                             <img
-                              src="https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/cochinito%20love.png"
+                              src="https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/cochinito love.png"
                               alt="Cochinito Love"
                               className="h-8 w-8"
                               onError={(e) => {

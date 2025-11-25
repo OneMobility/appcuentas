@@ -26,6 +26,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { exportToCsv, exportToPdf } from "@/utils/export";
 import CardTransferDialog from "@/components/CardTransferDialog"; // Importar el nuevo componente
 import { useCategoryContext } from "@/context/CategoryContext"; // Importar useCategoryContext
+import { toast } from "sonner"; // Importar toast de sonner
 
 interface CardTransaction {
   id: string;
@@ -105,6 +106,7 @@ const Cards = () => {
       .order('created_at', { ascending: false });
 
     if (error) {
+      console.error("Error fetching cards:", error); // Log the error
       showError('Error al cargar tarjetas: ' + error.message);
     } else {
       // Asegurar que transactions sea siempre un array
@@ -267,32 +269,43 @@ const Cards = () => {
 
   const handleSubmitTransaction = async (e: React.FormEvent) => {
     e.preventDefault();
+    console.log("handleSubmitTransaction called from Cards page.");
+    console.log("Current user:", user);
+    console.log("Selected card ID:", selectedCardId);
+    console.log("New transaction data:", newTransaction);
+
     if (!user) {
       showError("Debes iniciar sesión para registrar transacciones.");
+      console.error("User not loaded.");
       return;
     }
     if (!selectedCardId) { // Explicit check for selectedCardId
       showError("No se ha seleccionado una tarjeta para la transacción.");
+      console.error("No card selected for transaction.");
       return;
     }
 
     const amount = parseFloat(newTransaction.amount);
     if (isNaN(amount) || amount <= 0) {
       showError("El monto de la transacción debe ser un número positivo.");
+      console.error("Invalid amount:", newTransaction.amount);
       return;
     }
     if (!newTransaction.date) {
       showError("Por favor, selecciona una fecha para la transacción.");
+      console.error("No date selected.");
       return;
     }
     if (newTransaction.type === "charge" && !newTransaction.category_id) {
       showError("Por favor, selecciona una categoría para el cargo.");
+      console.error("No category selected for charge transaction.");
       return;
     }
 
     const currentCard = cards.find(c => c.id === selectedCardId);
     if (!currentCard) {
       showError("Tarjeta no encontrada o eliminada.");
+      console.error("Card not found for ID:", selectedCardId);
       return;
     }
 
@@ -302,6 +315,12 @@ const Cards = () => {
     let installmentsCount: number | undefined = undefined;
     let categoryId: string | undefined = undefined;
     let categoryType: "income" | "expense" | undefined = undefined;
+
+    console.log("--- Antes de registrar transacción ---");
+    console.log("Saldo actual de la tarjeta:", currentCard.current_balance);
+    console.log("Tipo de tarjeta:", currentCard.type);
+    console.log("Tipo de nueva transacción:", newTransaction.type);
+    console.log("Monto de nueva transacción:", amount);
 
     if (newTransaction.type === "charge") {
       categoryId = newTransaction.category_id;
@@ -317,6 +336,7 @@ const Cards = () => {
       if (newTransaction.type === "charge") {
         if (newBalance < transactionAmountToStore) {
           showError("Saldo insuficiente en la tarjeta de débito.");
+          console.error("Insufficient debit card balance.");
           return;
         }
         newBalance -= transactionAmountToStore;
@@ -326,18 +346,29 @@ const Cards = () => {
     } else { // Credit card
       if (newTransaction.type === "charge") {
         if (currentCard.credit_limit !== undefined && newBalance + transactionAmountToStore > currentCard.credit_limit) {
-          showError("El cargo excede el límite de crédito disponible.");
-          return;
+          toast.info(`Tu tarjeta de crédito ha excedido su límite. Saldo actual: $${(newBalance + transactionAmountToStore).toFixed(2)}`, {
+            style: { backgroundColor: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))' },
+            duration: 10000
+          });
         }
         newBalance += transactionAmountToStore;
       } else { // Payment
         if (newBalance < transactionAmountToStore) {
           showError("El pago excede la deuda pendiente.");
+          console.error("Payment exceeds outstanding debt.");
           return;
         }
         newBalance -= transactionAmountToStore;
+        if (newBalance < 0) {
+          toast.info(`Has sobrepagado tu tarjeta ${currentCard.name}. Tu saldo actual es de $${newBalance.toFixed(2)} (a tu favor).`, {
+            style: { backgroundColor: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))' },
+            duration: 10000
+          });
+        }
       }
     }
+
+    console.log("Nuevo saldo calculado:", newBalance);
 
     const { data: transactionData, error: transactionError } = await supabase
       .from('card_transactions')
@@ -358,6 +389,7 @@ const Cards = () => {
 
     if (transactionError) {
       showError('Error al registrar transacción: ' + transactionError.message);
+      console.error("Supabase transaction insert error:", transactionError);
       return;
     }
 
@@ -370,6 +402,7 @@ const Cards = () => {
 
     if (cardError) {
       showError('Error al actualizar saldo de la tarjeta: ' + cardError.message);
+      console.error("Supabase card balance update error:", cardError);
       return;
     }
 
@@ -389,6 +422,8 @@ const Cards = () => {
     setSelectedCardId(null);
     setIsAddTransactionDialogOpen(false);
     showSuccess("Transacción registrada exitosamente.");
+    console.log("--- Transacción registrada exitosamente ---");
+    console.log("Saldo final de la tarjeta:", newBalance);
   };
 
   const handleOpenEditCardDialog = (card: CardData) => {

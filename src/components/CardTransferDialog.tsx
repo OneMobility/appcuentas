@@ -11,6 +11,7 @@ import { useSession } from "@/context/SessionContext";
 import { showError, showSuccess } from "@/utils/toast";
 import { format } from "date-fns";
 import { CreditCard, ArrowRightLeft } from "lucide-react";
+import { toast } from "sonner"; // Importar toast de sonner
 
 interface CardData {
   id: string;
@@ -90,7 +91,13 @@ const CardTransferDialog: React.FC<CardTransferDialogProps> = ({ isOpen, onClose
     if (destinationCard.type === "credit") {
       // For credit card, payment reduces current_balance (debt)
       newDestinationBalance -= transferAmount;
-      if (newDestinationBalance < 0) newDestinationBalance = 0; // Debt cannot be negative
+      // Permitir que el saldo sea negativo para reflejar sobrepago
+      if (newDestinationBalance < 0) {
+        toast.info(`Has sobrepagado tu tarjeta ${destinationCard.name}. Tu saldo actual es de $${newDestinationBalance.toFixed(2)} (a tu favor).`, {
+          style: { backgroundColor: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))' },
+          duration: 10000
+        });
+      }
     } else { // Debit card
       // For debit card, payment increases current_balance
       newDestinationBalance += transferAmount;
