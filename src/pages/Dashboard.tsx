@@ -39,7 +39,7 @@ interface CardData {
   user_id?: string;
 }
 
-interface Transaction {
+interface CashTransaction {
   id: string;
   type: "ingreso" | "egreso";
   amount: number;
@@ -66,6 +66,19 @@ interface CreditorData {
   user_id?: string;
 }
 
+interface CardTransaction {
+  id: string;
+  type: "charge" | "payment";
+  amount: number;
+  description: string;
+  date: string;
+  card_id?: string;
+  user_id?: string;
+  installments_total_amount?: number;
+  installments_count?: number;
+  installment_number?: number;
+}
+
 interface MonthlySummary {
   name: string; // Month name
   ingresos: number;
@@ -80,10 +93,10 @@ const Dashboard = () => {
   const [toCurrency, setToCurrency] = useState<string>("MXN");
 
   const [cards, setCards] = useState<CardData[]>([]);
-  const [cashTransactions, setCashTransactions] = useState<Transaction[]>([]);
+  const [cashTransactions, setCashTransactions] = useState<CashTransaction[]>([]);
   const [debtors, setDebtors] = useState<DebtorData[]>([]);
   const [creditors, setCreditors] = useState<CreditorData[]>([]);
-  // Eliminado: const [isLoadingDashboardData, setIsLoadingDashboardData] = useState(true);
+  const [cardTransactions, setCardTransactions] = useState<CardTransaction[]>([]);
 
   const fetchDashboardData = async () => {
     if (!user) {
@@ -91,11 +104,10 @@ const Dashboard = () => {
       setCashTransactions([]);
       setDebtors([]);
       setCreditors([]);
-      // Eliminado: setIsLoadingDashboardData(false);
+      setCardTransactions([]);
       return;
     }
 
-    // Eliminado: setIsLoadingDashboardData(true);
     try {
       // Fetch Cards
       const { data: cardsData, error: cardsError } = await supabase
@@ -129,10 +141,17 @@ const Dashboard = () => {
       if (creditorsError) throw creditorsError;
       setCreditors(creditorsData || []);
 
+      // Fetch Card Transactions
+      const { data: cardTxData, error: cardTxError } = await supabase
+        .from('card_transactions')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('date', { ascending: true });
+      if (cardTxError) throw cardTxError;
+      setCardTransactions(cardTxData || []);
+
     } catch (error: any) {
       showError('Error al cargar datos del dashboard: ' + error.message);
-    } finally {
-      // Eliminado: setIsLoadingDashboardData(false);
     }
   };
 
@@ -236,16 +255,39 @@ const Dashboard = () => {
       .map(([, value]) => value);
   }, [cashTransactions]);
 
-  // Eliminado: if (isLoadingDashboardData || isLoadingCategories) {
-  //   return (
-  //     <div className="min-h-screen flex items-center justify-center bg-gray-100">
-  //       <div className="text-center">
-  //         <h1 className="text-4xl font-bold mb-4">Cargando datos del sistema...</h1>
-  //         <p className="text-xl text-gray-600">Esto puede tardar un momento.</p>
-  //       </div>
-  //     </div>
-  //   );
-  // }
+  const monthlyCardSpendingData = useMemo(() => {
+    if (!cards.length || !cardTransactions.length) return [];
+
+    const monthlyDataMap = new Map<string, { [key: string]: any }>(); // Key: YYYY-MM
+
+    cardTransactions.forEach(tx => {
+      if (tx.type === "charge") {
+        const monthKey = format(new Date(tx.date), "yyyy-MM");
+        const monthName = format(new Date(tx.date), "MMM", { locale: es }); // Short month name
+
+        if (!monthlyDataMap.has(monthKey)) {
+          monthlyDataMap.set(monthKey, { name: monthName });
+        }
+
+        const currentMonthData = monthlyDataMap.get(monthKey)!;
+        const cardName = cards.find(c => c.id === tx.card_id)?.name || `Tarjeta ${tx.card_id?.substring(0, 4)}`;
+
+        currentMonthData[cardName] = (currentMonthData[cardName] || 0) + tx.amount;
+        monthlyDataMap.set(monthKey, currentMonthData);
+      }
+    });
+
+    // Sort by month key to ensure chronological order
+    return Array.from(monthlyDataMap.entries())
+      .sort(([keyA], [keyB]) => keyA.localeCompare(keyB))
+      .map(([, value]) => value);
+  }, [cards, cardTransactions]);
+
+  const uniqueCardNames = useMemo(() => {
+    const names = new Set<string>();
+    cards.forEach(card => names.add(card.name));
+    return Array.from(names);
+  }, [cards]);
 
   return (
     <div className="flex flex-col gap-6 p-4">
@@ -353,7 +395,7 @@ const Dashboard = () => {
 
       <Card>
         <CardHeader>
-          <CardTitle>Resumen de Ingresos y Egresos</CardTitle>
+          <CardTitle>Resumen de Ingresos y Egresos (Efectivo)</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="h-[300px]">
@@ -380,10 +422,45 @@ const Dashboard = () => {
         </CardContent>
       </Card>
 
+      <Card>
+        <CardHeader>
+          <CardTitle>Gastos Mensuales por Tarjeta</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="h-[300px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={monthlyCardSpendingData}
+                margin={{
+                  top: 5,
+                  right: 30,
+                  left: 20,
+                  bottom: 5,
+                }}
+              >
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="name" />
+                <YAxis />
+                <Tooltip />
+                <Legend />
+                {uniqueCardNames.map((cardName, index) => (
+                  <Bar
+                    key={cardName}
+                    dataKey={cardName}
+                    fill={cards.find(c => c.name === cardName)?.color || `#${Math.floor(Math.random()*16777215).toString(16)}`} // Fallback a color aleatorio
+                    name={cardName}
+                  />
+                ))}
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </CardContent>
+      </Card>
+
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>Ingresos por Categoría</CardTitle>
+            <CardTitle>Ingresos por Categoría (Efectivo)</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="h-[300px]">
@@ -412,7 +489,7 @@ const Dashboard = () => {
 
         <Card>
           <CardHeader>
-            <CardTitle>Egresos por Categoría</CardTitle>
+            <CardTitle>Egresos por Categoría (Efectivo)</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="h-[300px]">
