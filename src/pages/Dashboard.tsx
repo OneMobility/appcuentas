@@ -326,6 +326,14 @@ const Dashboard = () => {
     });
   }, [cards]);
 
+  const cardStatusChartData = useMemo(() => {
+    return cards.map(card => ({
+      name: card.name,
+      LimiteOInicial: card.type === "credit" ? card.credit_limit : card.initial_balance,
+      SaldoActualODeuda: card.current_balance,
+    }));
+  }, [cards]);
+
   const cardHealthStatus = useMemo(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
