@@ -62,7 +62,7 @@ interface CardData {
 
 const Cards = () => {
   const { user } = useSession();
-  const { expenseCategories, isLoadingCategories } = useCategoryContext(); // Usar el contexto de categorías
+  const { incomeCategories, expenseCategories, isLoadingCategories } = useCategoryContext(); // Usar el contexto de categorías
   const [cards, setCards] = useState<CardData[]>([]);
   const [isAddCardDialogOpen, setIsAddCardDialogOpen] = useState(false);
   const [isEditCardDialogOpen, setIsEditCardDialogOpen] = useState(false);
@@ -296,11 +296,6 @@ const Cards = () => {
       console.error("No date selected.");
       return;
     }
-    if (newTransaction.type === "charge" && !newTransaction.category_id) {
-      showError("Por favor, selecciona una categoría para el cargo.");
-      console.error("No category selected for charge transaction.");
-      return;
-    }
 
     const currentCard = cards.find(c => c.id === selectedCardId);
     if (!currentCard) {
@@ -309,12 +304,31 @@ const Cards = () => {
       return;
     }
 
+    let categoryId: string | undefined = undefined;
+    let categoryType: "income" | "expense" | undefined = undefined;
+
+    // Determine category requirements and type
+    if (newTransaction.type === "charge") {
+      if (!newTransaction.category_id) {
+        showError("Por favor, selecciona una categoría para el cargo.");
+        return;
+      }
+      categoryId = newTransaction.category_id;
+      categoryType = "expense";
+    } else if (newTransaction.type === "payment" && currentCard.type === "debit") {
+      if (!newTransaction.category_id) {
+        showError("Por favor, selecciona una categoría para el ingreso.");
+        return;
+      }
+      categoryId = newTransaction.category_id;
+      categoryType = "income";
+    }
+    // For credit card payments, category is not required/applicable.
+
     let newBalance = currentCard.current_balance;
     let transactionAmountToStore = amount;
     let installmentsTotalAmount: number | undefined = undefined;
     let installmentsCount: number | undefined = undefined;
-    let categoryId: string | undefined = undefined;
-    let categoryType: "income" | "expense" | undefined = undefined;
 
     console.log("--- Antes de registrar transacción ---");
     console.log("Saldo actual de la tarjeta:", currentCard.current_balance);
@@ -323,9 +337,7 @@ const Cards = () => {
     console.log("Monto de nueva transacción:", amount);
 
     if (newTransaction.type === "charge") {
-      categoryId = newTransaction.category_id;
-      categoryType = "expense"; // Los cargos en tarjetas son egresos
-      if (newTransaction.installments_count && newTransaction.installTransaction.installments_count > 1) {
+      if (newTransaction.installments_count && newTransaction.installments_count > 1) {
         installmentsTotalAmount = amount;
         installmentsCount = newTransaction.installments_count;
         transactionAmountToStore = amount / installmentsCount; // Monto mensual
@@ -340,7 +352,7 @@ const Cards = () => {
           return;
         }
         newBalance -= transactionAmountToStore;
-      } else {
+      } else { // payment to debit card
         newBalance += transactionAmountToStore;
       }
     } else { // Credit card
@@ -352,7 +364,7 @@ const Cards = () => {
           });
         }
         newBalance += transactionAmountToStore;
-      } else { // Payment
+      } else { // Payment to credit card
         if (newBalance < transactionAmountToStore) {
           showError("El pago excede la deuda pendiente.");
           console.error("Payment exceeds outstanding debt.");
@@ -783,7 +795,8 @@ const Cards = () => {
                     </SelectContent>
                   </Select>
                 </div>
-                {newTransaction.type === "charge" && (
+                {/* Conditionally render category selector based on transaction type and card type */}
+                {(newTransaction.type === "charge" || (newTransaction.type === "payment" && currentCardForDialog?.type === "debit")) && (
                   <div className="grid grid-cols-4 items-center gap-4">
                     <Label htmlFor="category_id" className="text-right">
                       Categoría
@@ -793,11 +806,19 @@ const Cards = () => {
                         <SelectValue placeholder="Selecciona categoría" />
                       </SelectTrigger>
                       <SelectContent>
-                        {expenseCategories.map((cat) => (
-                          <SelectItem key={cat.id} value={cat.id}>
-                            {cat.name}
-                          </SelectItem>
-                        ))}
+                        {newTransaction.type === "charge" ? (
+                          expenseCategories.map((cat) => (
+                            <SelectItem key={cat.id} value={cat.id}>
+                              {cat.name}
+                            </SelectItem>
+                          ))
+                        ) : (
+                          incomeCategories.map((cat) => (
+                            <SelectItem key={cat.id} value={cat.id}>
+                              {cat.name}
+                            </SelectItem>
+                          ))
+                        )}
                       </SelectContent>
                     </Select>
                   </div>

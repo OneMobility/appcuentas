@@ -65,7 +65,7 @@ const CardDetailsPage: React.FC = () => {
   const { cardId } = useParams<{ cardId: string }>();
   const navigate = useNavigate();
   const { user } = useSession();
-  const { expenseCategories, getCategoryById, isLoadingCategories } = useCategoryContext();
+  const { incomeCategories, expenseCategories, getCategoryById, isLoadingCategories } = useCategoryContext();
   const [card, setCard] = useState<CardData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isAddTransactionDialogOpen, setIsAddTransactionDialogOpen] = useState(false);
@@ -163,18 +163,32 @@ const CardDetailsPage: React.FC = () => {
       console.error("No date selected.");
       return;
     }
-    if (newTransaction.type === "charge" && !newTransaction.category_id) {
-      showError("Por favor, selecciona una categoría para el cargo.");
-      console.error("No category selected for charge transaction.");
-      return;
+
+    let categoryId: string | undefined = undefined;
+    let categoryType: "income" | "expense" | undefined = undefined;
+
+    // Determine category requirements and type
+    if (newTransaction.type === "charge") {
+      if (!newTransaction.category_id) {
+        showError("Por favor, selecciona una categoría para el cargo.");
+        return;
+      }
+      categoryId = newTransaction.category_id;
+      categoryType = "expense";
+    } else if (newTransaction.type === "payment" && card.type === "debit") {
+      if (!newTransaction.category_id) {
+        showError("Por favor, selecciona una categoría para el ingreso.");
+        return;
+      }
+      categoryId = newTransaction.category_id;
+      categoryType = "income";
     }
+    // For credit card payments, category is not required/applicable.
 
     let newBalance = card.current_balance;
     let transactionAmountToStore = amount;
     let installmentsTotalAmount: number | undefined = undefined;
     let installmentsCount: number | undefined = undefined;
-    let categoryId: string | undefined = undefined;
-    let categoryType: "income" | "expense" | undefined = undefined;
 
     console.log("--- Antes de registrar transacción ---");
     console.log("Saldo actual de la tarjeta:", card.current_balance);
@@ -183,8 +197,6 @@ const CardDetailsPage: React.FC = () => {
     console.log("Monto de nueva transacción:", amount);
 
     if (newTransaction.type === "charge") {
-      categoryId = newTransaction.category_id;
-      categoryType = "expense";
       if (newTransaction.installments_count && newTransaction.installments_count > 1) {
         installmentsTotalAmount = amount;
         installmentsCount = newTransaction.installments_count;
@@ -200,7 +212,7 @@ const CardDetailsPage: React.FC = () => {
           return;
         }
         newBalance -= transactionAmountToStore;
-      } else {
+      } else { // payment to debit card
         newBalance += transactionAmountToStore;
       }
     } else { // Credit card
@@ -213,7 +225,7 @@ const CardDetailsPage: React.FC = () => {
           });
         }
         newBalance += transactionAmountToStore;
-      } else { // Payment
+      } else { // Payment to credit card
         if (newBalance < transactionAmountToStore) {
           showError("El pago excede la deuda pendiente.");
           console.error("Payment exceeds outstanding debt.");
@@ -320,10 +332,6 @@ const CardDetailsPage: React.FC = () => {
       showError("Por favor, selecciona una fecha para la transacción.");
       return;
     }
-    if (newType === "charge" && !newTransaction.category_id) {
-      showError("Por favor, selecciona una categoría para el cargo.");
-      return;
-    }
 
     console.log("--- Antes de actualizar transacción ---");
     console.log("Saldo actual de la tarjeta:", card.current_balance);
@@ -336,7 +344,12 @@ const CardDetailsPage: React.FC = () => {
     let newCategoryId: string | undefined = undefined;
     let newCategoryType: "income" | "expense" | undefined = undefined;
 
+    // Determine category requirements and type for the new transaction
     if (newType === "charge") {
+      if (!newTransaction.category_id) {
+        showError("Por favor, selecciona una categoría para el cargo.");
+        return;
+      }
       newCategoryId = newTransaction.category_id;
       newCategoryType = "expense";
       if (newInstallmentsCount && newInstallmentsCount > 1) {
@@ -344,7 +357,15 @@ const CardDetailsPage: React.FC = () => {
         newAmountPerInstallment = newAmountTotal / newInstallmentsCount;
         newInstallmentNumber = editingTransaction.installment_number || 1;
       }
+    } else if (newType === "payment" && card.type === "debit") {
+      if (!newTransaction.category_id) {
+        showError("Por favor, selecciona una categoría para el ingreso.");
+        return;
+      }
+      newCategoryId = newTransaction.category_id;
+      newCategoryType = "income";
     }
+    // For credit card payments, category is not required/applicable.
 
     let newCardBalance = card.current_balance;
 
@@ -362,7 +383,7 @@ const CardDetailsPage: React.FC = () => {
           return;
         }
         newCardBalance -= newEffectiveAmount;
-      } else {
+      } else { // payment to debit card
         newCardBalance += newEffectiveAmount;
       }
     } else { // Credit card
@@ -375,7 +396,7 @@ const CardDetailsPage: React.FC = () => {
           });
         }
         newCardBalance += newEffectiveAmount;
-      } else { // Payment
+      } else { // Payment to credit card
         if (newCardBalance < newEffectiveAmount) {
           showError("El pago excede la deuda pendiente.");
           return;
@@ -511,7 +532,7 @@ const CardDetailsPage: React.FC = () => {
       const matchesSearch = tx.description.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesType = filterType === "all" || tx.type === filterType;
       
-      const categoryName = tx.category_id ? getCategoryById(tx.category_id, "expense")?.name || "" : "";
+      const categoryName = tx.category_id && tx.category_type ? getCategoryById(tx.category_id, tx.category_type)?.name || "" : "";
       const matchesCategory = filterCategory === "all" || tx.category_id === filterCategory || categoryName.toLowerCase().includes(filterCategory.toLowerCase());
       
       const txDate = new Date(tx.date);
@@ -528,7 +549,7 @@ const CardDetailsPage: React.FC = () => {
     }
 
     const dataToExport = filteredTransactions.map(tx => {
-      const category = tx.category_id ? getCategoryById(tx.category_id, "expense") : undefined;
+      const category = tx.category_id && tx.category_type ? getCategoryById(tx.category_id, tx.category_type) : undefined;
       return {
         Fecha: format(new Date(tx.date), "dd/MM/yyyy", { locale: es }),
         Tipo: tx.type === "charge" ? "Cargo" : "Pago",
@@ -689,7 +710,8 @@ const CardDetailsPage: React.FC = () => {
                       </SelectContent>
                     </Select>
                   </div>
-                  {newTransaction.type === "charge" && (
+                  {/* Conditionally render category selector based on transaction type and card type */}
+                  {(newTransaction.type === "charge" || (newTransaction.type === "payment" && card.type === "debit")) && (
                     <div className="grid grid-cols-4 items-center gap-4">
                       <Label htmlFor="category_id" className="text-right">
                         Categoría
@@ -699,11 +721,19 @@ const CardDetailsPage: React.FC = () => {
                           <SelectValue placeholder="Selecciona categoría" />
                         </SelectTrigger>
                         <SelectContent>
-                          {expenseCategories.map((cat) => (
-                            <SelectItem key={cat.id} value={cat.id}>
-                              {cat.name}
-                            </SelectItem>
-                          ))}
+                          {newTransaction.type === "charge" ? (
+                            expenseCategories.map((cat) => (
+                              <SelectItem key={cat.id} value={cat.id}>
+                                {cat.name}
+                              </SelectItem>
+                            ))
+                          ) : (
+                            incomeCategories.map((cat) => (
+                              <SelectItem key={cat.id} value={cat.id}>
+                                {cat.name}
+                              </SelectItem>
+                            ))
+                          )}
                         </SelectContent>
                       </Select>
                     </div>
@@ -835,9 +865,11 @@ const CardDetailsPage: React.FC = () => {
                 <SelectValue placeholder="Filtrar por categoría" />
               </SelectTrigger>
               <SelectContent>
-                {expenseCategories.map((cat) => (
+                <SelectItem value="all">Todas las Categorías</SelectItem>
+                {/* Show all categories for filtering */}
+                {[...incomeCategories, ...expenseCategories].map((cat) => (
                   <SelectItem key={cat.id} value={cat.id}>
-                    {cat.name}
+                    {cat.name} ({cat.is_fixed ? "Fija" : "Personal"})
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -897,7 +929,7 @@ const CardDetailsPage: React.FC = () => {
                 <TableBody>
                   {filteredTransactions.map((transaction) => {
                     const isPaymentToCreditCard = card.type === "credit" && transaction.type === "payment";
-                    const category = transaction.category_id ? getCategoryById(transaction.category_id, "expense") : undefined;
+                    const category = transaction.category_id && transaction.category_type ? getCategoryById(transaction.category_id, transaction.category_type) : undefined;
 
                     let deleteDescription = `Esta acción no se puede deshacer. Esto eliminará permanentemente la transacción de ${transaction.type === "charge" ? "cargo" : "pago"} por $${transaction.amount.toFixed(2)}: "${transaction.description}".`;
 
@@ -1016,7 +1048,8 @@ const CardDetailsPage: React.FC = () => {
                     </SelectContent>
                   </Select>
                 </div>
-                {newTransaction.type === "charge" && (
+                {/* Conditionally render category selector for edit dialog */}
+                {(newTransaction.type === "charge" || (newTransaction.type === "payment" && card.type === "debit")) && (
                   <div className="grid grid-cols-4 items-center gap-4">
                     <Label htmlFor="editCategory" className="text-right">
                       Categoría
@@ -1026,11 +1059,19 @@ const CardDetailsPage: React.FC = () => {
                         <SelectValue placeholder="Selecciona categoría" />
                       </SelectTrigger>
                       <SelectContent>
-                        {expenseCategories.map((cat) => (
-                          <SelectItem key={cat.id} value={cat.id}>
-                            {cat.name}
-                          </SelectItem>
-                        ))}
+                        {newTransaction.type === "charge" ? (
+                          expenseCategories.map((cat) => (
+                            <SelectItem key={cat.id} value={cat.id}>
+                              {cat.name}
+                            </SelectItem>
+                          ))
+                        ) : (
+                          incomeCategories.map((cat) => (
+                            <SelectItem key={cat.id} value={cat.id}>
+                              {cat.name}
+                            </SelectItem>
+                          ))
+                        )}
                       </SelectContent>
                     </Select>
                   </div>
