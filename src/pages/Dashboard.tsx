@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
-import { Home, Users, DollarSign, CreditCard, Smile, AlertTriangle, Meh } from "lucide-react"; // Importar Meh
+import { Home, Users, DollarSign, CreditCard, Smile, AlertTriangle, Meh, RefreshCw } from "lucide-react"; // Importar RefreshCw
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -11,10 +11,11 @@ import { useCategoryContext } from "@/context/CategoryContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/context/SessionContext";
 import { showError } from "@/utils/toast";
-import { format, isBefore, isSameDay, addDays } from "date-fns"; // Importar addDays
+import { format, isBefore, isSameDay, addDays } from "date-fns";
 import { es } from "date-fns/locale";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { getUpcomingPaymentDueDate } from "@/utils/date-helpers";
+import { Button } from "@/components/ui/button"; // Importar Button
 
 // Tasas de cambio de ejemplo (MXN como base)
 const exchangeRates: { [key: string]: number } = {
@@ -99,6 +100,7 @@ const Dashboard = () => {
   const [cashTransactions, setCashTransactions] = useState<CashTransaction[]>([]);
   const [debtors, setDebtors] = useState<DebtorData[]>([]);
   const [creditors, setCreditors] = useState<CreditorData[]>([]);
+  const [refreshKey, setRefreshKey] = useState(0); // Nuevo estado para forzar el refresco
 
   const fetchDashboardData = async () => {
     if (!user) {
@@ -151,7 +153,12 @@ const Dashboard = () => {
     if (user && !isLoadingCategories) {
       fetchDashboardData();
     }
-  }, [user, isLoadingCategories]);
+  }, [user, isLoadingCategories, refreshKey]); // Añadir refreshKey a las dependencias
+
+  const handleRefreshData = () => {
+    setRefreshKey(prevKey => prevKey + 1); // Incrementar para forzar el re-fetch
+    showSuccess("Datos del dashboard actualizados.");
+  };
 
   const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
@@ -368,7 +375,13 @@ const Dashboard = () => {
 
   return (
     <div className="flex flex-col gap-6 p-4">
-      <h1 className="text-3xl font-bold">Dashboard</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-3xl font-bold">Dashboard</h1>
+        <Button variant="outline" size="sm" onClick={handleRefreshData}>
+          <RefreshCw className="h-4 w-4 mr-2" />
+          Actualizar Datos
+        </Button>
+      </div>
 
       {cardHealthStatus.status === "critical" ? (
         <Card className="border-blue-600 bg-blue-50 text-blue-800">
