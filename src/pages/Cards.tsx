@@ -477,7 +477,7 @@ const Cards = () => {
 
   return (
     <div className="flex flex-col gap-6 p-4">
-      <h1 className="text-3xl font-bold">Gestión de Tarjetas</h1>
+      <h1 className="text-3xl font-bold">Tus Tarjetas</h1>
 
       <Card>
         <CardHeader>

@@ -29,27 +29,27 @@ const navItems = [
     icon: PiggyBank,
   },
   {
-    name: "Tu Dinerito",
+    name: "Lo que tienes", // Título actualizado
     path: "/cash",
     icon: Banknote,
   },
   {
-    name: "Te Deben",
+    name: "Los que te deben", // Título actualizado
     path: "/debtors",
     icon: ThumbsUp,
   },
   {
-    name: "Le Debes",
+    name: "A quien le debes", // Título actualizado
     path: "/creditors",
     icon: ThumbsDown,
   },
   {
-    name: "Tarjetas",
+    name: "Tus Tarjetas", // Título actualizado
     path: "/cards",
     icon: CreditCard,
   },
   {
-    name: "Ahorros", // Nuevo elemento de navegación
+    name: "Tus Metas", // Título actualizado
     path: "/savings",
     icon: Wallet, // Icono para ahorros
   },

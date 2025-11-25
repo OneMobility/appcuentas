@@ -280,7 +280,7 @@ const Cash = () => {
 
   return (
     <div className="flex flex-col gap-6 p-4">
-      <h1 className="text-3xl font-bold">Gestión de Efectivo</h1>
+      <h1 className="text-3xl font-bold">Lo que tienes</h1>
 
       <Card>
         <CardHeader>

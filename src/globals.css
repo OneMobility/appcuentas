@@ -103,3 +103,34 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Animación pop-in-out para el feedback de ahorro */
+@keyframes pop-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes pop-out {
+  0% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+}
+
+.animate-pop-in {
+  animation: pop-in 0.5s ease-out forwards;
+}
+
+.animate-pop-out {
+  animation: pop-out 0.5s ease-in forwards;
+}

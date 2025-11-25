@@ -445,7 +445,7 @@ const Debtors = () => {
 
   return (
     <div className="flex flex-col gap-6 p-4">
-      <h1 className="text-3xl font-bold">Gestión de Deudores</h1>
+      <h1 className="text-3xl font-bold">Los que te deben</h1>
 
       <Card>
         <CardHeader>

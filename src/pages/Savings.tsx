@@ -21,7 +21,9 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { exportToCsv, exportToPdf } from "@/utils/export";
 import { Progress } from "@/components/ui/progress";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"; // Importar Select
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import RandomChallengeBanner from "@/components/RandomChallengeBanner"; // Importar el nuevo componente
+import SavingFeedbackOverlay from "@/components/SavingFeedbackOverlay"; // Importar el nuevo componente
 
 interface Saving {
   id: string;
@@ -53,6 +55,8 @@ const Savings = () => {
     amount: "",
     description: "",
   });
+  const [feedbackState, setFeedbackState] = useState<{ type: 'deposit' | 'withdrawal' | null; isVisible: boolean }>({ type: null, isVisible: false });
+
 
   const [searchTerm, setSearchTerm] = useState("");
 
@@ -257,7 +261,9 @@ const Savings = () => {
     }
 
     let newBalance = currentSaving.current_balance;
-    if (newTransaction.type === "deposit") {
+    const transactionType = newTransaction.type;
+
+    if (transactionType === "deposit") {
       newBalance += amount;
     } else { // withdrawal
       if (newBalance < amount) {
@@ -284,7 +290,12 @@ const Savings = () => {
       setSelectedSavingId(null);
       setIsTransactionDialogOpen(false);
       showSuccess("Transacción registrada exitosamente.");
+      setFeedbackState({ type: transactionType, isVisible: true }); // Mostrar feedback
     }
+  };
+
+  const handleFeedbackClose = () => {
+    setFeedbackState({ type: null, isVisible: false });
   };
 
   const filteredSavings = savings.filter((saving) =>
@@ -316,7 +327,9 @@ const Savings = () => {
 
   return (
     <div className="flex flex-col gap-6 p-4">
-      <h1 className="text-3xl font-bold">Gestión de Ahorros</h1>
+      <h1 className="text-3xl font-bold">Tus Metas</h1>
+
+      <RandomChallengeBanner /> {/* Nuevo banner de retos aleatorios */}
 
       <Card>
         <CardHeader>
@@ -664,6 +677,12 @@ const Savings = () => {
           </Dialog>
         </CardContent>
       </Card>
+      {feedbackState.isVisible && (
+        <SavingFeedbackOverlay
+          type={feedbackState.type!}
+          onClose={handleFeedbackClose}
+        />
+      )}
     </div>
   );
 };
