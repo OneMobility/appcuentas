@@ -57,7 +57,7 @@ const Sidebar = ({ onClose }: { onClose?: () => void }) => {
   return (
     <nav className="flex flex-col gap-2 p-4">
       <Link to="/dashboard" className="flex items-center gap-2 mb-6 text-sidebar-foreground" onClick={onClose}>
-        <img src="/oinkash-logo.png" alt="Oinkash Logo" className="h-8 w-8" />
+        <img src="https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Oinkash%20Logo.png" alt="Oinkash Logo" className="h-8 w-8" />
         <h2 className="text-2xl font-bold">Oinkash</h2>
       </Link>
       {navItems.map((item) => (
@@ -90,7 +90,7 @@ const Layout = () => {
       {isMobile ? (
         <>
           <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b bg-background px-4 shadow-sm">
-            <img src="/oinkash-logo.png" alt="Oinkash Logo" className="h-8 w-8" />
+            <img src="https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Oinkash%20Logo.png" alt="Oinkash Logo" className="h-8 w-8" />
             <h1 className="text-xl font-semibold">{currentPageName}</h1>
           </header>
           <main className="flex flex-1 flex-col gap-4 p-4 pb-20 lg:gap-6 lg:p-6">
