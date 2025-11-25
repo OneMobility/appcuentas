@@ -15,7 +15,7 @@ import { es } from "date-fns/locale";
 import { useCategoryContext } from "@/context/CategoryContext";
 import DynamicLucideIcon from "@/components/DynamicLucideIcon";
 import { cn } from "@/lib/utils";
-import FlippableChallengeCard from "@/components/FlippableChallengeCard"; // Importar el componente flippable
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"; // Importar Tooltip
 import ChallengeAlbumBackContent from "@/components/ChallengeAlbumBackContent"; // Importar el contenido trasero
 import { challengeTemplates, ChallengeTemplate } from "@/utils/challenge-templates"; // Importar plantillas
 
@@ -36,7 +36,7 @@ const badgeMapping: { [key: string]: string } = {
   "no-more-blouses": "Estilista Consciente",
   "no-entertainment": "Maestro del Ahorro Social",
   "no-apps": "Desintoxicador Digital",
-  "no-food-spend": "Chef Financiero", // Mapeo para el nuevo reto
+  "no-food-spend": "Chef Financiero",
   "saving-goal-150": "Ahorrador Nivel 1",
   "saving-goal-300": "Ahorrador Nivel 2",
   "saving-goal-200": "Ahorrador Nivel 1.5",
@@ -55,9 +55,10 @@ const GENERIC_REWARD_BADGE_NAMES = [
   'Recompensa de Reto 2',
   'Recompensa de Reto 3',
   'Recompensa de Reto 4',
-  'Recompensa de Reto 5', // Nueva
-  'Recompensa de Reto 6', // Nueva
-  'Recompensa de Reto 7', // Nueva
+  'Recompensa de Reto 5',
+  'Recompensa de Reto 6',
+  'Recompensa de Reto 7',
+  'Recompensa de Reto 8', // Nueva
 ];
 
 
@@ -325,13 +326,26 @@ const Challenges: React.FC<ChallengesProps> = ({ challengeRefreshKey, setChallen
         <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {userPastChallenges.length > 0 ? (
             userPastChallenges.map((challenge) => (
-              <div key={challenge.id} className="w-[350px] h-[350px] mx-auto">
-                <FlippableChallengeCard
-                  frontImageSrc={getFrontImageSrc(challenge)}
-                  frontImageAlt={challenge.name}
-                  backContent={<ChallengeAlbumBackContent challenge={challenge} />}
-                />
-              </div>
+              <TooltipProvider key={challenge.id}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className="relative w-full h-[200px] flex items-center justify-center rounded-lg shadow-md bg-white p-4 cursor-pointer">
+                      <img
+                        src={getFrontImageSrc(challenge)}
+                        alt={challenge.name}
+                        className="max-h-full max-w-full object-contain"
+                        onError={(e) => {
+                          console.error("Error al cargar la imagen del reto:", e.currentTarget.src);
+                          e.currentTarget.src = FAILED_CHALLENGE_IMAGE; // Fallback a una imagen de error
+                        }}
+                      />
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent className="w-[300px] p-0 z-50">
+                    <ChallengeAlbumBackContent challenge={challenge} />
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             ))
           ) : (
             <p className="col-span-full text-center text-muted-foreground">
