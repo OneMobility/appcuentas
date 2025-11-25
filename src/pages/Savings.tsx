@@ -32,7 +32,8 @@ interface Saving {
   name: string;
   current_balance: number;
   target_amount?: number;
-  target_date?: string; // Fecha objetivo o fecha de cumplimiento
+  target_date?: string; // Fecha objetivo
+  completion_date?: string; // Nueva: Fecha de cumplimiento
   color: string;
   user_id?: string;
   challenge_id?: string; // Añadir challenge_id
@@ -151,8 +152,9 @@ const Savings: React.FC = () => {
         name: newSaving.name.trim(),
         current_balance: initialBalance,
         target_amount: targetAmount,
-        target_date: newSaving.target_date ? format(newSaving.target_date, "yyyy-MM-dd") : undefined,
+        target_date: newSaving.target_date ? format(newSaving.target_date, "yyyy-MM-dd") : null, // Guardar como null si no hay fecha
         color: newSaving.color,
+        completion_date: null, // Inicializar completion_date como null
       })
       .select();
 
@@ -226,6 +228,7 @@ const Savings: React.FC = () => {
       }
     }
 
+    // No actualizamos current_balance ni completion_date desde aquí
     const { data, error } = await supabase
       .from('savings')
       .update({
@@ -250,15 +253,31 @@ const Savings: React.FC = () => {
       setIsEditSavingDialogOpen(false);
       showSuccess("Cuenta de ahorro actualizada exitosamente.");
 
-      // Check if goal is reached after update
-      if (updatedSaving.target_amount && updatedSaving.current_balance >= updatedSaving.target_amount) {
-        setFeedbackOverlay({
-          isVisible: true,
-          message: "¡Lo has logrado! ¡Felicidades por alcanzar tu meta!",
-          imageSrc: "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Meta%202.png", // Updated URL
-          bgColor: "bg-green-100",
-          textColor: "text-green-800",
-        });
+      // Check if goal is reached after update (only if target_amount is set and current_balance is already >= target_amount)
+      if (updatedSaving.target_amount && updatedSaving.current_balance >= updatedSaving.target_amount && !updatedSaving.completion_date) {
+        const todayFormatted = format(new Date(), "yyyy-MM-dd");
+        const { data: updatedSavingWithCompletionDate, error: dateUpdateError } = await supabase
+          .from('savings')
+          .update({ completion_date: todayFormatted })
+          .eq('id', updatedSaving.id)
+          .eq('user_id', user.id)
+          .select()
+          .single();
+        if (dateUpdateError) {
+          console.error("Error updating saving completion_date:", dateUpdateError.message);
+          showError("Error al actualizar la fecha de cumplimiento del ahorro.");
+        } else {
+          setSavings((prev) =>
+            prev.map((saving) => (saving.id === updatedSaving.id ? updatedSavingWithCompletionDate : saving))
+          );
+          setFeedbackOverlay({
+            isVisible: true,
+            message: "¡Lo has logrado! ¡Felicidades por alcanzar tu meta!",
+            imageSrc: "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Meta%202.png", // Updated URL
+            bgColor: "bg-green-100",
+            textColor: "text-green-800",
+          });
+        }
       }
       // Trigger refresh for challenges page if this saving is linked to a challenge
       if (updatedSaving.challenge_id) {
@@ -314,10 +333,25 @@ const Savings: React.FC = () => {
       newBalance -= amount;
     }
 
-    // Update saving balance
+    let updatedCompletionDate = currentSaving.completion_date;
+    const todayFormatted = format(new Date(), "yyyy-MM-dd");
+
+    // Check if goal is reached after this transaction and set completion_date
+    if (currentSaving.target_amount && newBalance >= currentSaving.target_amount && !currentSaving.completion_date) {
+      updatedCompletionDate = todayFormatted;
+    } else if (currentSaving.target_amount && newBalance < currentSaving.target_amount && currentSaving.completion_date) {
+      // If balance drops below target after a withdrawal, clear completion_date
+      updatedCompletionDate = null;
+    }
+
+
+    // Update saving balance and completion_date
     const { data, error } = await supabase
       .from('savings')
-      .update({ current_balance: newBalance })
+      .update({ 
+        current_balance: newBalance,
+        completion_date: updatedCompletionDate,
+      })
       .eq('id', selectedSavingId)
       .eq('user_id', user.id)
       .select();
@@ -326,28 +360,7 @@ const Savings: React.FC = () => {
       showError('Error al registrar transacción: ' + error.message);
     } else {
       let updatedSaving = data[0];
-      const todayFormatted = format(new Date(), "yyyy-MM-dd");
-
-      // Check if goal is reached after this transaction
-      if (updatedSaving.target_amount && newBalance >= updatedSaving.target_amount) {
-        // If target_date is not set or is in the future, set it to today
-        if (!updatedSaving.target_date || isAfter(new Date(updatedSaving.target_date), new Date())) {
-          const { data: updatedSavingWithDate, error: dateUpdateError } = await supabase
-            .from('savings')
-            .update({ target_date: todayFormatted })
-            .eq('id', selectedSavingId)
-            .eq('user_id', user.id)
-            .select()
-            .single();
-          if (dateUpdateError) {
-            console.error("Error updating saving target_date:", dateUpdateError.message);
-            showError("Error al actualizar la fecha de cumplimiento del ahorro.");
-          } else {
-            updatedSaving = updatedSavingWithDate; // Use the updated saving data
-          }
-        }
-      }
-
+      
       setSavings((prev) =>
         prev.map((saving) => (saving.id === selectedSavingId ? updatedSaving : saving))
       );
@@ -379,8 +392,8 @@ const Savings: React.FC = () => {
         } else if (currentChallenge) {
           let updateChallengeEndDate = currentChallenge.end_date;
           // If challenge is completed and saving has a completion date, use that date
-          if (challengeStatus === "completed" && updatedSaving.target_date) {
-            updateChallengeEndDate = updatedSaving.target_date;
+          if (challengeStatus === "completed" && updatedSaving.completion_date) { // Usar completion_date
+            updateChallengeEndDate = updatedSaving.completion_date;
           }
 
           // Only update if the new status is 'completed' or if the current status is 'active'
@@ -448,12 +461,13 @@ const Savings: React.FC = () => {
       "Saldo Actual": saving.current_balance.toFixed(2),
       "Monto Objetivo": saving.target_amount?.toFixed(2) || "N/A",
       "Fecha Objetivo": saving.target_date ? format(new Date(saving.target_date), "dd/MM/yyyy", { locale: es }) : "N/A",
+      "Fecha Cumplimiento": saving.completion_date ? format(new Date(saving.completion_date), "dd/MM/yyyy", { locale: es }) : "N/A", // Añadido
       "Progreso (%)": saving.target_amount ? ((saving.current_balance / saving.target_amount) * 100).toFixed(2) : "N/A",
     }));
 
     const filename = `ahorros_${format(new Date(), "yyyyMMdd_HHmmss")}`;
     const title = "Reporte de Cuentas de Ahorro";
-    const headers = ["Nombre", "Saldo Actual", "Monto Objetivo", "Fecha Objetivo", "Progreso (%)"];
+    const headers = ["Nombre", "Saldo Actual", "Monto Objetivo", "Fecha Objetivo", "Fecha Cumplimiento", "Progreso (%)"]; // Añadido
     const pdfData = dataToExport.map(row => Object.values(row));
 
     if (formatType === 'csv') {
@@ -621,7 +635,8 @@ const Savings: React.FC = () => {
                   <TableHead>Nombre</TableHead>
                   <TableHead>Saldo Actual</TableHead>
                   <TableHead>Monto Objetivo</TableHead>
-                  <TableHead>Fecha Objetivo / Cumplimiento</TableHead> {/* Actualizado */}
+                  <TableHead>Fecha Objetivo</TableHead>
+                  <TableHead>Fecha Cumplimiento</TableHead> {/* Nueva columna */}
                   <TableHead>Progreso</TableHead>
                   <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
@@ -647,6 +662,7 @@ const Savings: React.FC = () => {
                       <TableCell>${saving.current_balance.toFixed(2)}</TableCell>
                       <TableCell>${saving.target_amount?.toFixed(2) || "N/A"}</TableCell>
                       <TableCell>{saving.target_date ? format(new Date(saving.target_date), "dd/MM/yyyy", { locale: es }) : "N/A"}</TableCell>
+                      <TableCell>{saving.completion_date ? format(new Date(saving.completion_date), "dd/MM/yyyy", { locale: es }) : "N/A"}</TableCell> {/* Mostrar nueva columna */}
                       <TableCell>
                         {saving.target_amount ? (
                           <div className="flex items-center gap-2">

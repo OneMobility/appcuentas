@@ -25,12 +25,16 @@ const ChallengeAlbumBackContent: React.FC<ChallengeAlbumBackContentProps> = ({ c
 
   const formattedStartDate = challenge.start_date ? format(parseISO(challenge.start_date), "dd/MM/yyyy", { locale: es }) : "N/A";
   const formattedEndDate = challenge.end_date ? format(parseISO(challenge.end_date), "dd/MM/yyyy", { locale: es }) : "N/A";
+  const formattedCompletionDate = isSavingGoal && savingGoal?.completion_date ? format(parseISO(savingGoal.completion_date), "dd/MM/yyyy", { locale: es }) : "N/A";
+
 
   let statusText = "";
   let statusColorClass = "";
+  let isCompleted = false; // Variable para controlar la insignia
   if (challenge.status === "completed") {
     statusText = "¡Completado!";
     statusColorClass = "text-green-600";
+    isCompleted = true;
   } else if (challenge.status === "failed") {
     statusText = "Fallido";
     statusColorClass = "text-red-600";
@@ -46,6 +50,9 @@ const ChallengeAlbumBackContent: React.FC<ChallengeAlbumBackContentProps> = ({ c
       <p className={cn("text-base font-semibold mb-2", statusColorClass)}>Estado: {statusText}</p>
       <p className="text-xs text-gray-700">Inicio: {formattedStartDate}</p>
       <p className="text-xs text-gray-700">Fin: {formattedEndDate}</p>
+      {isSavingGoal && savingGoal?.target_amount && (
+        <p className="text-xs text-gray-700">Cumplimiento: {formattedCompletionDate}</p>
+      )}
 
       {isSavingGoal && savingGoal && (
         <div className="mt-4">

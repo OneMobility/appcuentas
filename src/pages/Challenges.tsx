@@ -72,7 +72,7 @@ const Challenges: React.FC<ChallengesProps> = ({ challengeRefreshKey, setChallen
     // Fetch active challenge
     const { data: activeChallengeData, error: activeChallengeError } = await supabase
       .from('challenges')
-      .select('*, savings(id, name, current_balance, target_amount, color), badges(id, name, description, image_url)')
+      .select('*, savings(id, name, current_balance, target_amount, color, completion_date), badges(id, name, description, image_url)') // Incluir completion_date
       .eq('user_id', user.id)
       .eq('status', 'active')
       .single();
@@ -115,7 +115,7 @@ const Challenges: React.FC<ChallengesProps> = ({ challengeRefreshKey, setChallen
     // Fetch all past challenges (completed, failed, regular) for the user
     const { data: pastChallengesData, error: pastChallengesError } = await supabase
       .from('challenges')
-      .select('*, savings(id, name, current_balance, target_amount, color), badges(id, name, description, image_url)')
+      .select('*, savings(id, name, current_balance, target_amount, color, completion_date), badges(id, name, description, image_url)') // Incluir completion_date
       .eq('user_id', user.id)
       .in('status', ['completed', 'failed', 'regular'])
       .order('end_date', { ascending: false });
