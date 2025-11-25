@@ -352,7 +352,8 @@ const CardDetailsPage: React.FC = () => {
 
   const filteredTransactions = useMemo(() => {
     if (!card) return [];
-    return card.transactions.filter((tx) => {
+    // Asegurarse de que card.transactions sea un array antes de llamar a filter
+    return (card.transactions || []).filter((tx) => {
       const matchesSearch = tx.description.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesType = filterType === "all" || tx.type === filterType;
       
