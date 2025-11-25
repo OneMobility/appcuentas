@@ -26,55 +26,74 @@ interface ChallengeTemplate {
   description: string;
   type: "no_spend_category" | "saving_goal";
   icon: keyof typeof LucideIcons;
-  default_categories?: string[]; // Para retos de no gasto
+  default_categories?: string[]; // Para retos de no gasto (nombres de categorías)
+  default_target_amount?: number; // Para retos de ahorro
 }
 
 const challengeTemplates: ChallengeTemplate[] = [
   {
-    id: "no-spend-food",
-    name: "Reto: Cero Gastos en Antojitos",
-    description: "Evita gastar en comida fuera, snacks y bebidas por 7 días.",
+    id: "no-netflix-more-books",
+    name: "Reto: Menos Netflix y más libros",
+    description: "No realices compras en la categoría 'Streaming' por 7 días.",
     type: "no_spend_category",
-    icon: "IceCream",
-    default_categories: ["Antojitos"], // Usar nombres para buscar IDs
+    icon: "Tv",
+    default_categories: ["Streaming"],
   },
   {
-    id: "no-spend-apps",
-    name: "Reto: Cero Gastos en Apps/Suscripciones",
-    description: "No realices compras en aplicaciones o nuevas suscripciones por 7 días.",
-    type: "no_spend_category",
-    icon: "Smartphone",
-    default_categories: ["Apps", "Streaming"],
-  },
-  {
-    id: "no-spend-entertainment",
-    name: "Reto: Cero Gastos en Entretenimiento",
-    description: "Evita gastos en cine, conciertos, bares o eventos por 7 días.",
-    type: "no_spend_category",
-    icon: "Film",
-    default_categories: ["Cine"],
-  },
-  {
-    id: "no-spend-clothing",
-    name: "Reto: Cero Gastos en Ropa",
-    description: "No compres ropa, accesorios o calzado por 7 días.",
+    id: "no-more-blouses",
+    name: "Reto: ¿Segur@ que necesitas esa blusa?",
+    description: "Menos compras en la categoría 'Ropa' por 7 días.",
     type: "no_spend_category",
     icon: "Shirt",
     default_categories: ["Ropa"],
   },
   {
-    id: "saving-goal-100",
-    name: "Reto: Ahorra $100 en 7 días",
-    description: "Intenta ahorrar $100 en una nueva meta durante la semana.",
+    id: "no-entertainment",
+    name: "Reto: Cero gastos en entretenimiento",
+    description: "El cine tendrá que esperar, no hagas compras en la categoría 'Cine' por 7 días.",
+    type: "no_spend_category",
+    icon: "Film",
+    default_categories: ["Cine"],
+  },
+  {
+    id: "no-apps",
+    name: "Reto: Cero Apps",
+    description: "Evita hacer compras en aplicaciones y registrar una compra en la categoría 'Apps' por 7 días.",
+    type: "no_spend_category",
+    icon: "Smartphone",
+    default_categories: ["Apps"],
+  },
+  {
+    id: "saving-goal-150",
+    name: "Reto: Ahorra $150 en 7 días",
+    description: "Vamos a crear un ahorro de $150 pesos, ¡complétalo!",
     type: "saving_goal",
     icon: "PiggyBank",
+    default_target_amount: 150,
+  },
+  {
+    id: "saving-goal-300",
+    name: "Reto: Ahorra $300 en 7 días",
+    description: "Vamos a crear un ahorro de $300 pesos, ¡complétalo!",
+    type: "saving_goal",
+    icon: "PiggyBank",
+    default_target_amount: 300,
   },
   {
     id: "saving-goal-200",
     name: "Reto: Ahorra $200 en 7 días",
-    description: "Intenta ahorrar $200 en una nueva meta durante la semana.",
+    description: "Vamos a crear un ahorro de $200 pesos, ¡complétalo!",
     type: "saving_goal",
     icon: "PiggyBank",
+    default_target_amount: 200,
+  },
+  {
+    id: "saving-goal-500",
+    name: "Reto: Ahorra $500 en 7 días",
+    description: "Vamos a crear un ahorro de $500 pesos, ¡complétalo!",
+    type: "saving_goal",
+    icon: "PiggyBank",
+    default_target_amount: 500,
   },
 ];
 
@@ -113,17 +132,21 @@ const ChallengeCreationDialog: React.FC<ChallengeCreationDialogProps> = ({ isOpe
   const fixedExpenseCategories = expenseCategories.filter(cat => cat.is_fixed);
 
   useEffect(() => {
-    if (selectedTemplate && selectedTemplate.type === "no_spend_category" && selectedTemplate.default_categories) {
-      const defaultCategoryIds = fixedExpenseCategories
-        .filter(cat => selectedTemplate.default_categories?.includes(cat.name))
-        .map(cat => cat.id);
-      setSelectedCategories(defaultCategoryIds);
-    } else if (selectedTemplate && selectedTemplate.type === "saving_goal") {
-      // Set default saving goal details based on template
-      if (selectedTemplate.id === "saving-goal-100") {
-        setSavingGoalDetails(prev => ({ ...prev, name: "Reto de Ahorro $100", target_amount: "100" }));
-      } else if (selectedTemplate.id === "saving-goal-200") {
-        setSavingGoalDetails(prev => ({ ...prev, name: "Reto de Ahorro $200", target_amount: "200" }));
+    if (selectedTemplate) {
+      if (selectedTemplate.type === "no_spend_category" && selectedTemplate.default_categories) {
+        const defaultCategoryIds = fixedExpenseCategories
+          .filter(cat => selectedTemplate.default_categories?.includes(cat.name))
+          .map(cat => cat.id);
+        setSelectedCategories(defaultCategoryIds);
+        setSavingGoalDetails({ name: "", target_amount: "", color: "#22C55E" }); // Reset saving goal details
+      } else if (selectedTemplate.type === "saving_goal") {
+        // Set default saving goal details based on template
+        setSavingGoalDetails(prev => ({
+          ...prev,
+          name: selectedTemplate.name, // Use challenge name as default saving goal name
+          target_amount: selectedTemplate.default_target_amount?.toString() || "",
+        }));
+        setSelectedCategories([]); // Reset categories
       }
     }
   }, [selectedTemplate, fixedExpenseCategories]);
