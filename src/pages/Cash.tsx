@@ -116,7 +116,8 @@ const Cash = () => {
       return;
     }
 
-    const categoryType = newTransaction.category_id.startsWith("inc") ? "income" : "expense";
+    // Correctly determine categoryType based on transaction type
+    const categoryType = newTransaction.type === "ingreso" ? "income" : "expense";
 
     const { data, error } = await supabase
       .from('cash_transactions')
@@ -176,7 +177,8 @@ const Cash = () => {
       return;
     }
 
-    const categoryType = newTransaction.category_id.startsWith("inc") ? "income" : "expense";
+    // Correctly determine categoryType based on new transaction type
+    const categoryType = newTransaction.type === "ingreso" ? "income" : "expense";
 
     const { data, error } = await supabase
       .from('cash_transactions')
@@ -561,11 +563,11 @@ const Cash = () => {
                       <SelectValue placeholder="Selecciona categoría" />
                     </SelectTrigger>
                     <SelectContent>
-                      {availableCategories.map((cat) => (
-                        <SelectItem key={cat.id} value={cat.id}>
-                          {cat.name}
-                        </SelectItem>
-                      ))}
+                        {availableCategories.map((cat) => (
+                          <SelectItem key={cat.id} value={cat.id}>
+                            {cat.name}
+                          </SelectItem>
+                        ))}
                     </SelectContent>
                   </Select>
                 </div>
