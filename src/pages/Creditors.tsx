@@ -257,7 +257,7 @@ const Creditors = () => {
   const handleUpdateTransaction = async (e: React.FormEvent) => { // Renombrado
     e.preventDefault();
     if (!user || !editingTransaction || !selectedCreditorId) {
-      showError("Debes iniciar sesión para actualizar transacciones.");
+      showError("No se ha seleccionado una transacción o acreedor para actualizar.");
       return;
     }
 
@@ -353,6 +353,69 @@ const Creditors = () => {
     setSelectedCreditorId(null);
     setIsEditTransactionDialogOpen(false);
     showSuccess("Transacción actualizada exitosamente.");
+  };
+
+  const handleDeleteCreditorTransaction = async (transactionId: string, creditorId: string, transactionAmount: number, transactionType: "charge" | "payment") => {
+    if (!user) {
+      showError("Debes iniciar sesión para eliminar transacciones.");
+      return;
+    }
+
+    const currentCreditor = creditors.find(c => c.id === creditorId);
+    if (!currentCreditor) {
+      showError("Acreedor no encontrado.");
+      return;
+    }
+
+    let newCreditorBalance = currentCreditor.current_balance;
+    // Revertir el impacto de la transacción eliminada en el saldo
+    newCreditorBalance = transactionType === "charge" ? newCreditorBalance - transactionAmount : newCreditorBalance + transactionAmount;
+
+    const { error: transactionError } = await supabase
+      .from('creditor_transactions')
+      .delete()
+      .eq('id', transactionId)
+      .eq('user_id', user.id);
+
+    if (transactionError) {
+      showError('Error al eliminar transacción: ' + transactionError.message);
+      return;
+    }
+
+    const { error: creditorError } = await supabase
+      .from('creditors')
+      .update({ current_balance: newCreditorBalance })
+      .eq('id', creditorId)
+      .eq('user_id', user.id);
+
+    if (creditorError) {
+      showError('Error al actualizar saldo del acreedor después de eliminar transacción: ' + creditorError.message);
+      return;
+    }
+
+    setCreditors((prevCreditors) =>
+      prevCreditors.map((creditor) => {
+        if (creditor.id === creditorId) {
+          return {
+            ...creditor,
+            current_balance: newCreditorBalance,
+            creditor_transactions: creditor.creditor_transactions.filter(t => t.id !== transactionId),
+          };
+        }
+        return creditor;
+      })
+    );
+
+    setHistoryCreditor((prev) => {
+      if (!prev || prev.id !== creditorId) return prev;
+      return {
+        ...prev,
+        current_balance: newCreditorBalance,
+        creditor_transactions: prev.creditor_transactions.filter(t => t.id !== transactionId),
+      };
+    });
+
+    showSuccess("Transacción eliminada exitosamente.");
   };
 
   const filteredCreditors = creditors.filter((creditor) =>
@@ -624,7 +687,7 @@ const Creditors = () => {
                           <TableCell className="text-right">
                             {transaction.type === "charge" ? "+" : "-"}${transaction.amount.toFixed(2)}
                           </TableCell>
-                          <TableCell className="text-right">
+                          <TableCell className="text-right flex gap-2 justify-end">
                             <Button
                               variant="outline"
                               size="sm"
@@ -634,6 +697,32 @@ const Creditors = () => {
                               <Edit className="h-3.5 w-3.5" />
                               <span className="sr-only">Editar</span>
                             </Button>
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button
+                                  variant="destructive"
+                                  size="sm"
+                                  className="h-8 w-8 p-0"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                  <span className="sr-only">Eliminar</span>
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>¿Estás absolutamente seguro?</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Esta acción no se puede deshacer. Esto eliminará permanentemente la transacción de {transaction.type === "charge" ? "cargo" : "pago"} por ${transaction.amount.toFixed(2)}: "{transaction.description}".
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                  <AlertDialogAction onClick={() => handleDeleteCreditorTransaction(transaction.id, historyCreditor.id, transaction.amount, transaction.type)}>
+                                    Eliminar
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
                           </TableCell>
                         </TableRow>
                       ))}

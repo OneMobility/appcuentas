@@ -257,7 +257,7 @@ const Debtors = () => {
   const handleUpdateTransaction = async (e: React.FormEvent) => { // Renombrado
     e.preventDefault();
     if (!user || !editingTransaction || !selectedDebtorId) {
-      showError("Debes iniciar sesión para actualizar transacciones.");
+      showError("No se ha seleccionado una transacción o deudor para actualizar.");
       return;
     }
 
@@ -353,6 +353,69 @@ const Debtors = () => {
     setSelectedDebtorId(null);
     setIsEditTransactionDialogOpen(false);
     showSuccess("Transacción actualizada exitosamente.");
+  };
+
+  const handleDeleteDebtorTransaction = async (transactionId: string, debtorId: string, transactionAmount: number, transactionType: "charge" | "payment") => {
+    if (!user) {
+      showError("Debes iniciar sesión para eliminar transacciones.");
+      return;
+    }
+
+    const currentDebtor = debtors.find(d => d.id === debtorId);
+    if (!currentDebtor) {
+      showError("Deudor no encontrado.");
+      return;
+    }
+
+    let newDebtorBalance = currentDebtor.current_balance;
+    // Revertir el impacto de la transacción eliminada en el saldo
+    newDebtorBalance = transactionType === "charge" ? newDebtorBalance - transactionAmount : newDebtorBalance + transactionAmount;
+
+    const { error: transactionError } = await supabase
+      .from('debtor_transactions')
+      .delete()
+      .eq('id', transactionId)
+      .eq('user_id', user.id);
+
+    if (transactionError) {
+      showError('Error al eliminar transacción: ' + transactionError.message);
+      return;
+    }
+
+    const { error: debtorError } = await supabase
+      .from('debtors')
+      .update({ current_balance: newDebtorBalance })
+      .eq('id', debtorId)
+      .eq('user_id', user.id);
+
+    if (debtorError) {
+      showError('Error al actualizar saldo del deudor después de eliminar transacción: ' + debtorError.message);
+      return;
+    }
+
+    setDebtors((prevDebtors) =>
+      prevDebtors.map((debtor) => {
+        if (debtor.id === debtorId) {
+          return {
+            ...debtor,
+            current_balance: newDebtorBalance,
+            debtor_transactions: debtor.debtor_transactions.filter(t => t.id !== transactionId),
+          };
+        }
+        return debtor;
+      })
+    );
+
+    setHistoryDebtor((prev) => {
+      if (!prev || prev.id !== debtorId) return prev;
+      return {
+        ...prev,
+        current_balance: newDebtorBalance,
+        debtor_transactions: prev.debtor_transactions.filter(t => t.id !== transactionId),
+      };
+    });
+
+    showSuccess("Transacción eliminada exitosamente.");
   };
 
   const filteredDebtors = debtors.filter((debtor) =>
@@ -624,7 +687,7 @@ const Debtors = () => {
                           <TableCell className="text-right">
                             {transaction.type === "charge" ? "+" : "-"}${transaction.amount.toFixed(2)}
                           </TableCell>
-                          <TableCell className="text-right">
+                          <TableCell className="text-right flex gap-2 justify-end">
                             <Button
                               variant="outline"
                               size="sm"
@@ -634,6 +697,32 @@ const Debtors = () => {
                               <Edit className="h-3.5 w-3.5" />
                               <span className="sr-only">Editar</span>
                             </Button>
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button
+                                  variant="destructive"
+                                  size="sm"
+                                  className="h-8 w-8 p-0"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                  <span className="sr-only">Eliminar</span>
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>¿Estás absolutamente seguro?</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Esta acción no se puede deshacer. Esto eliminará permanentemente la transacción de {transaction.type === "charge" ? "cargo" : "abono"} por ${transaction.amount.toFixed(2)}: "{transaction.description}".
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                  <AlertDialogAction onClick={() => handleDeleteDebtorTransaction(transaction.id, historyDebtor.id, transaction.amount, transaction.type)}>
+                                    Eliminar
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
                           </TableCell>
                         </TableRow>
                       ))}

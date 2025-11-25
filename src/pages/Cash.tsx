@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { PlusCircle, CalendarIcon, Edit, FileText, FileDown } from "lucide-react";
+import { PlusCircle, CalendarIcon, Edit, FileText, FileDown, Trash2 } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
@@ -21,6 +21,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/context/SessionContext";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { exportToCsv, exportToPdf } from "@/utils/export";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 
 interface Transaction {
   id: string;
@@ -209,6 +210,29 @@ const Cash = () => {
       setEditingTransaction(null);
       setNewTransaction({ type: "ingreso", amount: "", description: "", category_id: "" });
       showSuccess("Transacción actualizada exitosamente.");
+    }
+  };
+
+  const handleDeleteTransaction = async (transactionId: string, transactionAmount: number, transactionType: "ingreso" | "egreso") => {
+    if (!user) {
+      showError("Debes iniciar sesión para eliminar transacciones.");
+      return;
+    }
+
+    const { error } = await supabase
+      .from('cash_transactions')
+      .delete()
+      .eq('id', transactionId)
+      .eq('user_id', user.id);
+
+    if (error) {
+      showError('Error al eliminar transacción: ' + error.message);
+    } else {
+      setTransactions((prev) => prev.filter((tx) => tx.id !== transactionId));
+      setBalance((prev) =>
+        transactionType === "ingreso" ? prev - transactionAmount : prev + transactionAmount
+      );
+      showSuccess("Transacción eliminada exitosamente.");
     }
   };
 
@@ -465,7 +489,7 @@ const Cash = () => {
                       <TableCell className="text-right">
                         {tx.type === "ingreso" ? "+" : "-"}${tx.amount.toFixed(2)}
                       </TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className="text-right flex gap-2 justify-end">
                         <Button
                           variant="outline"
                           size="sm"
@@ -475,6 +499,32 @@ const Cash = () => {
                           <Edit className="h-3.5 w-3.5" />
                           <span className="sr-only">Editar</span>
                         </Button>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              className="h-8 w-8 p-0"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                              <span className="sr-only">Eliminar</span>
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>¿Estás absolutamente seguro?</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Esta acción no se puede deshacer. Esto eliminará permanentemente la transacción de {tx.type} por ${tx.amount.toFixed(2)}: "{tx.description}".
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                              <AlertDialogAction onClick={() => handleDeleteTransaction(tx.id, tx.amount, tx.type)}>
+                                Eliminar
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
                       </TableCell>
                     </TableRow>
                   );

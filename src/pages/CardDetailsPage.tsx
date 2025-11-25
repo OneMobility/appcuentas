@@ -355,6 +355,52 @@ const CardDetailsPage: React.FC = () => {
     showSuccess("Transacción actualizada exitosamente.");
   };
 
+  const handleDeleteCardTransaction = async (transactionId: string, transactionAmount: number, transactionType: "charge" | "payment", installmentsTotalAmount?: number, installmentsCount?: number) => {
+    if (!user || !card) {
+      showError("Debes iniciar sesión o la tarjeta no está cargada.");
+      return;
+    }
+
+    let newCardBalance = card.current_balance;
+    const effectiveAmount = installmentsTotalAmount ? installmentsTotalAmount / (installmentsCount || 1) : transactionAmount;
+
+    // Revertir el impacto de la transacción eliminada en el saldo
+    newCardBalance = transactionType === "charge" ? newCardBalance - effectiveAmount : newCardBalance + effectiveAmount;
+
+    const { error: transactionError } = await supabase
+      .from('card_transactions')
+      .delete()
+      .eq('id', transactionId)
+      .eq('user_id', user.id);
+
+    if (transactionError) {
+      showError('Error al eliminar transacción: ' + transactionError.message);
+      return;
+    }
+
+    const { error: cardError } = await supabase
+      .from('cards')
+      .update({ current_balance: newCardBalance })
+      .eq('id', card.id)
+      .eq('user_id', user.id);
+
+    if (cardError) {
+      showError('Error al actualizar saldo de la tarjeta después de eliminar transacción: ' + cardError.message);
+      return;
+    }
+
+    setCard((prevCard) => {
+      if (!prevCard) return null;
+      return {
+        ...prevCard,
+        current_balance: newCardBalance,
+        transactions: (prevCard.transactions || []).filter(t => t.id !== transactionId),
+      };
+    });
+
+    showSuccess("Transacción eliminada exitosamente.");
+  };
+
   const filteredTransactions = useMemo(() => {
     if (!card) return [];
     // Asegurarse de que card.transactions sea un array antes de llamar a filter
@@ -528,86 +574,86 @@ const CardDetailsPage: React.FC = () => {
                     <Label htmlFor="transactionAmount" className="text-right">
                       Monto
                     </Label>
-                    <Input
-                      id="transactionAmount"
-                      name="amount"
-                      type="number"
-                      step="0.01"
-                      value={newTransaction.amount}
-                      onChange={handleTransactionInputChange}
-                      className="col-span-3"
-                      required
-                    />
+                  <Input
+                    id="transactionAmount"
+                    name="amount"
+                    type="number"
+                    step="0.01"
+                    value={newTransaction.amount}
+                    onChange={handleTransactionInputChange}
+                    className="col-span-3"
+                    required
+                  />
+                </div>
+                {newTransaction.type === "charge" && card.type === "credit" && (
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="installments_count" className="text-right">
+                      Meses
+                    </Label>
+                    <Select
+                      value={newTransaction.installments_count?.toString() || ""}
+                      onValueChange={handleInstallmentsChange}
+                    >
+                      <SelectTrigger className="col-span-3">
+                        <SelectValue placeholder="Pago único" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="1">Pago único</SelectItem>
+                        <SelectItem value="3">3 meses</SelectItem>
+                        <SelectItem value="6">6 meses</SelectItem>
+                        <SelectItem value="9">9 meses</SelectItem>
+                        <SelectItem value="12">12 meses</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
-                  {newTransaction.type === "charge" && card.type === "credit" && (
-                    <div className="grid grid-cols-4 items-center gap-4">
-                      <Label htmlFor="installments_count" className="text-right">
-                        Meses
-                      </Label>
-                      <Select
-                        value={newTransaction.installments_count?.toString() || ""}
-                        onValueChange={handleInstallmentsChange}
+                )}
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="transactionDescription" className="text-right">
+                    Descripción
+                  </Label>
+                  <Input
+                    id="transactionDescription"
+                    name="description"
+                    value={newTransaction.description}
+                    onChange={handleTransactionInputChange}
+                    className="col-span-3"
+                    required
+                  />
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="transactionDate" className="text-right">
+                    Fecha
+                  </Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant={"outline"}
+                        className={cn(
+                          "col-span-3 justify-start text-left font-normal",
+                          !newTransaction.date && "text-muted-foreground"
+                        )}
                       >
-                        <SelectTrigger className="col-span-3">
-                          <SelectValue placeholder="Pago único" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="1">Pago único</SelectItem>
-                          <SelectItem value="3">3 meses</SelectItem>
-                          <SelectItem value="6">6 meses</SelectItem>
-                          <SelectItem value="9">9 meses</SelectItem>
-                          <SelectItem value="12">12 meses</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  )}
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="transactionDescription" className="text-right">
-                      Descripción
-                    </Label>
-                    <Input
-                      id="transactionDescription"
-                      name="description"
-                      value={newTransaction.description}
-                      onChange={handleTransactionInputChange}
-                      className="col-span-3"
-                      required
-                    />
-                  </div>
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="transactionDate" className="text-right">
-                      Fecha
-                    </Label>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant={"outline"}
-                          className={cn(
-                            "col-span-3 justify-start text-left font-normal",
-                            !newTransaction.date && "text-muted-foreground"
-                          )}
-                        >
-                          <CalendarIcon className="mr-2 h-4 w-4" />
-                          {newTransaction.date ? format(newTransaction.date, "dd/MM/yyyy", { locale: es }) : <span>Selecciona una fecha</span>}
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0">
-                        <Calendar
-                          mode="single"
-                          selected={newTransaction.date}
-                          onSelect={handleTransactionDateChange}
-                          initialFocus
-                          locale={es}
-                        />
-                      </PopoverContent>
-                    </Popover>
-                  </div>
-                  <DialogFooter>
-                    <Button type="submit">Registrar Transacción</Button>
-                  </DialogFooter>
-                </form>
-              </DialogContent>
-            </Dialog>
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {newTransaction.date ? format(newTransaction.date, "dd/MM/yyyy", { locale: es }) : <span>Selecciona una fecha</span>}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0">
+                      <Calendar
+                        mode="single"
+                        selected={newTransaction.date}
+                        onSelect={handleTransactionDateChange}
+                        initialFocus
+                        locale={es}
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+                <DialogFooter>
+                  <Button type="submit">Registrar Transacción</Button>
+                </DialogFooter>
+              </form>
+            </DialogContent>
+          </Dialog>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="sm" className="h-8 gap-1">
@@ -707,7 +753,7 @@ const CardDetailsPage: React.FC = () => {
                       </TableCell>
                       <TableCell>{transaction.description}</TableCell>
                       <TableCell className="text-right">${transaction.amount.toFixed(2)}</TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className="text-right flex gap-2 justify-end">
                         <Button
                           variant="outline"
                           size="sm"
@@ -717,6 +763,37 @@ const CardDetailsPage: React.FC = () => {
                           <Edit className="h-3.5 w-3.5" />
                           <span className="sr-only">Editar</span>
                         </Button>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              className="h-8 w-8 p-0"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                              <span className="sr-only">Eliminar</span>
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>¿Estás absolutamente seguro?</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Esta acción no se puede deshacer. Esto eliminará permanentemente la transacción de {transaction.type === "charge" ? "cargo" : "pago"} por ${transaction.amount.toFixed(2)}: "{transaction.description}".
+                                {transaction.installments_count && transaction.installments_count > 1 && (
+                                  <p className="mt-2 text-sm text-red-500">
+                                    Nota: Esta es una cuota de una transacción a meses. Eliminarla afectará el saldo de la tarjeta.
+                                  </p>
+                                )}
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                              <AlertDialogAction onClick={() => handleDeleteCardTransaction(transaction.id, transaction.amount, transaction.type, transaction.installments_total_amount, transaction.installments_count)}>
+                                Eliminar
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
                       </TableCell>
                     </TableRow>
                   ))}
