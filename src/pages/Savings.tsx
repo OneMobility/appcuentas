@@ -622,7 +622,7 @@ const Savings: React.FC = () => {
                           size="sm"
                           onClick={() => handleOpenTransactionDialog(saving.id)}
                           className="h-8 gap-1"
-                          disabled={isLinkedToChallenge} // Disable if linked to a challenge
+                          // REMOVED: disabled={isLinkedToChallenge}
                         >
                           <DollarSign className="h-3.5 w-3.5" />
                           Transacción
