@@ -488,7 +488,6 @@ const CardDetailsPage: React.FC = () => {
 
     if (cardError) {
       showError('Error al actualizar saldo de la tarjeta después de eliminar transacción: ' + cardError.message);
-      console.error("Supabase card balance update error after delete:", cardError);
       return;
     }
 
@@ -927,7 +926,7 @@ const CardDetailsPage: React.FC = () => {
                             <img
                               src="https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/cochinito love.png"
                               alt="Cochinito Love"
-                              className="h-8 w-8"
+                              className="h-20 w-20"
                               onError={(e) => {
                                 console.error("Error al cargar la imagen del cochinito:", e.currentTarget.src);
                                 e.currentTarget.style.display = 'none'; // Ocultar la imagen si falla

@@ -15,6 +15,7 @@ interface CardDataForDueDate {
   type: "credit" | "debit";
   cut_off_day?: number;
   days_to_pay_after_cut_off?: number;
+  current_balance: number; // Añadido para verificar deuda
 }
 
 interface GroupedPaymentDueDatesCardProps {
@@ -24,10 +25,14 @@ interface GroupedPaymentDueDatesCardProps {
 const GroupedPaymentDueDatesCard: React.FC<GroupedPaymentDueDatesCardProps> = ({ cards }) => {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const twoDaysFromNow = addDays(today, 2);
 
   const upcomingPayments = cards
-    .filter(card => card.type === "credit" && card.cut_off_day !== undefined && card.days_to_pay_after_cut_off !== undefined)
+    .filter(card => 
+      card.type === "credit" && 
+      card.cut_off_day !== undefined && 
+      card.days_to_pay_after_cut_off !== undefined &&
+      card.current_balance > 0 // Solo tarjetas de crédito con deuda pendiente
+    )
     .map(card => {
       const paymentDueDate = getUpcomingPaymentDueDate(card.cut_off_day!, card.days_to_pay_after_cut_off!, today);
       const daysRemaining = differenceInDays(paymentDueDate, today);
@@ -47,7 +52,26 @@ const GroupedPaymentDueDatesCard: React.FC<GroupedPaymentDueDatesCardProps> = ({
     .sort((a, b) => a!.paymentDueDate.getTime() - b!.paymentDueDate.getTime()); // Ordenar por fecha
 
   if (upcomingPayments.length === 0) {
-    return null; // No mostrar la tarjeta si no hay pagos próximos
+    return (
+      <Card className="relative p-4 shadow-md border-l-4 border-green-500 bg-green-50 text-green-800">
+        <CardHeader className="relative flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardTitle className="text-lg font-bold text-green-800">
+            ¡Vas bien!
+          </CardTitle>
+          <img
+            src="https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Conchinito%20Good.png"
+            alt="Cochinito Feliz"
+            className="absolute top-[-49px] right-[-34px] h-[100px] w-[100px] z-10 md:top-[5px] md:right-[50px] md:h-[120px] md:w-[120px]"
+          />
+        </CardHeader>
+        <CardContent>
+          <div className="text-lg font-bold">No hay pagos de tarjetas programados para los próximos 30 días.</div>
+          <p className="text-xs text-green-700 mt-1">
+            ¡Sigue así con tus finanzas!
+          </p>
+        </CardContent>
+      </Card>
+    );
   }
 
   return (
