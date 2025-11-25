@@ -26,7 +26,7 @@ export interface ChallengeData {
     id: string;
     name: string;
     current_balance: number;
-    target_amount: number;
+    target_amount: number | null; // Permitir que sea null
     color: string;
   } | null;
   expense_categories?: Category[]; // Para mostrar nombres de categorías prohibidas
@@ -93,8 +93,9 @@ const ChallengeCard: React.FC<ChallengeCardProps> = ({ challenge, onStartNewChal
     const isNoSpend = challenge.challenge_template_id.startsWith("no-spend");
 
     let progress = 0;
-    if (isSavingGoal && challenge.saving_goal && challenge.saving_goal.target_amount !== undefined && challenge.saving_goal.target_amount > 0) {
-      progress = (challenge.saving_goal.current_balance / challenge.saving_goal.target_amount) * 100;
+    const savingGoal = challenge.saving_goal; // Usar una variable local para mayor claridad
+    if (isSavingGoal && savingGoal && savingGoal.target_amount !== null && savingGoal.target_amount !== undefined && savingGoal.target_amount > 0) {
+      progress = (savingGoal.current_balance / savingGoal.target_amount) * 100;
     }
 
     return (
@@ -111,15 +112,19 @@ const ChallengeCard: React.FC<ChallengeCardProps> = ({ challenge, onStartNewChal
             Inició: {format(new Date(challenge.start_date), "dd/MM/yyyy", { locale: es })} | Finaliza: {format(new Date(challenge.end_date), "dd/MM/yyyy", { locale: es })}
           </p>
 
-          {isSavingGoal && challenge.saving_goal && (
+          {isSavingGoal && savingGoal && (
             <div className="mt-4">
               <p className="text-sm font-medium mb-1">Progreso de Ahorro:</p>
               <div className="flex items-center gap-2">
-                <Progress value={progress} className="w-full" indicatorColor={challenge.saving_goal.color} />
+                <Progress value={progress} className="w-full" indicatorColor={savingGoal.color} />
                 <span className="text-sm font-semibold">{progress.toFixed(0)}%</span>
               </div>
               <p className="text-xs text-muted-foreground mt-1">
-                ${challenge.saving_goal.current_balance.toFixed(2)} / ${challenge.saving_goal.target_amount.toFixed(2)}
+                ${savingGoal.current_balance.toFixed(2)} / ${
+                  savingGoal.target_amount !== null && savingGoal.target_amount !== undefined
+                    ? savingGoal.target_amount.toFixed(2)
+                    : "N/A"
+                }
               </p>
             </div>
           )}

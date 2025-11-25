@@ -103,7 +103,7 @@ const Challenges: React.FC = () => {
     } else if (challenge.challenge_template_id.startsWith("saving-goal") && challenge.saving_goal) {
       // Saving Goal Challenge evaluation
       const saving = challenge.saving_goal;
-      if (saving.target_amount > 0) {
+      if (saving.target_amount !== null && saving.target_amount !== undefined && saving.target_amount > 0) {
         const progress = (saving.current_balance / saving.target_amount) * 100;
         if (progress >= 100) {
           newStatus = "completed";
@@ -126,7 +126,7 @@ const Challenges: React.FC = () => {
       .from('challenges')
       .update({ status: newStatus })
       .eq('id', challenge.id)
-      .eq('user_id', user.id);
+      .eq('user.id', user.id);
 
     if (updateError) {
       showError('Error al actualizar el estado del reto: ' + updateError.message);
