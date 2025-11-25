@@ -25,6 +25,7 @@ import { getUpcomingPaymentDueDate } from "@/utils/date-helpers"; // Importar la
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { exportToCsv, exportToPdf } from "@/utils/export";
 import CardTransferDialog from "@/components/CardTransferDialog"; // Importar el nuevo componente
+import { useCategoryContext } from "@/context/CategoryContext"; // Importar useCategoryContext
 
 interface CardTransaction {
   id: string;
@@ -37,6 +38,8 @@ interface CardTransaction {
   installments_total_amount?: number; // Monto total del cargo original si es a meses
   installments_count?: number; // Número total de meses si es a meses
   installment_number?: number; // Número de cuota actual (1, 2, 3...)
+  category_id?: string; // Añadido
+  category_type?: "income" | "expense"; // Añadido
 }
 
 interface CardData {
@@ -58,6 +61,7 @@ interface CardData {
 
 const Cards = () => {
   const { user } = useSession();
+  const { expenseCategories, isLoadingCategories } = useCategoryContext(); // Usar el contexto de categorías
   const [cards, setCards] = useState<CardData[]>([]);
   const [isAddCardDialogOpen, setIsAddCardDialogOpen] = useState(false);
   const [isEditCardDialogOpen, setIsEditCardDialogOpen] = useState(false);
@@ -83,12 +87,13 @@ const Cards = () => {
     description: "",
     date: undefined as Date | undefined,
     installments_count: undefined as number | undefined, // Nuevo campo para meses
+    category_id: "", // Añadido
   });
 
   const [searchTerm, setSearchTerm] = useState("");
 
   const fetchCards = async () => {
-    if (!user) {
+    if (!user || isLoadingCategories) { // Esperar a que carguen las categorías
       setCards([]);
       return;
     }
@@ -115,7 +120,7 @@ const Cards = () => {
     if (user) {
       fetchCards();
     }
-  }, [user]);
+  }, [user, isLoadingCategories]); // Añadir isLoadingCategories a las dependencias
 
   const totalCardsBalance = cards.reduce((sum, card) => {
     return sum + (card.type === "credit" ? -card.current_balance : card.current_balance);
@@ -235,7 +240,7 @@ const Cards = () => {
 
   const handleOpenAddTransactionDialog = (cardId: string) => {
     setSelectedCardId(cardId);
-    setNewTransaction({ type: "charge", amount: "", description: "", date: undefined, installments_count: undefined });
+    setNewTransaction({ type: "charge", amount: "", description: "", date: undefined, installments_count: undefined, category_id: "" });
     setIsAddTransactionDialogOpen(true);
   };
 
@@ -245,7 +250,7 @@ const Cards = () => {
   };
 
   const handleTransactionTypeChange = (value: "charge" | "payment") => {
-    setNewTransaction((prev) => ({ ...prev, type: value, installments_count: undefined }));
+    setNewTransaction((prev) => ({ ...prev, type: value, installments_count: undefined, category_id: "" }));
   };
 
   const handleTransactionDateChange = (date: Date | undefined) => {
@@ -254,6 +259,10 @@ const Cards = () => {
 
   const handleInstallmentsChange = (value: string) => {
     setNewTransaction((prev) => ({ ...prev, installments_count: parseInt(value) || undefined }));
+  };
+
+  const handleCategorySelectChange = (value: string) => {
+    setNewTransaction((prev) => ({ ...prev, category_id: value }));
   };
 
   const handleSubmitTransaction = async (e: React.FormEvent) => {
@@ -276,6 +285,10 @@ const Cards = () => {
       showError("Por favor, selecciona una fecha para la transacción.");
       return;
     }
+    if (newTransaction.type === "charge" && !newTransaction.category_id) {
+      showError("Por favor, selecciona una categoría para el cargo.");
+      return;
+    }
 
     const currentCard = cards.find(c => c.id === selectedCardId);
     if (!currentCard) {
@@ -287,11 +300,17 @@ const Cards = () => {
     let transactionAmountToStore = amount;
     let installmentsTotalAmount: number | undefined = undefined;
     let installmentsCount: number | undefined = undefined;
+    let categoryId: string | undefined = undefined;
+    let categoryType: "income" | "expense" | undefined = undefined;
 
-    if (newTransaction.type === "charge" && newTransaction.installments_count && newTransaction.installments_count > 1) {
-      installmentsTotalAmount = amount;
-      installmentsCount = newTransaction.installments_count;
-      transactionAmountToStore = amount / installmentsCount; // Monto mensual
+    if (newTransaction.type === "charge") {
+      categoryId = newTransaction.category_id;
+      categoryType = "expense"; // Los cargos en tarjetas son egresos
+      if (newTransaction.installments_count && newTransaction.installments_count > 1) {
+        installmentsTotalAmount = amount;
+        installmentsCount = newTransaction.installments_count;
+        transactionAmountToStore = amount / installmentsCount; // Monto mensual
+      }
     }
 
     if (currentCard.type === "debit") {
@@ -332,6 +351,8 @@ const Cards = () => {
         installments_total_amount: installmentsTotalAmount,
         installments_count: installmentsCount,
         installment_number: installmentsCount ? 1 : undefined, // Siempre la primera cuota al registrar
+        category_id: categoryId, // Guardar category_id
+        category_type: categoryType, // Guardar category_type
       })
       .select();
 
@@ -364,7 +385,7 @@ const Cards = () => {
         return card;
       })
     );
-    setNewTransaction({ type: "charge", amount: "", description: "", date: undefined, installments_count: undefined });
+    setNewTransaction({ type: "charge", amount: "", description: "", date: undefined, installments_count: undefined, category_id: "" });
     setSelectedCardId(null);
     setIsAddTransactionDialogOpen(false);
     showSuccess("Transacción registrada exitosamente.");
@@ -727,6 +748,25 @@ const Cards = () => {
                     </SelectContent>
                   </Select>
                 </div>
+                {newTransaction.type === "charge" && (
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="category_id" className="text-right">
+                      Categoría
+                    </Label>
+                    <Select value={newTransaction.category_id} onValueChange={handleCategorySelectChange}>
+                      <SelectTrigger className="col-span-3">
+                        <SelectValue placeholder="Selecciona categoría" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {expenseCategories.map((cat) => (
+                          <SelectItem key={cat.id} value={cat.id}>
+                            {cat.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
                 <div className="grid grid-cols-4 items-center gap-4">
                   <Label htmlFor="transactionAmount" className="text-right">
                     Monto
