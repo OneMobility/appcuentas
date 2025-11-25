@@ -62,18 +62,18 @@ const GroupedPaymentDueDatesCard: React.FC<GroupedPaymentDueDatesCardProps> = ({
             ¡Vas bien!
           </CardTitle>
         </CardHeader>
-        <img
-          src="https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Calendario.png"
-          alt="Calendario"
-          className="absolute top-4 right-4 h-[180px] w-[180px] z-10"
-        />
-        <CardContent className="pr-48"> {/* Ajuste de padding-right */}
-          <div className="text-lg font-bold">
+        <CardContent className="flex flex-col items-center pr-4 md:block md:pr-48"> {/* Flex column on mobile, block on desktop */}
+          <img
+            src="https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Calendario.png"
+            alt="Calendario"
+            className="h-[180px] w-[180px] mb-4 md:absolute md:top-4 md:right-4 md:z-10" // Static on mobile, absolute on desktop
+          />
+          <div className="text-lg font-bold text-center md:text-left"> {/* Center text on mobile */}
             No hay pagos de tarjetas<br />
             programados para los<br />
             próximos 30 días.
           </div>
-          <p className="text-xs text-blue-700 mt-1">
+          <p className="text-xs text-blue-700 mt-1 text-center md:text-left">
             ¡Sigue así con tus finanzas!
           </p>
         </CardContent>
@@ -88,12 +88,12 @@ const GroupedPaymentDueDatesCard: React.FC<GroupedPaymentDueDatesCardProps> = ({
           Tu calendario de pagos
         </CardTitle>
       </CardHeader>
-      <img
-        src="https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Calendario.png"
-        alt="Calendario de Pagos"
-        className="absolute top-4 right-4 h-[180px] w-[180px] z-10"
-      />
-      <CardContent className="pr-48"> {/* Ajuste de padding-right */}
+      <CardContent className="flex flex-col items-center pr-4 md:block md:pr-48"> {/* Flex column on mobile, block on desktop */}
+        <img
+          src="https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Calendario.png"
+          alt="Calendario de Pagos"
+          className="h-[180px] w-[180px] mb-4 md:absolute md:top-4 md:right-4 md:z-10" // Static on mobile, absolute on desktop
+        />
         {upcomingPayments.map((payment, index) => {
           if (!payment) return null; // Double check for nulls
 
@@ -115,7 +115,7 @@ const GroupedPaymentDueDatesCard: React.FC<GroupedPaymentDueDatesCardProps> = ({
           }
 
           return (
-            <div key={index} className={cn("mb-2 last:mb-0", textColorClass)}>
+            <div key={index} className={cn("mb-2 last:mb-0 text-center md:text-left", textColorClass)}>
               <p className="text-sm font-medium">{message}</p>
               <p className="text-xs">
                 Fecha límite: <span className="font-semibold">{formattedDueDate}</span>
