@@ -44,7 +44,7 @@ const PastChallengeItem: React.FC<PastChallengeItemProps> = ({ challenge }) => {
     frontImageSrc = COMPLETED_CHALLENGE_IMAGES[challenge.challenge_template_id] || challenge.badge?.image_url || GENERIC_COMPLETED_IMAGE;
     frontImageAlt = challenge.badge?.name || challenge.name;
   } else if (isFailed) {
-    cardClasses = "border-l-4 border-pink-500 bg-pink-50 text-pink-800";
+    cardClasses = "border-l-4 border-pink-500 bg-pink-50 text-pink-800"; // Tarjeta rosa para fallido
     statusIcon = <XCircle className="h-5 w-5 text-red-600" />;
     statusText = "Fallido";
     titleClasses = "line-through";
@@ -60,6 +60,7 @@ const PastChallengeItem: React.FC<PastChallengeItemProps> = ({ challenge }) => {
     frontImageSrc = GENERIC_REGULAR_IMAGE; // Usar imagen genérica para regular
     frontImageAlt = "Reto Regular";
   } else {
+    // Fallback para cualquier otro estado inesperado
     cardClasses = "border-l-4 border-gray-300 bg-gray-50 text-gray-800";
     statusIcon = <XCircle className="h-5 w-5 text-gray-500" />;
     statusText = "Desconocido";
@@ -67,6 +68,7 @@ const PastChallengeItem: React.FC<PastChallengeItemProps> = ({ challenge }) => {
     descriptionClasses = "line-through";
   }
 
+  // Usar parseISO para asegurar que la fecha se interprete correctamente
   const formattedEndDate = challenge.end_date ? format(parseISO(challenge.end_date), "dd/MM/yyyy", { locale: es }) : "N/A";
 
   const backContent = (
@@ -111,6 +113,15 @@ const PastChallengeItem: React.FC<PastChallengeItemProps> = ({ challenge }) => {
         )}
       </CardContent>
     </Card>
+  );
+
+  return (
+    <FlippableChallengeCard
+      frontImageSrc={frontImageSrc}
+      frontImageAlt={frontImageAlt}
+      backContent={backContent}
+      cardClasses={cardClasses}
+    />
   );
 };
 
