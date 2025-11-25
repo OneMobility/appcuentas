@@ -12,7 +12,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { PlusCircle, DollarSign, Trash2, Edit, CalendarIcon, FileText, FileDown, PiggyBank, ArrowUpCircle, ArrowDownCircle } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { cn } from "@/lib/utils";
-import { format } from "date-fns";
+import { format, isAfter, isSameDay } from "date-fns"; // Importar isAfter y isSameDay
 import { es } from "date-fns/locale";
 import ColorPicker from "@/components/ColorPicker";
 import { supabase } from "@/integrations/supabase/client";
@@ -36,6 +36,10 @@ interface Saving {
   color: string;
   user_id?: string;
   challenge_id?: string; // Añadir challenge_id
+  challenges?: { // Añadir detalles del reto vinculado
+    status: "active" | "completed" | "failed" | "regular";
+    end_date: string;
+  } | null;
 }
 
 interface SavingsOutletContext {
@@ -82,7 +86,7 @@ const Savings: React.FC = () => {
 
     const { data, error } = await supabase
       .from('savings')
-      .select('*, challenge_id') // Seleccionar challenge_id
+      .select('*, challenge_id, challenges(status, end_date)') // Seleccionar challenge_id y detalles del reto
       .eq('user_id', user.id)
       .order('created_at', { ascending: false });
 
@@ -596,7 +600,13 @@ const Savings: React.FC = () => {
               <TableBody>
                 {filteredSavings.map((saving) => {
                   const progress = saving.target_amount ? (saving.current_balance / saving.target_amount) * 100 : 0;
-                  const isLinkedToChallenge = !!saving.challenge_id;
+                  
+                  // Determinar si la cuenta de ahorro está vinculada a un reto activo y en curso
+                  const isLinkedToActiveChallenge = saving.challenge_id && 
+                                                   saving.challenges && 
+                                                   saving.challenges.status === "active" &&
+                                                   (isAfter(new Date(saving.challenges.end_date), new Date()) || isSameDay(new Date(saving.challenges.end_date), new Date()));
+
                   return (
                     <TableRow key={saving.id}>
                       <TableCell className="font-medium">
@@ -622,7 +632,7 @@ const Savings: React.FC = () => {
                           size="sm"
                           onClick={() => handleOpenTransactionDialog(saving.id)}
                           className="h-8 gap-1"
-                          // REMOVED: disabled={isLinkedToChallenge}
+                          // La transacción siempre está permitida
                         >
                           <DollarSign className="h-3.5 w-3.5" />
                           Transacción
@@ -632,7 +642,7 @@ const Savings: React.FC = () => {
                           size="sm"
                           onClick={() => handleOpenEditSavingDialog(saving)}
                           className="h-8 w-8 p-0"
-                          disabled={isLinkedToChallenge} // Disable if linked to a challenge
+                          disabled={isLinkedToActiveChallenge} // Deshabilitar si está vinculado a un reto activo
                         >
                           <Edit className="h-3.5 w-3.5" />
                           <span className="sr-only">Editar</span>
@@ -643,7 +653,7 @@ const Savings: React.FC = () => {
                               variant="destructive"
                               size="sm"
                               className="h-8 w-8 p-0"
-                              disabled={isLinkedToChallenge} // Disable if linked to a challenge
+                              disabled={isLinkedToActiveChallenge} // Deshabilitar si está vinculado a un reto activo
                             >
                               <Trash2 className="h-3.5 w-3.5" />
                             </Button>
@@ -654,12 +664,12 @@ const Savings: React.FC = () => {
                               <AlertDialogDescription>
                                 Esta acción no se puede deshacer. Esto eliminará permanentemente la cuenta de ahorro 
                                 **{saving.name}** y todos sus registros.
-                                {isLinkedToChallenge && <p className="mt-2 text-red-500">Esta cuenta de ahorro está vinculada a un reto. No puedes eliminarla mientras el reto esté activo.</p>}
+                                {isLinkedToActiveChallenge && <p className="mt-2 text-red-500">Esta cuenta de ahorro está vinculada a un reto activo. No puedes eliminarla mientras el reto esté en curso.</p>}
                               </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>
                               <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                              <AlertDialogAction onClick={() => handleDeleteSaving(saving.id)} disabled={isLinkedToChallenge}>
+                              <AlertDialogAction onClick={() => handleDeleteSaving(saving.id)} disabled={isLinkedToActiveChallenge}>
                                 Eliminar
                               </AlertDialogAction>
                             </AlertDialogFooter>
@@ -690,7 +700,7 @@ const Savings: React.FC = () => {
                     onChange={handleNewSavingChange}
                     className="col-span-3"
                     required
-                    disabled={!!editingSaving?.challenge_id} // Disable if linked to a challenge
+                    disabled={!!editingSaving?.challenge_id} // Deshabilitar si está vinculado a un reto
                   />
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
@@ -705,7 +715,7 @@ const Savings: React.FC = () => {
                     value={newSaving.target_amount}
                     onChange={handleNewSavingChange}
                     className="col-span-3"
-                    disabled={!!editingSaving?.challenge_id} // Disable if linked to a challenge
+                    disabled={!!editingSaving?.challenge_id} // Deshabilitar si está vinculado a un reto
                   />
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
@@ -720,7 +730,7 @@ const Savings: React.FC = () => {
                           "col-span-3 justify-start text-left font-normal",
                           !newSaving.target_date && "text-muted-foreground"
                         )}
-                        disabled={!!editingSaving?.challenge_id} // Disable if linked to a challenge
+                        disabled={!!editingSaving?.challenge_id} // Deshabilitar si está vinculado a un reto
                       >
                         <CalendarIcon className="mr-2 h-4 w-4" />
                         {newSaving.target_date ? format(newSaving.target_date, "dd/MM/yyyy", { locale: es }) : <span>Selecciona una fecha</span>}
