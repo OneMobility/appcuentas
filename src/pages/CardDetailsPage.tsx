@@ -295,40 +295,40 @@ const CardDetailsPage: React.FC = () => {
     console.log("--- Transacción registrada exitosamente ---");
     console.log("Saldo final de la tarjeta:", newBalance);
 
-    // Check for active no-spend challenge if this is a charge
-    if (newTransaction.type === "charge" && categoryId) {
-      const { data: activeChallenge, error: challengeError } = await supabase
-        .from('challenges')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('status', 'active')
-        .single();
+    // Check for active no-spend challenge if this is a charge // Eliminado
+    // if (newTransaction.type === "charge" && categoryId) { // Eliminado
+    //   const { data: activeChallenge, error: challengeError } = await supabase // Eliminado
+    //     .from('challenges') // Eliminado
+    //     .select('*') // Eliminado
+    //     .eq('user_id', user.id) // Eliminado
+    //     .eq('status', 'active') // Eliminado
+    //     .single(); // Eliminado
 
-      if (challengeError && challengeError.code !== 'PGRST116') {
-        console.error("Error fetching active challenge:", challengeError.message);
-      } else if (activeChallenge && activeChallenge.challenge_template_id.startsWith("no-spend")) {
-        const endDate = new Date(activeChallenge.end_date);
-        endDate.setHours(23, 59, 59, 999);
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
+    //   if (challengeError && challengeError.code !== 'PGRST116') { // Eliminado
+    //     console.error("Error fetching active challenge:", challengeError.message); // Eliminado
+    //   } else if (activeChallenge && activeChallenge.challenge_template_id.startsWith("no-spend")) { // Eliminado
+    //     const endDate = new Date(activeChallenge.end_date); // Eliminado
+    //     endDate.setHours(23, 59, 59, 999); // Eliminado
+    //     const today = new Date(); // Eliminado
+    //     today.setHours(0, 0, 0, 0); // Eliminado
 
-        if (today >= new Date(activeChallenge.start_date) && today <= endDate) {
-          if (activeChallenge.forbidden_category_ids.includes(categoryId)) {
-            const { error: updateChallengeError } = await supabase
-              .from('challenges')
-              .update({ status: 'failed' })
-              .eq('id', activeChallenge.id)
-              .eq('user_id', user.id);
+    //     if (today >= new Date(activeChallenge.start_date) && today <= endDate) { // Eliminado
+    //       if (activeChallenge.forbidden_category_ids.includes(categoryId)) { // Eliminado
+    //         const { error: updateChallengeError } = await supabase // Eliminado
+    //           .from('challenges') // Eliminado
+    //           .update({ status: 'failed' }) // Eliminado
+    //           .eq('id', activeChallenge.id) // Eliminado
+    //           .eq('user_id', user.id); // Eliminado
 
-            if (updateChallengeError) {
-              showError('Error al actualizar el reto de cero gastos: ' + updateChallengeError.message);
-            } else {
-              showError(`¡Reto '${activeChallenge.name}' fallido! Registraste un gasto en una categoría prohibida.`);
-            }
-          }
-        }
-      }
-    }
+    //         if (updateChallengeError) { // Eliminado
+    //           showError('Error al actualizar el reto de cero gastos: ' + updateChallengeError.message); // Eliminado
+    //         } else { // Eliminado
+    //           showError(`¡Reto '${activeChallenge.name}' fallido! Registraste un gasto en una categoría prohibida.`); // Eliminado
+    //         } // Eliminado
+    //       } // Eliminado
+    //     } // Eliminado
+    //   } // Eliminado
+    // } // Eliminado
   };
 
   const handleOpenEditTransactionDialog = (transaction: CardTransaction) => {

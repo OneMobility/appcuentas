@@ -17,7 +17,6 @@ import {
   Tag,
   LogOut,
   Wallet, // Nuevo icono para ahorros
-  Lightbulb, // Icono para retos
 } from "lucide-react";
 import MobileNavbar from "./MobileNavbar";
 import { useSession } from "@/context/SessionContext";
@@ -53,11 +52,6 @@ const navItems = [
     name: "Tus Metas", // Título actualizado
     path: "/savings",
     icon: Wallet, // Icono para ahorros
-  },
-  {
-    name: "Tus Retos", // Nuevo elemento de navegación
-    path: "/challenges",
-    icon: Lightbulb, // Icono para retos
   },
   {
     name: "Categorías",
@@ -112,11 +106,11 @@ const Sidebar = ({ onClose }: { onClose?: () => void }) => {
 };
 
 interface LayoutProps {
-  challengeRefreshKey: number;
-  setChallengeRefreshKey: React.Dispatch<React.SetStateAction<number>>;
+  // challengeRefreshKey: number; // Eliminado
+  // setChallengeRefreshKey: React.Dispatch<React.SetStateAction<number>>; // Eliminado
 }
 
-const Layout: React.FC<LayoutProps> = ({ challengeRefreshKey, setChallengeRefreshKey }) => {
+const Layout: React.FC<LayoutProps> = () => { // Props actualizadas
   const isMobile = useIsMobile();
   const location = useLocation();
 
@@ -131,7 +125,7 @@ const Layout: React.FC<LayoutProps> = ({ challengeRefreshKey, setChallengeRefres
             <h1 className="text-xl font-semibold">{currentPageName}</h1>
           </header>
           <main className="flex flex-1 flex-col gap-4 p-4 pb-20 lg:gap-6 lg:p-6">
-            <Outlet context={{ setChallengeRefreshKey }} /> {/* Pass setChallengeRefreshKey via context */}
+            <Outlet /> {/* Ya no se pasa context */}
           </main>
           <MobileNavbar />
         </>
@@ -143,7 +137,7 @@ const Layout: React.FC<LayoutProps> = ({ challengeRefreshKey, setChallengeRefres
           <PanelResizeHandle className="w-2 bg-sidebar-border hover:bg-sidebar-ring transition-colors" />
           <Panel defaultSize={85}>
             <main className="flex flex-1 flex-col gap-4 p-4 lg:gap-6 lg:p-6">
-              <Outlet context={{ setChallengeRefreshKey }} /> {/* Pass setChallengeRefreshKey via context */}
+              <Outlet /> {/* Ya no se pasa context */}
             </main>
           </Panel>
         </PanelGroup>

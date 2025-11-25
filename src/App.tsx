@@ -12,13 +12,12 @@ import Cards from "./pages/Cards";
 import CardDetailsPage from "./pages/CardDetailsPage";
 import Categories from "./pages/Categories";
 import Savings from "./pages/Savings";
-import Challenges from "./pages/Challenges"; // Importar la nueva página de retos
 import NotFound from "./pages/NotFound";
 import Login from "./pages/Login";
 import { CategoryProvider } from "./context/CategoryContext";
 import { SessionProvider, useSession } from "./context/SessionContext";
 import CardNotifications from "./components/CardNotifications";
-import React, { useState } from "react"; // Importar useState
+import React from "react"; // Eliminar useState
 
 const queryClient = new QueryClient();
 
@@ -45,8 +44,6 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 };
 
 const App = () => {
-  const [challengeRefreshKey, setChallengeRefreshKey] = useState(0);
-
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
@@ -62,7 +59,7 @@ const App = () => {
                 <Route
                   element={
                     <ProtectedRoute>
-                      <Layout challengeRefreshKey={challengeRefreshKey} setChallengeRefreshKey={setChallengeRefreshKey} />
+                      <Layout />
                     </ProtectedRoute>
                   }
                 >
@@ -73,8 +70,7 @@ const App = () => {
                   <Route path="/cards" element={<Cards />} />
                   <Route path="/cards/:cardId" element={<CardDetailsPage />} />
                   <Route path="/categories" element={<Categories />} />
-                  <Route path="/savings" element={<Savings setChallengeRefreshKey={setChallengeRefreshKey} />} />
-                  <Route path="/challenges" element={<Challenges challengeRefreshKey={challengeRefreshKey} setChallengeRefreshKey={setChallengeRefreshKey} />} /> {/* Nueva ruta de retos */}
+                  <Route path="/savings" element={<Savings />} />
                 </Route>
                 {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                 <Route path="*" element={<NotFound />} />

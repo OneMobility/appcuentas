@@ -25,7 +25,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import FeedbackOverlay from "@/components/FeedbackOverlay";
 import RandomSavingTipCard from "@/components/RandomSavingTipCard"; // Importar el nuevo componente
 import FixedSavingTipCard from "@/components/FixedSavingTipCard"; // Importar el nuevo componente
-import { useOutletContext } from "react-router-dom"; // Importar useOutletContext
 import { getLocalDateString } from "@/utils/date-helpers"; // Importar la nueva función de utilidad
 
 interface Saving {
@@ -44,13 +43,11 @@ interface Saving {
   } | null;
 }
 
-interface SavingsOutletContext {
-  setChallengeRefreshKey: React.Dispatch<React.SetStateAction<number>>;
-}
+// Eliminado interface SavingsOutletContext
 
 const Savings: React.FC = () => {
   const { user } = useSession();
-  const { setChallengeRefreshKey } = useOutletContext<SavingsOutletContext>(); // Get from context
+  // const { setChallengeRefreshKey } = useOutletContext<SavingsOutletContext>(); // Eliminado
   const [savings, setSavings] = useState<Saving[]>([]);
   const [isAddSavingDialogOpen, setIsAddSavingDialogOpen] = useState(false);
   const [isEditSavingDialogOpen, setIsEditSavingDialogOpen] = useState(false);
@@ -232,7 +229,7 @@ const Savings: React.FC = () => {
     // No actualizamos current_balance ni completion_date desde aquí
     const { data, error } = await supabase
       .from('savings')
-      .update({
+      .update({ 
         name: newSaving.name.trim(),
         target_amount: targetAmount,
         target_date: newSaving.target_date ? getLocalDateString(newSaving.target_date) : null, // Usar getLocalDateString
@@ -246,6 +243,7 @@ const Savings: React.FC = () => {
       showError('Error al actualizar cuenta de ahorro: ' + error.message);
     } else {
       const updatedSaving = data[0];
+      
       setSavings((prev) =>
         prev.map((saving) => (saving.id === editingSaving.id ? updatedSaving : saving))
       );
@@ -281,9 +279,9 @@ const Savings: React.FC = () => {
         }
       }
       // Trigger refresh for challenges page if this saving is linked to a challenge
-      if (updatedSaving.challenge_id) {
-        setChallengeRefreshKey(prev => prev + 1);
-      }
+      // if (updatedSaving.challenge_id) { // Eliminado
+      //   setChallengeRefreshKey(prev => prev + 1); // Eliminado
+      // }
     }
   };
 
@@ -371,51 +369,51 @@ const Savings: React.FC = () => {
       showSuccess("Transacción registrada exitosamente.");
 
       // Lógica para actualizar el estado del reto si está vinculado
-      if (updatedSaving.challenge_id && updatedSaving.target_amount) {
-        let challengeStatus: "completed" | "regular" | "failed" | "active" = "active";
-        const progress = (updatedSaving.current_balance / updatedSaving.target_amount) * 100;
+      // if (updatedSaving.challenge_id && updatedSaving.target_amount) { // Eliminado
+      //   let challengeStatus: "completed" | "regular" | "failed" | "active" = "active"; // Eliminado
+      //   const progress = (updatedSaving.current_balance / updatedSaving.target_amount) * 100; // Eliminado
 
-        if (progress >= 100) {
-          challengeStatus = "completed";
-        } else {
-          challengeStatus = "active"; // Keep active until end date for full evaluation
-        }
+      //   if (progress >= 100) { // Eliminado
+      //     challengeStatus = "completed"; // Eliminado
+      //   } else { // Eliminado
+      //     challengeStatus = "active"; // Keep active until end date for full evaluation // Eliminado
+      //   } // Eliminado
 
-        // Fetch current challenge status to avoid unnecessary updates
-        const { data: currentChallenge, error: fetchChallengeError } = await supabase
-          .from('challenges')
-          .select('status, end_date')
-          .eq('id', updatedSaving.challenge_id)
-          .single();
+      //   // Fetch current challenge status to avoid unnecessary updates // Eliminado
+      //   const { data: currentChallenge, error: fetchChallengeError } = await supabase // Eliminado
+      //     .from('challenges') // Eliminado
+      //     .select('status, end_date') // Eliminado
+      //     .eq('id', updatedSaving.challenge_id) // Eliminado
+      //     .single(); // Eliminado
 
-        if (fetchChallengeError && fetchChallengeError.code !== 'PGRST116') {
-          console.error("Error fetching linked challenge:", fetchChallengeError.message);
-        } else if (currentChallenge) {
-          let updateChallengeEndDate = currentChallenge.end_date;
-          // If challenge is completed and saving has a completion date, use that date
-          if (challengeStatus === "completed" && updatedSaving.completion_date) { // Usar completion_date
-            updateChallengeEndDate = updatedSaving.completion_date;
-          }
+      //   if (fetchChallengeError && fetchChallengeError.code !== 'PGRST116') { // Eliminado
+      //     console.error("Error fetching linked challenge:", fetchChallengeError.message); // Eliminado
+      //   } else if (currentChallenge) { // Eliminado
+      //     let updateChallengeEndDate = currentChallenge.end_date; // Eliminado
+      //     // If challenge is completed and saving has a completion date, use that date // Eliminado
+      //     if (challengeStatus === "completed" && updatedSaving.completion_date) { // Usar completion_date // Eliminado
+      //       updateChallengeEndDate = updatedSaving.completion_date; // Eliminado
+      //     } // Eliminado
 
-          // Only update if the new status is 'completed' or if the current status is 'active'
-          if (challengeStatus === "completed" || currentChallenge.status === "active") {
-            const { error: updateChallengeError } = await supabase
-              .from('challenges')
-              .update({ status: challengeStatus, end_date: updateChallengeEndDate })
-              .eq('id', updatedSaving.challenge_id)
-              .eq('user_id', user.id);
+      //     // Only update if the new status is 'completed' or if the current status is 'active' // Eliminado
+      //     if (challengeStatus === "completed" || currentChallenge.status === "active") { // Eliminado
+      //       const { error: updateChallengeError } = await supabase // Eliminado
+      //         .from('challenges') // Eliminado
+      //         .update({ status: challengeStatus, end_date: updateChallengeEndDate }) // Eliminado
+      //         .eq('id', updatedSaving.challenge_id) // Eliminado
+      //         .eq('user_id', user.id); // Eliminado
 
-            if (updateChallengeError) {
-              showError('Error al actualizar el estado del reto vinculado: ' + updateChallengeError.message);
-            } else {
-              if (challengeStatus === "completed") {
-                showSuccess("¡Reto de ahorro completado!");
-              }
-              setChallengeRefreshKey(prev => prev + 1); // Force refresh in Challenges.tsx
-            }
-          }
-        }
-      }
+      //       if (updateChallengeError) { // Eliminado
+      //         showError('Error al actualizar el estado del reto vinculado: ' + updateChallengeError.message); // Eliminado
+      //       } else { // Eliminado
+      //         if (challengeStatus === "completed") { // Eliminado
+      //           showSuccess("¡Reto de ahorro completado!"); // Eliminado
+      //         } // Eliminado
+      //         setChallengeRefreshKey(prev => prev + 1); // Force refresh in Challenges.tsx // Eliminado
+      //       } // Eliminado
+      //     } // Eliminado
+      //   } // Eliminado
+      // } // Eliminado
 
       // Show feedback overlay based on transaction type
       if (transactionType === "deposit") {
