@@ -5,60 +5,26 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import * as LucideIcons from "lucide-react";
 import { cn } from "@/lib/utils";
 
-// Explicitly import Tag for fallback to ensure it's always available
-import { Tag as FallbackTagIcon } from "lucide-react";
+// Explicitly import all curated icons
+import {
+  Tag, Banknote, CreditCard, Gift, PiggyBank, Car, Plane, Utensils, Coffee,
+  ShoppingBag, Lightbulb, Wrench, Home, Droplet, Flame, Wifi, Broom, Shirt,
+  ShoppingCart, IceCream, Smartphone, Tv, Hotel, Siren, Film, PawPrint,
+  BookOpen, Wallet, Briefcase, Receipt, TrendingUp, DollarSign,
+} from "lucide-react";
 
-// Create a map of all Lucide icons that are actual React components
-const lucideIconMap: { [key: string]: ComponentType<any> } = {};
-for (const key in LucideIcons) {
-  const Icon = (LucideIcons as any)[key];
-  // Ensure it's a function (React component) and starts with an uppercase letter
-  if (typeof Icon === 'function' && key[0] === key[0].toUpperCase()) {
-    lucideIconMap[key] = Icon;
-  }
-}
+// Create a direct map of these imported icons
+const lucideIconMap: { [key: string]: ComponentType<any> } = {
+  Tag, Banknote, CreditCard, Gift, PiggyBank, Car, Plane, Utensils, Coffee,
+  ShoppingBag, Lightbulb, Wrench, Home, Droplet, Flame, Wifi, Broom, Shirt,
+  ShoppingCart, IceCream, Smartphone, Tv, Hotel, Siren, Film, PawPrint,
+  BookOpen, Wallet, Briefcase, Receipt, TrendingUp, DollarSign,
+};
 
-// Curated list of relevant icon names based on user request and fixed categories
-const curatedIconNames = [
-  "Tag",          // Etiqueta (default)
-  "Banknote",     // Billete
-  "CreditCard",   // Tarjeta
-  "Gift",         // Regalo
-  "PiggyBank",    // Cochinito
-  "Car",          // Transporte (coche)
-  "Plane",        // Transporte (avión)
-  "Utensils",     // Comida
-  "Coffee",       // Café (para comida/bebidas)
-  "ShoppingBag",  // Ropa / Compras
-  "Lightbulb",    // Servicio / Utilidades (Luz)
-  "Wrench",       // Mantenimiento
-  "Home",         // Casa / Alquiler (Renta)
-  "Droplet",      // Agua
-  "Flame",        // Gas
-  "Wifi",         // Internet
-  "Broom",        // Limpieza
-  "Shirt",        // Ropa
-  "ShoppingCart", // Super mercado
-  "IceCream",     // Antojitos
-  "Smartphone",   // Apps
-  "Tv",           // Streaming
-  "Hotel",        // Hospedaje
-  "Siren",        // Emergencias
-  "Film",         // Cine
-  "PawPrint",     // Mascota
-  "BookOpen",     // Educación
-  "Wallet",       // Sueldos
-  "Briefcase",    // Freelance
-  "Receipt",      // Reembolso
-  "TrendingUp",   // Rendimientos
-  "DollarSign",   // Ventas
-];
-
-// Filter the curated list to only include icons that actually exist in lucideIconMap
-const availableIcons = curatedIconNames.filter(iconName => lucideIconMap[iconName]);
+// The list of icon names to display (now directly from the map keys)
+const availableIconNames = Object.keys(lucideIconMap);
 
 interface IconPickerProps {
   selectedIcon: string;
@@ -67,33 +33,33 @@ interface IconPickerProps {
 
 const IconPicker: React.FC<IconPickerProps> = ({ selectedIcon, onSelectIcon }) => {
   const [search, setSearch] = useState("");
-  const [open, setOpen] = useState(false); // Manage popover open state
+  const [open, setOpen] = useState(false);
 
   // Ensure CurrentIcon is always a valid React component
-  const CurrentIcon = selectedIcon && lucideIconMap[selectedIcon] 
-    ? lucideIconMap[selectedIcon] 
-    : FallbackTagIcon; // Use the explicitly imported Tag as fallback
+  const CurrentIcon = selectedIcon && lucideIconMap[selectedIcon]
+    ? lucideIconMap[selectedIcon]
+    : Tag; // Use Tag as fallback, which is now directly imported
 
   const filteredIcons = useMemo(() => {
-    return availableIcons.filter(iconName =>
+    return availableIconNames.filter(iconName =>
       iconName.toLowerCase().includes(search.toLowerCase())
     );
-  }, [search, availableIcons]);
+  }, [search, availableIconNames]);
 
   const handleSelect = (iconName: string) => {
     onSelectIcon(iconName);
-    setOpen(false); // Close popover after selection
+    setOpen(false);
   };
 
   return (
-    <Popover open={open} onOpenChange={setOpen}> {/* Control popover state */}
+    <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button variant="outline" className="w-full justify-start">
-          <CurrentIcon className="mr-2 h-4 w-4" /> {/* Always show an icon */}
+          <CurrentIcon className="mr-2 h-4 w-4" />
           {selectedIcon || "Seleccionar Icono"}
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[300px] p-0 z-50"> {/* Added z-50 */}
+      <PopoverContent className="w-[300px] p-0 z-50">
         <Input
           placeholder="Buscar icono..."
           className="mb-2"
@@ -104,9 +70,11 @@ const IconPicker: React.FC<IconPickerProps> = ({ selectedIcon, onSelectIcon }) =
           <div className="grid grid-cols-4 gap-2 p-2">
             {filteredIcons.map((iconName) => {
               const IconComponent = lucideIconMap[iconName];
-              // This check is already there, but let's be extra careful
+              // At this point, IconComponent should always be defined due to direct mapping
+              // and availableIconNames being derived from lucideIconMap.
+              // However, a defensive check doesn't hurt.
               if (!IconComponent) {
-                console.warn(`IconComponent for ${iconName} is undefined.`);
+                console.error(`IconComponent for ${iconName} is unexpectedly undefined.`);
                 return null;
               }
 
@@ -115,10 +83,10 @@ const IconPicker: React.FC<IconPickerProps> = ({ selectedIcon, onSelectIcon }) =
                   key={iconName}
                   variant="ghost"
                   size="icon"
-                  onClick={() => handleSelect(iconName)} // Use handleSelect
+                  onClick={() => handleSelect(iconName)}
                   className={cn(
                     selectedIcon === iconName && "bg-accent",
-                    "hover:bg-muted" // Added hover state for better UX
+                    "hover:bg-muted"
                   )}
                 >
                   <IconComponent className="h-4 w-4" />
