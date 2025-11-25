@@ -7,14 +7,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
-import { PlusCircle, Edit, Trash2 } from "lucide-react";
+import { PlusCircle, Edit, Trash2 } from "lucide-react"; // Importar Trash2
 import { showSuccess, showError } from "@/utils/toast";
 import ColorPicker from "@/components/ColorPicker";
-import LucideIconPicker from "@/components/LucideIconPicker"; // Importar LucideIconPicker
-import ImagePicker from "@/components/ImagePicker"; // Importar ImagePicker
 import { useCategoryContext, Category } from "@/context/CategoryContext";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import * as LucideIcons from "lucide-react"; // Importar todos los iconos de Lucide
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"; // Importar AlertDialog
 
 const Categories = () => {
   const { incomeCategories, expenseCategories, addCategory, updateCategory, deleteCategory, isLoadingCategories } = useCategoryContext();
@@ -23,21 +20,15 @@ const Categories = () => {
   const [newCategory, setNewCategory] = useState({
     name: "",
     type: "income" as "income" | "expense",
-    color: "#3B82F6",
-    icon: "Tag", // Default icon (Lucide)
-    iconType: "lucide" as "lucide" | "image", // Nuevo campo para el tipo de icono
+    color: "#3B82F6", // Default color
   });
 
   useEffect(() => {
     if (editingCategory) {
-      // Determinar si el icono existente es una URL o un nombre de Lucide
-      const isImageUrl = editingCategory.icon.startsWith('http://') || editingCategory.icon.startsWith('https://');
       setNewCategory({
         name: editingCategory.name,
-        type: editingCategory.user_id?.startsWith("inc") ? "income" : "expense",
+        type: editingCategory.user_id?.startsWith("inc") ? "income" : "expense", // Asumiendo que el user_id puede indicar el tipo si no hay otra forma
         color: editingCategory.color,
-        icon: editingCategory.icon,
-        iconType: isImageUrl ? "image" : "lucide",
       });
     } else {
       resetForm();
@@ -45,7 +36,7 @@ const Categories = () => {
   }, [editingCategory]);
 
   const resetForm = () => {
-    setNewCategory({ name: "", type: "income", color: "#3B82F6", icon: "Tag", iconType: "lucide" });
+    setNewCategory({ name: "", type: "income", color: "#3B82F6" });
     setEditingCategory(null);
   };
 
@@ -54,19 +45,11 @@ const Categories = () => {
   };
 
   const handleNewCategoryTypeChange = (type: "income" | "expense") => {
-    setNewCategory((prev) => ({ ...prev, type, icon: "Tag", iconType: "lucide" })); // Resetear icono al cambiar tipo
+    setNewCategory((prev) => ({ ...prev, type }));
   };
 
   const handleColorSelect = (color: string) => {
     setNewCategory((prev) => ({ ...prev, color }));
-  };
-
-  const handleIconSelect = (iconValue: string) => {
-    setNewCategory((prev) => ({ ...prev, icon: iconValue }));
-  };
-
-  const handleIconTypeChange = (type: "lucide" | "image") => {
-    setNewCategory((prev) => ({ ...prev, iconType: type, icon: type === "lucide" ? "Tag" : "" })); // Resetear icono al cambiar tipo de icono
   };
 
   const handleOpenAddCategoryDialog = () => {
@@ -76,13 +59,10 @@ const Categories = () => {
 
   const handleOpenEditCategoryDialog = (category: Category, type: "income" | "expense") => {
     setEditingCategory(category);
-    const isImageUrl = category.icon.startsWith('http://') || category.icon.startsWith('https://');
     setNewCategory({
       name: category.name,
-      type: type,
+      type: type, // Pasar el tipo correcto
       color: category.color,
-      icon: category.icon,
-      iconType: isImageUrl ? "image" : "lucide",
     });
     setIsCategoryDialogOpen(true);
   };
@@ -97,17 +77,12 @@ const Categories = () => {
       showError("Por favor, selecciona un color para la categoría.");
       return;
     }
-    if (!newCategory.icon) {
-      showError("Por favor, selecciona un icono o imagen para la categoría.");
-      return;
-    }
 
     if (editingCategory) {
       const updatedCategory: Category = {
         ...editingCategory,
         name: newCategory.name.trim(),
         color: newCategory.color,
-        icon: newCategory.icon,
       };
       await updateCategory(updatedCategory, newCategory.type);
     } else {
@@ -115,7 +90,6 @@ const Categories = () => {
         {
           name: newCategory.name.trim(),
           color: newCategory.color,
-          icon: newCategory.icon,
         },
         newCategory.type
       );
@@ -127,15 +101,6 @@ const Categories = () => {
 
   const handleDeleteCategory = async (id: string, name: string, type: "income" | "expense") => {
     await deleteCategory(id, type);
-  };
-
-  const renderIcon = (iconString: string) => {
-    if (iconString.startsWith('http://') || iconString.startsWith('https://')) {
-      return <img src={iconString} alt="Category Icon" className="h-4 w-4 object-contain" />;
-    } else {
-      const IconComponent = (LucideIcons as any)[iconString];
-      return IconComponent ? <IconComponent className="h-4 w-4" /> : <LucideIcons.Tag className="h-4 w-4" />;
-    }
   };
 
   return (
@@ -179,7 +144,7 @@ const Categories = () => {
                       type="button"
                       variant={newCategory.type === "income" ? "default" : "outline"}
                       onClick={() => handleNewCategoryTypeChange("income")}
-                      disabled={!!editingCategory}
+                      disabled={!!editingCategory} // Deshabilitar cambio de tipo al editar
                     >
                       Ingreso
                     </Button>
@@ -187,7 +152,7 @@ const Categories = () => {
                       type="button"
                       variant={newCategory.type === "expense" ? "default" : "outline"}
                       onClick={() => handleNewCategoryTypeChange("expense")}
-                      disabled={!!editingCategory}
+                      disabled={!!editingCategory} // Deshabilitar cambio de tipo al editar
                     >
                       Egreso
                     </Button>
@@ -199,37 +164,6 @@ const Categories = () => {
                   </Label>
                   <div className="col-span-3">
                     <ColorPicker selectedColor={newCategory.color} onSelectColor={handleColorSelect} />
-                  </div>
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label className="text-right">Tipo de Icono</Label>
-                  <div className="col-span-3 flex gap-2">
-                    <Button
-                      type="button"
-                      variant={newCategory.iconType === "lucide" ? "default" : "outline"}
-                      onClick={() => handleIconTypeChange("lucide")}
-                    >
-                      Lucide
-                    </Button>
-                    <Button
-                      type="button"
-                      variant={newCategory.iconType === "image" ? "default" : "outline"}
-                      onClick={() => handleIconTypeChange("image")}
-                    >
-                      Imagen
-                    </Button>
-                  </div>
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="categoryIcon" className="text-right">
-                    Icono
-                  </Label>
-                  <div className="col-span-3">
-                    {newCategory.iconType === "lucide" ? (
-                      <LucideIconPicker selectedIcon={newCategory.icon} onSelectIcon={handleIconSelect} />
-                    ) : (
-                      <ImagePicker selectedImage={newCategory.icon} onSelectImage={handleIconSelect} />
-                    )}
                   </div>
                 </div>
                 <DialogFooter>
@@ -248,7 +182,6 @@ const Categories = () => {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Icono</TableHead>
                         <TableHead>Nombre</TableHead>
                         <TableHead>Color</TableHead>
                         <TableHead className="text-right">Acciones</TableHead>
@@ -257,9 +190,6 @@ const Categories = () => {
                     <TableBody>
                       {incomeCategories.map((cat) => (
                         <TableRow key={cat.id}>
-                          <TableCell>
-                            {renderIcon(cat.icon)}
-                          </TableCell>
                           <TableCell>{cat.name}</TableCell>
                           <TableCell>
                             <div
@@ -321,7 +251,6 @@ const Categories = () => {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Icono</TableHead>
                         <TableHead>Nombre</TableHead>
                         <TableHead>Color</TableHead>
                         <TableHead className="text-right">Acciones</TableHead>
@@ -330,9 +259,6 @@ const Categories = () => {
                     <TableBody>
                       {expenseCategories.map((cat) => (
                         <TableRow key={cat.id}>
-                          <TableCell>
-                            {renderIcon(cat.icon)}
-                          </TableCell>
                           <TableCell>{cat.name}</TableCell>
                           <TableCell>
                             <div

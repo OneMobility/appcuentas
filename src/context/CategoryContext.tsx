@@ -4,13 +4,12 @@ import React, { createContext, useContext, useState, ReactNode, useEffect } from
 import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "./SessionContext";
 import { showError, showSuccess } from "@/utils/toast";
-import LoadingSpinner from '@/components/LoadingSpinner';
+import LoadingSpinner from '@/components/LoadingSpinner'; // Importar LoadingSpinner
 
 export interface Category {
   id: string;
   name: string;
   color: string;
-  icon: string; // Ahora puede ser un nombre de icono de Lucide o una URL de imagen
   user_id?: string;
 }
 
@@ -19,7 +18,7 @@ interface CategoryContextType {
   expenseCategories: Category[];
   addCategory: (category: Omit<Category, "id" | "user_id">, type: "income" | "expense") => Promise<void>;
   updateCategory: (category: Category, type: "income" | "expense") => Promise<void>;
-  deleteCategory: (id: string, type: "income" | "expense") => Promise<void>;
+  deleteCategory: (id: string, type: "income" | "expense") => Promise<void>; // Añadido
   getCategoryById: (id: string, type: "income" | "expense") => Category | undefined;
   isLoadingCategories: boolean;
 }
@@ -102,7 +101,7 @@ export const CategoryProvider = ({ children }: { children: ReactNode }) => {
     const tableName = type === "income" ? "income_categories" : "expense_categories";
     const { data, error } = await supabase
       .from(tableName)
-      .update({ name: updatedCategory.name, color: updatedCategory.color, icon: updatedCategory.icon })
+      .update({ name: updatedCategory.name, color: updatedCategory.color })
       .eq('id', updatedCategory.id)
       .eq('user_id', user.id)
       .select();
@@ -163,12 +162,12 @@ export const CategoryProvider = ({ children }: { children: ReactNode }) => {
         expenseCategories,
         addCategory,
         updateCategory,
-        deleteCategory,
+        deleteCategory, // Añadido
         getCategoryById,
         isLoadingCategories,
       }}
     >
-      {isLoadingCategories && <LoadingSpinner />}
+      {isLoadingCategories && <LoadingSpinner />} {/* Mostrar spinner si está cargando */}
       {children}
     </CategoryContext.Provider>
   );

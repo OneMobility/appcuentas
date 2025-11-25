@@ -22,7 +22,6 @@ import { useSession } from "@/context/SessionContext";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { exportToCsv, exportToPdf } from "@/utils/export";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import * as LucideIcons from "lucide-react"; // Importar todos los iconos de Lucide
 
 interface Transaction {
   id: string;
@@ -241,8 +240,7 @@ const Cash = () => {
     const matchesSearch = tx.description.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesType = filterType === "all" || tx.type === filterType;
     
-    const category = getCategoryById(tx.category_id, tx.category_type);
-    const categoryName = category?.name || "";
+    const categoryName = getCategoryById(tx.category_id, tx.category_type)?.name || "";
     const matchesCategory = filterCategory === "all" || tx.category_id === filterCategory || categoryName.toLowerCase().includes(filterCategory.toLowerCase());
     
     const txDate = new Date(tx.date);
@@ -277,15 +275,6 @@ const Cash = () => {
     } else {
       exportToPdf(`${filename}.pdf`, title, headers, pdfData);
       showSuccess("Transacciones exportadas a PDF.");
-    }
-  };
-
-  const renderIcon = (iconString: string) => {
-    if (iconString.startsWith('http://') || iconString.startsWith('https://')) {
-      return <img src={iconString} alt="Category Icon" className="h-4 w-4 object-contain" />;
-    } else {
-      const IconComponent = (LucideIcons as any)[iconString];
-      return IconComponent ? <IconComponent className="h-4 w-4" /> : <LucideIcons.Tag className="h-4 w-4" />;
     }
   };
 
@@ -345,10 +334,7 @@ const Cash = () => {
                       <SelectContent>
                         {availableCategories.map((cat) => (
                           <SelectItem key={cat.id} value={cat.id}>
-                            <div className="flex items-center gap-2">
-                              {renderIcon(cat.icon)}
-                              {cat.name}
-                            </div>
+                            {cat.name}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -434,10 +420,7 @@ const Cash = () => {
                 <SelectItem value="all">Todas las Categorías</SelectItem>
                 {allCategories.map((cat) => (
                   <SelectItem key={cat.id} value={cat.id}>
-                    <div className="flex items-center gap-2">
-                      {renderIcon(cat.icon)}
-                      {cat.name} ({cat.id.startsWith("inc") ? "Ingreso" : "Egreso"})
-                    </div>
+                    {cat.name} ({cat.id.startsWith("inc") ? "Ingreso" : "Egreso"})
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -501,12 +484,7 @@ const Cash = () => {
                       <TableCell className={tx.type === "ingreso" ? "text-green-600" : "text-red-600"}>
                         {tx.type === "ingreso" ? "Ingreso" : "Egreso"}
                       </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          {category ? renderIcon(category.icon) : null}
-                          {category?.name || "Desconocida"}
-                        </div>
-                      </TableCell>
+                      <TableCell>{category?.name || "Desconocida"}</TableCell>
                       <TableCell>{tx.description}</TableCell>
                       <TableCell className="text-right">
                         {tx.type === "ingreso" ? "+" : "-"}${tx.amount.toFixed(2)}
@@ -585,10 +563,7 @@ const Cash = () => {
                     <SelectContent>
                       {availableCategories.map((cat) => (
                         <SelectItem key={cat.id} value={cat.id}>
-                          <div className="flex items-center gap-2">
-                            {renderIcon(cat.icon)}
-                            {cat.name}
-                          </div>
+                          {cat.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
