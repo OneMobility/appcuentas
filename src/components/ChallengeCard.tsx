@@ -9,6 +9,8 @@ import { format, differenceInDays, isAfter, isSameDay } from "date-fns";
 import { es } from "date-fns/locale";
 import { Progress } from "@/components/ui/progress";
 import { Category } from "@/context/CategoryContext"; // Importar Category
+import { Badge } from "@/components/ui/badge"; // Importar Badge
+import DynamicLucideIcon from "./DynamicLucideIcon"; // Importar DynamicLucideIcon
 
 export interface ChallengeData {
   id: string;
@@ -131,12 +133,15 @@ const ChallengeCard: React.FC<ChallengeCardProps> = ({ challenge, onStartNewChal
 
           {isNoSpend && challenge.expense_categories && challenge.expense_categories.length > 0 && (
             <div className="mt-4">
-              <p className="text-sm font-medium mb-1">Categorías a Evitar:</p>
-              <ul className="list-disc list-inside text-xs text-muted-foreground">
+              <p className="text-sm font-medium mb-2">Categorías a Evitar:</p>
+              <div className="flex flex-wrap gap-2">
                 {challenge.expense_categories.map(cat => (
-                  <li key={cat.id}>{cat.name}</li>
+                  <Badge key={cat.id} style={{ backgroundColor: cat.color, color: 'white' }} className="flex items-center gap-1">
+                    <DynamicLucideIcon iconName={cat.icon || "Tag"} className="h-3.5 w-3.5" />
+                    {cat.name}
+                  </Badge>
                 ))}
-              </ul>
+              </div>
             </div>
           )}
 
