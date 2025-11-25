@@ -10,12 +10,11 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import {
   Menu, // Mantener el icono de menú para el Sheet si se usa para otras cosas (ej. ajustes)
   Home,
-  Banknote, // Cambiado de PiggyBank a Banknote
+  Banknote,
   UserRound,
   Landmark,
   CreditCard,
   Tag,
-  FileText, // Nuevo icono para Reportes
 } from "lucide-react";
 import MobileNavbar from "./MobileNavbar";
 
@@ -28,7 +27,7 @@ const navItems = [
   {
     name: "Efectivo",
     path: "/cash",
-    icon: Banknote, // Cambiado de PiggyBank a Banknote
+    icon: Banknote,
   },
   {
     name: "Deudores",
@@ -49,11 +48,6 @@ const navItems = [
     name: "Categorías",
     path: "/categories",
     icon: Tag,
-  },
-  {
-    name: "Reportes", // Nuevo elemento de navegación
-    path: "/reports",
-    icon: FileText,
   },
 ];
 

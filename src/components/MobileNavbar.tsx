@@ -10,7 +10,6 @@ import {
   Landmark,
   CreditCard,
   Tag,
-  FileText,
 } from "lucide-react";
 
 const navItems = [
@@ -43,11 +42,6 @@ const navItems = [
     name: "Categorías",
     path: "/categories",
     icon: Tag,
-  },
-  {
-    name: "Reportes",
-    path: "/reports",
-    icon: FileText,
   },
 ];
 

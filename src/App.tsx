@@ -10,7 +10,6 @@ import Debtors from "./pages/Debtors";
 import Creditors from "./pages/Creditors";
 import Cards from "./pages/Cards";
 import Categories from "./pages/Categories";
-import Reports from "./pages/Reports";
 import NotFound from "./pages/NotFound";
 import Login from "./pages/Login"; // Importar la página de Login
 import { CategoryProvider } from "./context/CategoryContext";
@@ -66,7 +65,6 @@ const App = () => (
                 <Route path="/creditors" element={<Creditors />} />
                 <Route path="/cards" element={<Cards />} />
                 <Route path="/categories" element={<Categories />} />
-                <Route path="/reports" element={<Reports />} />
               </Route>
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
