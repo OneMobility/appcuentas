@@ -56,7 +56,10 @@ const Sidebar = ({ onClose }: { onClose?: () => void }) => {
 
   return (
     <nav className="flex flex-col gap-2 p-4">
-      <h2 className="text-2xl font-bold mb-6 text-sidebar-foreground">Cuentas</h2>
+      <Link to="/dashboard" className="flex items-center gap-2 mb-6 text-sidebar-foreground" onClick={onClose}>
+        <img src="/oinkash-logo.png" alt="Oinkash Logo" className="h-8 w-8" />
+        <h2 className="text-2xl font-bold">Oinkash</h2>
+      </Link>
       {navItems.map((item) => (
         <Link
           key={item.name}
@@ -80,20 +83,20 @@ const Layout = () => {
   const location = useLocation();
 
   // Obtener el nombre de la página actual para el encabezado móvil
-  const currentPageName = navItems.find(item => item.path === location.pathname)?.name || "Cuentas";
+  const currentPageName = navItems.find(item => item.path === location.pathname)?.name || "Oinkash";
 
   return (
     <div className="flex min-h-screen w-full flex-col bg-muted/40">
       {isMobile ? (
         <>
           <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b bg-background px-4 shadow-sm">
-            {/* Eliminado el Sheet Trigger para la navegación principal en móvil */}
-            <h1 className="text-xl font-semibold">{currentPageName}</h1> {/* Muestra el nombre de la página actual */}
+            <img src="/oinkash-logo.png" alt="Oinkash Logo" className="h-8 w-8" />
+            <h1 className="text-xl font-semibold">{currentPageName}</h1>
           </header>
-          <main className="flex flex-1 flex-col gap-4 p-4 pb-20 lg:gap-6 lg:p-6"> {/* Añadido pb-20 para dejar espacio a la MobileNavbar */}
+          <main className="flex flex-1 flex-col gap-4 p-4 pb-20 lg:gap-6 lg:p-6">
             <Outlet />
           </main>
-          <MobileNavbar /> {/* Barra de navegación inferior para móvil */}
+          <MobileNavbar />
         </>
       ) : (
         <PanelGroup direction="horizontal" className="min-h-screen">

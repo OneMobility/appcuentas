@@ -50,7 +50,7 @@ const MobileNavbar = () => {
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-40 bg-card border-t shadow-lg md:hidden">
-      <div className="flex h-16 items-center justify-start overflow-x-auto flex-nowrap px-2"> {/* Añadido overflow-x-auto y flex-nowrap */}
+      <div className="flex h-16 items-center justify-start overflow-x-auto flex-nowrap px-2">
         {navItems.map((item) => {
           const isActive = location.pathname === item.path;
           const Icon = item.icon;
@@ -59,10 +59,10 @@ const MobileNavbar = () => {
               key={item.name}
               to={item.path}
               className={cn(
-                "flex flex-col items-center justify-center gap-1 px-2 py-1 text-xs font-medium transition-colors shrink-0", // Añadido shrink-0
+                "flex flex-col items-center justify-center gap-1 px-2 py-1 text-xs font-medium transition-all duration-200 shrink-0",
                 isActive
-                  ? "text-primary"
-                  : "text-muted-foreground hover:text-foreground"
+                  ? "text-primary bg-primary/20 rounded-md scale-105" // Resaltado pastel y zoom
+                  : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
               )}
             >
               <Icon className="h-5 w-5" />
