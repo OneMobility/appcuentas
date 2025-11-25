@@ -828,14 +828,20 @@ const CardDetailsPage: React.FC = () => {
                     return (
                       <TableRow 
                         key={transaction.id}
-                        className={cn(isPaymentToCreditCard && "bg-blue-50 text-blue-800")}
+                        className={cn(isPaymentToCreditCard && "bg-pink-50 text-pink-800")} // Aplicar estilo rosa pastel
                       >
                         <TableCell>{format(new Date(transaction.date), "dd/MM/yyyy", { locale: es })}</TableCell>
                         <TableCell className={cn(
                           transaction.type === "charge" ? "text-red-600" : "text-green-600",
-                          isPaymentToCreditCard && "text-blue-800 font-medium"
+                          isPaymentToCreditCard && "text-pink-800 font-medium" // Asegurar que el texto sea legible
                         )}>
-                          {isPaymentToCreditCard && <Heart className="h-4 w-4 inline-block mr-1 text-blue-500" />}
+                          {isPaymentToCreditCard && (
+                            <img
+                              src="https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/cochinito_love.gif"
+                              alt="Cochinito Love"
+                              className="h-4 w-4 inline-block mr-1"
+                            />
+                          )}
                           {transaction.type === "charge" ? "Cargo" : "Pago"}
                           {transaction.installments_count && transaction.installment_number && transaction.installments_count > 1 &&
                             ` (${transaction.installment_number}/${transaction.installments_count})`}
