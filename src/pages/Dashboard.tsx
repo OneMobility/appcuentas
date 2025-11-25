@@ -16,7 +16,7 @@ import { es } from "date-fns/locale";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { getUpcomingPaymentDueDate } from "@/utils/date-helpers";
 import { Button } from "@/components/ui/button";
-import PaymentDueDateCard from "@/components/PaymentDueDateCard";
+import GroupedPaymentDueDatesCard from "@/components/GroupedPaymentDueDatesCard"; // Importar el nuevo componente
 
 // Tasas de cambio de ejemplo (MXN como base)
 const exchangeRates: { [key: string]: number } = {
@@ -369,6 +369,10 @@ const Dashboard = () => {
     }));
   }, [cards]);
 
+  const piggyBankImageSrc = cardHealthStatus.status === "critical"
+    ? "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Cochinito%20Fuego.png"
+    : "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Conchinito%20Good.png";
+
   return (
     <div className="flex flex-col gap-6 p-4">
       <div className="flex items-center justify-between">
@@ -381,9 +385,13 @@ const Dashboard = () => {
 
       {cardHealthStatus.status === "critical" ? (
         <Card className="border-blue-600 bg-blue-50 text-blue-800">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardHeader className="relative flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-blue-800">Estado de Tarjetas</CardTitle>
-            <AlertTriangle className="h-4 w-4 text-blue-600" />
+            <img 
+              src={piggyBankImageSrc} 
+              alt="Conchinito en problemas" 
+              className="absolute top-0 right-[50px] h-[120px] w-[120px] z-10 -mt-4"
+            />
           </CardHeader>
           <CardContent>
             <div className="text-lg font-bold">Oye, pon atención en tus saldos</div>
@@ -420,7 +428,7 @@ const Dashboard = () => {
           <CardHeader className="relative flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-green-800">Estado de Tarjetas</CardTitle>
             <img 
-              src="https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Conchinito%20Good.png" 
+              src={piggyBankImageSrc} 
               alt="Conchinito feliz" 
               className="absolute top-0 right-[50px] h-[120px] w-[120px] z-10 -mt-4"
             />
@@ -432,12 +440,8 @@ const Dashboard = () => {
         </Card>
       )}
 
-      {/* Tarjetas de cuenta regresiva para fechas de pago */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {cards.map(card => (
-          <PaymentDueDateCard key={card.id} card={card} />
-        ))}
-      </div>
+      {/* Tarjeta agrupada de cuenta regresiva para fechas de pago */}
+      <GroupedPaymentDueDatesCard cards={cards} />
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
