@@ -4,38 +4,41 @@ import React from "react";
 import { Link, Outlet, useLocation } from "react-router-dom";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import { Button } from "@/components/ui/button";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"; // Mantener Sheet para posible uso futuro, pero no para navegación principal
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 import {
-  Menu, // Mantener el icono de menú para el Sheet si se usa para otras cosas (ej. ajustes)
+  Menu,
   Home,
   Banknote,
   UserRound,
   Landmark,
   CreditCard,
   Tag,
+  LogOut, // Importar el icono de LogOut
 } from "lucide-react";
 import MobileNavbar from "./MobileNavbar";
+import { useSession } from "@/context/SessionContext"; // Importar useSession
+import { supabase } from "@/integrations/supabase/client"; // Importar supabase
 
 const navItems = [
   {
-    name: "Resumen", // Cambiado de Dashboard
+    name: "Resumen",
     path: "/dashboard",
     icon: Home,
   },
   {
-    name: "Tu Dinerito", // Cambiado de Efectivo
+    name: "Tu Dinerito",
     path: "/cash",
     icon: Banknote,
   },
   {
-    name: "Te Deben", // Cambiado de Deudores
+    name: "Te Deben",
     path: "/debtors",
     icon: UserRound,
   },
   {
-    name: "Le Debes", // Cambiado de Acreedores
+    name: "Le Debes",
     path: "/creditors",
     icon: Landmark,
   },
@@ -53,27 +56,45 @@ const navItems = [
 
 const Sidebar = ({ onClose }: { onClose?: () => void }) => {
   const location = useLocation();
+  const { user } = useSession(); // Usar useSession para el usuario
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    if (onClose) onClose(); // Cerrar el sheet si está abierto en móvil
+  };
 
   return (
-    <nav className="flex flex-col gap-2 p-4">
+    <nav className="flex flex-col gap-2 p-4 h-full"> {/* Asegurar que la nav ocupe toda la altura */}
       <Link to="/dashboard" className="flex items-center gap-2 mb-6 text-sidebar-foreground" onClick={onClose}>
         <img src="https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Oinkash%20Logo.png" alt="Oinkash Logo" className="h-8 w-8" />
         <h2 className="text-2xl font-bold">Oinkash</h2>
       </Link>
-      {navItems.map((item) => (
-        <Link
-          key={item.name}
-          to={item.path}
-          className={cn(
-            "flex items-center gap-3 rounded-lg px-3 py-2 text-sidebar-foreground transition-all hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-            location.pathname === item.path && "bg-sidebar-accent text-sidebar-accent-foreground font-semibold",
-          )}
-          onClick={onClose}
+      <div className="flex-1"> {/* Contenedor para los elementos de navegación principales */}
+        {navItems.map((item) => (
+          <Link
+            key={item.name}
+            to={item.path}
+            className={cn(
+              "flex items-center gap-3 rounded-lg px-3 py-2 text-sidebar-foreground transition-all hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+              location.pathname === item.path && "bg-sidebar-accent text-sidebar-accent-foreground font-semibold",
+            )}
+            onClick={onClose}
+          >
+            <item.icon className="h-5 w-5" />
+            {item.name}
+          </Link>
+        ))}
+      </div>
+      {user && ( // Mostrar el botón de cerrar sesión solo si hay un usuario logueado
+        <Button
+          variant="ghost"
+          onClick={handleLogout}
+          className="flex items-center gap-3 rounded-lg px-3 py-2 text-sidebar-foreground transition-all hover:bg-destructive hover:text-destructive-foreground mt-auto" // Alineado al final
         >
-          <item.icon className="h-5 w-5" />
-          {item.name}
-        </Link>
-      ))}
+          <LogOut className="h-5 w-5" />
+          Cerrar Sesión
+        </Button>
+      )}
     </nav>
   );
 };
@@ -82,7 +103,6 @@ const Layout = () => {
   const isMobile = useIsMobile();
   const location = useLocation();
 
-  // Obtener el nombre de la página actual para el encabezado móvil
   const currentPageName = navItems.find(item => item.path === location.pathname)?.name || "Oinkash";
 
   return (
