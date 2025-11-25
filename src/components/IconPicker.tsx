@@ -4,7 +4,7 @@ import React, { useState, useMemo } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area"; // Corregido: de '=>' a 'from'
+import { ScrollArea } from "@/components/ui/scroll-area";
 import * as LucideIcons from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -17,9 +17,9 @@ for (const key in LucideIcons) {
   }
 }
 
-// Curated list of relevant icon names based on user request
+// Curated list of relevant icon names based on user request and fixed categories
 const curatedIconNames = [
-  "Tag",          // Etiqueta
+  "Tag",          // Etiqueta (default)
   "Banknote",     // Billete
   "CreditCard",   // Tarjeta
   "Gift",         // Regalo
@@ -29,9 +29,28 @@ const curatedIconNames = [
   "Utensils",     // Comida
   "Coffee",       // Café (para comida/bebidas)
   "ShoppingBag",  // Ropa / Compras
-  "Lightbulb",    // Servicio / Utilidades
+  "Lightbulb",    // Servicio / Utilidades (Luz)
   "Wrench",       // Mantenimiento
-  "Home",         // Casa / Alquiler
+  "Home",         // Casa / Alquiler (Renta)
+  "Droplet",      // Agua
+  "Flame",        // Gas
+  "Wifi",         // Internet
+  "Broom",        // Limpieza
+  "Shirt",        // Ropa
+  "ShoppingCart", // Super mercado
+  "IceCream",     // Antojitos
+  "Smartphone",   // Apps
+  "Tv",           // Streaming
+  "Hotel",        // Hospedaje
+  "Siren",        // Emergencias
+  "Film",         // Cine
+  "PawPrint",     // Mascota
+  "BookOpen",     // Educación
+  "Wallet",       // Sueldos
+  "Briefcase",    // Freelance
+  "Receipt",      // Reembolso
+  "TrendingUp",   // Rendimientos
+  "DollarSign",   // Ventas
 ];
 
 // Filter the curated list to only include icons that actually exist in lucideIconMap

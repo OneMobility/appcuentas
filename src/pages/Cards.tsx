@@ -325,7 +325,7 @@ const Cards = () => {
     if (newTransaction.type === "charge") {
       categoryId = newTransaction.category_id;
       categoryType = "expense"; // Los cargos en tarjetas son egresos
-      if (newTransaction.installments_count && newTransaction.installments_count > 1) {
+      if (newTransaction.installments_count && newTransaction.installTransaction.installments_count > 1) {
         installmentsTotalAmount = amount;
         installmentsCount = newTransaction.installments_count;
         transactionAmountToStore = amount / installmentsCount; // Monto mensual

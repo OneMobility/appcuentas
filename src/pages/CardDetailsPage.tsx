@@ -835,7 +835,6 @@ const CardDetailsPage: React.FC = () => {
                 <SelectValue placeholder="Filtrar por categoría" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Todas las Categorías</SelectItem>
                 {expenseCategories.map((cat) => (
                   <SelectItem key={cat.id} value={cat.id}>
                     {cat.name}

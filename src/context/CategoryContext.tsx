@@ -27,6 +27,38 @@ interface CategoryContextType {
 
 const CategoryContext = createContext<CategoryContextType | undefined>(undefined);
 
+// Predefined fixed categories
+const predefinedFixedExpenseCategories: Omit<Category, "id" | "user_id">[] = [
+  { name: "Renta", color: "#FFADAD", is_fixed: true, icon: "Home" },
+  { name: "Agua", color: "#FFD6A5", is_fixed: true, icon: "Droplet" },
+  { name: "Luz", color: "#FDFFB6", is_fixed: true, icon: "Lightbulb" },
+  { name: "Gas", color: "#CAFFBF", is_fixed: true, icon: "Flame" },
+  { name: "Mantenimiento", color: "#9BF6FF", is_fixed: true, icon: "Wrench" },
+  { name: "Internet", color: "#A0C4FF", is_fixed: true, icon: "Wifi" },
+  { name: "Limpieza", color: "#BDB2FF", is_fixed: true, icon: "Broom" },
+  { name: "Ropa", color: "#FFC6FF", is_fixed: true, icon: "Shirt" },
+  { name: "Super mercado", color: "#FFFFFC", is_fixed: true, icon: "ShoppingCart" },
+  { name: "Antojitos", color: "#E0BBE4", is_fixed: true, icon: "IceCream" },
+  { name: "Apps", color: "#957DAD", is_fixed: true, icon: "Smartphone" },
+  { name: "Streaming", color: "#D291BC", is_fixed: true, icon: "Tv" },
+  { name: "Transporte", color: "#FFC72C", is_fixed: true, icon: "Car" },
+  { name: "Hospedaje", color: "#A7D9B1", is_fixed: true, icon: "Hotel" },
+  { name: "Emergencias", color: "#FF6B6B", is_fixed: true, icon: "Siren" },
+  { name: "Cine", color: "#8D99AE", is_fixed: true, icon: "Film" },
+  { name: "Mascota", color: "#C7E9B0", is_fixed: true, icon: "PawPrint" },
+  { name: "Educacion", color: "#FFD700", is_fixed: true, icon: "BookOpen" },
+];
+
+const predefinedFixedIncomeCategories: Omit<Category, "id" | "user_id">[] = [
+  { name: "Sueldos", color: "#B0E0E6", is_fixed: true, icon: "Wallet" },
+  { name: "Bonos", color: "#ADD8E6", is_fixed: true, icon: "Gift" },
+  { name: "Freelance", color: "#87CEEB", is_fixed: true, icon: "Briefcase" },
+  { name: "Ventas", color: "#6495ED", is_fixed: true, icon: "DollarSign" },
+  { name: "Reembolso", color: "#4682B4", is_fixed: true, icon: "Receipt" },
+  { name: "Rendimientos", color: "#5F9EA0", is_fixed: true, icon: "TrendingUp" },
+];
+
+
 export const CategoryProvider = ({ children }: { children: ReactNode }) => {
   const { user } = useSession();
   const [incomeCategories, setIncomeCategories] = useState<Category[]>([]);
@@ -36,23 +68,65 @@ export const CategoryProvider = ({ children }: { children: ReactNode }) => {
   const fetchCategories = async () => {
     setIsLoadingCategories(true);
     
-    // Fetch fixed categories (user_id is NULL)
-    const { data: fixedIncomeData, error: fixedIncomeError } = await supabase
+    // Fetch existing fixed categories (user_id is NULL)
+    const { data: existingFixedIncomeData, error: fixedIncomeError } = await supabase
       .from('income_categories')
       .select('*')
       .is('user_id', null);
 
-    const { data: fixedExpenseData, error: fixedExpenseError } = await supabase
+    const { data: existingFixedExpenseData, error: fixedExpenseError } = await supabase
       .from('expense_categories')
       .select('*')
       .is('user_id', null);
 
     if (fixedIncomeError || fixedExpenseError) {
-      showError('Error al cargar categorías fijas: ' + (fixedIncomeError?.message || fixedExpenseError?.message));
+      showError('Error al cargar categorías fijas existentes: ' + (fixedIncomeError?.message || fixedExpenseError?.message));
     }
 
-    let allIncomeCategories: Category[] = fixedIncomeData || [];
-    let allExpenseCategories: Category[] = fixedExpenseData || [];
+    const existingFixedIncomeMap = new Map(existingFixedIncomeData?.map(cat => [cat.name, cat.id]));
+    const existingFixedExpenseMap = new Map(existingFixedExpenseData?.map(cat => [cat.name, cat.id]));
+
+    // Insert missing predefined fixed income categories
+    for (const predefined of predefinedFixedIncomeCategories) {
+      if (!existingFixedIncomeMap.has(predefined.name)) {
+        const { error: insertError } = await supabase
+          .from('income_categories')
+          .insert({ ...predefined, user_id: null });
+        if (insertError) {
+          console.error("Error inserting fixed income category:", predefined.name, insertError);
+        }
+      }
+    }
+
+    // Insert missing predefined fixed expense categories
+    for (const predefined of predefinedFixedExpenseCategories) {
+      if (!existingFixedExpenseMap.has(predefined.name)) {
+        const { error: insertError } = await supabase
+          .from('expense_categories')
+          .insert({ ...predefined, user_id: null });
+        if (insertError) {
+          console.error("Error inserting fixed expense category:", predefined.name, insertError);
+        }
+      }
+    }
+
+    // Re-fetch all fixed categories after potential insertions
+    const { data: updatedFixedIncomeData, error: updatedFixedIncomeError } = await supabase
+      .from('income_categories')
+      .select('*')
+      .is('user_id', null);
+
+    const { data: updatedFixedExpenseData, error: updatedFixedExpenseError } = await supabase
+      .from('expense_categories')
+      .select('*')
+      .is('user_id', null);
+
+    if (updatedFixedIncomeError || updatedFixedExpenseError) {
+      showError('Error al recargar categorías fijas: ' + (updatedFixedIncomeError?.message || updatedFixedExpenseError?.message));
+    }
+
+    let allIncomeCategories: Category[] = updatedFixedIncomeData || [];
+    let allExpenseCategories: Category[] = updatedFixedExpenseData || [];
 
     if (user) {
       // Fetch user-specific categories
