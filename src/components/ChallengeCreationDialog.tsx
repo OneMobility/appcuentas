@@ -14,36 +14,67 @@ import { showError, showSuccess } from "@/utils/toast";
 import { addDays, format } from "date-fns";
 import * as LucideIcons from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Input } from "@/components/ui/input"; // Importar Input
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"; // Importar Popover
+import { CalendarIcon } from "lucide-react"; // Importar CalendarIcon
+import { Calendar } from "@/components/ui/calendar"; // Importar Calendar
+import ColorPicker from "@/components/ColorPicker"; // Importar ColorPicker
 
 interface ChallengeTemplate {
   id: string;
   name: string;
   description: string;
-  type: "no_spend_category"; // For now, only this type
-  icon: keyof typeof LucideIcons; // Use keyof typeof LucideIcons for icon names
+  type: "no_spend_category" | "saving_goal";
+  icon: keyof typeof LucideIcons;
+  default_categories?: string[]; // Para retos de no gasto
 }
 
 const challengeTemplates: ChallengeTemplate[] = [
   {
     id: "no-spend-food",
-    name: "Reto: Cero Gastos en Comida Fuera",
-    description: "Evita gastar en restaurantes, comida rápida y bebidas por 7 días.",
+    name: "Reto: Cero Gastos en Antojitos",
+    description: "Evita gastar en comida fuera, snacks y bebidas por 7 días.",
     type: "no_spend_category",
-    icon: "Utensils",
+    icon: "IceCream",
+    default_categories: ["Antojitos"], // Usar nombres para buscar IDs
   },
   {
-    id: "no-impulse-buy",
-    name: "Reto: Sin Compras Impulsivas",
-    description: "No realices compras en categorías de ocio, ropa o gadgets por 7 días.",
+    id: "no-spend-apps",
+    name: "Reto: Cero Gastos en Apps/Suscripciones",
+    description: "No realices compras en aplicaciones o nuevas suscripciones por 7 días.",
     type: "no_spend_category",
-    icon: "ShoppingBag",
+    icon: "Smartphone",
+    default_categories: ["Apps", "Streaming"],
   },
   {
-    id: "no-entertainment",
-    name: "Reto: Cero Entretenimiento Pagado",
-    description: "Evita gastos en cine, conciertos, bares o suscripciones de entretenimiento por 7 días.",
+    id: "no-spend-entertainment",
+    name: "Reto: Cero Gastos en Entretenimiento",
+    description: "Evita gastos en cine, conciertos, bares o eventos por 7 días.",
     type: "no_spend_category",
-    icon: "Tv",
+    icon: "Film",
+    default_categories: ["Cine"],
+  },
+  {
+    id: "no-spend-clothing",
+    name: "Reto: Cero Gastos en Ropa",
+    description: "No compres ropa, accesorios o calzado por 7 días.",
+    type: "no_spend_category",
+    icon: "Shirt",
+    default_categories: ["Ropa"],
+  },
+  {
+    id: "saving-goal-100",
+    name: "Reto: Ahorra $100 en 7 días",
+    description: "Intenta ahorrar $100 en una nueva meta durante la semana.",
+    type: "saving_goal",
+    icon: "PiggyBank",
+  },
+  {
+    id: "saving-goal-200",
+    name: "Reto: Ahorra $200 en 7 días",
+    description: "Intenta ahorrar $200 en una nueva meta durante la semana.",
+    type: "saving_goal",
+    icon: "PiggyBank",
   },
 ];
 
@@ -55,15 +86,21 @@ interface ChallengeCreationDialogProps {
 
 const ChallengeCreationDialog: React.FC<ChallengeCreationDialogProps> = ({ isOpen, onClose, onChallengeStarted }) => {
   const { user } = useSession();
-  const { expenseCategories, isLoadingCategories } = useCategoryContext();
+  const { expenseCategories, incomeCategories, isLoadingCategories } = useCategoryContext();
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+  const [savingGoalDetails, setSavingGoalDetails] = useState({
+    name: "",
+    target_amount: "",
+    color: "#22C55E",
+  });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     if (!isOpen) {
       setSelectedTemplateId(null);
       setSelectedCategories([]);
+      setSavingGoalDetails({ name: "", target_amount: "", color: "#22C55E" });
       setIsSubmitting(false);
     }
   }, [isOpen]);
@@ -72,10 +109,38 @@ const ChallengeCreationDialog: React.FC<ChallengeCreationDialogProps> = ({ isOpe
     ? challengeTemplates.find((t) => t.id === selectedTemplateId)
     : null;
 
+  // Filter fixed expense categories for "no_spend_category" challenges
+  const fixedExpenseCategories = expenseCategories.filter(cat => cat.is_fixed);
+
+  useEffect(() => {
+    if (selectedTemplate && selectedTemplate.type === "no_spend_category" && selectedTemplate.default_categories) {
+      const defaultCategoryIds = fixedExpenseCategories
+        .filter(cat => selectedTemplate.default_categories?.includes(cat.name))
+        .map(cat => cat.id);
+      setSelectedCategories(defaultCategoryIds);
+    } else if (selectedTemplate && selectedTemplate.type === "saving_goal") {
+      // Set default saving goal details based on template
+      if (selectedTemplate.id === "saving-goal-100") {
+        setSavingGoalDetails(prev => ({ ...prev, name: "Reto de Ahorro $100", target_amount: "100" }));
+      } else if (selectedTemplate.id === "saving-goal-200") {
+        setSavingGoalDetails(prev => ({ ...prev, name: "Reto de Ahorro $200", target_amount: "200" }));
+      }
+    }
+  }, [selectedTemplate, fixedExpenseCategories]);
+
   const handleCategoryToggle = (categoryId: string) => {
     setSelectedCategories((prev) =>
       prev.includes(categoryId) ? prev.filter((id) => id !== categoryId) : [...prev, categoryId]
     );
+  };
+
+  const handleSavingGoalChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setSavingGoalDetails((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleSavingGoalColorSelect = (color: string) => {
+    setSavingGoalDetails((prev) => ({ ...prev, color }));
   };
 
   const handleStartChallenge = async () => {
@@ -85,10 +150,6 @@ const ChallengeCreationDialog: React.FC<ChallengeCreationDialogProps> = ({ isOpe
     }
     if (!selectedTemplate) {
       showError("Por favor, selecciona un tipo de reto.");
-      return;
-    }
-    if (selectedTemplate.type === "no_spend_category" && selectedCategories.length === 0) {
-      showError("Por favor, selecciona al menos una categoría para el reto.");
       return;
     }
 
@@ -114,7 +175,7 @@ const ChallengeCreationDialog: React.FC<ChallengeCreationDialogProps> = ({ isOpe
         return;
       }
 
-      const { error } = await supabase.from('challenges').insert({
+      let challengeData: any = {
         user_id: user.id,
         challenge_template_id: selectedTemplate.id,
         name: selectedTemplate.name,
@@ -122,8 +183,61 @@ const ChallengeCreationDialog: React.FC<ChallengeCreationDialogProps> = ({ isOpe
         start_date: format(startDate, "yyyy-MM-dd"),
         end_date: format(endDate, "yyyy-MM-dd"),
         status: "active",
-        forbidden_category_ids: selectedCategories,
-      });
+      };
+
+      if (selectedTemplate.type === "no_spend_category") {
+        if (selectedCategories.length === 0) {
+          showError("Por favor, selecciona al menos una categoría para el reto de cero gastos.");
+          setIsSubmitting(false);
+          return;
+        }
+        challengeData.forbidden_category_ids = selectedCategories;
+      } else if (selectedTemplate.type === "saving_goal") {
+        const targetAmount = parseFloat(savingGoalDetails.target_amount);
+        if (isNaN(targetAmount) || targetAmount <= 0) {
+          showError("El monto objetivo para el reto de ahorro debe ser un número positivo.");
+          setIsSubmitting(false);
+          return;
+        }
+        if (!savingGoalDetails.name.trim()) {
+          showError("El nombre de la meta de ahorro no puede estar vacío.");
+          setIsSubmitting(false);
+          return;
+        }
+
+        // First, insert the challenge
+        const { data: newChallenge, error: challengeInsertError } = await supabase
+          .from('challenges')
+          .insert(challengeData)
+          .select()
+          .single();
+
+        if (challengeInsertError) throw challengeInsertError;
+
+        // Then, create the linked saving goal
+        const { error: savingInsertError } = await supabase
+          .from('savings')
+          .insert({
+            user_id: user.id,
+            name: savingGoalDetails.name.trim(),
+            current_balance: 0, // Starts at 0 for the challenge
+            target_amount: targetAmount,
+            target_date: format(endDate, "yyyy-MM-dd"), // Target date is end of challenge
+            color: savingGoalDetails.color,
+            challenge_id: newChallenge.id, // Link to the new challenge
+          })
+          .select();
+
+        if (savingInsertError) throw savingInsertError;
+
+        showSuccess("¡Reto de ahorro iniciado exitosamente! ¡Mucha suerte!");
+        onChallengeStarted();
+        onClose();
+        return; // Exit early as saving challenge handled
+      }
+
+      // For no_spend_category challenges, insert directly
+      const { error } = await supabase.from('challenges').insert(challengeData);
 
       if (error) {
         throw error;
@@ -177,19 +291,20 @@ const ChallengeCreationDialog: React.FC<ChallengeCreationDialogProps> = ({ isOpe
 
           {selectedTemplate && selectedTemplate.type === "no_spend_category" && (
             <div className="grid gap-2">
-              <Label>Categorías a Evitar (Egresos)</Label>
+              <Label>Categorías a Evitar (Egresos Fijos)</Label>
               {isLoadingCategories ? (
                 <p className="text-sm text-muted-foreground">Cargando categorías...</p>
-              ) : expenseCategories.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No tienes categorías de egresos. Crea algunas primero.</p>
+              ) : fixedExpenseCategories.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No hay categorías de egresos fijas disponibles.</p>
               ) : (
                 <ScrollArea className="h-[150px] rounded-md border p-4">
-                  {expenseCategories.map((category) => (
+                  {fixedExpenseCategories.map((category) => (
                     <div key={category.id} className="flex items-center space-x-2 mb-2">
                       <Checkbox
                         id={`category-${category.id}`}
                         checked={selectedCategories.includes(category.id)}
                         onCheckedChange={() => handleCategoryToggle(category.id)}
+                        disabled={selectedTemplate.default_categories?.includes(category.name)} // Deshabilitar si es categoría por defecto
                       />
                       <label
                         htmlFor={`category-${category.id}`}
@@ -204,6 +319,47 @@ const ChallengeCreationDialog: React.FC<ChallengeCreationDialogProps> = ({ isOpe
                   ))}
                 </ScrollArea>
               )}
+            </div>
+          )}
+
+          {selectedTemplate && selectedTemplate.type === "saving_goal" && (
+            <div className="grid gap-2">
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="savingName" className="text-right">
+                  Nombre de Meta
+                </Label>
+                <Input
+                  id="savingName"
+                  name="name"
+                  value={savingGoalDetails.name}
+                  onChange={handleSavingGoalChange}
+                  className="col-span-3"
+                  required
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="targetAmount" className="text-right">
+                  Monto Objetivo
+                </Label>
+                <Input
+                  id="targetAmount"
+                  name="target_amount"
+                  type="number"
+                  step="0.01"
+                  value={savingGoalDetails.target_amount}
+                  onChange={handleSavingGoalChange}
+                  className="col-span-3"
+                  required
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="savingColor" className="text-right">
+                  Color de Meta
+                </Label>
+                <div className="col-span-3">
+                  <ColorPicker selectedColor={savingGoalDetails.color} onSelectColor={handleSavingGoalColorSelect} />
+                </div>
+              </div>
             </div>
           )}
         </div>

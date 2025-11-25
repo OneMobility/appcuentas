@@ -10,16 +10,19 @@ import { showError, showSuccess } from "@/utils/toast";
 import ChallengeCard, { ChallengeData } from "@/components/ChallengeCard";
 import ChallengeCreationDialog from "@/components/ChallengeCreationDialog";
 import LoadingSpinner from "@/components/LoadingSpinner";
+import { isAfter, isSameDay, format } from "date-fns";
+import { useCategoryContext } from "@/context/CategoryContext"; // Importar useCategoryContext
 
 const Challenges: React.FC = () => {
   const { user } = useSession();
+  const { expenseCategories, incomeCategories, isLoadingCategories, getCategoryById } = useCategoryContext();
   const [activeChallenge, setActiveChallenge] = useState<ChallengeData | null>(null);
   const [isChallengeCreationDialogOpen, setIsChallengeCreationDialogOpen] = useState(false);
   const [isLoadingChallenges, setIsLoadingChallenges] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
 
   const fetchActiveChallenge = async () => {
-    if (!user) {
+    if (!user || isLoadingCategories) {
       setActiveChallenge(null);
       setIsLoadingChallenges(false);
       return;
@@ -27,7 +30,7 @@ const Challenges: React.FC = () => {
     setIsLoadingChallenges(true);
     const { data, error } = await supabase
       .from('challenges')
-      .select('*')
+      .select('*, savings(id, name, current_balance, target_amount, color)') // Fetch linked saving goal
       .eq('user_id', user.id)
       .eq('status', 'active')
       .single();
@@ -36,19 +39,107 @@ const Challenges: React.FC = () => {
       showError('Error al cargar reto activo: ' + error.message);
       setActiveChallenge(null);
     } else if (data) {
-      setActiveChallenge(data as ChallengeData);
+      const challenge: ChallengeData = {
+        ...data,
+        saving_goal: data.savings ? data.savings : null,
+        expense_categories: data.forbidden_category_ids
+          ? data.forbidden_category_ids.map(id => getCategoryById(id, "expense")).filter(Boolean) as Category[]
+          : [],
+      };
+      setActiveChallenge(challenge);
+      // Check if challenge needs evaluation
+      const endDate = new Date(challenge.end_date);
+      endDate.setHours(23, 59, 59, 999); // End of day
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      if (challenge.status === "active" && (isAfter(today, endDate) || isSameDay(today, endDate))) {
+        await evaluateChallenge(challenge);
+      }
     } else {
       setActiveChallenge(null);
     }
     setIsLoadingChallenges(false);
   };
 
+  const evaluateChallenge = async (challenge: ChallengeData) => {
+    if (!user) return;
+
+    let newStatus: "completed" | "failed" | "regular" = "failed";
+
+    if (challenge.challenge_template_id.startsWith("no-spend")) {
+      // No-Spend Challenge evaluation
+      const { data: expenseTransactions, error: txError } = await supabase
+        .from('cash_transactions')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('type', 'egreso')
+        .in('category_id', challenge.forbidden_category_ids)
+        .gte('date', challenge.start_date)
+        .lte('date', challenge.end_date);
+
+      const { data: cardTransactions, error: cardTxError } = await supabase
+        .from('card_transactions')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('type', 'charge')
+        .in('category_id', challenge.forbidden_category_ids)
+        .gte('date', challenge.start_date)
+        .lte('date', challenge.end_date);
+
+      if (txError || cardTxError) {
+        console.error("Error fetching transactions for challenge evaluation:", txError?.message || cardTxError?.message);
+        showError("Error al evaluar el reto de cero gastos.");
+        return;
+      }
+
+      if (expenseTransactions?.length === 0 && cardTransactions?.length === 0) {
+        newStatus = "completed";
+        showSuccess(`¡Reto '${challenge.name}' completado! ¡Felicidades!`);
+      } else {
+        newStatus = "failed";
+        showError(`Reto '${challenge.name}' fallido. Se registraron gastos en categorías prohibidas.`);
+      }
+    } else if (challenge.challenge_template_id.startsWith("saving-goal") && challenge.saving_goal) {
+      // Saving Goal Challenge evaluation
+      const saving = challenge.saving_goal;
+      if (saving.target_amount > 0) {
+        const progress = (saving.current_balance / saving.target_amount) * 100;
+        if (progress >= 100) {
+          newStatus = "completed";
+          showSuccess(`¡Reto '${challenge.name}' completado! ¡Alcanzaste tu meta de ahorro!`);
+        } else if (progress >= 50) {
+          newStatus = "regular";
+          showSuccess(`Reto '${challenge.name}' regular. ¡Casi lo logras, sigue así!`);
+        } else {
+          newStatus = "failed";
+          showError(`Reto '${challenge.name}' fallido. No alcanzaste el 50% de tu meta de ahorro.`);
+        }
+      } else {
+        newStatus = "failed"; // Target amount was 0 or invalid
+        showError(`Reto '${challenge.name}' fallido. La meta de ahorro no era válida.`);
+      }
+    }
+
+    // Update challenge status in DB
+    const { error: updateError } = await supabase
+      .from('challenges')
+      .update({ status: newStatus })
+      .eq('id', challenge.id)
+      .eq('user_id', user.id);
+
+    if (updateError) {
+      showError('Error al actualizar el estado del reto: ' + updateError.message);
+    } else {
+      setRefreshKey(prev => prev + 1); // Force re-fetch to show updated status
+    }
+  };
+
   useEffect(() => {
     fetchActiveChallenge();
-  }, [user, refreshKey]);
+  }, [user, refreshKey, isLoadingCategories]);
 
   const handleChallengeStarted = () => {
-    fetchActiveChallenge(); // Refresh active challenge after a new one is started
     setRefreshKey(prev => prev + 1); // Force re-fetch
   };
 
@@ -75,6 +166,7 @@ const Challenges: React.FC = () => {
         challenge={activeChallenge}
         onStartNewChallenge={() => setIsChallengeCreationDialogOpen(true)}
         onViewBadges={() => { /* TODO: Navigate to badges page */ }}
+        onRefreshChallenges={handleRefreshChallenges}
       />
 
       {/* Aquí podrías añadir una sección para retos completados/fallidos si fuera necesario */}
