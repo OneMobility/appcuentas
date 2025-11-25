@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { RefreshCw, Trophy, XCircle } from "lucide-react"; // Importar XCircle para el álbum
+import { RefreshCw, Trophy, XCircle } from "lucide-react";
 import { useSession } from "@/context/SessionContext";
 import { supabase } from "@/integrations/supabase/client";
 import { showError, showSuccess } from "@/utils/toast";
@@ -11,11 +11,12 @@ import ChallengeCard, { ChallengeData } from "@/components/ChallengeCard";
 import ChallengeCreationDialog from "@/components/ChallengeCreationDialog";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import { isAfter, isSameDay, format } from "date-fns";
-import { es } from "date-fns/locale"; // Importar el objeto de localización 'es'
-import { useCategoryContext } from "@/context/CategoryContext"; // Importar useCategoryContext
-import DynamicLucideIcon from "@/components/DynamicLucideIcon"; // Importar DynamicLucideIcon
+import { es } from "date-fns/locale";
+import { useCategoryContext } from "@/context/CategoryContext";
+import DynamicLucideIcon from "@/components/DynamicLucideIcon";
 import { cn } from "@/lib/utils";
-import PastChallengeItem from "@/components/PastChallengeItem"; // Importar el nuevo componente
+import PastChallengeItem from "@/components/PastChallengeItem";
+import { challengeTemplates, ChallengeTemplate } from "@/utils/challenge-templates"; // Importar plantillas
 
 interface ChallengesProps {
   challengeRefreshKey: number;
@@ -44,14 +45,14 @@ const Challenges: React.FC<ChallengesProps> = ({ challengeRefreshKey, setChallen
   const { user } = useSession();
   const { expenseCategories, incomeCategories, isLoadingCategories, getCategoryById } = useCategoryContext();
   const [activeChallenge, setActiveChallenge] = useState<ChallengeData | null>(null);
-  const [pastChallenges, setPastChallenges] = useState<ChallengeData[]>([]); // Para el álbum
+  const [userPastChallenges, setUserPastChallenges] = useState<ChallengeData[]>([]); // Renombrado para evitar conflicto
   const [isChallengeCreationDialogOpen, setIsChallengeCreationDialogOpen] = useState(false);
   const [isLoadingChallenges, setIsLoadingChallenges] = useState(true);
 
   const fetchChallenges = async () => {
     if (!user || isLoadingCategories) {
       setActiveChallenge(null);
-      setPastChallenges([]);
+      setUserPastChallenges([]);
       setIsLoadingChallenges(false);
       return;
     }
@@ -83,13 +84,13 @@ const Challenges: React.FC<ChallengesProps> = ({ challengeRefreshKey, setChallen
         expense_categories: activeChallengeData.forbidden_category_ids
           ? activeChallengeData.forbidden_category_ids.map(id => getCategoryById(id, "expense")).filter(Boolean) as Category[]
           : [],
-        badge: activeChallengeData.badges as BadgeData | null, // Asignar la insignia
+        badge: activeChallengeData.badges as BadgeData | null,
       };
       setActiveChallenge(challenge);
 
       // Check if challenge needs evaluation
       const endDate = new Date(challenge.end_date);
-      endDate.setHours(23, 59, 59, 999); // End of day
+      endDate.setHours(23, 59, 59, 999);
       const today = new Date();
       today.setHours(0, 0, 0, 0);
 
@@ -100,17 +101,17 @@ const Challenges: React.FC<ChallengesProps> = ({ challengeRefreshKey, setChallen
       setActiveChallenge(null);
     }
 
-    // Fetch past challenges (completed and failed) for the album
+    // Fetch all past challenges (completed, failed, regular) for the user
     const { data: pastChallengesData, error: pastChallengesError } = await supabase
       .from('challenges')
       .select('*, savings(id, name, current_balance, target_amount, color), badges(id, name, description, image_url)')
       .eq('user_id', user.id)
-      .in('status', ['completed', 'failed', 'regular']) // Incluir 'regular' en retos pasados
+      .in('status', ['completed', 'failed', 'regular'])
       .order('end_date', { ascending: false });
 
     if (pastChallengesError) {
       showError('Error al cargar retos anteriores: ' + pastChallengesError.message);
-      setPastChallenges([]);
+      setUserPastChallenges([]);
     } else {
       const formattedPastChallenges = (pastChallengesData || []).map(data => {
         let savingGoalData = null;
@@ -130,7 +131,7 @@ const Challenges: React.FC<ChallengesProps> = ({ challengeRefreshKey, setChallen
           badge: data.badges as BadgeData | null,
         };
       });
-      setPastChallenges(formattedPastChallenges);
+      setUserPastChallenges(formattedPastChallenges);
     }
 
     setIsLoadingChallenges(false);
@@ -141,10 +142,9 @@ const Challenges: React.FC<ChallengesProps> = ({ challengeRefreshKey, setChallen
 
     let newStatus: "completed" | "failed" | "regular" = "failed";
     let awardedBadgeId: string | null = null;
-    const evaluationDate = format(new Date(), "yyyy-MM-dd"); // Fecha actual del sistema
+    const evaluationDate = format(new Date(), "yyyy-MM-dd");
 
     if (challenge.challenge_template_id.startsWith("no-spend")) {
-      // No-Spend Challenge evaluation
       const { data: expenseTransactions, error: txError } = await supabase
         .from('cash_transactions')
         .select('id')
@@ -177,7 +177,6 @@ const Challenges: React.FC<ChallengesProps> = ({ challengeRefreshKey, setChallen
         showError(`Reto '${challenge.name}' fallido. Se registraron gastos en categorías prohibidas.`);
       }
     } else if (challenge.challenge_template_id.startsWith("saving-goal") && challenge.saving_goal) {
-      // Saving Goal Challenge evaluation
       const saving = challenge.saving_goal;
       if (saving.target_amount !== null && saving.target_amount !== undefined && saving.target_amount > 0) {
         const progress = (saving.current_balance / saving.target_amount) * 100;
@@ -192,12 +191,11 @@ const Challenges: React.FC<ChallengesProps> = ({ challengeRefreshKey, setChallen
           showError(`Reto '${challenge.name}' fallido. No alcanzaste el 50% de tu meta de ahorro.`);
         }
       } else {
-        newStatus = "failed"; // Target amount was 0 or invalid
+        newStatus = "failed";
         showError(`Reto '${challenge.name}' fallido. La meta de ahorro no era válida.`);
       }
     }
 
-    // Award badge if completed
     if (newStatus === "completed") {
       const badgeName = badgeMapping[challenge.challenge_template_id];
       if (badgeName) {
@@ -215,26 +213,25 @@ const Challenges: React.FC<ChallengesProps> = ({ challengeRefreshKey, setChallen
       }
     }
 
-    // Update challenge status, badge_id, and end_date in DB
     const { error: updateError } = await supabase
       .from('challenges')
-      .update({ status: newStatus, badge_id: awardedBadgeId, end_date: evaluationDate }) // Actualizar end_date
+      .update({ status: newStatus, badge_id: awardedBadgeId, end_date: evaluationDate })
       .eq('id', challenge.id)
       .eq('user_id', user.id);
 
     if (updateError) {
       showError('Error al actualizar el estado del reto: ' + updateError.message);
     } else {
-      setChallengeRefreshKey(prev => prev + 1); // Force re-fetch to show updated status and badge
+      setChallengeRefreshKey(prev => prev + 1);
     }
   };
 
   useEffect(() => {
     fetchChallenges();
-  }, [user, challengeRefreshKey, isLoadingCategories]); // Depend on prop refreshKey
+  }, [user, challengeRefreshKey, isLoadingCategories]);
 
   const handleChallengeStarted = () => {
-    setChallengeRefreshKey(prev => prev + 1); // Force re-fetch
+    setChallengeRefreshKey(prev => prev + 1);
   };
 
   const handleRefreshChallenges = () => {
@@ -269,21 +266,28 @@ const Challenges: React.FC<ChallengesProps> = ({ challengeRefreshKey, setChallen
         onChallengeStarted={handleChallengeStarted}
       />
 
-      {pastChallenges.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Trophy className="h-5 w-5 text-yellow-500" />
-              Álbum de Retos Anteriores
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {pastChallenges.map((challenge) => (
-              <PastChallengeItem key={challenge.id} challenge={challenge} />
-            ))}
-          </CardContent>
-        </Card>
-      )}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Trophy className="h-5 w-5 text-yellow-500" />
+            Álbum de Retos Anteriores
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {challengeTemplates.map((template) => {
+            const userChallenge = userPastChallenges.find(
+              (uc) => uc.challenge_template_id === template.id
+            );
+            return (
+              <PastChallengeItem
+                key={template.id}
+                template={template}
+                userChallenge={userChallenge}
+              />
+            );
+          })}
+        </CardContent>
+      </Card>
     </div>
   );
 };
