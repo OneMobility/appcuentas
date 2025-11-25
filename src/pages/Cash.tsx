@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { PlusCircle, CalendarIcon, Edit } from "lucide-react";
+import { PlusCircle, CalendarIcon, Edit, FileText, FileDown } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
@@ -19,6 +19,8 @@ import { DateRange } from "react-day-picker";
 import { useCategoryContext } from "@/context/CategoryContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/context/SessionContext";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { exportToCsv, exportToPdf } from "@/utils/export";
 
 interface Transaction {
   id: string;
@@ -45,7 +47,6 @@ const Cash = () => {
     description: "",
     category_id: "",
   });
-  // Eliminado: const [isLoadingTransactions, setIsLoadingTransactions] = useState(true);
 
   // Filter states
   const [searchTerm, setSearchTerm] = useState("");
@@ -57,11 +58,9 @@ const Cash = () => {
     if (!user) {
       setTransactions([]);
       setBalance(0);
-      // Eliminado: setIsLoadingTransactions(false);
       return;
     }
 
-    // Eliminado: setIsLoadingTransactions(true);
     const { data, error } = await supabase
       .from('cash_transactions')
       .select('*')
@@ -78,7 +77,6 @@ const Cash = () => {
       }, 0);
       setBalance(currentBalance);
     }
-    // Eliminado: setIsLoadingTransactions(false);
   };
 
   useEffect(() => {
@@ -230,15 +228,31 @@ const Cash = () => {
   const availableCategories = newTransaction.type === "ingreso" ? incomeCategories : expenseCategories;
   const allCategories = [...incomeCategories, ...expenseCategories];
 
-  // Eliminado: if (isLoadingTransactions || isLoadingCategories) {
-  //   return (
-  //     <div className="min-h-screen flex items-center justify-center bg-gray-100">
-  //       <div className="text-center">
-  //         <h1 className="text-4xl font-bold mb-4">Cargando datos de efectivo...</h1>
-  //       </div>
-  //     </div>
-  //   );
-  // }
+  const handleExport = (formatType: 'csv' | 'pdf') => {
+    const dataToExport = filteredTransactions.map(tx => {
+      const category = getCategoryById(tx.category_id, tx.category_type);
+      return {
+        Fecha: format(new Date(tx.date), "dd/MM/yyyy", { locale: es }),
+        Tipo: tx.type === "ingreso" ? "Ingreso" : "Egreso",
+        Categoria: category?.name || "Desconocida",
+        Descripcion: tx.description,
+        Monto: `${tx.type === "ingreso" ? "+" : "-"}${tx.amount.toFixed(2)}`,
+      };
+    });
+
+    const filename = `transacciones_efectivo_${format(new Date(), "yyyyMMdd_HHmmss")}`;
+    const title = "Reporte de Transacciones de Efectivo";
+    const headers = ["Fecha", "Tipo", "Categoría", "Descripción", "Monto"];
+    const pdfData = dataToExport.map(row => Object.values(row));
+
+    if (formatType === 'csv') {
+      exportToCsv(`${filename}.csv`, dataToExport);
+      showSuccess("Transacciones exportadas a CSV.");
+    } else {
+      exportToPdf(`${filename}.pdf`, title, headers, pdfData);
+      showSuccess("Transacciones exportadas a PDF.");
+    }
+  };
 
   return (
     <div className="flex flex-col gap-6 p-4">
@@ -256,85 +270,105 @@ const Cash = () => {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>Transacciones Recientes</CardTitle>
-          <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-            <DialogTrigger asChild>
-              <Button size="sm" className="h-8 gap-1">
-                <PlusCircle className="h-3.5 w-3.5" />
-                <span className="sr-only sm:not-sr-only sm:whitespace-nowrap">
-                  Nueva Transacción
-                </span>
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-[425px]">
-              <DialogHeader>
-                <DialogTitle>Registrar Transacción</DialogTitle>
-              </DialogHeader>
-              <form onSubmit={handleSubmitTransaction} className="grid gap-4 py-4">
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="type" className="text-right">
-                    Tipo
-                  </Label>
-                  <Select value={newTransaction.type} onValueChange={handleSelectChange}>
-                    <SelectTrigger className="col-span-3">
-                      <SelectValue placeholder="Selecciona tipo" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="ingreso">Ingreso</SelectItem>
-                      <SelectItem value="egreso">Egreso</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="category_id" className="text-right">
-                    Categoría
-                  </Label>
-                  <Select value={newTransaction.category_id} onValueChange={handleCategorySelectChange}>
-                    <SelectTrigger className="col-span-3">
-                      <SelectValue placeholder="Selecciona categoría" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {availableCategories.map((cat) => (
-                        <SelectItem key={cat.id} value={cat.id}>
-                          {cat.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="amount" className="text-right">
-                    Monto
-                  </Label>
-                  <Input
-                    id="amount"
-                    name="amount"
-                    type="number"
-                    step="0.01"
-                    value={newTransaction.amount}
-                    onChange={handleInputChange}
-                    className="col-span-3"
-                    required
-                  />
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="description" className="text-right">
-                    Descripción
-                  </Label>
-                  <Input
-                    id="description"
-                    name="description"
-                    value={newTransaction.description}
-                    onChange={handleInputChange}
-                    className="col-span-3"
-                    required
-                  />
-                </div>
-                <DialogFooter>
-                  <Button type="submit">Guardar Transacción</Button>
-                </DialogFooter>
-              </form>
-            </DialogContent>
-          </Dialog>
+          <div className="flex gap-2">
+            <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+              <DialogTrigger asChild>
+                <Button size="sm" className="h-8 gap-1">
+                  <PlusCircle className="h-3.5 w-3.5" />
+                  <span className="sr-only sm:not-sr-only sm:whitespace-nowrap">
+                    Nueva Transacción
+                  </span>
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[425px]">
+                <DialogHeader>
+                  <DialogTitle>Registrar Transacción</DialogTitle>
+                </DialogHeader>
+                <form onSubmit={handleSubmitTransaction} className="grid gap-4 py-4">
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="type" className="text-right">
+                      Tipo
+                    </Label>
+                    <Select value={newTransaction.type} onValueChange={handleSelectChange}>
+                      <SelectTrigger className="col-span-3">
+                        <SelectValue placeholder="Selecciona tipo" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="ingreso">Ingreso</SelectItem>
+                        <SelectItem value="egreso">Egreso</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="category_id" className="text-right">
+                      Categoría
+                    </Label>
+                    <Select value={newTransaction.category_id} onValueChange={handleCategorySelectChange}>
+                      <SelectTrigger className="col-span-3">
+                        <SelectValue placeholder="Selecciona categoría" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availableCategories.map((cat) => (
+                          <SelectItem key={cat.id} value={cat.id}>
+                            {cat.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="amount" className="text-right">
+                      Monto
+                    </Label>
+                    <Input
+                      id="amount"
+                      name="amount"
+                      type="number"
+                      step="0.01"
+                      value={newTransaction.amount}
+                      onChange={handleInputChange}
+                      className="col-span-3"
+                      required
+                    />
+                  </div>
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="description" className="text-right">
+                      Descripción
+                    </Label>
+                    <Input
+                      id="description"
+                      name="description"
+                      value={newTransaction.description}
+                      onChange={handleInputChange}
+                      className="col-span-3"
+                      required
+                    />
+                  </div>
+                  <DialogFooter>
+                    <Button type="submit">Guardar Transacción</Button>
+                  </DialogFooter>
+                </form>
+              </DialogContent>
+            </Dialog>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="h-8 gap-1">
+                  <FileDown className="h-3.5 w-3.5" />
+                  <span className="sr-only sm:not-sr-only sm:whitespace-nowrap">
+                    Exportar
+                  </span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => handleExport('csv')}>
+                  <FileText className="mr-2 h-4 w-4" /> Exportar a CSV
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleExport('pdf')}>
+                  <FileText className="mr-2 h-4 w-4" /> Exportar a PDF
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="flex flex-col md:flex-row gap-4 mb-4">

@@ -7,11 +7,15 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
-import { PlusCircle, DollarSign, History, Trash2, Edit } from "lucide-react";
+import { PlusCircle, DollarSign, History, Trash2, Edit, FileText, FileDown } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/context/SessionContext";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { exportToCsv, exportToPdf } from "@/utils/export";
+import { format } from "date-fns";
+import { es } from "date-fns/locale";
 
 interface Payment {
   id: string;
@@ -42,7 +46,6 @@ const Creditors = () => {
   const [editingPayment, setEditingPayment] = useState<Payment | null>(null);
   const [newCreditor, setNewCreditor] = useState({ name: "", initial_balance: "" });
   const [paymentAmount, setPaymentAmount] = useState("");
-  // Eliminado: const [isLoadingCreditors, setIsLoadingCreditors] = useState(true);
 
   // Filter state
   const [searchTerm, setSearchTerm] = useState("");
@@ -50,11 +53,9 @@ const Creditors = () => {
   const fetchCreditors = async () => {
     if (!user) {
       setCreditors([]);
-      // Eliminado: setIsLoadingCreditors(false);
       return;
     }
 
-    // Eliminado: setIsLoadingCreditors(true);
     const { data, error } = await supabase
       .from('creditors')
       .select('*, creditor_payments(*)')
@@ -66,7 +67,6 @@ const Creditors = () => {
     } else {
       setCreditors(data || []);
     }
-    // Eliminado: setIsLoadingCreditors(false);
   };
 
   useEffect(() => {
@@ -308,15 +308,26 @@ const Creditors = () => {
     creditor.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  // Eliminado: if (isLoadingCreditors) {
-  //   return (
-  //     <div className="min-h-screen flex items-center justify-center bg-gray-100">
-  //       <div className="text-center">
-  //         <h1 className="text-4xl font-bold mb-4">Cargando acreedores...</h1>
-  //       </div>
-  //     </div>
-  //   );
-  // }
+  const handleExport = (formatType: 'csv' | 'pdf') => {
+    const dataToExport = filteredCreditors.map(creditor => ({
+      Nombre: creditor.name,
+      "Saldo Inicial": creditor.initial_balance.toFixed(2),
+      "Saldo Actual": creditor.current_balance.toFixed(2),
+    }));
+
+    const filename = `acreedores_${format(new Date(), "yyyyMMdd_HHmmss")}`;
+    const title = "Reporte de Acreedores";
+    const headers = ["Nombre", "Saldo Inicial", "Saldo Actual"];
+    const pdfData = dataToExport.map(row => Object.values(row));
+
+    if (formatType === 'csv') {
+      exportToCsv(`${filename}.csv`, dataToExport);
+      showSuccess("Acreedores exportados a CSV.");
+    } else {
+      exportToPdf(`${filename}.pdf`, title, headers, pdfData);
+      showSuccess("Acreedores exportados a PDF.");
+    }
+  };
 
   return (
     <div className="flex flex-col gap-6 p-4">
@@ -334,54 +345,74 @@ const Creditors = () => {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>Lista de Acreedores</CardTitle>
-          <Dialog open={isAddCreditorDialogOpen} onOpenChange={setIsAddCreditorDialogOpen}>
-            <DialogTrigger asChild>
-              <Button size="sm" className="h-8 gap-1">
-                <PlusCircle className="h-3.5 w-3.5" />
-                <span className="sr-only sm:not-sr-only sm:whitespace-nowrap">
-                  Añadir Acreedor
-                </span>
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-[425px]">
-              <DialogHeader>
-                <DialogTitle>Añadir Nuevo Acreedor</DialogTitle>
-              </DialogHeader>
-              <form onSubmit={handleSubmitNewCreditor} className="grid gap-4 py-4">
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="name" className="text-right">
-                    Nombre
-                  </Label>
-                  <Input
-                    id="name"
-                    name="name"
-                    value={newCreditor.name}
-                    onChange={handleNewCreditorChange}
-                    className="col-span-3"
-                    required
-                  />
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="initial_balance" className="text-right">
-                    Saldo Inicial
-                  </Label>
-                  <Input
-                    id="initial_balance"
-                    name="initial_balance"
-                    type="number"
-                    step="0.01"
-                    value={newCreditor.initial_balance}
-                    onChange={handleNewCreditorChange}
-                    className="col-span-3"
-                    required
-                  />
-                </div>
-                <DialogFooter>
-                  <Button type="submit">Guardar Acreedor</Button>
-                </DialogFooter>
-              </form>
-            </DialogContent>
-          </Dialog>
+          <div className="flex gap-2">
+            <Dialog open={isAddCreditorDialogOpen} onOpenChange={setIsAddCreditorDialogOpen}>
+              <DialogTrigger asChild>
+                <Button size="sm" className="h-8 gap-1">
+                  <PlusCircle className="h-3.5 w-3.5" />
+                  <span className="sr-only sm:not-sr-only sm:whitespace-nowrap">
+                    Añadir Acreedor
+                  </span>
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[425px]">
+                <DialogHeader>
+                  <DialogTitle>Añadir Nuevo Acreedor</DialogTitle>
+                </DialogHeader>
+                <form onSubmit={handleSubmitNewCreditor} className="grid gap-4 py-4">
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="name" className="text-right">
+                      Nombre
+                    </Label>
+                    <Input
+                      id="name"
+                      name="name"
+                      value={newCreditor.name}
+                      onChange={handleNewCreditorChange}
+                      className="col-span-3"
+                      required
+                    />
+                  </div>
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="initial_balance" className="text-right">
+                      Saldo Inicial
+                    </Label>
+                    <Input
+                      id="initial_balance"
+                      name="initial_balance"
+                      type="number"
+                      step="0.01"
+                      value={newCreditor.initial_balance}
+                      onChange={handleNewCreditorChange}
+                      className="col-span-3"
+                      required
+                    />
+                  </div>
+                  <DialogFooter>
+                    <Button type="submit">Guardar Acreedor</Button>
+                  </DialogFooter>
+                </form>
+              </DialogContent>
+            </Dialog>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="h-8 gap-1">
+                  <FileDown className="h-3.5 w-3.5" />
+                  <span className="sr-only sm:not-sr-only sm:whitespace-nowrap">
+                    Exportar
+                  </span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => handleExport('csv')}>
+                  <FileText className="mr-2 h-4 w-4" /> Exportar a CSV
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleExport('pdf')}>
+                  <FileText className="mr-2 h-4 w-4" /> Exportar a PDF
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="mb-4">

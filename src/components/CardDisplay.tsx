@@ -61,16 +61,23 @@ const CardDisplay: React.FC<CardDisplayProps> = ({ card, onAddTransaction, onVie
       </CardHeader>
       <CardContent className="p-0 relative z-10">
         <div className="mb-4">
-          <p className="text-sm opacity-80">
-            {isCredit ? "Deuda Pendiente" : "Saldo Disponible"}
-          </p>
-          <p className="text-3xl font-extrabold">
-            ${card.current_balance.toFixed(2)}
-          </p>
-          {isCredit && card.credit_limit !== undefined && (
-            <p className="text-sm opacity-80 mt-1">
-              Crédito Disponible: ${creditAvailable.toFixed(2)}
-            </p>
+          {isCredit ? (
+            <>
+              <p className="text-sm opacity-80">Crédito Disponible</p>
+              <p className="text-3xl font-extrabold">
+                ${creditAvailable.toFixed(2)}
+              </p>
+              <p className="text-sm opacity-80 mt-1">
+                Deuda Pendiente: ${card.current_balance.toFixed(2)}
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="text-sm opacity-80">Saldo Disponible</p>
+              <p className="text-3xl font-extrabold">
+                ${card.current_balance.toFixed(2)}
+              </p>
+            </>
           )}
         </div>
 

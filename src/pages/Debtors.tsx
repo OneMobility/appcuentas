@@ -7,11 +7,15 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
-import { PlusCircle, DollarSign, History, Trash2, Edit } from "lucide-react";
+import { PlusCircle, DollarSign, History, Trash2, Edit, FileText, FileDown } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/context/SessionContext";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { exportToCsv, exportToPdf } from "@/utils/export";
+import { format } from "date-fns";
+import { es } from "date-fns/locale";
 
 interface Payment {
   id: string;
@@ -42,7 +46,6 @@ const Debtors = () => {
   const [editingPayment, setEditingPayment] = useState<Payment | null>(null);
   const [newDebtor, setNewDebtor] = useState({ name: "", initial_balance: "" });
   const [paymentAmount, setPaymentAmount] = useState("");
-  // Eliminado: const [isLoadingDebtors, setIsLoadingDebtors] = useState(true);
 
   // Filter state
   const [searchTerm, setSearchTerm] = useState("");
@@ -50,11 +53,9 @@ const Debtors = () => {
   const fetchDebtors = async () => {
     if (!user) {
       setDebtors([]);
-      // Eliminado: setIsLoadingDebtors(false);
       return;
     }
 
-    // Eliminado: setIsLoadingDebtors(true);
     const { data, error } = await supabase
       .from('debtors')
       .select('*, debtor_payments(*)')
@@ -66,7 +67,6 @@ const Debtors = () => {
     } else {
       setDebtors(data || []);
     }
-    // Eliminado: setIsLoadingDebtors(false);
   };
 
   useEffect(() => {
@@ -308,15 +308,26 @@ const Debtors = () => {
     debtor.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  // Eliminado: if (isLoadingDebtors) {
-  //   return (
-  //     <div className="min-h-screen flex items-center justify-center bg-gray-100">
-  //       <div className="text-center">
-  //         <h1 className="text-4xl font-bold mb-4">Cargando deudores...</h1>
-  //       </div>
-  //     </div>
-  //   );
-  // }
+  const handleExport = (formatType: 'csv' | 'pdf') => {
+    const dataToExport = filteredDebtors.map(debtor => ({
+      Nombre: debtor.name,
+      "Saldo Inicial": debtor.initial_balance.toFixed(2),
+      "Saldo Actual": debtor.current_balance.toFixed(2),
+    }));
+
+    const filename = `deudores_${format(new Date(), "yyyyMMdd_HHmmss")}`;
+    const title = "Reporte de Deudores";
+    const headers = ["Nombre", "Saldo Inicial", "Saldo Actual"];
+    const pdfData = dataToExport.map(row => Object.values(row));
+
+    if (formatType === 'csv') {
+      exportToCsv(`${filename}.csv`, dataToExport);
+      showSuccess("Deudores exportados a CSV.");
+    } else {
+      exportToPdf(`${filename}.pdf`, title, headers, pdfData);
+      showSuccess("Deudores exportados a PDF.");
+    }
+  };
 
   return (
     <div className="flex flex-col gap-6 p-4">
@@ -334,54 +345,74 @@ const Debtors = () => {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>Lista de Deudores</CardTitle>
-          <Dialog open={isAddDebtorDialogOpen} onOpenChange={setIsAddDebtorDialogOpen}>
-            <DialogTrigger asChild>
-              <Button size="sm" className="h-8 gap-1">
-                <PlusCircle className="h-3.5 w-3.5" />
-                <span className="sr-only sm:not-sr-only sm:whitespace-nowrap">
-                  Añadir Deudor
-                </span>
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-[425px]">
-              <DialogHeader>
-                <DialogTitle>Añadir Nuevo Deudor</DialogTitle>
-              </DialogHeader>
-              <form onSubmit={handleSubmitNewDebtor} className="grid gap-4 py-4">
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="name" className="text-right">
-                    Nombre
-                  </Label>
-                  <Input
-                    id="name"
-                    name="name"
-                    value={newDebtor.name}
-                    onChange={handleNewDebtorChange}
-                    className="col-span-3"
-                    required
-                  />
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="initial_balance" className="text-right">
-                    Saldo Inicial
-                  </Label>
-                  <Input
-                    id="initial_balance"
-                    name="initial_balance"
-                    type="number"
-                    step="0.01"
-                    value={newDebtor.initial_balance}
-                    onChange={handleNewDebtorChange}
-                    className="col-span-3"
-                    required
-                  />
-                </div>
-                <DialogFooter>
-                  <Button type="submit">Guardar Deudor</Button>
-                </DialogFooter>
-              </form>
-            </DialogContent>
-          </Dialog>
+          <div className="flex gap-2">
+            <Dialog open={isAddDebtorDialogOpen} onOpenChange={setIsAddDebtorDialogOpen}>
+              <DialogTrigger asChild>
+                <Button size="sm" className="h-8 gap-1">
+                  <PlusCircle className="h-3.5 w-3.5" />
+                  <span className="sr-only sm:not-sr-only sm:whitespace-nowrap">
+                    Añadir Deudor
+                  </span>
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[425px]">
+                <DialogHeader>
+                  <DialogTitle>Añadir Nuevo Deudor</DialogTitle>
+                </DialogHeader>
+                <form onSubmit={handleSubmitNewDebtor} className="grid gap-4 py-4">
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="name" className="text-right">
+                      Nombre
+                    </Label>
+                    <Input
+                      id="name"
+                      name="name"
+                      value={newDebtor.name}
+                      onChange={handleNewDebtorChange}
+                      className="col-span-3"
+                      required
+                    />
+                  </div>
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="initial_balance" className="text-right">
+                      Saldo Inicial
+                    </Label>
+                    <Input
+                      id="initial_balance"
+                      name="initial_balance"
+                      type="number"
+                      step="0.01"
+                      value={newDebtor.initial_balance}
+                      onChange={handleNewDebtorChange}
+                      className="col-span-3"
+                      required
+                    />
+                  </div>
+                  <DialogFooter>
+                    <Button type="submit">Guardar Deudor</Button>
+                  </DialogFooter>
+                </form>
+              </DialogContent>
+            </Dialog>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="h-8 gap-1">
+                  <FileDown className="h-3.5 w-3.5" />
+                  <span className="sr-only sm:not-sr-only sm:whitespace-nowrap">
+                    Exportar
+                  </span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => handleExport('csv')}>
+                  <FileText className="mr-2 h-4 w-4" /> Exportar a CSV
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleExport('pdf')}>
+                  <FileText className="mr-2 h-4 w-4" /> Exportar a PDF
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="mb-4">
