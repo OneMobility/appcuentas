@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { DollarSign, History, Trash2, Edit, CalendarIcon, ArrowLeft, FileText, FileDown, Heart } from "lucide-react"; // Importar Heart
+import { DollarSign, History, Trash2, Edit, CalendarIcon, ArrowLeft, FileText, FileDown, Heart } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
@@ -25,8 +25,9 @@ import { getUpcomingPaymentDueDate } from "@/utils/date-helpers";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { exportToCsv, exportToPdf } from "@/utils/export";
 import LoadingSpinner from "@/components/LoadingSpinner";
-import PaymentDueDateCard from "@/components/PaymentDueDateCard"; // Importar el nuevo componente
-import { useCategoryContext } from "@/context/CategoryContext"; // Importar useCategoryContext
+import PaymentDueDateCard from "@/components/PaymentDueDateCard";
+import { useCategoryContext } from "@/context/CategoryContext";
+import { toast } from "sonner"; // Importar toast de sonner
 
 interface CardTransaction {
   id: string;
@@ -39,8 +40,8 @@ interface CardTransaction {
   installments_total_amount?: number;
   installments_count?: number;
   installment_number?: number;
-  category_id?: string; // Añadido
-  category_type?: "income" | "expense"; // Añadido
+  category_id?: string;
+  category_type?: "income" | "expense";
 }
 
 interface CardData {
@@ -64,7 +65,7 @@ const CardDetailsPage: React.FC = () => {
   const { cardId } = useParams<{ cardId: string }>();
   const navigate = useNavigate();
   const { user } = useSession();
-  const { expenseCategories, getCategoryById, isLoadingCategories } = useCategoryContext(); // Usar el contexto de categorías
+  const { expenseCategories, getCategoryById, isLoadingCategories } = useCategoryContext();
   const [card, setCard] = useState<CardData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isAddTransactionDialogOpen, setIsAddTransactionDialogOpen] = useState(false);
@@ -76,18 +77,18 @@ const CardDetailsPage: React.FC = () => {
     description: "",
     date: undefined as Date | undefined,
     installments_count: undefined as number | undefined,
-    category_id: "", // Añadido
+    category_id: "",
   });
 
   // Filter states
   const [searchTerm, setSearchTerm] = useState("");
   const [filterType, setFilterType] = useState<"all" | "charge" | "payment">("all");
-  const [filterCategory, setFilterCategory] = useState<string>("all"); // Nuevo filtro por categoría
+  const [filterCategory, setFilterCategory] = useState<string>("all");
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
 
   useEffect(() => {
     const fetchCardDetails = async () => {
-      if (!user || !cardId || isLoadingCategories) { // Esperar a que carguen las categorías
+      if (!user || !cardId || isLoadingCategories) {
         setIsLoading(false);
         return;
       }
@@ -102,12 +103,11 @@ const CardDetailsPage: React.FC = () => {
 
       if (error) {
         showError('Error al cargar detalles de la tarjeta: ' + error.message);
-        navigate('/cards'); // Redirigir si la tarjeta no se encuentra o hay un error
+        navigate('/cards');
       } else {
-        // Asegurar que transactions sea siempre un array
         const formattedCard = {
-          ...(data as CardData), // Cast to CardData
-          transactions: (data as any).card_transactions || [] // Usar card_transactions de Supabase, por defecto array vacío
+          ...(data as CardData),
+          transactions: (data as any).card_transactions || []
         };
         setCard(formattedCard);
       }
@@ -115,7 +115,7 @@ const CardDetailsPage: React.FC = () => {
     };
 
     fetchCardDetails();
-  }, [cardId, user, navigate, isLoadingCategories]); // Añadir isLoadingCategories a las dependencias
+  }, [cardId, user, navigate, isLoadingCategories]);
 
   const handleTransactionInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -123,7 +123,7 @@ const CardDetailsPage: React.FC = () => {
   };
 
   const handleTransactionTypeChange = (value: "charge" | "payment") => {
-    setNewTransaction((prev) => ({ ...prev, type: value, installments_count: undefined, category_id: "" })); // Reset category_id
+    setNewTransaction((prev) => ({ ...prev, type: value, installments_count: undefined, category_id: "" }));
   };
 
   const handleTransactionDateChange = (date: Date | undefined) => {
@@ -168,11 +168,11 @@ const CardDetailsPage: React.FC = () => {
 
     if (newTransaction.type === "charge") {
       categoryId = newTransaction.category_id;
-      categoryType = "expense"; // Los cargos en tarjetas son egresos
+      categoryType = "expense";
       if (newTransaction.installments_count && newTransaction.installments_count > 1) {
         installmentsTotalAmount = amount;
         installmentsCount = newTransaction.installments_count;
-        transactionAmountToStore = amount / installmentsCount; // Monto mensual
+        transactionAmountToStore = amount / installmentsCount;
       }
     }
 
@@ -188,9 +188,12 @@ const CardDetailsPage: React.FC = () => {
       }
     } else { // Credit card
       if (newTransaction.type === "charge") {
+        // Modificación aquí: Permitir que el saldo exceda el límite, pero mostrar una notificación
         if (card.credit_limit !== undefined && newBalance + transactionAmountToStore > card.credit_limit) {
-          showError("El cargo excede el límite de crédito disponible.");
-          return;
+          toast.info(`Tu tarjeta de crédito ha excedido su límite. Saldo actual: $${(newBalance + transactionAmountToStore).toFixed(2)}`, {
+            style: { backgroundColor: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))' },
+            duration: 10000
+          });
         }
         newBalance += transactionAmountToStore;
       } else { // Payment
@@ -213,9 +216,9 @@ const CardDetailsPage: React.FC = () => {
         date: format(newTransaction.date, "yyyy-MM-dd"),
         installments_total_amount: installmentsTotalAmount,
         installments_count: installmentsCount,
-        installment_number: installmentsCount ? 1 : undefined, // Siempre la primera cuota al registrar
-        category_id: categoryId, // Guardar category_id
-        category_type: categoryType, // Guardar category_type
+        installment_number: installmentsCount ? 1 : undefined,
+        category_id: categoryId,
+        category_type: categoryType,
       })
       .select();
 
@@ -241,7 +244,7 @@ const CardDetailsPage: React.FC = () => {
       return {
         ...prevCard,
         current_balance: newBalance,
-        transactions: [...(prevCard.transactions || []), transactionData[0]], // Asegurar que transactions sea un array
+        transactions: [...(prevCard.transactions || []), transactionData[0]],
       };
     });
     setNewTransaction({ type: "charge", amount: "", description: "", date: undefined, installments_count: undefined, category_id: "" });
@@ -257,7 +260,7 @@ const CardDetailsPage: React.FC = () => {
       description: transaction.description,
       date: new Date(transaction.date),
       installments_count: transaction.installments_count,
-      category_id: transaction.category_id || "", // Cargar category_id
+      category_id: transaction.category_id || "",
     });
     setIsEditTransactionDialogOpen(true);
   };
@@ -328,9 +331,12 @@ const CardDetailsPage: React.FC = () => {
       }
     } else { // Credit card
       if (newType === "charge") {
+        // Modificación aquí: Permitir que el saldo exceda el límite, pero mostrar una notificación
         if (card.credit_limit !== undefined && newCardBalance + newEffectiveAmount > card.credit_limit) {
-          showError("El cargo excede el límite de crédito disponible.");
-          return;
+          toast.info(`Tu tarjeta de crédito ha excedido su límite. Saldo actual: $${(newCardBalance + newEffectiveAmount).toFixed(2)}`, {
+            style: { backgroundColor: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))' },
+            duration: 10000
+          });
         }
         newCardBalance += newEffectiveAmount;
       } else { // Payment
@@ -352,8 +358,8 @@ const CardDetailsPage: React.FC = () => {
         installments_total_amount: newInstallmentsTotalAmount,
         installments_count: newInstallmentsCount,
         installment_number: newInstallmentNumber,
-        category_id: newCategoryId, // Actualizar category_id
-        category_type: newCategoryType, // Actualizar category_type
+        category_id: newCategoryId,
+        category_type: newCategoryType,
       })
       .eq('id', editingTransaction.id)
       .eq('user_id', user.id)
@@ -381,7 +387,7 @@ const CardDetailsPage: React.FC = () => {
       return {
         ...prevCard,
         current_balance: newCardBalance,
-        transactions: (prevCard.transactions || []).map(t => t.id === editingTransaction.id ? updatedTransactionData[0] : t), // Asegurar que transactions sea un array
+        transactions: (prevCard.transactions || []).map(t => t.id === editingTransaction.id ? updatedTransactionData[0] : t),
       };
     });
 
@@ -439,7 +445,6 @@ const CardDetailsPage: React.FC = () => {
 
   const filteredTransactions = useMemo(() => {
     if (!card) return [];
-    // Asegurarse de que card.transactions sea un array antes de llamar a filter
     return (card.transactions || []).filter((tx) => {
       const matchesSearch = tx.description.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesType = filterType === "all" || tx.type === filterType;
@@ -451,7 +456,7 @@ const CardDetailsPage: React.FC = () => {
       const matchesDate = !dateRange?.from || (txDate >= dateRange.from && (!dateRange.to || txDate <= dateRange.to));
 
       return matchesSearch && matchesType && matchesCategory && matchesDate;
-    }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()); // Ordenar por fecha descendente
+    }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [card, searchTerm, filterType, filterCategory, dateRange, getCategoryById]);
 
   const handleExportCardTransactions = (formatType: 'csv' | 'pdf') => {
@@ -465,7 +470,7 @@ const CardDetailsPage: React.FC = () => {
       return {
         Fecha: format(new Date(tx.date), "dd/MM/yyyy", { locale: es }),
         Tipo: tx.type === "charge" ? "Cargo" : "Pago",
-        Categoria: category?.name || "N/A", // Incluir categoría
+        Categoria: category?.name || "N/A",
         Descripcion: tx.description,
         Monto: `${tx.type === "charge" ? "-" : "+"}${tx.amount.toFixed(2)}`,
         Cuotas: tx.installments_count && tx.installment_number && tx.installments_count > 1
@@ -476,7 +481,7 @@ const CardDetailsPage: React.FC = () => {
 
     const filename = `estado_cuenta_${card.name.replace(/\s/g, '_')}_${format(new Date(), "yyyyMMdd_HHmmss")}`;
     const title = `Estado de Cuenta: ${card.name} (${card.bank_name})`;
-    const headers = ["Fecha", "Tipo", "Categoría", "Descripción", "Monto", "Cuotas"]; // Actualizar headers
+    const headers = ["Fecha", "Tipo", "Categoría", "Descripción", "Monto", "Cuotas"];
     const pdfData = dataToExport.map(row => Object.values(row));
 
     if (formatType === 'csv') {
@@ -488,7 +493,7 @@ const CardDetailsPage: React.FC = () => {
     }
   };
 
-  if (isLoading || isLoadingCategories) { // Mostrar spinner mientras cargan categorías
+  if (isLoading || isLoadingCategories) {
     return <LoadingSpinner />;
   }
 
@@ -769,43 +774,6 @@ const CardDetailsPage: React.FC = () => {
                   </SelectItem>
                 ))}
               </SelectContent>
-            </Select>
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  id="date"
-                  variant={"outline"}
-                  className={cn(
-                    "w-[300px] justify-start text-left font-normal",
-                    !dateRange && "text-muted-foreground"
-                  )}
-                >
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {dateRange?.from ? (
-                    dateRange.to ? (
-                      <>
-                        {format(dateRange.from, "dd/MM/yyyy", { locale: es })} -{" "}
-                        {format(dateRange.to, "dd/MM/yyyy", { locale: es })}
-                      </>
-                    ) : (
-                      format(dateRange.from, "dd/MM/yyyy", { locale: es })
-                    )
-                  ) : (
-                    <span>Filtrar por fecha</span>
-                  )}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0">
-                <Calendar
-                  initialFocus
-                  mode="range"
-                  defaultMonth={dateRange?.from}
-                  selected={dateRange}
-                  onSelect={setDateRange}
-                  numberOfMonths={2}
-                  locale={es}
-                />
-              </PopoverContent>
             </Popover>
           </div>
           <div className="overflow-x-auto">
@@ -813,9 +781,10 @@ const CardDetailsPage: React.FC = () => {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-10"></TableHead> {/* Nueva columna para el icono */}
                     <TableHead>Fecha</TableHead>
                     <TableHead>Tipo</TableHead>
-                    <TableHead>Categoría</TableHead> {/* Nueva columna */}
+                    <TableHead>Categoría</TableHead>
                     <TableHead>Descripción</TableHead>
                     <TableHead className="text-right">Monto</TableHead>
                     <TableHead className="text-right">Acciones</TableHead>
@@ -828,25 +797,27 @@ const CardDetailsPage: React.FC = () => {
                     return (
                       <TableRow 
                         key={transaction.id}
-                        className={cn(isPaymentToCreditCard && "bg-pink-50 text-pink-800")} // Aplicar estilo rosa pastel
+                        className={cn(isPaymentToCreditCard && "bg-pink-50 text-pink-800")}
                       >
-                        <TableCell>{format(new Date(transaction.date), "dd/MM/yyyy", { locale: es })}</TableCell>
-                        <TableCell className={cn(
-                          transaction.type === "charge" ? "text-red-600" : "text-green-600",
-                          isPaymentToCreditCard && "text-pink-800 font-medium" // Asegurar que el texto sea legible
-                        )}>
+                        <TableCell className="w-10"> {/* Celda para el icono */}
                           {isPaymentToCreditCard && (
                             <img
                               src="https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/cochinito_love.png"
                               alt="Cochinito Love"
-                              className="h-4 w-4 inline-block mr-1"
+                              className="h-4 w-4"
                             />
                           )}
+                        </TableCell>
+                        <TableCell>{format(new Date(transaction.date), "dd/MM/yyyy", { locale: es })}</TableCell>
+                        <TableCell className={cn(
+                          transaction.type === "charge" ? "text-red-600" : "text-green-600",
+                          isPaymentToCreditCard && "text-pink-800 font-medium"
+                        )}>
                           {transaction.type === "charge" ? "Cargo" : "Pago"}
                           {transaction.installments_count && transaction.installment_number && transaction.installments_count > 1 &&
                             ` (${transaction.installment_number}/${transaction.installments_count})`}
                         </TableCell>
-                        <TableCell>{category?.name || "N/A"}</TableCell> {/* Mostrar categoría */}
+                        <TableCell>{category?.name || "N/A"}</TableCell>
                         <TableCell>{transaction.description}</TableCell>
                         <TableCell className="text-right">${transaction.amount.toFixed(2)}</TableCell>
                         <TableCell className="text-right flex gap-2 justify-end">
