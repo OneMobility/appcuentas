@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { PlusCircle, DollarSign, History, Trash2, Edit, CalendarIcon } from "lucide-react";
+import { PlusCircle, DollarSign, History, Trash2, Edit, CalendarIcon, FileText, FileDown } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
@@ -22,6 +22,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/context/SessionContext";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { getUpcomingPaymentDueDate } from "@/utils/date-helpers"; // Importar la nueva función
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { exportToCsv, exportToPdf } from "@/utils/export";
 
 interface CardTransaction {
   id: string;
@@ -625,6 +627,36 @@ const Cards = () => {
   // Obtener la tarjeta actual para el diálogo de transacción, si selectedCardId está definido
   const currentCardForDialog = selectedCardId ? cards.find(c => c.id === selectedCardId) : null;
 
+  const handleExportCardTransactions = (formatType: 'csv' | 'pdf') => {
+    if (!detailedCard) {
+      showError("No hay tarjeta seleccionada para exportar.");
+      return;
+    }
+
+    const dataToExport = detailedCard.transactions.map(tx => ({
+      Fecha: format(new Date(tx.date), "dd/MM/yyyy", { locale: es }),
+      Tipo: tx.type === "charge" ? "Cargo" : "Pago",
+      Descripcion: tx.description,
+      Monto: `${tx.type === "charge" ? "-" : "+"}${tx.amount.toFixed(2)}`,
+      Cuotas: tx.installments_count && tx.installment_number && tx.installments_count > 1
+        ? `${tx.installment_number}/${tx.installments_count}`
+        : "Pago único",
+    }));
+
+    const filename = `estado_cuenta_${detailedCard.name.replace(/\s/g, '_')}_${format(new Date(), "yyyyMMdd_HHmmss")}`;
+    const title = `Estado de Cuenta: ${detailedCard.name} (${detailedCard.bank_name})`;
+    const headers = ["Fecha", "Tipo", "Descripción", "Monto", "Cuotas"];
+    const pdfData = dataToExport.map(row => Object.values(row));
+
+    if (formatType === 'csv') {
+      exportToCsv(`${filename}.csv`, dataToExport);
+      showSuccess("Estado de cuenta exportado a CSV.");
+    } else {
+      exportToPdf(`${filename}.pdf`, title, headers, pdfData);
+      showSuccess("Estado de cuenta exportado a PDF.");
+    }
+  };
+
   return (
     <div className="flex flex-col gap-6 p-4">
       <h1 className="text-3xl font-bold">Gestión de Tarjetas</h1>
@@ -1007,7 +1039,27 @@ const Cards = () => {
                       )}
                     </div>
 
-                    <h3 className="text-lg font-semibold mt-4">Historial de Transacciones</h3>
+                    <div className="flex items-center justify-between mt-4">
+                      <h3 className="text-lg font-semibold">Historial de Transacciones</h3>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="outline" size="sm" className="h-8 gap-1">
+                            <FileDown className="h-3.5 w-3.5" />
+                            <span className="sr-only sm:not-sr-only sm:whitespace-nowrap">
+                              Exportar
+                            </span>
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => handleExportCardTransactions('csv')}>
+                            <FileText className="mr-2 h-4 w-4" /> Exportar a CSV
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleExportCardTransactions('pdf')}>
+                            <FileText className="mr-2 h-4 w-4" /> Exportar a PDF
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
                     <div className="overflow-x-auto">
                       {detailedCard.transactions && detailedCard.transactions.length > 0 ? (
                         <Table>
