@@ -34,6 +34,7 @@ interface Saving {
   target_date?: string;
   color: string;
   user_id?: string;
+  challenge_id?: string; // Añadir challenge_id
 }
 
 const Savings = () => {
@@ -75,7 +76,7 @@ const Savings = () => {
 
     const { data, error } = await supabase
       .from('savings')
-      .select('*')
+      .select('*, challenge_id') // Seleccionar challenge_id
       .eq('user_id', user.id)
       .order('created_at', { ascending: false });
 
@@ -317,6 +318,50 @@ const Savings = () => {
       setSelectedSavingId(null);
       setIsTransactionDialogOpen(false);
       showSuccess("Transacción registrada exitosamente.");
+
+      // Lógica para actualizar el estado del reto si está vinculado
+      if (updatedSaving.challenge_id && updatedSaving.target_amount) {
+        let challengeStatus: "completed" | "regular" | "failed" | "active" = "active";
+        const progress = (updatedSaving.current_balance / updatedSaving.target_amount) * 100;
+
+        if (progress >= 100) {
+          challengeStatus = "completed";
+        } else if (progress >= 50) {
+          challengeStatus = "regular";
+        } else {
+          challengeStatus = "active"; // Mantener activo si no ha fallado ni llegado a regular
+        }
+
+        // Solo actualizar si el estado es diferente al actual en la DB o si es 'completed'
+        const { data: currentChallenge, error: fetchChallengeError } = await supabase
+          .from('challenges')
+          .select('status')
+          .eq('id', updatedSaving.challenge_id)
+          .single();
+
+        if (fetchChallengeError && fetchChallengeError.code !== 'PGRST116') {
+          console.error("Error fetching linked challenge:", fetchChallengeError.message);
+        } else if (currentChallenge && currentChallenge.status !== challengeStatus) {
+          const { error: updateChallengeError } = await supabase
+            .from('challenges')
+            .update({ status: challengeStatus })
+            .eq('id', updatedSaving.challenge_id)
+            .eq('user_id', user.id);
+
+          if (updateChallengeError) {
+            showError('Error al actualizar el estado del reto vinculado: ' + updateChallengeError.message);
+          } else {
+            // Forzar un refresh en la página de retos si el estado cambió
+            // Esto se puede hacer con un evento global o un refetch en la página de retos
+            // Por ahora, solo mostraremos un mensaje si el reto se completó
+            if (challengeStatus === "completed") {
+              showSuccess("¡Reto de ahorro completado!");
+            } else if (challengeStatus === "regular") {
+              showSuccess("¡Reto de ahorro en progreso! ¡Vas por buen camino!");
+            }
+          }
+        }
+      }
 
       // Show feedback overlay based on transaction type
       if (transactionType === "deposit") {

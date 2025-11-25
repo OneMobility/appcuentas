@@ -126,7 +126,7 @@ const Challenges: React.FC = () => {
       .from('challenges')
       .update({ status: newStatus })
       .eq('id', challenge.id)
-      .eq('user.id', user.id);
+      .eq('user_id', user.id); // Corregido: usar user_id en lugar de user.id
 
     if (updateError) {
       showError('Error al actualizar el estado del reto: ' + updateError.message);
