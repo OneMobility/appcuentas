@@ -208,6 +208,13 @@ const CardDetailsPage: React.FC = () => {
           return;
         }
         newBalance -= transactionAmountToStore;
+        // New: Notification for overpayment on credit card
+        if (newBalance < 0) {
+          toast.info(`Has sobrepagado tu tarjeta ${card.name}. Tu saldo actual es de $${newBalance.toFixed(2)} (a tu favor).`, {
+            style: { backgroundColor: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))' },
+            duration: 10000
+          });
+        }
       }
     }
 
@@ -360,6 +367,13 @@ const CardDetailsPage: React.FC = () => {
           return;
         }
         newCardBalance -= newEffectiveAmount;
+        // New: Notification for overpayment on credit card
+        if (newCardBalance < 0) {
+          toast.info(`Has sobrepagado tu tarjeta ${card.name}. Tu saldo actual es de $${newCardBalance.toFixed(2)} (a tu favor).`, {
+            style: { backgroundColor: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))' },
+            duration: 10000
+          });
+        }
       }
     }
 
@@ -805,6 +819,43 @@ const CardDetailsPage: React.FC = () => {
                   </SelectItem>
                 ))}
               </SelectContent>
+            </Select>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  id="date"
+                  variant={"outline"}
+                  className={cn(
+                    "w-[300px] justify-start text-left font-normal",
+                    !dateRange && "text-muted-foreground"
+                  )}
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {dateRange?.from ? (
+                    dateRange.to ? (
+                      <>
+                        {format(dateRange.from, "dd/MM/yyyy", { locale: es })} -{" "}
+                        {format(dateRange.to, "dd/MM/yyyy", { locale: es })}
+                      </>
+                    ) : (
+                      format(dateRange.from, "dd/MM/yyyy", { locale: es })
+                    )
+                  ) : (
+                    <span>Filtrar por fecha</span>
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0">
+                <Calendar
+                  initialFocus
+                  mode="range"
+                  defaultMonth={dateRange?.from}
+                  selected={dateRange}
+                  onSelect={setDateRange}
+                  numberOfMonths={2}
+                  locale={es}
+                />
+              </PopoverContent>
             </Popover>
           </div>
           <div className="overflow-x-auto">
@@ -812,7 +863,7 @@ const CardDetailsPage: React.FC = () => {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-10"></TableHead> {/* Nueva columna para el icono */}
+                    <TableHead className="w-12"></TableHead> {/* Nueva columna para el icono, más ancha */}
                     <TableHead>Fecha</TableHead>
                     <TableHead>Tipo</TableHead>
                     <TableHead>Categoría</TableHead>
@@ -847,12 +898,12 @@ const CardDetailsPage: React.FC = () => {
                         key={transaction.id}
                         className={cn(isPaymentToCreditCard && "bg-pink-50 text-pink-800")}
                       >
-                        <TableCell className="w-10"> {/* Celda para el icono */}
+                        <TableCell className="w-12 flex items-center justify-center"> {/* Celda para el icono */}
                           {isPaymentToCreditCard && (
                             <img
                               src="https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/cochinito_love.png"
                               alt="Cochinito Love"
-                              className="h-8 w-8 ml-2" // Aumentado el tamaño y añadido margen
+                              className="h-8 w-8"
                             />
                           )}
                         </TableCell>
