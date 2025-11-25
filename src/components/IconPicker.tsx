@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, ComponentType } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,12 +8,16 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import * as LucideIcons from "lucide-react";
 import { cn } from "@/lib/utils";
 
+// Explicitly import Tag for fallback to ensure it's always available
+import { Tag as FallbackTagIcon } from "lucide-react";
+
 // Create a map of all Lucide icons that are actual React components
-const lucideIconMap: { [key: string]: React.ElementType } = {};
+const lucideIconMap: { [key: string]: ComponentType<any> } = {};
 for (const key in LucideIcons) {
-  // Check if the property is a function (React component) and starts with an uppercase letter
-  if (typeof (LucideIcons as any)[key] === 'function' && key[0] === key[0].toUpperCase()) {
-    lucideIconMap[key] = (LucideIcons as any)[key];
+  const Icon = (LucideIcons as any)[key];
+  // Ensure it's a function (React component) and starts with an uppercase letter
+  if (typeof Icon === 'function' && key[0] === key[0].toUpperCase()) {
+    lucideIconMap[key] = Icon;
   }
 }
 
@@ -65,7 +69,10 @@ const IconPicker: React.FC<IconPickerProps> = ({ selectedIcon, onSelectIcon }) =
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false); // Manage popover open state
 
-  const CurrentIcon = selectedIcon ? lucideIconMap[selectedIcon] : LucideIcons.Tag; // Fallback to Tag icon
+  // Ensure CurrentIcon is always a valid React component
+  const CurrentIcon = selectedIcon && lucideIconMap[selectedIcon] 
+    ? lucideIconMap[selectedIcon] 
+    : FallbackTagIcon; // Use the explicitly imported Tag as fallback
 
   const filteredIcons = useMemo(() => {
     return availableIcons.filter(iconName =>
@@ -97,7 +104,11 @@ const IconPicker: React.FC<IconPickerProps> = ({ selectedIcon, onSelectIcon }) =
           <div className="grid grid-cols-4 gap-2 p-2">
             {filteredIcons.map((iconName) => {
               const IconComponent = lucideIconMap[iconName];
-              if (!IconComponent) return null;
+              // This check is already there, but let's be extra careful
+              if (!IconComponent) {
+                console.warn(`IconComponent for ${iconName} is undefined.`);
+                return null;
+              }
 
               return (
                 <Button
