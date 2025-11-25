@@ -4,7 +4,7 @@ import React from "react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { XCircle, CheckCircle, TrendingUp } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { format } from "date-fns";
+import { format, parseISO } from "date-fns"; // Importar parseISO
 import { es } from "date-fns/locale";
 import { Badge } from "@/components/ui/badge";
 import DynamicLucideIcon from "./DynamicLucideIcon";
@@ -50,7 +50,8 @@ const PastChallengeItem: React.FC<PastChallengeItemProps> = ({ challenge }) => {
     descriptionClasses = "line-through";
   }
 
-  const formattedEndDate = challenge.end_date ? format(new Date(challenge.end_date), "dd/MM/yyyy", { locale: es }) : "N/A";
+  // Usar parseISO para asegurar que la fecha se interprete correctamente
+  const formattedEndDate = challenge.end_date ? format(parseISO(challenge.end_date), "dd/MM/yyyy", { locale: es }) : "N/A";
 
   return (
     <Card className={cn("p-4 shadow-sm", cardClasses)}>
