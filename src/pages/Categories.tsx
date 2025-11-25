@@ -7,13 +7,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
-import { PlusCircle, Edit } from "lucide-react";
+import { PlusCircle, Edit, Trash2 } from "lucide-react"; // Importar Trash2
 import { showSuccess, showError } from "@/utils/toast";
 import ColorPicker from "@/components/ColorPicker";
 import { useCategoryContext, Category } from "@/context/CategoryContext";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"; // Importar AlertDialog
 
 const Categories = () => {
-  const { incomeCategories, expenseCategories, addCategory, updateCategory, isLoadingCategories } = useCategoryContext();
+  const { incomeCategories, expenseCategories, addCategory, updateCategory, deleteCategory, isLoadingCategories } = useCategoryContext();
   const [isCategoryDialogOpen, setIsCategoryDialogOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [newCategory, setNewCategory] = useState({
@@ -26,7 +27,7 @@ const Categories = () => {
     if (editingCategory) {
       setNewCategory({
         name: editingCategory.name,
-        type: editingCategory.user_id?.startsWith("inc") ? "income" : "expense",
+        type: editingCategory.user_id?.startsWith("inc") ? "income" : "expense", // Asumiendo que el user_id puede indicar el tipo si no hay otra forma
         color: editingCategory.color,
       });
     } else {
@@ -56,8 +57,13 @@ const Categories = () => {
     setIsCategoryDialogOpen(true);
   };
 
-  const handleOpenEditCategoryDialog = (category: Category) => {
+  const handleOpenEditCategoryDialog = (category: Category, type: "income" | "expense") => {
     setEditingCategory(category);
+    setNewCategory({
+      name: category.name,
+      type: type, // Pasar el tipo correcto
+      color: category.color,
+    });
     setIsCategoryDialogOpen(true);
   };
 
@@ -93,15 +99,9 @@ const Categories = () => {
     resetForm();
   };
 
-  // Eliminado: if (isLoadingCategories) {
-  //   return (
-  //     <div className="min-h-screen flex items-center justify-center bg-gray-100">
-  //       <div className="text-center">
-  //         <h1 className="text-4xl font-bold mb-4">Cargando categorías...</h1>
-  //       </div>
-  //     </div>
-  //   );
-  // }
+  const handleDeleteCategory = async (id: string, name: string, type: "income" | "expense") => {
+    await deleteCategory(id, type);
+  };
 
   return (
     <div className="flex flex-col gap-6 p-4">
@@ -144,7 +144,7 @@ const Categories = () => {
                       type="button"
                       variant={newCategory.type === "income" ? "default" : "outline"}
                       onClick={() => handleNewCategoryTypeChange("income")}
-                      disabled={!!editingCategory}
+                      disabled={!!editingCategory} // Deshabilitar cambio de tipo al editar
                     >
                       Ingreso
                     </Button>
@@ -152,7 +152,7 @@ const Categories = () => {
                       type="button"
                       variant={newCategory.type === "expense" ? "default" : "outline"}
                       onClick={() => handleNewCategoryTypeChange("expense")}
-                      disabled={!!editingCategory}
+                      disabled={!!editingCategory} // Deshabilitar cambio de tipo al editar
                     >
                       Egreso
                     </Button>
@@ -197,16 +197,43 @@ const Categories = () => {
                               style={{ backgroundColor: cat.color }}
                             />
                           </TableCell>
-                          <TableCell className="text-right">
+                          <TableCell className="text-right flex gap-2 justify-end">
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={() => handleOpenEditCategoryDialog(cat)}
+                              onClick={() => handleOpenEditCategoryDialog(cat, "income")}
                               className="h-8 w-8 p-0"
                             >
                               <Edit className="h-3.5 w-3.5" />
                               <span className="sr-only">Editar</span>
                             </Button>
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button
+                                  variant="destructive"
+                                  size="sm"
+                                  className="h-8 w-8 p-0"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                  <span className="sr-only">Eliminar</span>
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>¿Estás absolutamente seguro?</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Esta acción no se puede deshacer. Esto eliminará permanentemente la categoría 
+                                    **{cat.name}** de ingresos.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                  <AlertDialogAction onClick={() => handleDeleteCategory(cat.id, cat.name, "income")}>
+                                    Eliminar
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
                           </TableCell>
                         </TableRow>
                       ))}
@@ -239,16 +266,43 @@ const Categories = () => {
                               style={{ backgroundColor: cat.color }}
                             />
                           </TableCell>
-                          <TableCell className="text-right">
+                          <TableCell className="text-right flex gap-2 justify-end">
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={() => handleOpenEditCategoryDialog(cat)}
+                              onClick={() => handleOpenEditCategoryDialog(cat, "expense")}
                               className="h-8 w-8 p-0"
                             >
                               <Edit className="h-3.5 w-3.5" />
                               <span className="sr-only">Editar</span>
                             </Button>
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button
+                                  variant="destructive"
+                                  size="sm"
+                                  className="h-8 w-8 p-0"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                  <span className="sr-only">Eliminar</span>
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>¿Estás absolutamente seguro?</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Esta acción no se puede deshacer. Esto eliminará permanentemente la categoría 
+                                    **{cat.name}** de egresos.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                  <AlertDialogAction onClick={() => handleDeleteCategory(cat.id, cat.name, "expense")}>
+                                    Eliminar
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
                           </TableCell>
                         </TableRow>
                       ))}

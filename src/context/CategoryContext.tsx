@@ -18,6 +18,7 @@ interface CategoryContextType {
   expenseCategories: Category[];
   addCategory: (category: Omit<Category, "id" | "user_id">, type: "income" | "expense") => Promise<void>;
   updateCategory: (category: Category, type: "income" | "expense") => Promise<void>;
+  deleteCategory: (id: string, type: "income" | "expense") => Promise<void>; // Añadido
   getCategoryById: (id: string, type: "income" | "expense") => Category | undefined;
   isLoadingCategories: boolean;
 }
@@ -121,6 +122,31 @@ export const CategoryProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  const deleteCategory = async (id: string, type: "income" | "expense") => {
+    if (!user) {
+      showError("Debes iniciar sesión para eliminar categorías.");
+      return;
+    }
+
+    const tableName = type === "income" ? "income_categories" : "expense_categories";
+    const { error } = await supabase
+      .from(tableName)
+      .delete()
+      .eq('id', id)
+      .eq('user_id', user.id);
+
+    if (error) {
+      showError('Error al eliminar categoría: ' + error.message);
+    } else {
+      if (type === "income") {
+        setIncomeCategories((prev) => prev.filter((cat) => cat.id !== id));
+      } else {
+        setExpenseCategories((prev) => prev.filter((cat) => cat.id !== id));
+      }
+      showSuccess("Categoría eliminada exitosamente.");
+    }
+  };
+
   const getCategoryById = (id: string, type: "income" | "expense") => {
     if (type === "income") {
       return incomeCategories.find(cat => cat.id === id);
@@ -136,6 +162,7 @@ export const CategoryProvider = ({ children }: { children: ReactNode }) => {
         expenseCategories,
         addCategory,
         updateCategory,
+        deleteCategory, // Añadido
         getCategoryById,
         isLoadingCategories,
       }}
