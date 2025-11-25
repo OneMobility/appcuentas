@@ -50,14 +50,11 @@ const GENERIC_REGULAR_IMAGE = `${SUPABASE_STORAGE_BASE_URL}Cochinito%20Calendari
 
 // Mapeo explícito de IDs de retos a URLs de imágenes específicas para retos COMPLETADOS
 const COMPLETED_CHALLENGE_IMAGES: { [key: string]: string } = {
-  "no-netflix-more-books": `${SUPABASE_STORAGE_BASE_URL}Reto%20menos%20netflix.png`,
-  "no-more-blouses": `${SUPABASE_STORAGE_BASE_URL}Reto%20Blusa.png`,
-  "no-entertainment": `${SUPABASE_STORAGE_BASE_URL}Reto%20Entretenimiento.png`,
-  "no-apps": `${SUPABASE_STORAGE_BASE_URL}Reto%20Apps.png`,
-  "saving-goal-150": `${SUPABASE_STORAGE_BASE_URL}Reto%20150%20pesos.png`,
-  "saving-goal-300": `${SUPABASE_STORAGE_BASE_URL}Reto%20300%20pesos.png`,
-  "saving-goal-200": `${SUPABASE_STORAGE_BASE_URL}Reto%20200%20pesos.png`,
-  "saving-goal-500": `${SUPABASE_STORAGE_BASE_URL}Reto%20500%20pesos.png`,
+  "no-netflix-more-books": "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Reto%20menos%20netflix.png",
+  "no-more-blouses": "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Reto%20Ropa.png",
+  "saving-goal-150": "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Reto%20150%20pesos.png",
+  // La imagen de "Reto comida.png" no tiene un challenge_template_id directo en este momento.
+  // Si deseas usarla, por favor, especifica a qué reto debería asociarse o si es para un nuevo reto.
 };
 
 
