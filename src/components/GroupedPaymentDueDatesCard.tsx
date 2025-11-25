@@ -51,22 +51,29 @@ const GroupedPaymentDueDatesCard: React.FC<GroupedPaymentDueDatesCardProps> = ({
     .filter(Boolean) // Eliminar entradas nulas
     .sort((a, b) => a!.paymentDueDate.getTime() - b!.paymentDueDate.getTime()); // Ordenar por fecha
 
+  // Estilo de la tarjeta siempre azul
+  const cardBaseClasses = "relative p-4 shadow-md border-l-4 border-blue-500 bg-blue-50 text-blue-800";
+
   if (upcomingPayments.length === 0) {
     return (
-      <Card className="relative p-4 shadow-md border-l-4 border-green-500 bg-green-50 text-green-800">
+      <Card className={cardBaseClasses}>
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-lg font-bold text-green-800">
+          <CardTitle className="text-lg font-bold text-blue-800">
             ¡Vas bien!
           </CardTitle>
         </CardHeader>
         <img
           src="https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Calendario.png"
           alt="Calendario"
-          className="absolute top-4 right-4 h-20 w-20 z-10"
+          className="absolute top-4 right-4 h-[180px] w-[180px] z-10"
         />
-        <CardContent className="pr-24"> {/* Añadido padding-right */}
-          <div className="text-lg font-bold">No hay pagos de tarjetas programados para los próximos 30 días.</div>
-          <p className="text-xs text-green-700 mt-1">
+        <CardContent className="pr-48"> {/* Ajuste de padding-right */}
+          <div className="text-lg font-bold">
+            No hay pagos de tarjetas<br />
+            programados para los<br />
+            próximos 30 días.
+          </div>
+          <p className="text-xs text-blue-700 mt-1">
             ¡Sigue así con tus finanzas!
           </p>
         </CardContent>
@@ -75,7 +82,7 @@ const GroupedPaymentDueDatesCard: React.FC<GroupedPaymentDueDatesCardProps> = ({
   }
 
   return (
-    <Card className="relative p-4 shadow-md border-l-4 border-blue-500 bg-blue-50 text-blue-800">
+    <Card className={cardBaseClasses}>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <CardTitle className="text-lg font-bold text-blue-800">
           Tu calendario de pagos
@@ -84,9 +91,9 @@ const GroupedPaymentDueDatesCard: React.FC<GroupedPaymentDueDatesCardProps> = ({
       <img
         src="https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Calendario.png"
         alt="Calendario de Pagos"
-        className="absolute top-4 right-4 h-20 w-20 z-10"
+        className="absolute top-4 right-4 h-[180px] w-[180px] z-10"
       />
-      <CardContent className="pr-24"> {/* Añadido padding-right */}
+      <CardContent className="pr-48"> {/* Ajuste de padding-right */}
         {upcomingPayments.map((payment, index) => {
           if (!payment) return null; // Double check for nulls
 
