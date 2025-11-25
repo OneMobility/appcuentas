@@ -4,23 +4,23 @@ import React from "react";
 import { Link, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import {
-  Home,
+  PiggyBank, // Cambiado de Home a PiggyBank
   Banknote,
-  UserRound,
-  Landmark,
+  ThumbsUp, // Cambiado de UserRound a ThumbsUp
+  ThumbsDown, // Cambiado de Landmark a ThumbsDown
   CreditCard,
   Tag,
-  LogOut, // Importar el icono de LogOut
+  LogOut,
 } from "lucide-react";
-import { useSession } from "@/context/SessionContext"; // Importar useSession
-import { supabase } from "@/integrations/supabase/client"; // Importar supabase
-import { Button } from "@/components/ui/button"; // Importar Button
+import { useSession } from "@/context/SessionContext";
+import { supabase } from "@/integrations/supabase/client";
+import { Button } from "@/components/ui/button";
 
 const navItems = [
   {
     name: "Resumen",
     path: "/dashboard",
-    icon: Home,
+    icon: PiggyBank, // Usar PiggyBank
   },
   {
     name: "Tu Dinerito",
@@ -30,12 +30,12 @@ const navItems = [
   {
     name: "Te Deben",
     path: "/debtors",
-    icon: UserRound,
+    icon: ThumbsUp, // Usar ThumbsUp
   },
   {
   name: "Le Debes",
     path: "/creditors",
-    icon: Landmark,
+    icon: ThumbsDown, // Usar ThumbsDown
   },
   {
     name: "Tarjetas",
@@ -51,7 +51,7 @@ const navItems = [
 
 const MobileNavbar = () => {
   const location = useLocation();
-  const { user } = useSession(); // Usar useSession para el usuario
+  const { user } = useSession();
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -70,7 +70,7 @@ const MobileNavbar = () => {
               className={cn(
                 "flex flex-col items-center justify-center gap-1 px-2 py-1 text-xs font-medium transition-all duration-200 shrink-0",
                 isActive
-                  ? "text-pink-800 bg-pink-200 rounded-md scale-110" // Rosa pastel y más grande
+                  ? "text-pink-800 bg-pink-200 rounded-md scale-110"
                   : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
               )}
             >
@@ -79,7 +79,7 @@ const MobileNavbar = () => {
             </Link>
           );
         })}
-        {user && ( // Mostrar el botón de cerrar sesión solo si hay un usuario logueado
+        {user && (
           <Button
             variant="ghost"
             onClick={handleLogout}

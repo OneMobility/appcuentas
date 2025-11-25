@@ -9,23 +9,23 @@ import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 import {
   Menu,
-  Home,
+  PiggyBank, // Cambiado de Home a PiggyBank
   Banknote,
-  UserRound,
-  Landmark,
+  ThumbsUp, // Cambiado de UserRound a ThumbsUp
+  ThumbsDown, // Cambiado de Landmark a ThumbsDown
   CreditCard,
   Tag,
-  LogOut, // Importar el icono de LogOut
+  LogOut,
 } from "lucide-react";
 import MobileNavbar from "./MobileNavbar";
-import { useSession } from "@/context/SessionContext"; // Importar useSession
-import { supabase } from "@/integrations/supabase/client"; // Importar supabase
+import { useSession } from "@/context/SessionContext";
+import { supabase } from "@/integrations/supabase/client";
 
 const navItems = [
   {
     name: "Resumen",
     path: "/dashboard",
-    icon: Home,
+    icon: PiggyBank, // Usar PiggyBank
   },
   {
     name: "Tu Dinerito",
@@ -35,12 +35,12 @@ const navItems = [
   {
     name: "Te Deben",
     path: "/debtors",
-    icon: UserRound,
+    icon: ThumbsUp, // Usar ThumbsUp
   },
   {
     name: "Le Debes",
     path: "/creditors",
-    icon: Landmark,
+    icon: ThumbsDown, // Usar ThumbsDown
   },
   {
     name: "Tarjetas",
@@ -56,20 +56,20 @@ const navItems = [
 
 const Sidebar = ({ onClose }: { onClose?: () => void }) => {
   const location = useLocation();
-  const { user } = useSession(); // Usar useSession para el usuario
+  const { user } = useSession();
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    if (onClose) onClose(); // Cerrar el sheet si está abierto en móvil
+    if (onClose) onClose();
   };
 
   return (
-    <nav className="flex flex-col gap-2 p-4 h-full"> {/* Asegurar que la nav ocupe toda la altura */}
+    <nav className="flex flex-col gap-2 p-4 h-full">
       <Link to="/dashboard" className="flex items-center gap-2 mb-6 text-sidebar-foreground" onClick={onClose}>
         <img src="https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Oinkash%20Logo.png" alt="Oinkash Logo" className="h-8 w-8" />
         <h2 className="text-2xl font-bold">Oinkash</h2>
       </Link>
-      <div className="flex-1"> {/* Contenedor para los elementos de navegación principales */}
+      <div className="flex-1">
         {navItems.map((item) => (
           <Link
             key={item.name}
@@ -85,11 +85,11 @@ const Sidebar = ({ onClose }: { onClose?: () => void }) => {
           </Link>
         ))}
       </div>
-      {user && ( // Mostrar el botón de cerrar sesión solo si hay un usuario logueado
+      {user && (
         <Button
           variant="ghost"
           onClick={handleLogout}
-          className="flex items-center gap-3 rounded-lg px-3 py-2 text-sidebar-foreground transition-all hover:bg-destructive hover:text-destructive-foreground mt-auto" // Alineado al final
+          className="flex items-center gap-3 rounded-lg px-3 py-2 text-sidebar-foreground transition-all hover:bg-destructive hover:text-destructive-foreground mt-auto"
         >
           <LogOut className="h-5 w-5" />
           Cerrar Sesión
