@@ -7,8 +7,8 @@ import { es } from "date-fns/locale";
 import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/context/SessionContext";
 import { showError, showSuccess } from "@/utils/toast";
-import { Capacitor } from '@capacitor/core'; // Mantener para isNativePlatform
-import { getUpcomingPaymentDueDate } from "@/utils/date-helpers"; // Importar la nueva función
+import { Capacitor } from '@capacitor/core';
+import { getUpcomingPaymentDueDate } from "@/utils/date-helpers";
 
 interface CardData {
   id: string;
@@ -18,6 +18,8 @@ interface CardData {
   type: "credit" | "debit";
   cut_off_day?: number;
   days_to_pay_after_cut_off?: number;
+  current_balance: number; // Añadido para la lógica de límite de crédito
+  credit_limit?: number; // Añadido para la lógica de límite de crédito
 }
 
 const CardNotifications: React.FC = () => {
@@ -33,7 +35,7 @@ const CardNotifications: React.FC = () => {
 
       const { data, error } = await supabase
         .from('cards')
-        .select('id, name, bank_name, expiration_date, type, cut_off_day, days_to_pay_after_cut_off')
+        .select('id, name, bank_name, expiration_date, type, cut_off_day, days_to_pay_after_cut_off, current_balance, credit_limit') // Incluir current_balance y credit_limit
         .eq('user_id', user.id);
 
       if (error) {
@@ -46,7 +48,7 @@ const CardNotifications: React.FC = () => {
     fetchCards();
   }, [user]);
 
-  // Display toast notifications for upcoming card dates (Web only)
+  // Display toast notifications for upcoming card dates and credit limit (Web only)
   useEffect(() => {
     // Solo mostrar toasts si no es una plataforma móvil nativa
     if (!isMobilePlatform && cards.length > 0) {
@@ -56,6 +58,14 @@ const CardNotifications: React.FC = () => {
 
       cards.forEach(card => {
         if (card.type === "credit") {
+          // Check Credit Limit Exceeded
+          if (card.credit_limit !== undefined && card.current_balance > card.credit_limit) {
+            toast.info(
+              `¡Atención! El saldo actual de tu tarjeta ${card.name} (${card.bank_name}) excede tu límite de crédito.`,
+              { style: { backgroundColor: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))' }, duration: 10000 }
+            );
+          }
+
           // Check Cut-off Day
           if (card.cut_off_day !== undefined && card.cut_off_day > 0) {
             let cutOffDate = new Date(today.getFullYear(), today.getMonth(), card.cut_off_day);
