@@ -1,0 +1,120 @@
+"use client";
+
+import React from "react";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Lightbulb, Trophy, XCircle, CheckCircle, Clock } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { format, differenceInDays } from "date-fns";
+import { es } from "date-fns/locale";
+
+export interface ChallengeData {
+  id: string;
+  name: string;
+  description: string;
+  start_date: string;
+  end_date: string;
+  status: "active" | "completed" | "failed";
+  forbidden_category_ids: string[];
+  badge_id?: string;
+  user_id?: string;
+}
+
+interface ChallengeCardProps {
+  challenge?: ChallengeData | null;
+  onStartNewChallenge: () => void;
+  onViewBadges: () => void;
+}
+
+const ChallengeCard: React.FC<ChallengeCardProps> = ({ challenge, onStartNewChallenge, onViewBadges }) => {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const getStatusDisplay = (challenge: ChallengeData) => {
+    const startDate = new Date(challenge.start_date);
+    const endDate = new Date(challenge.end_date);
+    const daysRemaining = differenceInDays(endDate, today);
+
+    let statusText = "";
+    let cardClasses = "";
+    let icon = null;
+
+    if (challenge.status === "active") {
+      if (daysRemaining === 0) {
+        statusText = "¡Hoy es el último día del reto!";
+        cardClasses = "border-l-4 border-yellow-500 bg-yellow-50 text-yellow-800";
+        icon = <Clock className="h-4 w-4 text-yellow-600" />;
+      } else if (daysRemaining > 0) {
+        statusText = `Faltan ${daysRemaining} días para completar el reto.`;
+        cardClasses = "border-l-4 border-blue-500 bg-blue-50 text-blue-800";
+        icon = <Clock className="h-4 w-4 text-blue-600" />;
+      } else { // Challenge ended but not marked completed/failed
+        statusText = "Reto finalizado, esperando verificación.";
+        cardClasses = "border-l-4 border-gray-500 bg-gray-50 text-gray-800";
+        icon = <Clock className="h-4 w-4 text-gray-600" />;
+      }
+    } else if (challenge.status === "completed") {
+      statusText = "¡Reto completado! ¡Felicidades!";
+      cardClasses = "border-l-4 border-green-500 bg-green-50 text-green-800";
+      icon = <CheckCircle className="h-4 w-4 text-green-600" />;
+    } else if (challenge.status === "failed") {
+      statusText = "Reto fallido. ¡No te rindas, inténtalo de nuevo!";
+      cardClasses = "border-l-4 border-red-500 bg-red-50 text-red-800";
+      icon = <XCircle className="h-4 w-4 text-red-600" />;
+    }
+
+    return { statusText, cardClasses, icon };
+  };
+
+  if (challenge) {
+    const { statusText, cardClasses, icon } = getStatusDisplay(challenge);
+    return (
+      <Card className={cn("relative p-4 shadow-md", cardClasses)}>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardTitle className="text-sm font-medium">
+            Reto Activo: {challenge.name}
+          </CardTitle>
+          {icon}
+        </CardHeader>
+        <CardContent>
+          <div className="text-lg font-bold mb-1">{statusText}</div>
+          <p className="text-xs text-muted-foreground">
+            Inició: {format(new Date(challenge.start_date), "dd/MM/yyyy", { locale: es })} | Finaliza: {format(new Date(challenge.end_date), "dd/MM/yyyy", { locale: es })}
+          </p>
+          {challenge.status === "failed" && (
+            <Button onClick={onStartNewChallenge} className="mt-4 w-full">
+              Intentar otro reto
+            </Button>
+          )}
+          {challenge.status === "completed" && (
+            <Button onClick={onViewBadges} className="mt-4 w-full">
+              Ver mis insignias
+            </Button>
+          )}
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card className={cn("relative p-4 shadow-md border-l-4 border-purple-500 bg-purple-50 text-purple-800")}>
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <CardTitle className="text-sm font-medium text-purple-800">
+          ¡Empieza un Reto de Ahorro!
+        </CardTitle>
+        <Lightbulb className="h-4 w-4 text-purple-600" />
+      </CardHeader>
+      <CardContent>
+        <div className="text-lg font-bold">Desafíate a ti mismo y gana insignias.</div>
+        <p className="text-xs text-purple-700 mt-1">
+          Elige un reto y mejora tus hábitos financieros.
+        </p>
+        <Button onClick={onStartNewChallenge} className="mt-4 w-full">
+          Elegir un Reto
+        </Button>
+      </CardContent>
+    </Card>
+  );
+};
+
+export default ChallengeCard;
