@@ -5,26 +5,31 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import * as LucideIcons from "lucide-react"; // Importar todos los iconos como namespace
 import { cn } from "@/lib/utils";
 
-// Explicitly import all curated icons
-import {
-  Tag, Banknote, CreditCard, Gift, PiggyBank, Car, Plane, Utensils, Coffee,
-  ShoppingBag, Lightbulb, Wrench, Home, Droplet, Flame, Wifi, Broom, Shirt,
-  ShoppingCart, IceCream, Smartphone, Tv, Hotel, Siren, Film, PawPrint,
-  BookOpen, Wallet, Briefcase, Receipt, TrendingUp, DollarSign,
-} from "lucide-react";
+// La lista curada de nombres de iconos a mostrar
+const curatedIconNames = [
+  "Tag", "Banknote", "CreditCard", "Gift", "PiggyBank", "Car", "Plane", "Utensils", "Coffee",
+  "ShoppingBag", "Lightbulb", "Wrench", "Home", "Droplet", "Flame", "Wifi", "Broom", "Shirt",
+  "ShoppingCart", "IceCream", "Smartphone", "Tv", "Hotel", "Siren", "Film", "PawPrint",
+  "BookOpen", "Wallet", "Briefcase", "Receipt", "TrendingUp", "DollarSign",
+];
 
-// Create a direct map of these imported icons
-const lucideIconMap: { [key: string]: ComponentType<any> } = {
-  Tag, Banknote, CreditCard, Gift, PiggyBank, Car, Plane, Utensils, Coffee,
-  ShoppingBag, Lightbulb, Wrench, Home, Droplet, Flame, Wifi, Broom, Shirt,
-  ShoppingCart, IceCream, Smartphone, Tv, Hotel, Siren, Film, PawPrint,
-  BookOpen, Wallet, Briefcase, Receipt, TrendingUp, DollarSign,
-};
+// Crear un mapa de estos iconos desde el namespace LucideIcons
+const lucideIconMap: { [key: string]: ComponentType<any> } = {};
+for (const iconName of curatedIconNames) {
+  const IconComponent = (LucideIcons as any)[iconName];
+  if (IconComponent && typeof IconComponent === 'function') {
+    lucideIconMap[iconName] = IconComponent;
+  } else {
+    // Esto ayudará a depurar si algún icono de la lista curada no existe realmente
+    console.warn(`Icono "${iconName}" no encontrado o no es un componente React válido en lucide-react.`);
+  }
+}
 
-// The list of icon names to display (now directly from the map keys)
-const availableIconNames = Object.keys(lucideIconMap);
+// Filtrar la lista curada para incluir solo los iconos que realmente existen en lucideIconMap
+const availableIcons = curatedIconNames.filter(iconName => lucideIconMap[iconName]);
 
 interface IconPickerProps {
   selectedIcon: string;
@@ -35,16 +40,16 @@ const IconPicker: React.FC<IconPickerProps> = ({ selectedIcon, onSelectIcon }) =
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
 
-  // Ensure CurrentIcon is always a valid React component
+  // Asegurar que CurrentIcon siempre sea un componente React válido, usando 'Tag' como fallback
   const CurrentIcon = selectedIcon && lucideIconMap[selectedIcon]
     ? lucideIconMap[selectedIcon]
-    : Tag; // Use Tag as fallback, which is now directly imported
+    : lucideIconMap["Tag"] || LucideIcons.Tag; // Fallback a LucideIcons.Tag si la entrada del mapa falta
 
   const filteredIcons = useMemo(() => {
-    return availableIconNames.filter(iconName =>
+    return availableIcons.filter(iconName =>
       iconName.toLowerCase().includes(search.toLowerCase())
     );
-  }, [search, availableIconNames]);
+  }, [search, availableIcons]);
 
   const handleSelect = (iconName: string) => {
     onSelectIcon(iconName);
@@ -70,11 +75,8 @@ const IconPicker: React.FC<IconPickerProps> = ({ selectedIcon, onSelectIcon }) =
           <div className="grid grid-cols-4 gap-2 p-2">
             {filteredIcons.map((iconName) => {
               const IconComponent = lucideIconMap[iconName];
-              // At this point, IconComponent should always be defined due to direct mapping
-              // and availableIconNames being derived from lucideIconMap.
-              // However, a defensive check doesn't hurt.
               if (!IconComponent) {
-                console.error(`IconComponent for ${iconName} is unexpectedly undefined.`);
+                console.warn(`IconComponent para ${iconName} es inesperadamente indefinido en el renderizado.`);
                 return null;
               }
 
