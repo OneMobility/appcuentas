@@ -22,7 +22,9 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { exportToCsv, exportToPdf } from "@/utils/export";
 import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import FeedbackOverlay from "@/components/FeedbackOverlay"; // Importar el componente genérico
+import FeedbackOverlay from "@/components/FeedbackOverlay";
+import RandomSavingTipCard from "@/components/RandomSavingTipCard"; // Importar el nuevo componente
+import FixedSavingTipCard from "@/components/FixedSavingTipCard"; // Importar el nuevo componente
 
 interface Saving {
   id: string;
@@ -381,6 +383,11 @@ const Savings = () => {
   return (
     <div className="flex flex-col gap-6 p-4">
       <h1 className="text-3xl font-bold">Tus Metas</h1>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <RandomSavingTipCard />
+        <FixedSavingTipCard />
+      </div>
 
       <Card>
         <CardHeader>
