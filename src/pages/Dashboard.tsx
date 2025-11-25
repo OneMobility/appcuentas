@@ -144,11 +144,6 @@ const Dashboard = () => {
         .select('*')
         .eq('user_id', user.id);
       
-      // --- START DEBUG LOGS ---
-      console.log("Supabase creditors response - data:", creditorsData);
-      console.log("Supabase creditors response - error:", creditorError);
-      // --- END DEBUG LOGS ---
-
       if (creditorError) {
         throw creditorError;
       }
@@ -466,6 +461,7 @@ const Dashboard = () => {
       <GroupedPaymentDueDatesCard cards={cards} />
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        {/* Tarjetas Verdes */}
         <Card className={cn("border-l-4 border-green-600 bg-green-50 text-green-800")}>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-green-800">TU DINERITO</CardTitle>
@@ -486,6 +482,18 @@ const Dashboard = () => {
             <p className="text-xs text-green-700">-5.2% desde el mes pasado</p> {/* Placeholder */}
           </CardContent>
         </Card>
+        <Card className={cn("border-l-4 border-green-600 bg-green-50 text-green-800")}>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-green-800">SALDO TARJETAS DÉBITO</CardTitle>
+            <CreditCard className="h-4 w-4 text-green-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">${totalDebitCardsBalance.toFixed(2)}</div>
+            <p className="text-xs text-green-700">Saldo total en tus tarjetas de débito.</p>
+          </CardContent>
+        </Card>
+
+        {/* Tarjetas Amarillas */}
         <Card className={cn("border-l-4 border-yellow-500 bg-yellow-50 text-yellow-800")}>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-yellow-800">A QUIEN LE DEBES</CardTitle>
@@ -507,19 +515,7 @@ const Dashboard = () => {
           </CardContent>
         </Card>
 
-        {/* Nueva tarjeta para Saldo de Tarjetas de Débito */}
-        <Card className={cn("border-l-4 border-green-600 bg-green-50 text-green-800")}>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-green-800">SALDO TARJETAS DÉBITO</CardTitle>
-            <CreditCard className="h-4 w-4 text-green-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">${totalDebitCardsBalance.toFixed(2)}</div>
-            <p className="text-xs text-green-700">Saldo total en tus tarjetas de débito.</p>
-          </CardContent>
-        </Card>
-
-        {/* Nueva tarjeta para Balance Total */}
+        {/* Tarjeta Rosa */}
         <Card className={cn("border-l-4 border-pink-500 bg-pink-50 text-pink-800")}>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-pink-800">BALANCE TOTAL</CardTitle>
@@ -657,8 +653,8 @@ const Dashboard = () => {
                 <YAxis />
                 <Tooltip formatter={(value: number) => `$${value.toFixed(2)}`} />
                 <Legend />
-                <Bar dataKey="LimiteOInicial" fill="#8884d8" name="Límite / Saldo Inicial" />
-                <Bar dataKey="SaldoActualODeuda" fill="#82ca9d" name="Saldo Actual / Deuda" />
+                <Bar dataKey="LimiteOInicial" fill="#87CEEB" name="Límite / Saldo Inicial" /> {/* Azul Celeste */}
+                <Bar dataKey="SaldoActualODeuda" fill="#FFB6C1" name="Saldo Actual / Deuda" /> {/* Rosa Claro */}
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -686,8 +682,8 @@ const Dashboard = () => {
                 <YAxis />
                 <Tooltip />
                 <Legend />
-                <Bar dataKey="ingresos" fill="#8884d8" name="Ingresos" />
-                <Bar dataKey="egresos" fill="#82ca9d" name="Egresos" />
+                <Bar dataKey="ingresos" fill="#87CEEB" name="Ingresos" /> {/* Azul Celeste */}
+                <Bar dataKey="egresos" fill="#FFB6C1" name="Egresos" /> {/* Rosa Claro */}
               </BarChart>
             </ResponsiveContainer>
           </div>
