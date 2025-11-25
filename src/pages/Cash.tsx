@@ -129,6 +129,7 @@ const Cash = () => {
         description: newTransaction.description,
         category_id: newTransaction.category_id,
         category_type: categoryType,
+        date: format(new Date(), "yyyy-MM-dd"), // Usar la fecha local del dispositivo
       })
       .select();
 
@@ -224,6 +225,7 @@ const Cash = () => {
         description: newTransaction.description,
         category_id: newTransaction.category_id,
         category_type: categoryType,
+        date: format(new Date(editingTransaction.date), "yyyy-MM-dd"), // Mantener la fecha original o permitir editar si se desea
       })
       .eq('id', editingTransaction.id)
       .eq('user_id', user.id)

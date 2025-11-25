@@ -204,7 +204,7 @@ const Creditors = () => {
         type: newTransaction.type,
         amount,
         description: newTransaction.description,
-        date: new Date().toISOString().split('T')[0],
+        date: format(new Date(), "yyyy-MM-dd"), // Usar la fecha local del dispositivo
       })
       .select();
 
@@ -303,7 +303,7 @@ const Creditors = () => {
         type: newType,
         amount: newAmount,
         description: newTransaction.description,
-        date: new Date().toISOString().split('T')[0], // Mantener la fecha actual o permitir editar
+        date: format(new Date(), "yyyy-MM-dd"), // Usar la fecha local del dispositivo
       })
       .eq('id', editingTransaction.id)
       .eq('user_id', user.id)
