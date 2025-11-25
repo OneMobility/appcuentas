@@ -36,6 +36,7 @@ const badgeMapping: { [key: string]: string } = {
   "no-more-blouses": "Estilista Consciente",
   "no-entertainment": "Maestro del Ahorro Social",
   "no-apps": "Desintoxicador Digital",
+  "no-food-spend": "Chef Financiero", // Mapeo para el nuevo reto
   "saving-goal-150": "Ahorrador Nivel 1",
   "saving-goal-300": "Ahorrador Nivel 2",
   "saving-goal-200": "Ahorrador Nivel 1.5",
@@ -48,23 +49,39 @@ const FAILED_CHALLENGE_IMAGE = `${SUPABASE_STORAGE_BASE_URL}Fallido.png`;
 const GENERIC_COMPLETED_IMAGE = `${SUPABASE_STORAGE_BASE_URL}Meta%202.png`;
 const GENERIC_REGULAR_IMAGE = `${SUPABASE_STORAGE_BASE_URL}Cochinito%20Calendario.png`;
 
-// Mapeo explícito de IDs de retos a URLs de imágenes específicas para retos COMPLETADOS
-const COMPLETED_CHALLENGE_IMAGES: { [key: string]: string } = {
-  "no-netflix-more-books": "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Reto%20menos%20netflix.png",
-  "no-more-blouses": "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Reto%20Ropa.png",
-  "saving-goal-150": "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Reto%20150%20pesos.png",
-  // La imagen de "Reto comida.png" no tiene un challenge_template_id directo en este momento.
-  // Si deseas usarla, por favor, especifica a qué reto debería asociarse o si es para un nuevo reto.
-};
+// IDs de las insignias de recompensa genéricas que se crearán en la base de datos
+const GENERIC_REWARD_BADGE_NAMES = [
+  'Recompensa de Reto 1',
+  'Recompensa de Reto 2',
+  'Recompensa de Reto 3',
+  'Recompensa de Reto 4',
+];
 
 
 const Challenges: React.FC<ChallengesProps> = ({ challengeRefreshKey, setChallengeRefreshKey }) => {
   const { user } = useSession();
   const { expenseCategories, incomeCategories, isLoadingCategories, getCategoryById } = useCategoryContext();
   const [activeChallenge, setActiveChallenge] = useState<ChallengeData | null>(null);
-  const [userPastChallenges, setUserPastChallenges] = useState<ChallengeData[]>([]); // Renombrado para evitar conflicto
+  const [userPastChallenges, setUserPastChallenges] = useState<ChallengeData[]>([]);
   const [isChallengeCreationDialogOpen, setIsChallengeCreationDialogOpen] = useState(false);
   const [isLoadingChallenges, setIsLoadingChallenges] = useState(true);
+  const [rewardBadgeIds, setRewardBadgeIds] = useState<string[]>([]); // Estado para almacenar los IDs de las insignias de recompensa
+
+  // Cargar los IDs de las insignias de recompensa al iniciar el componente
+  useEffect(() => {
+    const fetchRewardBadges = async () => {
+      const { data, error } = await supabase
+        .from('badges')
+        .select('id')
+        .in('name', GENERIC_REWARD_BADGE_NAMES);
+      if (error) {
+        console.error("Error fetching reward badge IDs:", error.message);
+      } else {
+        setRewardBadgeIds(data.map(b => b.id));
+      }
+    };
+    fetchRewardBadges();
+  }, []);
 
   const fetchChallenges = async () => {
     if (!user || isLoadingCategories) {
@@ -78,7 +95,7 @@ const Challenges: React.FC<ChallengesProps> = ({ challengeRefreshKey, setChallen
     // Fetch active challenge
     const { data: activeChallengeData, error: activeChallengeError } = await supabase
       .from('challenges')
-      .select('*, savings(id, name, current_balance, target_amount, color, completion_date), badges(id, name, description, image_url)') // Incluir completion_date
+      .select('*, savings(id, name, current_balance, target_amount, color, completion_date), badges(id, name, description, image_url)')
       .eq('user_id', user.id)
       .eq('status', 'active')
       .single();
@@ -121,7 +138,7 @@ const Challenges: React.FC<ChallengesProps> = ({ challengeRefreshKey, setChallen
     // Fetch all past challenges (completed, failed, regular) for the user
     const { data: pastChallengesData, error: pastChallengesError } = await supabase
       .from('challenges')
-      .select('*, savings(id, name, current_balance, target_amount, color, completion_date), badges(id, name, description, image_url)') // Incluir completion_date
+      .select('*, savings(id, name, current_balance, target_amount, color, completion_date), badges(id, name, description, image_url)')
       .eq('user_id', user.id)
       .in('status', ['completed', 'failed', 'regular'])
       .order('end_date', { ascending: false });
@@ -159,7 +176,7 @@ const Challenges: React.FC<ChallengesProps> = ({ challengeRefreshKey, setChallen
 
     let newStatus: "completed" | "failed" | "regular" = "failed";
     let awardedBadgeId: string | null = null;
-    const evaluationDate = format(new Date(), "yyyy-MM-dd"); // Usar fecha local del dispositivo
+    const evaluationDate = format(new Date(), "yyyy-MM-dd");
 
     if (challenge.challenge_template_id.startsWith("no-spend")) {
       const { data: expenseTransactions, error: txError } = await supabase
@@ -188,10 +205,8 @@ const Challenges: React.FC<ChallengesProps> = ({ challengeRefreshKey, setChallen
 
       if (expenseTransactions?.length === 0 && cardTransactions?.length === 0) {
         newStatus = "completed";
-        showSuccess(`¡Reto '${challenge.name}' completado! ¡Felicidades!`);
       } else {
         newStatus = "failed";
-        showError(`Reto '${challenge.name}' fallido. Se registraron gastos en categorías prohibidas.`);
       }
     } else if (challenge.challenge_template_id.startsWith("saving-goal") && challenge.saving_goal) {
       const saving = challenge.saving_goal;
@@ -199,36 +214,32 @@ const Challenges: React.FC<ChallengesProps> = ({ challengeRefreshKey, setChallen
         const progress = (saving.current_balance / saving.target_amount) * 100;
         if (progress >= 100) {
           newStatus = "completed";
-          showSuccess(`¡Reto '${challenge.name}' completado! ¡Alcanzaste tu meta de ahorro!`);
         } else if (progress >= 50) {
           newStatus = "regular";
-          showSuccess(`Reto '${challenge.name}' regular. ¡Casi lo logras, sigue así!`);
         } else {
           newStatus = "failed";
-          showError(`Reto '${challenge.name}' fallido. No alcanzaste el 50% de tu meta de ahorro.`);
         }
       } else {
         newStatus = "failed";
-        showError(`Reto '${challenge.name}' fallido. La meta de ahorro no era válida.`);
       }
     }
 
     if (newStatus === "completed") {
-      const badgeName = badgeMapping[challenge.challenge_template_id];
-      if (badgeName) {
-        const { data: badgeData, error: badgeError } = await supabase
-          .from('badges')
-          .select('id')
-          .eq('name', badgeName)
-          .single();
-
-        if (badgeError) {
-          console.error("Error fetching badge ID:", badgeError.message);
-        } else if (badgeData) {
-          awardedBadgeId = badgeData.id;
-        }
+      // Asignar una insignia de recompensa aleatoria
+      if (rewardBadgeIds.length > 0) {
+        const randomIndex = Math.floor(Math.random() * rewardBadgeIds.length);
+        awardedBadgeId = rewardBadgeIds[randomIndex];
+        showSuccess(`¡Reto '${challenge.name}' completado! ¡Has ganado una insignia de recompensa!`);
+      } else {
+        console.warn("No reward badge IDs available to assign.");
+        showSuccess(`¡Reto '${challenge.name}' completado!`); // Mensaje de fallback
       }
+    } else if (newStatus === "failed") {
+      showError(`Reto '${challenge.name}' fallido. ¡No te rindas, inténtalo de nuevo!`);
+    } else if (newStatus === "regular") {
+      showSuccess(`Reto '${challenge.name}' regular. ¡Casi lo logras, sigue esforzándote!`);
     }
+
 
     const { error: updateError } = await supabase
       .from('challenges')
@@ -245,7 +256,7 @@ const Challenges: React.FC<ChallengesProps> = ({ challengeRefreshKey, setChallen
 
   useEffect(() => {
     fetchChallenges();
-  }, [user, challengeRefreshKey, isLoadingCategories]);
+  }, [user, challengeRefreshKey, isLoadingCategories, rewardBadgeIds]); // Añadir rewardBadgeIds a las dependencias
 
   const handleChallengeStarted = () => {
     setChallengeRefreshKey(prev => prev + 1);
@@ -261,18 +272,17 @@ const Challenges: React.FC<ChallengesProps> = ({ challengeRefreshKey, setChallen
     const isFailed = challenge.status === "failed";
     const isRegular = challenge.status === "regular";
 
-    let imageUrl: string | undefined;
-
     if (isCompleted) {
-      // Priorizar la imagen específica del reto completado, luego la del badge, luego la genérica
-      imageUrl = COMPLETED_CHALLENGE_IMAGES[challenge.challenge_template_id] || challenge.badge?.image_url || GENERIC_COMPLETED_IMAGE;
+      // Si hay una insignia asignada (que ahora será una de las aleatorias), usa su imagen
+      return challenge.badge?.image_url || GENERIC_COMPLETED_IMAGE;
     } else if (isFailed) {
-      imageUrl = FAILED_CHALLENGE_IMAGE;
+      return FAILED_CHALLENGE_IMAGE;
     } else if (isRegular) {
-      imageUrl = GENERIC_REGULAR_IMAGE;
+      return GENERIC_REGULAR_IMAGE;
     }
-    console.log(`Challenge ${challenge.name} (status: ${challenge.status}): Front image URL: ${imageUrl}`);
-    return imageUrl;
+    // Para retos activos o sin estado específico en el álbum, no debería llegar aquí si se filtra bien.
+    // Como fallback, podemos usar la imagen genérica de "regular" o una específica para "activo".
+    return GENERIC_REGULAR_IMAGE; 
   };
 
   if (isLoadingChallenges) {
@@ -312,7 +322,7 @@ const Challenges: React.FC<ChallengesProps> = ({ challengeRefreshKey, setChallen
         <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {userPastChallenges.length > 0 ? (
             userPastChallenges.map((challenge) => (
-              <div key={challenge.id} className="w-[350px] h-[350px] mx-auto"> {/* Contenedor de 350x350 */}
+              <div key={challenge.id} className="w-[350px] h-[350px] mx-auto">
                 <FlippableChallengeCard
                   frontImageSrc={getFrontImageSrc(challenge)}
                   frontImageAlt={challenge.name}

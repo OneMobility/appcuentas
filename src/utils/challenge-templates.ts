@@ -44,6 +44,14 @@ export const challengeTemplates: ChallengeTemplate[] = [
     default_categories: ["Apps"],
   },
   {
+    id: "no-food-spend", // Nuevo reto
+    name: "Reto: Cero gastos en comida",
+    description: "No realices compras en las categorías 'Antojitos' o 'Super mercado' por 7 días.",
+    type: "no_spend_category",
+    icon: "Utensils",
+    default_categories: ["Antojitos", "Super mercado"],
+  },
+  {
     id: "saving-goal-150",
     name: "Reto: Ahorra $150 en 7 días",
     description: "Vamos a crear un ahorro de $150 pesos, ¡complétalo!",
