@@ -4,13 +4,14 @@ import React from "react";
 import { Link, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import {
-  PiggyBank, // Cambiado de Home a PiggyBank
+  PiggyBank,
   Banknote,
-  ThumbsUp, // Cambiado de UserRound a ThumbsUp
-  ThumbsDown, // Cambiado de Landmark a ThumbsDown
+  ThumbsUp,
+  ThumbsDown,
   CreditCard,
   Tag,
   LogOut,
+  Wallet, // Nuevo icono para ahorros
 } from "lucide-react";
 import { useSession } from "@/context/SessionContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -20,7 +21,7 @@ const navItems = [
   {
     name: "Resumen",
     path: "/dashboard",
-    icon: PiggyBank, // Usar PiggyBank
+    icon: PiggyBank,
   },
   {
     name: "Tu Dinerito",
@@ -30,17 +31,22 @@ const navItems = [
   {
     name: "Te Deben",
     path: "/debtors",
-    icon: ThumbsUp, // Usar ThumbsUp
+    icon: ThumbsUp,
   },
   {
   name: "Le Debes",
     path: "/creditors",
-    icon: ThumbsDown, // Usar ThumbsDown
+    icon: ThumbsDown,
   },
   {
     name: "Tarjetas",
     path: "/cards",
     icon: CreditCard,
+  },
+  {
+    name: "Ahorros", // Nuevo elemento de navegación
+    path: "/savings",
+    icon: Wallet, // Icono para ahorros
   },
   {
     name: "Categorías",

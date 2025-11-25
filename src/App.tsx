@@ -9,8 +9,9 @@ import Cash from "./pages/Cash";
 import Debtors from "./pages/Debtors";
 import Creditors from "./pages/Creditors";
 import Cards from "./pages/Cards";
-import CardDetailsPage from "./pages/CardDetailsPage"; // Importar la nueva página
+import CardDetailsPage from "./pages/CardDetailsPage";
 import Categories from "./pages/Categories";
+import Savings from "./pages/Savings"; // Importar la nueva página de ahorros
 import NotFound from "./pages/NotFound";
 import Login from "./pages/Login";
 import { CategoryProvider } from "./context/CategoryContext";
@@ -65,8 +66,9 @@ const App = () => (
                 <Route path="/debtors" element={<Debtors />} />
                 <Route path="/creditors" element={<Creditors />} />
                 <Route path="/cards" element={<Cards />} />
-                <Route path="/cards/:cardId" element={<CardDetailsPage />} /> {/* Nueva ruta */}
+                <Route path="/cards/:cardId" element={<CardDetailsPage />} />
                 <Route path="/categories" element={<Categories />} />
+                <Route path="/savings" element={<Savings />} /> {/* Nueva ruta de ahorros */}
               </Route>
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
