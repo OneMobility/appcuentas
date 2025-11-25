@@ -64,7 +64,7 @@ const GroupedPaymentDueDatesCard: React.FC<GroupedPaymentDueDatesCardProps> = ({
         </CardHeader>
         <CardContent className="flex flex-col items-center pr-4 md:block md:pr-48"> {/* Flex column on mobile, block on desktop */}
           <img
-            src="https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Calendario.png"
+            src="https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Cochinito%20Calendario.png" // Updated URL
             alt="Calendario"
             className="h-[180px] w-[180px] mb-4 md:absolute md:top-4 md:right-4 md:z-10" // Static on mobile, absolute on desktop
           />
@@ -90,7 +90,7 @@ const GroupedPaymentDueDatesCard: React.FC<GroupedPaymentDueDatesCardProps> = ({
       </CardHeader>
       <CardContent className="flex flex-col items-center pr-4 md:block md:pr-48"> {/* Flex column on mobile, block on desktop */}
         <img
-          src="https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Calendario.png"
+          src="https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Cochinito%20Calendario.png" // Updated URL
           alt="Calendario de Pagos"
           className="h-[180px] w-[180px] mb-4 md:absolute md:top-4 md:right-4 md:z-10" // Static on mobile, absolute on desktop
         />

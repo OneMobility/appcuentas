@@ -155,7 +155,7 @@ const Savings = () => {
       setFeedbackOverlay({
         isVisible: true,
         message: "¡Muy bien! ¡Cumpliremos esa meta!",
-        imageSrc: "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/cochinito%20love.png",
+        imageSrc: "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/cochinito%20amor.png", // Updated URL
         bgColor: "bg-pink-100",
         textColor: "text-pink-800",
       });
@@ -244,7 +244,7 @@ const Savings = () => {
         setFeedbackOverlay({
           isVisible: true,
           message: "¡Lo has logrado! ¡Felicidades por alcanzar tu meta!",
-          imageSrc: "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Meta.png",
+          imageSrc: "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Meta%202.png", // Updated URL
           bgColor: "bg-green-100",
           textColor: "text-green-800",
         });
@@ -323,7 +323,7 @@ const Savings = () => {
         setFeedbackOverlay({
           isVisible: true,
           message: "¡Felicidades! ¡Un paso más cerca de tus metas!",
-          imageSrc: "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Cochinito%20Ahorro.png",
+          imageSrc: "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Cochinito%20Ahorro.png", // No change
           bgColor: "bg-pink-100",
           textColor: "text-pink-800",
         });
@@ -332,7 +332,7 @@ const Savings = () => {
           setFeedbackOverlay({
             isVisible: true,
             message: "¡Lo has logrado! ¡Felicidades por alcanzar tu meta!",
-            imageSrc: "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Meta.png",
+            imageSrc: "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Meta%202.png", // Updated URL
             bgColor: "bg-green-100",
             textColor: "text-green-800",
           });
@@ -341,7 +341,7 @@ const Savings = () => {
         setFeedbackOverlay({
           isVisible: true,
           message: "Pensé que éramos amigos... ¡No te rindas!",
-          imageSrc: "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Cochinito%20Ahorro%20Triste.png",
+          imageSrc: "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Cochinito%20Ahorro%20Triste.png", // No change
           bgColor: "bg-blue-100",
           textColor: "text-blue-800",
         });

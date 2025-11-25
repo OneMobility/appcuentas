@@ -376,17 +376,9 @@ const Dashboard = () => {
     }
   }, [cards]);
 
-  const cardStatusChartData = useMemo(() => {
-    return cards.map(card => ({
-      name: card.name,
-      LimiteOInicial: card.type === "credit" ? (card.credit_limit || 0) : card.initial_balance,
-      SaldoActualODeuda: card.current_balance,
-    }));
-  }, [cards]);
-
   const piggyBankImageSrc = cardHealthStatus.status === "critical"
     ? "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Cochinito%20Fuego.png"
-    : "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Conchinito%20Good.png";
+    : "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Conchinito%20feliz.png"; // Updated URL
 
   const userFirstName = user?.user_metadata?.first_name || user?.email?.split('@')[0] || 'Usuario'; // Fallback a email o 'Usuario'
 

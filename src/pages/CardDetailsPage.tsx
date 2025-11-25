@@ -924,7 +924,7 @@ const CardDetailsPage: React.FC = () => {
                         <TableCell className="w-12 flex items-center justify-center"> {/* Celda para el icono */}
                           {isPaymentToCreditCard && (
                             <img
-                              src="https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/cochinito love.png"
+                              src="https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Love%20Cochinito%20Card.png" // Updated URL
                               alt="Cochinito Love"
                               className="h-20 w-20"
                               onError={(e) => {
