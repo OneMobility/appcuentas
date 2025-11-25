@@ -14,22 +14,22 @@ import {
 
 const navItems = [
   {
-    name: "Dashboard",
+    name: "Resumen", // Cambiado de Dashboard
     path: "/dashboard",
     icon: Home,
   },
   {
-    name: "Efectivo",
+    name: "Tu Dinerito", // Cambiado de Efectivo
     path: "/cash",
     icon: Banknote,
   },
   {
-    name: "Deudores",
+    name: "Te Deben", // Cambiado de Deudores
     path: "/debtors",
     icon: UserRound,
   },
   {
-    name: "Acreedores",
+    name: "Le Debes", // Cambiado de Acreedores
     path: "/creditors",
     icon: Landmark,
   },
