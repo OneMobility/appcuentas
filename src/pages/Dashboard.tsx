@@ -417,9 +417,13 @@ const Dashboard = () => {
         </Card>
       ) : (
         <Card className="border-green-600 bg-green-50 text-green-800">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardHeader className="relative flex flex-row items-center justify-between space-y-0 pb-2"> {/* Added relative */}
             <CardTitle className="text-sm font-medium text-green-800">Estado de Tarjetas</CardTitle>
-            <img src="https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Conchinito%20feliz.png" alt="Conchinito feliz" className="h-24 w-24" />
+            <img 
+              src="https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Conchinito%20feliz.png" 
+              alt="Conchinito feliz" 
+              className="absolute top-0 right-0 h-24 w-24 z-10 -mt-4 -mr-4" // Added absolute positioning and negative margins
+            />
           </CardHeader>
           <CardContent>
             <div className="text-lg font-bold">¡Todo está en orden aquí!</div>
