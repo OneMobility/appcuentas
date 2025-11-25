@@ -93,7 +93,7 @@ const ChallengeCard: React.FC<ChallengeCardProps> = ({ challenge, onStartNewChal
     const isNoSpend = challenge.challenge_template_id.startsWith("no-spend");
 
     let progress = 0;
-    if (isSavingGoal && challenge.saving_goal) {
+    if (isSavingGoal && challenge.saving_goal && challenge.saving_goal.target_amount !== undefined && challenge.saving_goal.target_amount > 0) {
       progress = (challenge.saving_goal.current_balance / challenge.saving_goal.target_amount) * 100;
     }
 
