@@ -17,6 +17,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { exportToCsv, exportToPdf } from "@/utils/export";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
+import { getLocalDateString } from "@/utils/date-helpers"; // Importar la nueva función de utilidad
 
 interface DebtorTransaction {
   id: string;
@@ -204,7 +205,7 @@ const Debtors = () => {
         type: newTransaction.type,
         amount,
         description: newTransaction.description,
-        date: format(new Date(), "yyyy-MM-dd"), // Usar la fecha local del dispositivo
+        date: getLocalDateString(new Date()), // Usar getLocalDateString
       })
       .select();
 
@@ -303,10 +304,10 @@ const Debtors = () => {
         type: newType,
         amount: newAmount,
         description: newTransaction.description,
-        date: format(new Date(), "yyyy-MM-dd"), // Usar la fecha local del dispositivo
+        date: getLocalDateString(new Date()), // Usar getLocalDateString
       })
       .eq('id', editingTransaction.id)
-      .eq('user_id', user.id)
+      .eq('user.id', user.id)
       .select();
 
     if (transactionError) {

@@ -23,6 +23,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { exportToCsv, exportToPdf } from "@/utils/export";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import DynamicLucideIcon from "@/components/DynamicLucideIcon"; // Importar DynamicLucideIcon
+import { getLocalDateString } from "@/utils/date-helpers"; // Importar la nueva función de utilidad
 
 interface Transaction {
   id: string;
@@ -120,9 +121,6 @@ const Cash = () => {
     // Correctly determine categoryType based on transaction type
     const categoryType = newTransaction.type === "ingreso" ? "income" : "expense";
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0); // Establecer a inicio del día local
-
     const { data, error } = await supabase
       .from('cash_transactions')
       .insert({
@@ -132,7 +130,7 @@ const Cash = () => {
         description: newTransaction.description,
         category_id: newTransaction.category_id,
         category_type: categoryType,
-        date: format(today, "yyyy-MM-dd"), // Usar la fecha local del dispositivo
+        date: getLocalDateString(new Date()), // Usar getLocalDateString
       })
       .select();
 
@@ -228,7 +226,7 @@ const Cash = () => {
         description: newTransaction.description,
         category_id: newTransaction.category_id,
         category_type: categoryType,
-        date: format(new Date(editingTransaction.date), "yyyy-MM-dd"), // Mantener la fecha original o permitir editar si se desea
+        date: getLocalDateString(new Date(editingTransaction.date)), // Usar getLocalDateString
       })
       .eq('id', editingTransaction.id)
       .eq('user_id', user.id)

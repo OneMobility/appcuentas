@@ -12,7 +12,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { PlusCircle, DollarSign, Trash2, Edit, CalendarIcon, FileText, FileDown, PiggyBank, ArrowUpCircle, ArrowDownCircle } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { cn } from "@/lib/utils";
-import { format, isAfter, isSameDay, parseISO } from "date-fns"; // Importar isAfter, isSameDay y parseISO
+import { format, isAfter, isSameDay, parseISO } from "date-fns"; // Importar isAfter y isSameDay
 import { es } from "date-fns/locale";
 import ColorPicker from "@/components/ColorPicker";
 import { supabase } from "@/integrations/supabase/client";
@@ -26,6 +26,7 @@ import FeedbackOverlay from "@/components/FeedbackOverlay";
 import RandomSavingTipCard from "@/components/RandomSavingTipCard"; // Importar el nuevo componente
 import FixedSavingTipCard from "@/components/FixedSavingTipCard"; // Importar el nuevo componente
 import { useOutletContext } from "react-router-dom"; // Importar useOutletContext
+import { getLocalDateString } from "@/utils/date-helpers"; // Importar la nueva función de utilidad
 
 interface Saving {
   id: string;
@@ -152,7 +153,7 @@ const Savings: React.FC = () => {
         name: newSaving.name.trim(),
         current_balance: initialBalance,
         target_amount: targetAmount,
-        target_date: newSaving.target_date ? format(newSaving.target_date, "yyyy-MM-dd") : null, // Guardar como null si no hay fecha
+        target_date: newSaving.target_date ? getLocalDateString(newSaving.target_date) : null, // Usar getLocalDateString
         color: newSaving.color,
         completion_date: null, // Inicializar completion_date como null
       })
@@ -234,7 +235,7 @@ const Savings: React.FC = () => {
       .update({
         name: newSaving.name.trim(),
         target_amount: targetAmount,
-        target_date: newSaving.target_date ? format(newSaving.target_date, "yyyy-MM-dd") : null,
+        target_date: newSaving.target_date ? getLocalDateString(newSaving.target_date) : null, // Usar getLocalDateString
         color: newSaving.color,
       })
       .eq('id', editingSaving.id)
@@ -255,9 +256,7 @@ const Savings: React.FC = () => {
 
       // Check if goal is reached after update (only if target_amount is set and current_balance is already >= target_amount)
       if (updatedSaving.target_amount && updatedSaving.current_balance >= updatedSaving.target_amount && !updatedSaving.completion_date) {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0); // Establecer a inicio del día local
-        const todayFormatted = format(today, "yyyy-MM-dd");
+        const todayFormatted = getLocalDateString(new Date()); // Usar getLocalDateString
         const { data: updatedSavingWithCompletionDate, error: dateUpdateError } = await supabase
           .from('savings')
           .update({ completion_date: todayFormatted })
@@ -336,9 +335,7 @@ const Savings: React.FC = () => {
     }
 
     let updatedCompletionDate = currentSaving.completion_date;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0); // Establecer a inicio del día local
-    const todayFormatted = format(today, "yyyy-MM-dd");
+    const todayFormatted = getLocalDateString(new Date()); // Usar getLocalDateString
 
     // Check if goal is reached after this transaction and set completion_date
     if (currentSaving.target_amount && newBalance >= currentSaving.target_amount && !currentSaving.completion_date) {
@@ -406,7 +403,7 @@ const Savings: React.FC = () => {
               .from('challenges')
               .update({ status: challengeStatus, end_date: updateChallengeEndDate })
               .eq('id', updatedSaving.challenge_id)
-              .eq('user_id', user.id); // Corregido: user.id en lugar de user.id
+              .eq('user_id', user.id);
 
             if (updateChallengeError) {
               showError('Error al actualizar el estado del reto vinculado: ' + updateChallengeError.message);
@@ -670,7 +667,7 @@ const Savings: React.FC = () => {
                       <TableCell>
                         {saving.target_amount ? (
                           <div className="flex items-center gap-2">
-                            <Progress value={progress} className="w-[100px]" style={{ backgroundColor: saving.color }} />
+                            <Progress value={progress} className="w-[100px]" indicatorColor={saving.color} />
                             <span className="text-sm">{progress.toFixed(0)}%</span>
                           </div>
                         ) : "N/A"}
