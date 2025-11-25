@@ -9,12 +9,13 @@ import Cash from "./pages/Cash";
 import Debtors from "./pages/Debtors";
 import Creditors from "./pages/Creditors";
 import Cards from "./pages/Cards";
+import CardDetailsPage from "./pages/CardDetailsPage"; // Importar la nueva página
 import Categories from "./pages/Categories";
 import NotFound from "./pages/NotFound";
-import Login from "./pages/Login"; // Importar la página de Login
+import Login from "./pages/Login";
 import { CategoryProvider } from "./context/CategoryContext";
-import { SessionProvider, useSession } from "./context/SessionContext"; // Importar SessionProvider y useSession
-import CardNotifications from "./components/CardNotifications"; // Importar el nuevo componente
+import { SessionProvider, useSession } from "./context/SessionContext";
+import CardNotifications from "./components/CardNotifications";
 
 const queryClient = new QueryClient();
 
@@ -48,7 +49,7 @@ const App = () => (
       <BrowserRouter>
         <SessionProvider>
           <CategoryProvider>
-            <CardNotifications /> {/* Integrar el componente de notificaciones aquí */}
+            <CardNotifications />
             <Routes>
               <Route path="/login" element={<Login />} />
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
@@ -64,6 +65,7 @@ const App = () => (
                 <Route path="/debtors" element={<Debtors />} />
                 <Route path="/creditors" element={<Creditors />} />
                 <Route path="/cards" element={<Cards />} />
+                <Route path="/cards/:cardId" element={<CardDetailsPage />} /> {/* Nueva ruta */}
                 <Route path="/categories" element={<Categories />} />
               </Route>
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

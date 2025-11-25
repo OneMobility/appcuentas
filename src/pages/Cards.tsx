@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { PlusCircle, DollarSign, History, Trash2, Edit, CalendarIcon, FileText, FileDown } from "lucide-react";
+import { PlusCircle, DollarSign, History, Trash2, Edit, CalendarIcon } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
@@ -61,12 +61,8 @@ const Cards = () => {
   const [isAddCardDialogOpen, setIsAddCardDialogOpen] = useState(false);
   const [isEditCardDialogOpen, setIsEditCardDialogOpen] = useState(false);
   const [isAddTransactionDialogOpen, setIsAddTransactionDialogOpen] = useState(false);
-  const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false);
-  const [isEditTransactionDialogOpen, setIsEditTransactionDialogOpen] = useState(false);
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
-  const [detailedCard, setDetailedCard] = useState<CardData | null>(null);
   const [editingCard, setEditingCard] = useState<CardData | null>(null);
-  const [editingTransaction, setEditingTransaction] = useState<CardTransaction | null>(null);
   const [newCard, setNewCard] = useState({
     name: "",
     bank_name: "",
@@ -236,11 +232,6 @@ const Cards = () => {
     setIsAddTransactionDialogOpen(true);
   };
 
-  const handleOpenDetailsDialog = (card: CardData) => {
-    setDetailedCard(card);
-    setIsDetailsDialogOpen(true);
-  };
-
   const handleTransactionInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setNewTransaction((prev) => ({ ...prev, [name]: value }));
@@ -372,156 +363,6 @@ const Cards = () => {
     showSuccess("Transacción registrada exitosamente.");
   };
 
-  const handleOpenEditTransactionDialog = (transaction: CardTransaction, cardId: string) => {
-    setEditingTransaction(transaction);
-    setSelectedCardId(cardId);
-    setNewTransaction({
-      type: transaction.type,
-      amount: (transaction.installments_total_amount || transaction.amount).toString(), // Mostrar monto total si es a meses
-      description: transaction.description,
-      date: new Date(transaction.date),
-      installments_count: transaction.installments_count,
-    });
-    setIsEditTransactionDialogOpen(true);
-  };
-
-  const handleUpdateTransaction = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!user || !editingTransaction || !selectedCardId) { // Explicit check for editingTransaction and selectedCardId
-      showError("No se ha seleccionado una transacción o tarjeta para actualizar.");
-      return;
-    }
-
-    const oldAmount = editingTransaction.amount;
-    const oldType = editingTransaction.type;
-    const oldInstallmentsTotalAmount = editingTransaction.installments_total_amount;
-    const oldInstallmentsCount = editingTransaction.installments_count;
-
-    const newAmountTotal = parseFloat(newTransaction.amount); // Nuevo monto total si es a meses, o monto único
-    const newType = newTransaction.type;
-    const newInstallmentsCount = newTransaction.installments_count;
-
-    if (isNaN(newAmountTotal) || newAmountTotal <= 0) {
-      showError("El monto de la transacción debe ser un número positivo.");
-      return;
-    }
-    if (!newTransaction.date) {
-      showError("Por favor, selecciona una fecha para la transacción.");
-      return;
-    }
-
-    let newAmountPerInstallment = newAmountTotal;
-    let newInstallmentsTotalAmount: number | undefined = undefined;
-    let newInstallmentNumber: number | undefined = undefined;
-
-    if (newType === "charge" && newInstallmentsCount && newInstallmentsCount > 1) {
-      newInstallmentsTotalAmount = newAmountTotal;
-      newAmountPerInstallment = newAmountTotal / newInstallmentsCount;
-      newInstallmentNumber = editingTransaction.installment_number || 1; // Mantener el número de cuota actual
-    }
-
-    const currentCard = cards.find(c => c.id === selectedCardId);
-    if (!currentCard) {
-      showError("Tarjeta no encontrada.");
-      return;
-    }
-
-    let newCardBalance = currentCard.current_balance;
-
-    // Revertir el impacto de la transacción antigua en el saldo
-    const oldEffectiveAmount = oldInstallmentsTotalAmount ? oldInstallmentsTotalAmount / (oldInstallmentsCount || 1) : oldAmount;
-    newCardBalance = oldType === "charge" ? newCardBalance - oldEffectiveAmount : newCardBalance + oldEffectiveAmount;
-
-    // Aplicar el impacto de la nueva transacción en el saldo
-    const newEffectiveAmount = newInstallmentsTotalAmount ? newInstallmentsTotalAmount / (newInstallmentsCount || 1) : newAmountTotal;
-
-    if (currentCard.type === "debit") {
-      if (newType === "charge") {
-        if (newCardBalance < newEffectiveAmount) {
-          showError("Saldo insuficiente en la tarjeta de débito.");
-          return;
-        }
-        newCardBalance -= newEffectiveAmount;
-      } else {
-        newCardBalance += newEffectiveAmount;
-      }
-    } else { // Credit card
-      if (newType === "charge") {
-        if (currentCard.credit_limit !== undefined && newCardBalance + newEffectiveAmount > currentCard.credit_limit) {
-          showError("El cargo excede el límite de crédito disponible.");
-          return;
-        }
-        newCardBalance += newEffectiveAmount;
-      } else { // Payment
-        if (newCardBalance < newEffectiveAmount) {
-          showError("El pago excede la deuda pendiente.");
-          return;
-        }
-        newCardBalance -= newEffectiveAmount;
-      }
-    }
-
-    const { data: updatedTransactionData, error: transactionError } = await supabase
-      .from('card_transactions')
-      .update({
-        type: newType,
-        amount: newAmountPerInstallment,
-        description: newTransaction.description,
-        date: format(newTransaction.date, "yyyy-MM-dd"),
-        installments_total_amount: newInstallmentsTotalAmount,
-        installments_count: newInstallmentsCount,
-        installment_number: newInstallmentNumber,
-      })
-      .eq('id', editingTransaction.id)
-      .eq('user_id', user.id)
-      .select();
-
-    if (transactionError) {
-      showError('Error al actualizar transacción: ' + transactionError.message);
-      return;
-    }
-
-    const { data: cardData, error: cardError } = await supabase
-      .from('cards')
-      .update({ current_balance: newCardBalance })
-      .eq('id', selectedCardId)
-      .eq('user_id', user.id)
-      .select();
-
-    if (cardError) {
-      showError('Error al actualizar saldo de la tarjeta: ' + cardError.message);
-      return;
-    }
-
-    setCards((prevCards) =>
-      prevCards.map((card) => {
-        if (card.id === selectedCardId) {
-          return {
-            ...card,
-            current_balance: newCardBalance,
-            transactions: card.transactions.map(t => t.id === editingTransaction.id ? updatedTransactionData[0] : t),
-          };
-        }
-        return card;
-      })
-    );
-
-    setDetailedCard((prev) => {
-      if (!prev) return null;
-      return {
-        ...prev,
-        current_balance: newCardBalance,
-        transactions: prev.transactions.map(t => t.id === editingTransaction.id ? updatedTransactionData[0] : t),
-      };
-    });
-
-    setNewTransaction({ type: "charge", amount: "", description: "", date: undefined, installments_count: undefined });
-    setEditingTransaction(null);
-    setSelectedCardId(null);
-    setIsEditTransactionDialogOpen(false);
-    showSuccess("Transacción actualizada exitosamente.");
-  };
-
   const handleOpenEditCardDialog = (card: CardData) => {
     setEditingCard(card);
     setNewCard({
@@ -626,36 +467,6 @@ const Cards = () => {
 
   // Obtener la tarjeta actual para el diálogo de transacción, si selectedCardId está definido
   const currentCardForDialog = selectedCardId ? cards.find(c => c.id === selectedCardId) : null;
-
-  const handleExportCardTransactions = (formatType: 'csv' | 'pdf') => {
-    if (!detailedCard) {
-      showError("No hay tarjeta seleccionada para exportar.");
-      return;
-    }
-
-    const dataToExport = detailedCard.transactions.map(tx => ({
-      Fecha: format(new Date(tx.date), "dd/MM/yyyy", { locale: es }),
-      Tipo: tx.type === "charge" ? "Cargo" : "Pago",
-      Descripcion: tx.description,
-      Monto: `${tx.type === "charge" ? "-" : "+"}${tx.amount.toFixed(2)}`,
-      Cuotas: tx.installments_count && tx.installment_number && tx.installments_count > 1
-        ? `${tx.installment_number}/${tx.installments_count}`
-        : "Pago único",
-    }));
-
-    const filename = `estado_cuenta_${detailedCard.name.replace(/\s/g, '_')}_${format(new Date(), "yyyyMMdd_HHmmss")}`;
-    const title = `Estado de Cuenta: ${detailedCard.name} (${detailedCard.bank_name})`;
-    const headers = ["Fecha", "Tipo", "Descripción", "Monto", "Cuotas"];
-    const pdfData = dataToExport.map(row => Object.values(row));
-
-    if (formatType === 'csv') {
-      exportToCsv(`${filename}.csv`, dataToExport);
-      showSuccess("Estado de cuenta exportado a CSV.");
-    } else {
-      exportToPdf(`${filename}.pdf`, title, headers, pdfData);
-      showSuccess("Estado de cuenta exportado a PDF.");
-    }
-  };
 
   return (
     <div className="flex flex-col gap-6 p-4">
@@ -868,7 +679,6 @@ const Cards = () => {
                 key={card.id}
                 card={card}
                 onAddTransaction={handleOpenAddTransactionDialog}
-                onViewDetails={handleOpenDetailsDialog}
                 onDeleteCard={handleDeleteCard}
                 onEditCard={handleOpenEditCardDialog}
               />
@@ -975,242 +785,6 @@ const Cards = () => {
                 </div>
                 <DialogFooter>
                   <Button type="submit">Registrar Transacción</Button>
-                </DialogFooter>
-              </form>
-            </DialogContent>
-          </Dialog>
-
-          <Dialog open={isDetailsDialogOpen} onOpenChange={setIsDetailsDialogOpen}>
-            <DialogContent className="sm:max-w-[600px]">
-              <DialogHeader>
-                <DialogTitle>Detalles de la Tarjeta: {detailedCard?.name}</DialogTitle>
-              </DialogHeader>
-              <div className="py-4 grid gap-4">
-                {detailedCard && (
-                  <>
-                    <div className="grid grid-cols-2 gap-2 text-sm">
-                      <div>
-                        <p className="text-muted-foreground">Banco:</p>
-                        <p className="font-medium">{detailedCard.bank_name}</p>
-                      </div>
-                      <div>
-                        <p className="text-muted-foreground">Tipo:</p>
-                        <p className="font-medium">{detailedCard.type === "credit" ? "Crédito" : "Débito"}</p>
-                      </div>
-                      <div>
-                        <p className="text-muted-foreground">Últimos 4 Dígitos:</p>
-                        <p className="font-medium">**** {detailedCard.last_four_digits}</p>
-                      </div>
-                      <div>
-                        <p className="text-muted-foreground">Fecha de Expiración:</p>
-                        <p className="font-medium">{detailedCard.expiration_date}</p>
-                      </div>
-                      <div>
-                        <p className="text-muted-foreground">Saldo Actual:</p>
-                        <p className="font-medium">${detailedCard.current_balance.toFixed(2)}</p>
-                      </div>
-                      {detailedCard.type === "credit" && (
-                        <>
-                          <div>
-                            <p className="text-muted-foreground">Límite de Crédito:</p>
-                            <p className="font-medium">${detailedCard.credit_limit?.toFixed(2) || "N/A"}</p>
-                          </div>
-                          <div>
-                            <p className="text-muted-foreground">Crédito Disponible:</p>
-                            <p className="font-medium">${(detailedCard.credit_limit !== undefined ? detailedCard.credit_limit - detailedCard.current_balance : 0).toFixed(2)}</p>
-                          </div>
-                          <div>
-                            <p className="text-muted-foreground">Día de Corte:</p>
-                            <p className="font-medium">{detailedCard.cut_off_day ? `Día ${detailedCard.cut_off_day} de cada mes` : "N/A"}</p>
-                          </div>
-                          <div>
-                            <p className="text-muted-foreground">Días para pagar después del corte:</p>
-                            <p className="font-medium">{detailedCard.days_to_pay_after_cut_off !== undefined ? `${detailedCard.days_to_pay_after_cut_off} días` : "N/A"}</p>
-                          </div>
-                          {detailedCard.cut_off_day !== undefined && detailedCard.days_to_pay_after_cut_off !== undefined && (
-                            <div>
-                              <p className="text-muted-foreground">Fecha Límite de Pago (Estimada):</p>
-                              <p className="font-medium">
-                                {format(getUpcomingPaymentDueDate(detailedCard.cut_off_day, detailedCard.days_to_pay_after_cut_off), "dd 'de' MMMM, yyyy", { locale: es })}
-                              </p>
-                            </div>
-                          )}
-                        </>
-                      )}
-                    </div>
-
-                    <div className="flex items-center justify-between mt-4">
-                      <h3 className="text-lg font-semibold">Historial de Transacciones</h3>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="outline" size="sm" className="h-8 gap-1">
-                            <FileDown className="h-3.5 w-3.5" />
-                            <span className="sr-only sm:not-sr-only sm:whitespace-nowrap">
-                              Exportar
-                            </span>
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => handleExportCardTransactions('csv')}>
-                            <FileText className="mr-2 h-4 w-4" /> Exportar a CSV
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleExportCardTransactions('pdf')}>
-                            <FileText className="mr-2 h-4 w-4" /> Exportar a PDF
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
-                    <div className="overflow-x-auto">
-                      {detailedCard.transactions && detailedCard.transactions.length > 0 ? (
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead>Fecha</TableHead>
-                              <TableHead>Tipo</TableHead>
-                              <TableHead>Descripción</TableHead>
-                              <TableHead className="text-right">Monto</TableHead>
-                              <TableHead className="text-right">Acciones</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {detailedCard.transactions.map((transaction) => (
-                              <TableRow key={transaction.id}>
-                                <TableCell>{format(new Date(transaction.date), "dd/MM/yyyy", { locale: es })}</TableCell>
-                                <TableCell className={transaction.type === "charge" ? "text-red-600" : "text-green-600"}>
-                                  {transaction.type === "charge" ? "Cargo" : "Pago"}
-                                  {transaction.installments_count && transaction.installment_number && transaction.installments_count > 1 &&
-                                    ` (${transaction.installment_number}/${transaction.installments_count})`}
-                                </TableCell>
-                                <TableCell>{transaction.description}</TableCell>
-                                <TableCell className="text-right">${transaction.amount.toFixed(2)}</TableCell>
-                                <TableCell className="text-right">
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => handleOpenEditTransactionDialog(transaction, detailedCard.id)}
-                                    className="h-8 w-8 p-0"
-                                  >
-                                    <Edit className="h-3.5 w-3.5" />
-                                    <span className="sr-only">Editar</span>
-                                  </Button>
-                                </TableCell>
-                              </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
-                      ) : (
-                        <p className="text-center text-muted-foreground">No hay historial de transacciones para esta tarjeta.</p>
-                      )}
-                    </div>
-                  </>
-                )}
-              </div>
-              <DialogFooter>
-                <Button onClick={() => setIsDetailsDialogOpen(false)}>Cerrar</Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-
-          <Dialog open={isEditTransactionDialogOpen} onOpenChange={setIsEditTransactionDialogOpen}>
-            <DialogContent className="sm:max-w-[425px]">
-              <DialogHeader>
-                <DialogTitle>Editar Transacción para {detailedCard?.name}</DialogTitle>
-              </DialogHeader>
-              <form onSubmit={handleUpdateTransaction} className="grid gap-4 py-4">
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="editTransactionType" className="text-right">
-                    Tipo
-                  </Label>
-                  <Select value={newTransaction.type} onValueChange={handleTransactionTypeChange}>
-                    <SelectTrigger id="editTransactionType" className="col-span-3">
-                      <SelectValue placeholder="Selecciona tipo" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="charge">Cargo</SelectItem>
-                      <SelectItem value="payment">Pago</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="editTransactionAmount" className="text-right">
-                    Monto
-                  </Label>
-                  <Input
-                    id="editTransactionAmount"
-                    name="amount"
-                    type="number"
-                    step="0.01"
-                    value={newTransaction.amount}
-                    onChange={handleTransactionInputChange}
-                    className="col-span-3"
-                    required
-                  />
-                </div>
-                {newTransaction.type === "charge" && currentCardForDialog?.type === "credit" && (
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="editInstallmentsCount" className="text-right">
-                      Meses
-                    </Label>
-                    <Select
-                      value={newTransaction.installments_count?.toString() || ""}
-                      onValueChange={handleInstallmentsChange}
-                    >
-                      <SelectTrigger id="editInstallmentsCount" className="col-span-3">
-                        <SelectValue placeholder="Pago único" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="1">Pago único</SelectItem>
-                        <SelectItem value="3">3 meses</SelectItem>
-                        <SelectItem value="6">6 meses</SelectItem>
-                        <SelectItem value="9">9 meses</SelectItem>
-                        <SelectItem value="12">12 meses</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="editTransactionDescription" className="text-right">
-                    Descripción
-                  </Label>
-                  <Input
-                    id="editTransactionDescription"
-                    name="description"
-                    value={newTransaction.description}
-                    onChange={handleTransactionInputChange}
-                    className="col-span-3"
-                    required
-                  />
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="editTransactionDate" className="text-right">
-                    Fecha
-                  </Label>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant={"outline"}
-                        className={cn(
-                          "col-span-3 justify-start text-left font-normal",
-                          !newTransaction.date && "text-muted-foreground"
-                        )}
-                      >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {newTransaction.date ? format(newTransaction.date, "dd/MM/yyyy", { locale: es }) : <span>Selecciona una fecha</span>}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0">
-                      <Calendar
-                        mode="single"
-                        selected={newTransaction.date}
-                        onSelect={handleTransactionDateChange}
-                        initialFocus
-                        locale={es}
-                      />
-                    </PopoverContent>
-                  </Popover>
-                </div>
-                <DialogFooter>
-                  <Button type="submit">Actualizar Transacción</Button>
                 </DialogFooter>
               </form>
             </DialogContent>

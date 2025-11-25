@@ -6,11 +6,12 @@ import { Button } from "@/components/ui/button";
 import { CreditCard, DollarSign, History, Trash2, Edit } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { useNavigate } from "react-router-dom"; // Importar useNavigate
 
 interface CardTransaction {
   id: string;
-  type: "charge" | "payment";
-  amount: number; // Monto mensual si es a meses, o monto total si es pago único
+  type: "charge" | "payment"; // Monto mensual si es a meses, o monto total si es pago único
+  amount: number;
   description: string;
   date: string;
   installments_total_amount?: number; // Monto total del cargo original si es a meses
@@ -37,14 +38,18 @@ interface CardData {
 interface CardDisplayProps {
   card: CardData;
   onAddTransaction: (cardId: string) => void;
-  onViewDetails: (card: CardData) => void;
   onDeleteCard: (cardId: string) => void;
   onEditCard: (card: CardData) => void;
 }
 
-const CardDisplay: React.FC<CardDisplayProps> = ({ card, onAddTransaction, onViewDetails, onDeleteCard, onEditCard }) => {
+const CardDisplay: React.FC<CardDisplayProps> = ({ card, onAddTransaction, onDeleteCard, onEditCard }) => {
   const isCredit = card.type === "credit";
   const creditAvailable = isCredit && card.credit_limit !== undefined ? card.credit_limit - card.current_balance : 0;
+  const navigate = useNavigate(); // Inicializar useNavigate
+
+  const handleViewDetails = () => {
+    navigate(`/cards/${card.id}`); // Navegar a la nueva página de detalles
+  };
 
   return (
     <Card className={cn(
@@ -105,7 +110,7 @@ const CardDisplay: React.FC<CardDisplayProps> = ({ card, onAddTransaction, onVie
           <Button
             variant="secondary"
             size="sm"
-            onClick={() => onViewDetails(card)}
+            onClick={handleViewDetails} // Usar la nueva función de navegación
             className="flex-1 bg-white/20 hover:bg-white/30 text-white"
           >
             <History className="h-3.5 w-3.5 mr-1" />
