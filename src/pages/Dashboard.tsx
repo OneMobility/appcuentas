@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
-import { Home, Users, DollarSign, CreditCard, AlertTriangle, Meh, RefreshCw } from "lucide-react"; // Eliminar Smile
+import { Home, Users, DollarSign, CreditCard, AlertTriangle, Meh, RefreshCw, PiggyBank } from "lucide-react"; // Eliminar Smile
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -143,7 +143,7 @@ const Dashboard = () => {
         .select('*')
         .eq('user_id', user.id);
       if (creditorError) throw creditorError;
-      setCreditors(creditorsData || []);
+      setCreditors(creditorData || []);
 
     } catch (error: any) {
       showError('Error al cargar datos del dashboard: ' + error.message);
@@ -204,6 +204,17 @@ const Dashboard = () => {
       return sum + (card.type === "credit" ? -card.current_balance : card.current_balance);
     }, 0);
   }, [cards]);
+
+  // Nuevo cálculo para el saldo total de tarjetas de débito
+  const totalDebitCardsBalance = useMemo(() => {
+    return cards.filter(card => card.type === "debit").reduce((sum, card) => sum + card.current_balance, 0);
+  }, [cards]);
+
+  // Nuevo cálculo para el balance total
+  const totalOverallBalance = useMemo(() => {
+    return totalCashBalance + totalDebitCardsBalance + totalDebtorsBalance - totalCreditorsBalance;
+  }, [totalCashBalance, totalDebitCardsBalance, totalDebtorsBalance, totalCreditorsBalance]);
+
 
   const incomeCategoryData = useMemo(() => {
     const dataMap = new Map<string, { name: string; value: number; color: string }>();
@@ -446,44 +457,68 @@ const Dashboard = () => {
       <GroupedPaymentDueDatesCard cards={cards} />
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
+        <Card className="bg-card text-foreground">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Saldo Efectivo</CardTitle>
-            <Home className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">TU DINERITO</CardTitle>
+            <Home className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">${totalCashBalance.toFixed(2)}</div>
             <p className="text-xs text-muted-foreground">+20.1% desde el mes pasado</p> {/* Placeholder */}
           </CardContent>
         </Card>
-        <Card>
+        <Card className="bg-card text-foreground">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Deuda de Deudores</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">QUIEN TE DEBE</CardTitle>
+            <Users className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">${totalDebtorsBalance.toFixed(2)}</div>
             <p className="text-xs text-muted-foreground">-5.2% desde el mes pasado</p> {/* Placeholder */}
           </CardContent>
         </Card>
-        <Card>
+        <Card className="bg-card text-foreground">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Deuda a Acreedores</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">A QUIEN LE DEBES</CardTitle>
+            <DollarSign className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">${totalCreditorsBalance.toFixed(2)}</div>
             <p className="text-xs text-muted-foreground">+10.5% desde el mes pasado</p> {/* Placeholder */}
           </CardContent>
         </Card>
-        <Card>
+        <Card className="bg-card text-foreground">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Saldo Tarjetas</CardTitle>
-            <CreditCard className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">TARJETAS</CardTitle>
+            <CreditCard className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">${totalCardsBalance.toFixed(2)}</div>
             <p className="text-xs text-muted-foreground">+1.8% desde el mes pasado</p> {/* Placeholder */}
+          </CardContent>
+        </Card>
+
+        {/* Nueva tarjeta para Saldo de Tarjetas de Débito */}
+        <Card className="bg-card text-foreground">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">SALDO TARJETAS DÉBITO</CardTitle>
+            <CreditCard className="h-4 w-4 text-primary" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">${totalDebitCardsBalance.toFixed(2)}</div>
+            <p className="text-xs text-muted-foreground">Saldo total en tus tarjetas de débito.</p>
+          </CardContent>
+        </Card>
+
+        {/* Nueva tarjeta para Balance Total */}
+        <Card className="bg-card text-foreground">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">BALANCE TOTAL</CardTitle>
+            <PiggyBank className="h-4 w-4 text-primary" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">${totalOverallBalance.toFixed(2)}</div>
+            <p className="text-xs text-muted-foreground">Efectivo + Débito + Deudores - Acreedores.</p>
           </CardContent>
         </Card>
       </div>
