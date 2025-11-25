@@ -13,7 +13,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { PlusCircle, DollarSign, History, CalendarIcon, Trash2, Edit } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { cn } from "@/lib/utils";
-import { format } from "date-fns";
+import { format, addDays } from "date-fns"; // Importar addDays
 import { es } from "date-fns/locale";
 import { DateRange } from "react-day-picker";
 import CardDisplay from "@/components/CardDisplay";
@@ -46,7 +46,7 @@ interface CardData {
   current_balance: number;
   credit_limit?: number;
   cut_off_day?: number;
-  payment_due_day?: number;
+  days_to_pay_after_cut_off?: number; // Nuevo campo
   color: string;
   transactions: CardTransaction[];
   user_id?: string;
@@ -73,7 +73,7 @@ const Cards = () => {
     initial_balance: "",
     credit_limit: "",
     cut_off_day: undefined as number | undefined,
-    payment_due_day: undefined as number | undefined,
+    days_to_pay_after_cut_off: undefined as number | undefined, // Nuevo campo
     color: "#3B82F6",
   });
   const [newTransaction, setNewTransaction] = useState({
@@ -121,10 +121,10 @@ const Cards = () => {
   };
 
   const handleNewCardTypeChange = (value: "credit" | "debit") => {
-    setNewCard((prev) => ({ ...prev, type: value, credit_limit: "", cut_off_day: undefined, payment_due_day: undefined }));
+    setNewCard((prev) => ({ ...prev, type: value, credit_limit: "", cut_off_day: undefined, days_to_pay_after_cut_off: undefined })); // Resetear días de pago
   };
 
-  const handleNewCardDayChange = (field: "cut_off_day" | "payment_due_day", date: Date | undefined) => {
+  const handleNewCardDayChange = (field: "cut_off_day", date: Date | undefined) => { // Solo para cut_off_day
     setNewCard((prev) => ({ ...prev, [field]: date ? date.getDate() : undefined }));
   };
 
@@ -159,7 +159,7 @@ const Cards = () => {
 
     let creditLimit: number | undefined = undefined;
     let cutOffDay: number | undefined = undefined;
-    let paymentDueDay: number | undefined = undefined;
+    let daysToPayAfterCutOff: number | undefined = undefined;
 
     if (newCard.type === "credit") {
       creditLimit = parseFloat(newCard.credit_limit);
@@ -171,12 +171,12 @@ const Cards = () => {
         showError("Por favor, selecciona el día de corte para la tarjeta de crédito.");
         return;
       }
-      if (newCard.payment_due_day === undefined) {
-        showError("Por favor, selecciona el día límite de pago para la tarjeta de crédito.");
+      if (newCard.days_to_pay_after_cut_off === undefined || newCard.days_to_pay_after_cut_off < 0) {
+        showError("Por favor, ingresa los días para pagar después del corte.");
         return;
       }
       cutOffDay = newCard.cut_off_day;
-      paymentDueDay = newCard.payment_due_day;
+      daysToPayAfterCutOff = newCard.days_to_pay_after_cut_off;
     }
 
     const { data, error } = await supabase
@@ -192,7 +192,7 @@ const Cards = () => {
         current_balance: initialBalance,
         credit_limit: newCard.type === "credit" ? creditLimit : undefined,
         cut_off_day: newCard.type === "credit" ? cutOffDay : undefined,
-        payment_due_day: newCard.type === "credit" ? paymentDueDay : undefined,
+        days_to_pay_after_cut_off: newCard.type === "credit" ? daysToPayAfterCutOff : undefined, // Guardar nuevo campo
         color: newCard.color,
       })
       .select();
@@ -201,7 +201,7 @@ const Cards = () => {
       showError('Error al registrar tarjeta: ' + error.message);
     } else {
       setCards((prev) => [...prev, { ...data[0], transactions: [] }]);
-      setNewCard({ name: "", bank_name: "", last_four_digits: "", expiration_date: "", type: "debit", initial_balance: "", credit_limit: "", cut_off_day: undefined, payment_due_day: undefined, color: "#3B82F6" });
+      setNewCard({ name: "", bank_name: "", last_four_digits: "", expiration_date: "", type: "debit", initial_balance: "", credit_limit: "", cut_off_day: undefined, days_to_pay_after_cut_off: undefined, color: "#3B82F6" });
       setIsAddCardDialogOpen(false);
       showSuccess("Tarjeta registrada exitosamente.");
     }
@@ -534,7 +534,7 @@ const Cards = () => {
       initial_balance: card.initial_balance.toString(),
       credit_limit: card.credit_limit?.toString() || "",
       cut_off_day: card.cut_off_day,
-      payment_due_day: card.payment_due_day,
+      days_to_pay_after_cut_off: card.days_to_pay_after_cut_off, // Cargar nuevo campo
       color: card.color,
     });
     setIsEditCardDialogOpen(true);
@@ -567,7 +567,7 @@ const Cards = () => {
 
     let creditLimit: number | undefined = undefined;
     let cutOffDay: number | undefined = undefined;
-    let paymentDueDay: number | undefined = undefined;
+    let daysToPayAfterCutOff: number | undefined = undefined;
 
     if (newCard.type === "credit") {
       creditLimit = parseFloat(newCard.credit_limit);
@@ -579,12 +579,12 @@ const Cards = () => {
         showError("Por favor, selecciona el día de corte para la tarjeta de crédito.");
         return;
       }
-      if (newCard.payment_due_day === undefined) {
-        showError("Por favor, selecciona el día límite de pago para la tarjeta de crédito.");
+      if (newCard.days_to_pay_after_cut_off === undefined || newCard.days_to_pay_after_cut_off < 0) {
+        showError("Por favor, ingresa los días para pagar después del corte.");
         return;
       }
       cutOffDay = newCard.cut_off_day;
-      paymentDueDay = newCard.payment_due_day;
+      daysToPayAfterCutOff = newCard.days_to_pay_after_cut_off;
     }
 
     const { data, error } = await supabase
@@ -599,7 +599,7 @@ const Cards = () => {
         current_balance: parseFloat(newCard.initial_balance),
         credit_limit: newCard.type === "credit" ? creditLimit : null,
         cut_off_day: newCard.type === "credit" ? cutOffDay : null,
-        payment_due_day: newCard.type === "credit" ? paymentDueDay : null,
+        days_to_pay_after_cut_off: newCard.type === "credit" ? daysToPayAfterCutOff : null, // Actualizar nuevo campo
         color: newCard.color,
       })
       .eq('id', editingCard.id)
@@ -613,7 +613,7 @@ const Cards = () => {
         prev.map((card) => (card.id === editingCard.id ? { ...data[0], transactions: card.transactions } : card))
       );
       setEditingCard(null);
-      setNewCard({ name: "", bank_name: "", last_four_digits: "", expiration_date: "", type: "debit", initial_balance: "", credit_limit: "", cut_off_day: undefined, payment_due_day: undefined, color: "#3B82F6" });
+      setNewCard({ name: "", bank_name: "", last_four_digits: "", expiration_date: "", type: "debit", initial_balance: "", credit_limit: "", cut_off_day: undefined, days_to_pay_after_cut_off: undefined, color: "#3B82F6" });
       setIsEditCardDialogOpen(false);
       showSuccess("Tarjeta actualizada exitosamente.");
     }
@@ -624,6 +624,22 @@ const Cards = () => {
     card.bank_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     card.last_four_digits.includes(searchTerm)
   );
+
+  // Helper para calcular la fecha límite de pago
+  const calculatePaymentDueDate = (cutOffDay: number, daysToPay: number) => {
+    const today = new Date();
+    let currentCutOffDate = new Date(today.getFullYear(), today.getMonth(), cutOffDay);
+    
+    // Si el día de corte ya pasó este mes, se considera el del próximo mes
+    if (currentCutOffDate.getDate() < today.getDate() && currentCutOffDate.getMonth() === today.getMonth()) {
+      currentCutOffDate = new Date(today.getFullYear(), today.getMonth() + 1, cutOffDay);
+    } else if (currentCutOffDate.getDate() > today.getDate() && currentCutOffDate.getMonth() !== today.getMonth()) {
+      // Si el día de corte es en un mes futuro (ej. hoy es 30 de enero, corte es 1 de marzo), usar el mes actual
+      currentCutOffDate = new Date(today.getFullYear(), today.getMonth(), cutOffDay);
+    }
+
+    return addDays(currentCutOffDate, daysToPay);
+  };
 
   // Obtener la tarjeta actual para el diálogo de transacción, si selectedCardId está definido
   const currentCardForDialog = selectedCardId ? cards.find(c => c.id === selectedCardId) : null;
@@ -801,35 +817,19 @@ const Cards = () => {
                       </Popover>
                     </div>
                     <div className="grid grid-cols-4 items-center gap-4">
-                      <Label htmlFor="payment_due_day" className="text-right">
-                        Día Límite de Pago
+                      <Label htmlFor="days_to_pay_after_cut_off" className="text-right">
+                        Días para pagar después del corte
                       </Label>
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <Button
-                            variant={"outline"}
-                            className={cn(
-                              "col-span-3 justify-start text-left font-normal",
-                              !newCard.payment_due_day && "text-muted-foreground"
-                            )}
-                          >
-                            <CalendarIcon className="mr-2 h-4 w-4" />
-                            {newCard.payment_due_day ? `Día ${newCard.payment_due_day} de cada mes` : <span>Selecciona un día</span>}
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0">
-                          <Calendar
-                            mode="single"
-                            selected={newCard.payment_due_day ? new Date(new Date().setDate(newCard.payment_due_day)) : undefined}
-                            onSelect={(date) => handleNewCardDayChange("payment_due_day", date)}
-                            initialFocus
-                            captionLayout="dropdown-buttons"
-                            fromYear={1900}
-                            toYear={2100}
-                            locale={es}
-                          />
-                        </PopoverContent>
-                      </Popover>
+                      <Input
+                        id="days_to_pay_after_cut_off"
+                        name="days_to_pay_after_cut_off"
+                        type="number"
+                        min="0"
+                        value={newCard.days_to_pay_after_cut_off?.toString() || ""}
+                        onChange={handleNewCardChange}
+                        className="col-span-3"
+                        required
+                      />
                     </div>
                   </>
                 )}
@@ -1011,9 +1011,17 @@ const Cards = () => {
                             <p className="font-medium">{detailedCard.cut_off_day ? `Día ${detailedCard.cut_off_day} de cada mes` : "N/A"}</p>
                           </div>
                           <div>
-                            <p className="text-muted-foreground">Día Límite de Pago:</p>
-                            <p className="font-medium">{detailedCard.payment_due_day ? `Día ${detailedCard.payment_due_day} de cada mes` : "N/A"}</p>
+                            <p className="text-muted-foreground">Días para pagar después del corte:</p>
+                            <p className="font-medium">{detailedCard.days_to_pay_after_cut_off !== undefined ? `${detailedCard.days_to_pay_after_cut_off} días` : "N/A"}</p>
                           </div>
+                          {detailedCard.cut_off_day !== undefined && detailedCard.days_to_pay_after_cut_off !== undefined && (
+                            <div>
+                              <p className="text-muted-foreground">Fecha Límite de Pago (Estimada):</p>
+                              <p className="font-medium">
+                                {format(calculatePaymentDueDate(detailedCard.cut_off_day, detailedCard.days_to_pay_after_cut_off), "dd 'de' MMMM, yyyy", { locale: es })}
+                              </p>
+                            </div>
+                          )}
                         </>
                       )}
                     </div>
@@ -1324,35 +1332,19 @@ const Cards = () => {
                       </Popover>
                     </div>
                     <div className="grid grid-cols-4 items-center gap-4">
-                      <Label htmlFor="editPaymentDueDay" className="text-right">
-                        Día Límite de Pago
+                      <Label htmlFor="editDaysToPayAfterCutOff" className="text-right">
+                        Días para pagar después del corte
                       </Label>
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <Button
-                            variant={"outline"}
-                            className={cn(
-                              "col-span-3 justify-start text-left font-normal",
-                              !newCard.payment_due_day && "text-muted-foreground"
-                            )}
-                          >
-                            <CalendarIcon className="mr-2 h-4 w-4" />
-                            {newCard.payment_due_day ? `Día ${newCard.payment_due_day} de cada mes` : <span>Selecciona un día</span>}
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0">
-                          <Calendar
-                            mode="single"
-                            selected={newCard.payment_due_day ? new Date(new Date().setDate(newCard.payment_due_day)) : undefined}
-                            onSelect={(date) => handleNewCardDayChange("payment_due_day", date)}
-                            initialFocus
-                            captionLayout="dropdown-buttons"
-                            fromYear={1900}
-                            toYear={2100}
-                            locale={es}
-                          />
-                        </PopoverContent>
-                      </Popover>
+                      <Input
+                        id="editDaysToPayAfterCutOff"
+                        name="days_to_pay_after_cut_off"
+                        type="number"
+                        min="0"
+                        value={newCard.days_to_pay_after_cut_off?.toString() || ""}
+                        onChange={handleNewCardChange}
+                        className="col-span-3"
+                        required
+                      />
                     </div>
                   </>
                 )}

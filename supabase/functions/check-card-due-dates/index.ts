@@ -66,7 +66,7 @@ serve(async (req) => {
     // Fetch all credit cards
     const { data: cards, error: cardsError } = await supabaseClient
       .from('cards')
-      .select('id, name, bank_name, type, cut_off_day, payment_due_day, user_id')
+      .select('id, name, bank_name, type, cut_off_day, days_to_pay_after_cut_off, user_id') // Seleccionar nuevo campo
       .eq('type', 'credit');
 
     if (cardsError) {
@@ -78,8 +78,6 @@ serve(async (req) => {
     }
 
     for (const card of cards || []) {
-      let notificationSent = false;
-
       // Check Cut-off Day
       if (card.cut_off_day !== undefined && card.cut_off_day > 0) {
         let cutOffDate = new Date(today.getFullYear(), today.getMonth(), card.cut_off_day);
@@ -102,18 +100,23 @@ serve(async (req) => {
           } else {
             for (const device of devices || []) {
               await sendPushNotification(device.push_token, title, body);
-              notificationSent = true;
             }
           }
         }
       }
 
-      // Check Payment Due Day
-      if (card.payment_due_day !== undefined && card.payment_due_day > 0) {
-        let paymentDueDate = new Date(today.getFullYear(), today.getMonth(), card.payment_due_day);
-        if (isBefore(paymentDueDate, today)) {
-          paymentDueDate = new Date(today.getFullYear(), today.getMonth() + 1, card.payment_due_day);
+      // Check Payment Due Day (calculated from days_to_pay_after_cut_off)
+      if (card.cut_off_day !== undefined && card.days_to_pay_after_cut_off !== undefined) {
+        let cutOffDateForPayment = new Date(today.getFullYear(), today.getMonth(), card.cut_off_day);
+        // Si el día de corte ya pasó este mes, se considera el del próximo mes para calcular la fecha de pago
+        if (cutOffDateForPayment.getDate() < today.getDate() && cutOffDateForPayment.getMonth() === today.getMonth()) {
+          cutOffDateForPayment = new Date(today.getFullYear(), today.getMonth() + 1, card.cut_off_day);
+        } else if (cutOffDateForPayment.getDate() > today.getDate() && cutOffDateForPayment.getMonth() !== today.getMonth()) {
+          // Si el día de corte es en un mes futuro (ej. hoy es 30 de enero, corte es 1 de marzo), usar el mes actual
+          cutOffDateForPayment = new Date(today.getFullYear(), today.getMonth(), card.cut_off_day);
         }
+
+        const paymentDueDate = addDays(cutOffDateForPayment, card.days_to_pay_after_cut_off);
 
         if (isBefore(paymentDueDate, twoDaysFromNow) || isSameDay(paymentDueDate, twoDaysFromNow)) {
           const title = `¡Fecha límite de pago próxima!`;
@@ -130,7 +133,6 @@ serve(async (req) => {
           } else {
             for (const device of devices || []) {
               await sendPushNotification(device.push_token, title, body);
-              notificationSent = true;
             }
           }
         }

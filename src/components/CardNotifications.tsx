@@ -17,7 +17,7 @@ interface CardData {
   expiration_date: string;
   type: "credit" | "debit";
   cut_off_day?: number;
-  payment_due_day?: number;
+  days_to_pay_after_cut_off?: number; // Nuevo campo
 }
 
 const CardNotifications: React.FC = () => {
@@ -33,7 +33,7 @@ const CardNotifications: React.FC = () => {
 
       const { data, error } = await supabase
         .from('cards')
-        .select('id, name, bank_name, expiration_date, type, cut_off_day, payment_due_day')
+        .select('id, name, bank_name, expiration_date, type, cut_off_day, days_to_pay_after_cut_off') // Seleccionar nuevo campo
         .eq('user_id', user.id);
 
       if (error) {
@@ -69,12 +69,18 @@ const CardNotifications: React.FC = () => {
             }
           }
 
-          // Check Payment Due Day
-          if (card.payment_due_day !== undefined && card.payment_due_day > 0) {
-            let paymentDueDate = new Date(today.getFullYear(), today.getMonth(), card.payment_due_day);
-            if (isBefore(paymentDueDate, today)) {
-              paymentDueDate = new Date(today.getFullYear(), today.getMonth() + 1, card.payment_due_day);
+          // Check Payment Due Day (calculated from days_to_pay_after_cut_off)
+          if (card.cut_off_day !== undefined && card.days_to_pay_after_cut_off !== undefined) {
+            let cutOffDateForPayment = new Date(today.getFullYear(), today.getMonth(), card.cut_off_day);
+            // Si el día de corte ya pasó este mes, se considera el del próximo mes para calcular la fecha de pago
+            if (cutOffDateForPayment.getDate() < today.getDate() && cutOffDateForPayment.getMonth() === today.getMonth()) {
+              cutOffDateForPayment = new Date(today.getFullYear(), today.getMonth() + 1, card.cut_off_day);
+            } else if (cutOffDateForPayment.getDate() > today.getDate() && cutOffDateForPayment.getMonth() !== today.getMonth()) {
+              // Si el día de corte es en un mes futuro (ej. hoy es 30 de enero, corte es 1 de marzo), usar el mes actual
+              cutOffDateForPayment = new Date(today.getFullYear(), today.getMonth(), card.cut_off_day);
             }
+
+            const paymentDueDate = addDays(cutOffDateForPayment, card.days_to_pay_after_cut_off);
 
             if (isBefore(paymentDueDate, twoDaysFromNow) || isSameDay(paymentDueDate, twoDaysFromNow)) {
               toast.info(
