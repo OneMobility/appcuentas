@@ -6,21 +6,9 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 const colors = [
-  "#EF4444", // red-500
-  "#F97316", // orange-500
-  "#F59E0B", // amber-500
-  "#EAB308", // yellow-500
-  "#84CC16", // lime-500
-  "#22C55E", // green-500
-  "#10B981", // emerald-500
-  "#06B6D4", // cyan-500
-  "#0EA5E9", // sky-500
-  "#3B82F6", // blue-500
-  "#6366F1", // indigo-500
-  "#A855F7", // purple-500
-  "#D946EF", // fuchsia-500
-  "#EC4899", // pink-500
-  "#78716C", // stone-500
+  "#FFADAD", "#FFD6A5", "#FDFFB6", "#CAFFBF", "#9BF6FF", "#A0C4FF", "#BDB2FF", "#FFC6FF", "#FFFFFC", "#E0BBE4",
+  "#957DAD", "#D291BC", "#FFC72C", "#A7D9B1", "#FF6B6B", "#8D99AE", "#C7E9B0", "#FFD700", "#B0E0E6", "#ADD8E6",
+  "#87CEEB", "#6495ED", "#4682B4", "#5F9EA0", "#F08080", "#FFB6C1", "#FFDAB9", "#E6E6FA", "#DDA0DD", "#BA55D3"
 ];
 
 interface ColorPickerProps {

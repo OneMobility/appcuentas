@@ -4,21 +4,23 @@ import React, { createContext, useContext, useState, ReactNode, useEffect } from
 import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "./SessionContext";
 import { showError, showSuccess } from "@/utils/toast";
-import LoadingSpinner from '@/components/LoadingSpinner'; // Importar LoadingSpinner
+import LoadingSpinner from '@/components/LoadingSpinner';
 
 export interface Category {
   id: string;
   name: string;
   color: string;
-  user_id?: string;
+  user_id?: string | null; // Ahora puede ser nulo para categorías fijas
+  is_fixed?: boolean; // Nuevo campo para identificar categorías fijas
+  icon?: string; // Nuevo campo para el icono
 }
 
 interface CategoryContextType {
   incomeCategories: Category[];
   expenseCategories: Category[];
-  addCategory: (category: Omit<Category, "id" | "user_id">, type: "income" | "expense") => Promise<void>;
+  addCategory: (category: Omit<Category, "id" | "user_id" | "is_fixed">, type: "income" | "expense") => Promise<void>;
   updateCategory: (category: Category, type: "income" | "expense") => Promise<void>;
-  deleteCategory: (id: string, type: "income" | "expense") => Promise<void>; // Añadido
+  deleteCategory: (id: string, type: "income" | "expense") => Promise<void>;
   getCategoryById: (id: string, type: "income" | "expense") => Category | undefined;
   isLoadingCategories: boolean;
 }
@@ -32,35 +34,57 @@ export const CategoryProvider = ({ children }: { children: ReactNode }) => {
   const [isLoadingCategories, setIsLoadingCategories] = useState(true);
 
   const fetchCategories = async () => {
-    if (!user) {
-      setIncomeCategories([]);
-      setExpenseCategories([]);
-      setIsLoadingCategories(false);
-      return;
-    }
-
     setIsLoadingCategories(true);
-    const { data: incomeData, error: incomeError } = await supabase
+    
+    // Fetch fixed categories (user_id is NULL)
+    const { data: fixedIncomeData, error: fixedIncomeError } = await supabase
       .from('income_categories')
       .select('*')
-      .eq('user_id', user.id);
+      .is('user_id', null);
 
-    const { data: expenseData, error: expenseError } = await supabase
+    const { data: fixedExpenseData, error: fixedExpenseError } = await supabase
       .from('expense_categories')
       .select('*')
-      .eq('user_id', user.id);
+      .is('user_id', null);
 
-    if (incomeError) {
-      showError('Error al cargar categorías de ingresos: ' + incomeError.message);
-    } else {
-      setIncomeCategories(incomeData || []);
+    if (fixedIncomeError || fixedExpenseError) {
+      showError('Error al cargar categorías fijas: ' + (fixedIncomeError?.message || fixedExpenseError?.message));
     }
 
-    if (expenseError) {
-      showError('Error al cargar categorías de egresos: ' + expenseError.message);
-    } else {
-      setExpenseCategories(expenseData || []);
+    let allIncomeCategories: Category[] = fixedIncomeData || [];
+    let allExpenseCategories: Category[] = fixedExpenseData || [];
+
+    if (user) {
+      // Fetch user-specific categories
+      const { data: userDataIncome, error: userIncomeError } = await supabase
+        .from('income_categories')
+        .select('*')
+        .eq('user_id', user.id);
+
+      const { data: userDataExpense, error: userExpenseError } = await supabase
+        .from('expense_categories')
+        .select('*')
+        .eq('user_id', user.id);
+
+      if (userIncomeError) {
+        showError('Error al cargar categorías de ingresos del usuario: ' + userIncomeError.message);
+      } else {
+        allIncomeCategories = [...allIncomeCategories, ...(userDataIncome || [])];
+      }
+
+      if (userExpenseError) {
+        showError('Error al cargar categorías de egresos del usuario: ' + userExpenseError.message);
+      } else {
+        allExpenseCategories = [...allExpenseCategories, ...(userDataExpense || [])];
+      }
     }
+
+    // Sort categories by name
+    allIncomeCategories.sort((a, b) => a.name.localeCompare(b.name));
+    allExpenseCategories.sort((a, b) => a.name.localeCompare(b.name));
+
+    setIncomeCategories(allIncomeCategories);
+    setExpenseCategories(allExpenseCategories);
     setIsLoadingCategories(false);
   };
 
@@ -68,7 +92,7 @@ export const CategoryProvider = ({ children }: { children: ReactNode }) => {
     fetchCategories();
   }, [user]);
 
-  const addCategory = async (category: Omit<Category, "id" | "user_id">, type: "income" | "expense") => {
+  const addCategory = async (category: Omit<Category, "id" | "user_id" | "is_fixed">, type: "income" | "expense") => {
     if (!user) {
       showError("Debes iniciar sesión para añadir categorías.");
       return;
@@ -77,16 +101,16 @@ export const CategoryProvider = ({ children }: { children: ReactNode }) => {
     const tableName = type === "income" ? "income_categories" : "expense_categories";
     const { data, error } = await supabase
       .from(tableName)
-      .insert({ ...category, user_id: user.id })
+      .insert({ ...category, user_id: user.id, is_fixed: false }) // Las categorías añadidas por el usuario no son fijas
       .select();
 
     if (error) {
       showError('Error al añadir categoría: ' + error.message);
     } else {
       if (type === "income") {
-        setIncomeCategories((prev) => [...prev, data[0]]);
+        setIncomeCategories((prev) => [...prev, data[0]].sort((a, b) => a.name.localeCompare(b.name)));
       } else {
-        setExpenseCategories((prev) => [...prev, data[0]]);
+        setExpenseCategories((prev) => [...prev, data[0]].sort((a, b) => a.name.localeCompare(b.name)));
       }
       showSuccess("Categoría añadida exitosamente.");
     }
@@ -97,11 +121,15 @@ export const CategoryProvider = ({ children }: { children: ReactNode }) => {
       showError("Debes iniciar sesión para actualizar categorías.");
       return;
     }
+    if (updatedCategory.is_fixed) {
+      showError("No puedes editar categorías fijas.");
+      return;
+    }
 
     const tableName = type === "income" ? "income_categories" : "expense_categories";
     const { data, error } = await supabase
       .from(tableName)
-      .update({ name: updatedCategory.name, color: updatedCategory.color })
+      .update({ name: updatedCategory.name, color: updatedCategory.color, icon: updatedCategory.icon })
       .eq('id', updatedCategory.id)
       .eq('user_id', user.id)
       .select();
@@ -111,11 +139,11 @@ export const CategoryProvider = ({ children }: { children: ReactNode }) => {
     } else {
       if (type === "income") {
         setIncomeCategories((prev) =>
-          prev.map((cat) => (cat.id === updatedCategory.id ? data[0] : cat))
+          prev.map((cat) => (cat.id === updatedCategory.id ? data[0] : cat)).sort((a, b) => a.name.localeCompare(b.name))
         );
       } else {
         setExpenseCategories((prev) =>
-          prev.map((cat) => (cat.id === updatedCategory.id ? data[0] : cat))
+          prev.map((cat) => (cat.id === updatedCategory.id ? data[0] : cat)).sort((a, b) => a.name.localeCompare(b.name))
         );
       }
       showSuccess("Categoría actualizada exitosamente.");
@@ -125,6 +153,12 @@ export const CategoryProvider = ({ children }: { children: ReactNode }) => {
   const deleteCategory = async (id: string, type: "income" | "expense") => {
     if (!user) {
       showError("Debes iniciar sesión para eliminar categorías.");
+      return;
+    }
+
+    const categoryToDelete = (type === "income" ? incomeCategories : expenseCategories).find(cat => cat.id === id);
+    if (categoryToDelete?.is_fixed) {
+      showError("No puedes eliminar categorías fijas.");
       return;
     }
 
@@ -139,9 +173,9 @@ export const CategoryProvider = ({ children }: { children: ReactNode }) => {
       showError('Error al eliminar categoría: ' + error.message);
     } else {
       if (type === "income") {
-        setIncomeCategories((prev) => prev.filter((cat) => cat.id !== id));
+        setIncomeCategories((prev) => prev.filter((cat) => cat.id !== id).sort((a, b) => a.name.localeCompare(b.name)));
       } else {
-        setExpenseCategories((prev) => prev.filter((cat) => cat.id !== id));
+        setExpenseCategories((prev) => prev.filter((cat) => cat.id !== id).sort((a, b) => a.name.localeCompare(b.name)));
       }
       showSuccess("Categoría eliminada exitosamente.");
     }
@@ -162,12 +196,12 @@ export const CategoryProvider = ({ children }: { children: ReactNode }) => {
         expenseCategories,
         addCategory,
         updateCategory,
-        deleteCategory, // Añadido
+        deleteCategory,
         getCategoryById,
         isLoadingCategories,
       }}
     >
-      {isLoadingCategories && <LoadingSpinner />} {/* Mostrar spinner si está cargando */}
+      {isLoadingCategories && <LoadingSpinner />}
       {children}
     </CategoryContext.Provider>
   );

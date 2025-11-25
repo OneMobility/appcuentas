@@ -7,11 +7,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
-import { PlusCircle, Edit, Trash2 } from "lucide-react"; // Importar Trash2
+import { PlusCircle, Edit, Trash2 } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import ColorPicker from "@/components/ColorPicker";
 import { useCategoryContext, Category } from "@/context/CategoryContext";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"; // Importar AlertDialog
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import IconPicker from "@/components/IconPicker"; // Importar IconPicker
+import * as LucideIcons from "lucide-react"; // Importar todos los iconos de Lucide
 
 const Categories = () => {
   const { incomeCategories, expenseCategories, addCategory, updateCategory, deleteCategory, isLoadingCategories } = useCategoryContext();
@@ -21,22 +23,24 @@ const Categories = () => {
     name: "",
     type: "income" as "income" | "expense",
     color: "#3B82F6", // Default color
+    icon: "Tag", // Default icon
   });
 
   useEffect(() => {
     if (editingCategory) {
       setNewCategory({
         name: editingCategory.name,
-        type: editingCategory.user_id?.startsWith("inc") ? "income" : "expense", // Asumiendo que el user_id puede indicar el tipo si no hay otra forma
+        type: editingCategory.user_id === null ? "income" : (incomeCategories.some(c => c.id === editingCategory.id) ? "income" : "expense"),
         color: editingCategory.color,
+        icon: editingCategory.icon || "Tag",
       });
     } else {
       resetForm();
     }
-  }, [editingCategory]);
+  }, [editingCategory, incomeCategories]);
 
   const resetForm = () => {
-    setNewCategory({ name: "", type: "income", color: "#3B82F6" });
+    setNewCategory({ name: "", type: "income", color: "#3B82F6", icon: "Tag" });
     setEditingCategory(null);
   };
 
@@ -52,17 +56,26 @@ const Categories = () => {
     setNewCategory((prev) => ({ ...prev, color }));
   };
 
+  const handleIconSelect = (iconName: string) => {
+    setNewCategory((prev) => ({ ...prev, icon: iconName }));
+  };
+
   const handleOpenAddCategoryDialog = () => {
     resetForm();
     setIsCategoryDialogOpen(true);
   };
 
   const handleOpenEditCategoryDialog = (category: Category, type: "income" | "expense") => {
+    if (category.is_fixed) {
+      showError("No puedes editar categorías fijas.");
+      return;
+    }
     setEditingCategory(category);
     setNewCategory({
       name: category.name,
-      type: type, // Pasar el tipo correcto
+      type: type,
       color: category.color,
+      icon: category.icon || "Tag",
     });
     setIsCategoryDialogOpen(true);
   };
@@ -77,12 +90,17 @@ const Categories = () => {
       showError("Por favor, selecciona un color para la categoría.");
       return;
     }
+    if (!newCategory.icon) {
+      showError("Por favor, selecciona un icono para la categoría.");
+      return;
+    }
 
     if (editingCategory) {
       const updatedCategory: Category = {
         ...editingCategory,
         name: newCategory.name.trim(),
         color: newCategory.color,
+        icon: newCategory.icon,
       };
       await updateCategory(updatedCategory, newCategory.type);
     } else {
@@ -90,6 +108,7 @@ const Categories = () => {
         {
           name: newCategory.name.trim(),
           color: newCategory.color,
+          icon: newCategory.icon,
         },
         newCategory.type
       );
@@ -99,8 +118,17 @@ const Categories = () => {
     resetForm();
   };
 
-  const handleDeleteCategory = async (id: string, name: string, type: "income" | "expense") => {
+  const handleDeleteCategory = async (id: string, name: string, type: "income" | "expense", isFixed: boolean | undefined) => {
+    if (isFixed) {
+      showError("No puedes eliminar categorías fijas.");
+      return;
+    }
     await deleteCategory(id, type);
+  };
+
+  const getIconComponent = (iconName: string | undefined) => {
+    const IconComponent = iconName ? (LucideIcons as any)[iconName] : LucideIcons.Tag;
+    return IconComponent || LucideIcons.Tag;
   };
 
   return (
@@ -135,6 +163,7 @@ const Categories = () => {
                     onChange={handleNewCategoryChange}
                     className="col-span-3"
                     required
+                    disabled={editingCategory?.is_fixed}
                   />
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
@@ -166,8 +195,18 @@ const Categories = () => {
                     <ColorPicker selectedColor={newCategory.color} onSelectColor={handleColorSelect} />
                   </div>
                 </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="categoryIcon" className="text-right">
+                    Icono
+                  </Label>
+                  <div className="col-span-3">
+                    <IconPicker selectedIcon={newCategory.icon} onSelectIcon={handleIconSelect} />
+                  </div>
+                </div>
                 <DialogFooter>
-                  <Button type="submit">{editingCategory ? "Actualizar Categoría" : "Guardar Categoría"}</Button>
+                  <Button type="submit" disabled={editingCategory?.is_fixed}>
+                    {editingCategory ? "Actualizar Categoría" : "Guardar Categoría"}
+                  </Button>
                 </DialogFooter>
               </form>
             </DialogContent>
@@ -182,61 +221,68 @@ const Categories = () => {
                   <Table>
                     <TableHeader>
                       <TableRow>
+                        <TableHead>Icono</TableHead>
                         <TableHead>Nombre</TableHead>
                         <TableHead>Color</TableHead>
                         <TableHead className="text-right">Acciones</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {incomeCategories.map((cat) => (
-                        <TableRow key={cat.id}>
-                          <TableCell>{cat.name}</TableCell>
-                          <TableCell>
-                            <div
-                              className="h-4 w-4 rounded-full border"
-                              style={{ backgroundColor: cat.color }}
-                            />
-                          </TableCell>
-                          <TableCell className="text-right flex gap-2 justify-end">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleOpenEditCategoryDialog(cat, "income")}
-                              className="h-8 w-8 p-0"
-                            >
-                              <Edit className="h-3.5 w-3.5" />
-                              <span className="sr-only">Editar</span>
-                            </Button>
-                            <AlertDialog>
-                              <AlertDialogTrigger asChild>
-                                <Button
-                                  variant="destructive"
-                                  size="sm"
-                                  className="h-8 w-8 p-0"
-                                >
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                  <span className="sr-only">Eliminar</span>
-                                </Button>
-                              </AlertDialogTrigger>
-                              <AlertDialogContent>
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle>¿Estás absolutamente seguro?</AlertDialogTitle>
-                                  <AlertDialogDescription>
-                                    Esta acción no se puede deshacer. Esto eliminará permanentemente la categoría 
-                                    **{cat.name}** de ingresos.
-                                  </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                  <AlertDialogAction onClick={() => handleDeleteCategory(cat.id, cat.name, "income")}>
-                                    Eliminar
-                                  </AlertDialogAction>
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                            </AlertDialog>
-                          </TableCell>
-                        </TableRow>
-                      ))}
+                      {incomeCategories.map((cat) => {
+                        const IconComponent = getIconComponent(cat.icon);
+                        return (
+                          <TableRow key={cat.id}>
+                            <TableCell><IconComponent className="h-4 w-4" /></TableCell>
+                            <TableCell>{cat.name}</TableCell>
+                            <TableCell>
+                              <div
+                                className="h-4 w-4 rounded-full border"
+                                style={{ backgroundColor: cat.color }}
+                              />
+                            </TableCell>
+                            <TableCell className="text-right flex gap-2 justify-end">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleOpenEditCategoryDialog(cat, "income")}
+                                className="h-8 w-8 p-0"
+                                disabled={cat.is_fixed}
+                              >
+                                <Edit className="h-3.5 w-3.5" />
+                                <span className="sr-only">Editar</span>
+                              </Button>
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button
+                                    variant="destructive"
+                                    size="sm"
+                                    className="h-8 w-8 p-0"
+                                    disabled={cat.is_fixed}
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                    <span className="sr-only">Eliminar</span>
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>¿Estás absolutamente seguro?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      Esta acción no se puede deshacer. Esto eliminará permanentemente la categoría 
+                                      **{cat.name}** de ingresos.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                    <AlertDialogAction onClick={() => handleDeleteCategory(cat.id, cat.name, "income", cat.is_fixed)}>
+                                      Eliminar
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
                     </TableBody>
                   </Table>
                 </div>
@@ -251,61 +297,68 @@ const Categories = () => {
                   <Table>
                     <TableHeader>
                       <TableRow>
+                        <TableHead>Icono</TableHead>
                         <TableHead>Nombre</TableHead>
                         <TableHead>Color</TableHead>
                         <TableHead className="text-right">Acciones</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {expenseCategories.map((cat) => (
-                        <TableRow key={cat.id}>
-                          <TableCell>{cat.name}</TableCell>
-                          <TableCell>
-                            <div
-                              className="h-4 w-4 rounded-full border"
-                              style={{ backgroundColor: cat.color }}
-                            />
-                          </TableCell>
-                          <TableCell className="text-right flex gap-2 justify-end">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleOpenEditCategoryDialog(cat, "expense")}
-                              className="h-8 w-8 p-0"
-                            >
-                              <Edit className="h-3.5 w-3.5" />
-                              <span className="sr-only">Editar</span>
-                            </Button>
-                            <AlertDialog>
-                              <AlertDialogTrigger asChild>
-                                <Button
-                                  variant="destructive"
-                                  size="sm"
-                                  className="h-8 w-8 p-0"
-                                >
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                  <span className="sr-only">Eliminar</span>
-                                </Button>
-                              </AlertDialogTrigger>
-                              <AlertDialogContent>
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle>¿Estás absolutamente seguro?</AlertDialogTitle>
-                                  <AlertDialogDescription>
-                                    Esta acción no se puede deshacer. Esto eliminará permanentemente la categoría 
-                                    **{cat.name}** de egresos.
-                                  </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                  <AlertDialogAction onClick={() => handleDeleteCategory(cat.id, cat.name, "expense")}>
-                                    Eliminar
-                                  </AlertDialogAction>
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                            </AlertDialog>
-                          </TableCell>
-                        </TableRow>
-                      ))}
+                      {expenseCategories.map((cat) => {
+                        const IconComponent = getIconComponent(cat.icon);
+                        return (
+                          <TableRow key={cat.id}>
+                            <TableCell><IconComponent className="h-4 w-4" /></TableCell>
+                            <TableCell>{cat.name}</TableCell>
+                            <TableCell>
+                              <div
+                                className="h-4 w-4 rounded-full border"
+                                style={{ backgroundColor: cat.color }}
+                              />
+                            </TableCell>
+                            <TableCell className="text-right flex gap-2 justify-end">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleOpenEditCategoryDialog(cat, "expense")}
+                                className="h-8 w-8 p-0"
+                                disabled={cat.is_fixed}
+                              >
+                                <Edit className="h-3.5 w-3.5" />
+                                <span className="sr-only">Editar</span>
+                              </Button>
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button
+                                    variant="destructive"
+                                    size="sm"
+                                    className="h-8 w-8 p-0"
+                                    disabled={cat.is_fixed}
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                    <span className="sr-only">Eliminar</span>
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>¿Estás absolutamente seguro?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      Esta acción no se puede deshacer. Esto eliminará permanentemente la categoría 
+                                      **{cat.name}** de egresos.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                    <AlertDialogAction onClick={() => handleDeleteCategory(cat.id, cat.name, "expense", cat.is_fixed)}>
+                                      Eliminar
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
                     </TableBody>
                   </Table>
                 </div>
