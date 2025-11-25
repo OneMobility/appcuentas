@@ -111,7 +111,12 @@ const Sidebar = ({ onClose }: { onClose?: () => void }) => {
   );
 };
 
-const Layout = () => {
+interface LayoutProps {
+  challengeRefreshKey: number;
+  setChallengeRefreshKey: React.Dispatch<React.SetStateAction<number>>;
+}
+
+const Layout: React.FC<LayoutProps> = ({ challengeRefreshKey, setChallengeRefreshKey }) => {
   const isMobile = useIsMobile();
   const location = useLocation();
 
@@ -126,7 +131,7 @@ const Layout = () => {
             <h1 className="text-xl font-semibold">{currentPageName}</h1>
           </header>
           <main className="flex flex-1 flex-col gap-4 p-4 pb-20 lg:gap-6 lg:p-6">
-            <Outlet />
+            <Outlet context={{ setChallengeRefreshKey }} /> {/* Pass setChallengeRefreshKey via context */}
           </main>
           <MobileNavbar />
         </>
@@ -138,7 +143,7 @@ const Layout = () => {
           <PanelResizeHandle className="w-2 bg-sidebar-border hover:bg-sidebar-ring transition-colors" />
           <Panel defaultSize={85}>
             <main className="flex flex-1 flex-col gap-4 p-4 lg:gap-6 lg:p-6">
-              <Outlet />
+              <Outlet context={{ setChallengeRefreshKey }} /> {/* Pass setChallengeRefreshKey via context */}
             </main>
           </Panel>
         </PanelGroup>

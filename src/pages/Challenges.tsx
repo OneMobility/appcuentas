@@ -13,13 +13,18 @@ import LoadingSpinner from "@/components/LoadingSpinner";
 import { isAfter, isSameDay, format } from "date-fns";
 import { useCategoryContext } from "@/context/CategoryContext"; // Importar useCategoryContext
 
-const Challenges: React.FC = () => {
+interface ChallengesProps {
+  challengeRefreshKey: number;
+  setChallengeRefreshKey: React.Dispatch<React.SetStateAction<number>>;
+}
+
+const Challenges: React.FC<ChallengesProps> = ({ challengeRefreshKey, setChallengeRefreshKey }) => {
   const { user } = useSession();
   const { expenseCategories, incomeCategories, isLoadingCategories, getCategoryById } = useCategoryContext();
   const [activeChallenge, setActiveChallenge] = useState<ChallengeData | null>(null);
   const [isChallengeCreationDialogOpen, setIsChallengeCreationDialogOpen] = useState(false);
   const [isLoadingChallenges, setIsLoadingChallenges] = useState(true);
-  const [refreshKey, setRefreshKey] = useState(0);
+  // const [refreshKey, setRefreshKey] = useState(0); // Removed local refreshKey, using prop
 
   const fetchActiveChallenge = async () => {
     if (!user || isLoadingCategories) {
@@ -39,13 +44,25 @@ const Challenges: React.FC = () => {
       showError('Error al cargar reto activo: ' + error.message);
       setActiveChallenge(null);
     } else if (data) {
+      console.log("Fetched raw challenge data:", data); // Debug log
+
+      let savingGoalData = null;
+      if (data.savings) {
+        if (Array.isArray(data.savings)) {
+          savingGoalData = data.savings.length > 0 ? data.savings[0] : null;
+        } else {
+          savingGoalData = data.savings;
+        }
+      }
+
       const challenge: ChallengeData = {
         ...data,
-        saving_goal: data.savings ? data.savings : null,
+        saving_goal: savingGoalData,
         expense_categories: data.forbidden_category_ids
           ? data.forbidden_category_ids.map(id => getCategoryById(id, "expense")).filter(Boolean) as Category[]
           : [],
       };
+      console.log("Processed challenge for state:", challenge); // Debug log
       setActiveChallenge(challenge);
       // Check if challenge needs evaluation
       const endDate = new Date(challenge.end_date);
@@ -126,25 +143,25 @@ const Challenges: React.FC = () => {
       .from('challenges')
       .update({ status: newStatus })
       .eq('id', challenge.id)
-      .eq('user_id', user.id); // Corregido: usar user_id en lugar de user.id
+      .eq('user_id', user.id);
 
     if (updateError) {
       showError('Error al actualizar el estado del reto: ' + updateError.message);
     } else {
-      setRefreshKey(prev => prev + 1); // Force re-fetch to show updated status
+      setChallengeRefreshKey(prev => prev + 1); // Force re-fetch to show updated status
     }
   };
 
   useEffect(() => {
     fetchActiveChallenge();
-  }, [user, refreshKey, isLoadingCategories]);
+  }, [user, challengeRefreshKey, isLoadingCategories]); // Depend on prop refreshKey
 
   const handleChallengeStarted = () => {
-    setRefreshKey(prev => prev + 1); // Force re-fetch
+    setChallengeRefreshKey(prev => prev + 1); // Force re-fetch
   };
 
   const handleRefreshChallenges = () => {
-    setRefreshKey(prevKey => prevKey + 1);
+    setChallengeRefreshKey(prevKey => prevKey + 1);
     showSuccess("Retos actualizados.");
   };
 
@@ -168,16 +185,6 @@ const Challenges: React.FC = () => {
         onViewBadges={() => { /* TODO: Navigate to badges page */ }}
         onRefreshChallenges={handleRefreshChallenges}
       />
-
-      {/* Aquí podrías añadir una sección para retos completados/fallidos si fuera necesario */}
-      {/* <Card>
-        <CardHeader>
-          <CardTitle>Historial de Retos</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-muted-foreground">Próximamente: Ver tus retos completados y fallidos.</p>
-        </CardContent>
-      </Card> */}
 
       <ChallengeCreationDialog
         isOpen={isChallengeCreationDialogOpen}

@@ -89,15 +89,19 @@ const ChallengeCard: React.FC<ChallengeCardProps> = ({ challenge, onStartNewChal
   // Determinar si hay un reto activo y en curso (no finalizado ni evaluado)
   const isChallengeOngoing = challenge && challenge.status === "active" && (isAfter(new Date(challenge.end_date), today) || isSameDay(new Date(challenge.end_date), today));
 
+  console.log("ChallengeCard received challenge:", challenge); // Debug log
+
   if (challenge) {
     const { statusText, cardClasses, icon } = getStatusDisplay(challenge);
     const isSavingGoal = challenge.challenge_template_id.startsWith("saving-goal");
     const isNoSpend = challenge.challenge_template_id.startsWith("no-spend");
 
     let progress = 0;
-    const savingGoal = challenge.saving_goal; // Usar una variable local para mayor claridad
+    const savingGoal = challenge.saving_goal;
+    console.log("Saving Goal in ChallengeCard:", savingGoal); // Debug log
     if (isSavingGoal && savingGoal && savingGoal.target_amount !== null && savingGoal.target_amount !== undefined && savingGoal.target_amount > 0) {
       progress = (savingGoal.current_balance / savingGoal.target_amount) * 100;
+      console.log("Calculated progress:", progress); // Debug log
     }
 
     return (

@@ -25,6 +25,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import FeedbackOverlay from "@/components/FeedbackOverlay";
 import RandomSavingTipCard from "@/components/RandomSavingTipCard"; // Importar el nuevo componente
 import FixedSavingTipCard from "@/components/FixedSavingTipCard"; // Importar el nuevo componente
+import { useOutletContext } from "react-router-dom"; // Importar useOutletContext
 
 interface Saving {
   id: string;
@@ -37,8 +38,13 @@ interface Saving {
   challenge_id?: string; // Añadir challenge_id
 }
 
-const Savings = () => {
+interface SavingsOutletContext {
+  setChallengeRefreshKey: React.Dispatch<React.SetStateAction<number>>;
+}
+
+const Savings: React.FC = () => {
   const { user } = useSession();
+  const { setChallengeRefreshKey } = useOutletContext<SavingsOutletContext>(); // Get from context
   const [savings, setSavings] = useState<Saving[]>([]);
   const [isAddSavingDialogOpen, setIsAddSavingDialogOpen] = useState(false);
   const [isEditSavingDialogOpen, setIsEditSavingDialogOpen] = useState(false);
@@ -250,6 +256,10 @@ const Savings = () => {
           textColor: "text-green-800",
         });
       }
+      // Trigger refresh for challenges page if this saving is linked to a challenge
+      if (updatedSaving.challenge_id) {
+        setChallengeRefreshKey(prev => prev + 1);
+      }
     }
   };
 
@@ -326,13 +336,11 @@ const Savings = () => {
 
         if (progress >= 100) {
           challengeStatus = "completed";
-        } else if (progress >= 50) {
-          challengeStatus = "regular";
         } else {
-          challengeStatus = "active"; // Mantener activo si no ha fallado ni llegado a regular
+          challengeStatus = "active"; // Keep active until end date for full evaluation
         }
 
-        // Solo actualizar si el estado es diferente al actual en la DB o si es 'completed'
+        // Fetch current challenge status to avoid unnecessary updates
         const { data: currentChallenge, error: fetchChallengeError } = await supabase
           .from('challenges')
           .select('status')
@@ -342,22 +350,21 @@ const Savings = () => {
         if (fetchChallengeError && fetchChallengeError.code !== 'PGRST116') {
           console.error("Error fetching linked challenge:", fetchChallengeError.message);
         } else if (currentChallenge && currentChallenge.status !== challengeStatus) {
-          const { error: updateChallengeError } = await supabase
-            .from('challenges')
-            .update({ status: challengeStatus })
-            .eq('id', updatedSaving.challenge_id)
-            .eq('user_id', user.id);
+          // Only update if the new status is 'completed' or if the current status is 'active'
+          if (challengeStatus === "completed" || currentChallenge.status === "active") {
+            const { error: updateChallengeError } = await supabase
+              .from('challenges')
+              .update({ status: challengeStatus })
+              .eq('id', updatedSaving.challenge_id)
+              .eq('user_id', user.id);
 
-          if (updateChallengeError) {
-            showError('Error al actualizar el estado del reto vinculado: ' + updateChallengeError.message);
-          } else {
-            // Forzar un refresh en la página de retos si el estado cambió
-            // Esto se puede hacer con un evento global o un refetch en la página de retos
-            // Por ahora, solo mostraremos un mensaje si el reto se completó
-            if (challengeStatus === "completed") {
-              showSuccess("¡Reto de ahorro completado!");
-            } else if (challengeStatus === "regular") {
-              showSuccess("¡Reto de ahorro en progreso! ¡Vas por buen camino!");
+            if (updateChallengeError) {
+              showError('Error al actualizar el estado del reto vinculado: ' + updateChallengeError.message);
+            } else {
+              if (challengeStatus === "completed") {
+                showSuccess("¡Reto de ahorro completado!");
+              }
+              setChallengeRefreshKey(prev => prev + 1); // Force refresh in Challenges.tsx
             }
           }
         }
@@ -614,6 +621,7 @@ const Savings = () => {
                           size="sm"
                           onClick={() => handleOpenTransactionDialog(saving.id)}
                           className="h-8 gap-1"
+                          disabled={!!saving.challenge_id} // Disable if linked to a challenge
                         >
                           <DollarSign className="h-3.5 w-3.5" />
                           Transacción
@@ -623,6 +631,7 @@ const Savings = () => {
                           size="sm"
                           onClick={() => handleOpenEditSavingDialog(saving)}
                           className="h-8 w-8 p-0"
+                          disabled={!!saving.challenge_id} // Disable if linked to a challenge
                         >
                           <Edit className="h-3.5 w-3.5" />
                           <span className="sr-only">Editar</span>
@@ -633,6 +642,7 @@ const Savings = () => {
                               variant="destructive"
                               size="sm"
                               className="h-8 w-8 p-0"
+                              disabled={!!saving.challenge_id} // Disable if linked to a challenge
                             >
                               <Trash2 className="h-3.5 w-3.5" />
                             </Button>
@@ -643,6 +653,7 @@ const Savings = () => {
                               <AlertDialogDescription>
                                 Esta acción no se puede deshacer. Esto eliminará permanentemente la cuenta de ahorro 
                                 **{saving.name}** y todos sus registros.
+                                {saving.challenge_id && <p className="mt-2 text-red-500">Esta cuenta de ahorro está vinculada a un reto. Eliminarla podría afectar el reto.</p>}
                               </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>
@@ -678,6 +689,7 @@ const Savings = () => {
                     onChange={handleNewSavingChange}
                     className="col-span-3"
                     required
+                    disabled={!!editingSaving?.challenge_id} // Disable if linked to a challenge
                   />
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
@@ -692,6 +704,7 @@ const Savings = () => {
                     value={newSaving.target_amount}
                     onChange={handleNewSavingChange}
                     className="col-span-3"
+                    disabled={!!editingSaving?.challenge_id} // Disable if linked to a challenge
                   />
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
@@ -706,6 +719,7 @@ const Savings = () => {
                           "col-span-3 justify-start text-left font-normal",
                           !newSaving.target_date && "text-muted-foreground"
                         )}
+                        disabled={!!editingSaving?.challenge_id} // Disable if linked to a challenge
                       >
                         <CalendarIcon className="mr-2 h-4 w-4" />
                         {newSaving.target_date ? format(newSaving.target_date, "dd/MM/yyyy", { locale: es }) : <span>Selecciona una fecha</span>}
@@ -731,7 +745,7 @@ const Savings = () => {
                   </div>
                 </div>
                 <DialogFooter>
-                  <Button type="submit">Actualizar Ahorro</Button>
+                  <Button type="submit" disabled={!!editingSaving?.challenge_id}>Actualizar Ahorro</Button>
                 </DialogFooter>
               </form>
             </DialogContent>

@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, Outlet } from "react-router-dom"; // Importar Outlet
 import Layout from "./components/Layout";
 import Dashboard from "./pages/Dashboard";
 import Cash from "./pages/Cash";
@@ -18,6 +18,7 @@ import Login from "./pages/Login";
 import { CategoryProvider } from "./context/CategoryContext";
 import { SessionProvider, useSession } from "./context/SessionContext";
 import CardNotifications from "./components/CardNotifications";
+import React, { useState } from "react"; // Importar useState
 
 const queryClient = new QueryClient();
 
@@ -43,43 +44,47 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   return <>{children}</>;
 };
 
-const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <SessionProvider>
-          <CategoryProvider>
-            <CardNotifications />
-            <Routes>
-              <Route path="/login" element={<Login />} />
-              <Route path="/" element={<Navigate to="/dashboard" replace />} />
-              <Route
-                element={
-                  <ProtectedRoute>
-                    <Layout />
-                  </ProtectedRoute>
-                }
-              >
-                <Route path="/dashboard" element={<Dashboard />} />
-                <Route path="/cash" element={<Cash />} />
-                <Route path="/debtors" element={<Debtors />} />
-                <Route path="/creditors" element={<Creditors />} />
-                <Route path="/cards" element={<Cards />} />
-                <Route path="/cards/:cardId" element={<CardDetailsPage />} />
-                <Route path="/categories" element={<Categories />} />
-                <Route path="/savings" element={<Savings />} />
-                <Route path="/challenges" element={<Challenges />} /> {/* Nueva ruta de retos */}
-              </Route>
-              {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </CategoryProvider>
-        </SessionProvider>
-      </BrowserRouter>
-    </TooltipProvider>
-  </QueryClientProvider>
-);
+const App = () => {
+  const [challengeRefreshKey, setChallengeRefreshKey] = useState(0);
+
+  return (
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
+          <SessionProvider>
+            <CategoryProvider>
+              <CardNotifications />
+              <Routes>
+                <Route path="/login" element={<Login />} />
+                <Route path="/" element={<Navigate to="/dashboard" replace />} />
+                <Route
+                  element={
+                    <ProtectedRoute>
+                      <Layout challengeRefreshKey={challengeRefreshKey} setChallengeRefreshKey={setChallengeRefreshKey} />
+                    </ProtectedRoute>
+                  }
+                >
+                  <Route path="/dashboard" element={<Dashboard />} />
+                  <Route path="/cash" element={<Cash />} />
+                  <Route path="/debtors" element={<Debtors />} />
+                  <Route path="/creditors" element={<Creditors />} />
+                  <Route path="/cards" element={<Cards />} />
+                  <Route path="/cards/:cardId" element={<CardDetailsPage />} />
+                  <Route path="/categories" element={<Categories />} />
+                  <Route path="/savings" element={<Savings setChallengeRefreshKey={setChallengeRefreshKey} />} />
+                  <Route path="/challenges" element={<Challenges challengeRefreshKey={challengeRefreshKey} setChallengeRefreshKey={setChallengeRefreshKey} />} /> {/* Nueva ruta de retos */}
+                </Route>
+                {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </CategoryProvider>
+          </SessionProvider>
+        </BrowserRouter>
+      </TooltipProvider>
+    </QueryClientProvider>
+  );
+};
 
 export default App;
