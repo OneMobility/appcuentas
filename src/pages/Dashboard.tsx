@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
-import { Home, Users, DollarSign, CreditCard, Smile, AlertTriangle } from "lucide-react"; // Importar Smile y AlertTriangle
+import { Home, Users, DollarSign, CreditCard, Smile, AlertTriangle, Meh } from "lucide-react"; // Importar Meh
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -11,7 +11,7 @@ import { useCategoryContext } from "@/context/CategoryContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/context/SessionContext";
 import { showError } from "@/utils/toast";
-import { format, isBefore, isSameDay } from "date-fns"; // Importar isBefore y isSameDay
+import { format, isBefore, isSameDay } from "date-fns";
 import { es } from "date-fns/locale";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { getUpcomingPaymentDueDate } from "@/utils/date-helpers";
@@ -359,14 +359,14 @@ const Dashboard = () => {
           </CardContent>
         </Card>
       ) : (
-        <Card className="border-destructive bg-destructive/10 text-destructive-foreground">
+        <Card className="border-orange-600 bg-orange-50 text-orange-800"> {/* Cambiado a naranja */}
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-destructive">Estado de Tarjetas</CardTitle>
-            <AlertTriangle className="h-4 w-4 text-destructive" />
+            <CardTitle className="text-sm font-medium text-orange-800">Estado de Tarjetas</CardTitle>
+            <Meh className="h-4 w-4 text-orange-600" /> {/* Cambiado a ícono Meh */}
           </CardHeader>
           <CardContent>
-            <div className="text-lg font-bold">Atención: Revisa tus tarjetas</div>
-            <p className="text-xs text-destructive-foreground">Algunas tarjetas pueden tener saldos negativos o pagos próximos/vencidos.</p>
+            <div className="text-lg font-bold">Atención: Algo no cuadra</div> {/* Texto actualizado */}
+            <p className="text-xs text-orange-700">Revisa tus tarjetas, puede haber saldos negativos o pagos próximos/vencidos.</p> {/* Descripción actualizada */}
           </CardContent>
         </Card>
       )}
