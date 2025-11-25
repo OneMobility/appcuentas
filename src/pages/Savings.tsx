@@ -255,7 +255,9 @@ const Savings: React.FC = () => {
 
       // Check if goal is reached after update (only if target_amount is set and current_balance is already >= target_amount)
       if (updatedSaving.target_amount && updatedSaving.current_balance >= updatedSaving.target_amount && !updatedSaving.completion_date) {
-        const todayFormatted = format(new Date(), "yyyy-MM-dd");
+        const today = new Date();
+        today.setHours(0, 0, 0, 0); // Establecer a inicio del día local
+        const todayFormatted = format(today, "yyyy-MM-dd");
         const { data: updatedSavingWithCompletionDate, error: dateUpdateError } = await supabase
           .from('savings')
           .update({ completion_date: todayFormatted })
@@ -334,7 +336,9 @@ const Savings: React.FC = () => {
     }
 
     let updatedCompletionDate = currentSaving.completion_date;
-    const todayFormatted = format(new Date(), "yyyy-MM-dd");
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // Establecer a inicio del día local
+    const todayFormatted = format(today, "yyyy-MM-dd");
 
     // Check if goal is reached after this transaction and set completion_date
     if (currentSaving.target_amount && newBalance >= currentSaving.target_amount && !currentSaving.completion_date) {
@@ -402,7 +406,7 @@ const Savings: React.FC = () => {
               .from('challenges')
               .update({ status: challengeStatus, end_date: updateChallengeEndDate })
               .eq('id', updatedSaving.challenge_id)
-              .eq('user.id', user.id); // Corregido: user.id en lugar de user.id
+              .eq('user_id', user.id); // Corregido: user.id en lugar de user.id
 
             if (updateChallengeError) {
               showError('Error al actualizar el estado del reto vinculado: ' + updateChallengeError.message);

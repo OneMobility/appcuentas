@@ -196,6 +196,9 @@ const Creditors = () => {
       newBalance -= amount;
     }
 
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // Establecer a inicio del día local
+
     const { data: transactionData, error: transactionError } = await supabase
       .from('creditor_transactions') // Usar la nueva tabla
       .insert({
@@ -204,7 +207,7 @@ const Creditors = () => {
         type: newTransaction.type,
         amount,
         description: newTransaction.description,
-        date: format(new Date(), "yyyy-MM-dd"), // Usar la fecha local del dispositivo
+        date: format(today, "yyyy-MM-dd"), // Usar la fecha local del dispositivo
       })
       .select();
 
@@ -297,13 +300,16 @@ const Creditors = () => {
       newCreditorBalance -= newAmount;
     }
 
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // Establecer a inicio del día local
+
     const { data: updatedTransactionData, error: transactionError } = await supabase
       .from('creditor_transactions') // Usar la nueva tabla
       .update({
         type: newType,
         amount: newAmount,
         description: newTransaction.description,
-        date: format(new Date(), "yyyy-MM-dd"), // Usar la fecha local del dispositivo
+        date: format(today, "yyyy-MM-dd"), // Usar la fecha local del dispositivo
       })
       .eq('id', editingTransaction.id)
       .eq('user_id', user.id)

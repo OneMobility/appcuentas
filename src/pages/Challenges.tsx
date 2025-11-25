@@ -10,7 +10,7 @@ import { showError, showSuccess } from "@/utils/toast";
 import ChallengeCard, { ChallengeData } from "@/components/ChallengeCard";
 import ChallengeCreationDialog from "@/components/ChallengeCreationDialog";
 import LoadingSpinner from "@/components/LoadingSpinner";
-import { isAfter, isSameDay, format, parseISO } from "date-fns"; // Importar parseISO
+import { isAfter, isSameDay, format } from "date-fns";
 import { es } from "date-fns/locale";
 import { useCategoryContext } from "@/context/CategoryContext";
 import DynamicLucideIcon from "@/components/DynamicLucideIcon";
@@ -100,7 +100,7 @@ const Challenges: React.FC<ChallengesProps> = ({ challengeRefreshKey, setChallen
       setActiveChallenge(challenge);
 
       // Check if challenge needs evaluation
-      const endDate = parseISO(challenge.end_date); // Usar parseISO
+      const endDate = new Date(challenge.end_date);
       endDate.setHours(23, 59, 59, 999);
       const today = new Date();
       today.setHours(0, 0, 0, 0);
@@ -153,7 +153,9 @@ const Challenges: React.FC<ChallengesProps> = ({ challengeRefreshKey, setChallen
 
     let newStatus: "completed" | "failed" | "regular" = "failed";
     let awardedBadgeId: string | null = null;
-    const evaluationDate = format(new Date(), "yyyy-MM-dd"); // Usar fecha local del dispositivo
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // Establecer a inicio del día local
+    const evaluationDate = format(today, "yyyy-MM-dd");
 
     if (challenge.challenge_template_id.startsWith("no-spend")) {
       const { data: expenseTransactions, error: txError } = await supabase
