@@ -28,6 +28,7 @@ import LoadingSpinner from "@/components/LoadingSpinner";
 import PaymentDueDateCard from "@/components/PaymentDueDateCard";
 import { useCategoryContext } from "@/context/CategoryContext";
 import { toast } from "sonner"; // Importar toast de sonner
+import DynamicLucideIcon from "@/components/DynamicLucideIcon"; // Importar DynamicLucideIcon
 
 interface CardTransaction {
   id: string;
@@ -724,13 +725,19 @@ const CardDetailsPage: React.FC = () => {
                           {newTransaction.type === "charge" ? (
                             expenseCategories.map((cat) => (
                               <SelectItem key={cat.id} value={cat.id}>
-                                {cat.name}
+                                <div className="flex items-center gap-2">
+                                  <DynamicLucideIcon iconName={cat.icon || "Tag"} className="h-4 w-4" />
+                                  {cat.name}
+                                </div>
                               </SelectItem>
                             ))
                           ) : (
                             incomeCategories.map((cat) => (
                               <SelectItem key={cat.id} value={cat.id}>
-                                {cat.name}
+                                <div className="flex items-center gap-2">
+                                  <DynamicLucideIcon iconName={cat.icon || "Tag"} className="h-4 w-4" />
+                                  {cat.name}
+                                </div>
                               </SelectItem>
                             ))
                           )}
@@ -869,7 +876,10 @@ const CardDetailsPage: React.FC = () => {
                 {/* Show all categories for filtering */}
                 {[...incomeCategories, ...expenseCategories].map((cat) => (
                   <SelectItem key={cat.id} value={cat.id}>
-                    {cat.name} ({cat.is_fixed ? "Fija" : "Personal"})
+                    <div className="flex items-center gap-2">
+                      <DynamicLucideIcon iconName={cat.icon || "Tag"} className="h-4 w-4" />
+                      {cat.name} ({cat.is_fixed ? "Fija" : "Personal"})
+                    </div>
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -974,7 +984,12 @@ const CardDetailsPage: React.FC = () => {
                           {transaction.installments_count && transaction.installment_number && transaction.installments_count > 1 &&
                             ` (${transaction.installment_number}/${transaction.installments_count})`}
                         </TableCell>
-                        <TableCell>{category?.name || "N/A"}</TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <DynamicLucideIcon iconName={category?.icon || "Tag"} className="h-4 w-4" />
+                            {category?.name || "N/A"}
+                          </div>
+                        </TableCell>
                         <TableCell>{transaction.description}</TableCell>
                         <TableCell className="text-right">${transaction.amount.toFixed(2)}</TableCell>
                         <TableCell className="text-right flex gap-2 justify-end">
@@ -1062,13 +1077,19 @@ const CardDetailsPage: React.FC = () => {
                         {newTransaction.type === "charge" ? (
                           expenseCategories.map((cat) => (
                             <SelectItem key={cat.id} value={cat.id}>
-                              {cat.name}
+                              <div className="flex items-center gap-2">
+                                <DynamicLucideIcon iconName={cat.icon || "Tag"} className="h-4 w-4" />
+                                {cat.name}
+                              </div>
                             </SelectItem>
                           ))
                         ) : (
                           incomeCategories.map((cat) => (
                             <SelectItem key={cat.id} value={cat.id}>
-                              {cat.name}
+                              <div className="flex items-center gap-2">
+                                <DynamicLucideIcon iconName={cat.icon || "Tag"} className="h-4 w-4" />
+                                {cat.name}
+                              </div>
                             </SelectItem>
                           ))
                         )}

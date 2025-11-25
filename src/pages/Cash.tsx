@@ -22,6 +22,7 @@ import { useSession } from "@/context/SessionContext";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { exportToCsv, exportToPdf } from "@/utils/export";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import DynamicLucideIcon from "@/components/DynamicLucideIcon"; // Importar DynamicLucideIcon
 
 interface Transaction {
   id: string;
@@ -336,7 +337,10 @@ const Cash = () => {
                       <SelectContent>
                         {availableCategories.map((cat) => (
                           <SelectItem key={cat.id} value={cat.id}>
-                            {cat.name}
+                            <div className="flex items-center gap-2">
+                              <DynamicLucideIcon iconName={cat.icon || "Tag"} className="h-4 w-4" />
+                              {cat.name}
+                            </div>
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -422,7 +426,10 @@ const Cash = () => {
                 <SelectItem value="all">Todas las Categorías</SelectItem>
                 {allCategories.map((cat) => (
                   <SelectItem key={cat.id} value={cat.id}>
-                    {cat.name} ({cat.id.startsWith("inc") ? "Ingreso" : "Egreso"})
+                    <div className="flex items-center gap-2">
+                      <DynamicLucideIcon iconName={cat.icon || "Tag"} className="h-4 w-4" />
+                      {cat.name} ({cat.id.startsWith("inc") ? "Ingreso" : "Egreso"})
+                    </div>
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -486,7 +493,12 @@ const Cash = () => {
                       <TableCell className={tx.type === "ingreso" ? "text-green-600" : "text-red-600"}>
                         {tx.type === "ingreso" ? "Ingreso" : "Egreso"}
                       </TableCell>
-                      <TableCell>{category?.name || "Desconocida"}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <DynamicLucideIcon iconName={category?.icon || "Tag"} className="h-4 w-4" />
+                          {category?.name || "Desconocida"}
+                        </div>
+                      </TableCell>
                       <TableCell>{tx.description}</TableCell>
                       <TableCell className="text-right">
                         {tx.type === "ingreso" ? "+" : "-"}${tx.amount.toFixed(2)}
@@ -565,7 +577,10 @@ const Cash = () => {
                     <SelectContent>
                         {availableCategories.map((cat) => (
                           <SelectItem key={cat.id} value={cat.id}>
-                            {cat.name}
+                            <div className="flex items-center gap-2">
+                              <DynamicLucideIcon iconName={cat.icon || "Tag"} className="h-4 w-4" />
+                              {cat.name}
+                            </div>
                           </SelectItem>
                         ))}
                     </SelectContent>
