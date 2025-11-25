@@ -22,7 +22,6 @@ import { useSession } from "@/context/SessionContext";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { exportToCsv, exportToPdf } from "@/utils/export";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { checkChallengeStatus } from "@/utils/challenge-helpers"; // Importar el helper de retos
 
 interface Transaction {
   id: string;
@@ -133,21 +132,15 @@ const Cash = () => {
 
     if (error) {
       showError('Error al registrar transacción: ' + error.message);
-      return;
-    }
-
-    const newTx = data[0];
-    setTransactions((prev) => [newTx, ...prev]);
-    setBalance((prev) =>
-      newTx.type === "ingreso" ? prev + newTx.amount : prev - newTx.amount
-    );
-    setNewTransaction({ type: "ingreso", amount: "", description: "", category_id: "" });
-    setIsAddDialogOpen(false);
-    showSuccess("Transacción registrada exitosamente.");
-
-    // Verificar el estado del reto si es un egreso
-    if (user && newTx.type === "egreso") {
-      await checkChallengeStatus(user.id, newTx.category_id, fetchTransactions); // Pasar fetchTransactions para refrescar datos si el reto falla
+    } else {
+      const newTx = data[0];
+      setTransactions((prev) => [newTx, ...prev]);
+      setBalance((prev) =>
+        newTx.type === "ingreso" ? prev + newTx.amount : prev - newTx.amount
+      );
+      setNewTransaction({ type: "ingreso", amount: "", description: "", category_id: "" });
+      setIsAddDialogOpen(false);
+      showSuccess("Transacción registrada exitosamente.");
     }
   };
 
@@ -217,11 +210,6 @@ const Cash = () => {
       setEditingTransaction(null);
       setNewTransaction({ type: "ingreso", amount: "", description: "", category_id: "" });
       showSuccess("Transacción actualizada exitosamente.");
-
-      // Verificar el estado del reto si es un egreso
-      if (user && updatedTx.type === "egreso") {
-        await checkChallengeStatus(user.id, updatedTx.category_id, fetchTransactions); // Pasar fetchTransactions para refrescar datos si el reto falla
-      }
     }
   };
 
