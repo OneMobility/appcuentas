@@ -122,7 +122,7 @@ const ChallengeCard: React.FC<ChallengeCardProps> = ({ challenge, onStartNewChal
                 <span className="text-sm font-semibold">{progress.toFixed(0)}%</span>
               </div>
               <p className="text-xs text-muted-foreground mt-1">
-                ${savingGoal.current_balance.toFixed(2)} / ${
+                ${savingGoal.current_balance !== null && savingGoal.current_balance !== undefined ? savingGoal.current_balance.toFixed(2) : "0.00"} / ${
                   savingGoal.target_amount !== null && savingGoal.target_amount !== undefined
                     ? savingGoal.target_amount.toFixed(2)
                     : "N/A"
