@@ -409,7 +409,7 @@ const Dashboard = () => {
             <img 
               src={piggyBankImageSrc} 
               alt="Conchinito en problemas" 
-              className="h-[180px] w-[180px] mb-4 mx-auto md:absolute md:top-4 md:right-4 md:z-10"
+              className="h-[180px] w-[180px] mb-4 mx-auto md:absolute md:top-[29px] md:right-4 md:z-10"
             />
             <div className="text-lg font-bold text-center md:text-left">Oye, pon atención en tus saldos</div>
             <p className="text-xs text-blue-700 mt-1 text-center md:text-left">
@@ -431,7 +431,7 @@ const Dashboard = () => {
             <img 
               src={piggyBankImageSrc} 
               alt="Conchinito en advertencia" 
-              className="h-[180px] w-[180px] mb-4 mx-auto md:absolute md:top-4 md:right-4 md:z-10"
+              className="h-[180px] w-[180px] mb-4 mx-auto md:absolute md:top-[29px] md:right-4 md:z-10"
             />
             <div className="text-lg font-bold text-center md:text-left">Atención: Algo no cuadra</div>
             <p className="text-xs text-orange-700 mt-1 text-center md:text-left">
@@ -453,7 +453,7 @@ const Dashboard = () => {
             <img 
               src={piggyBankImageSrc} 
               alt="Conchinito feliz" 
-              className="h-[180px] w-[180px] mb-4 mx-auto md:absolute md:top-4 md:right-4 md:z-10"
+              className="h-[180px] w-[180px] mb-4 mx-auto md:absolute md:top-[29px] md:right-4 md:z-10"
             />
             <div className="text-lg font-bold text-center md:text-left">¡Todo está en orden aquí!</div>
             <p className="text-xs text-green-700 mt-1 text-center md:text-left">Tus tarjetas están al día y dentro de los límites.</p>
