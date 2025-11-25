@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PlusCircle, DollarSign, History, Trash2, Edit, FileText, FileDown } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -17,9 +18,11 @@ import { exportToCsv, exportToPdf } from "@/utils/export";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 
-interface Payment {
+interface CreditorTransaction {
   id: string;
+  type: "charge" | "payment"; // 'charge' para cargo, 'payment' para pago
   amount: number;
+  description: string;
   date: string;
   creditor_id?: string;
   user_id?: string;
@@ -30,7 +33,7 @@ interface Creditor {
   name: string;
   initial_balance: number;
   current_balance: number;
-  payments: Payment[];
+  creditor_transactions: CreditorTransaction[]; // Renombrado de 'payments'
   user_id?: string;
 }
 
@@ -38,14 +41,18 @@ const Creditors = () => {
   const { user } = useSession();
   const [creditors, setCreditors] = useState<Creditor[]>([]);
   const [isAddCreditorDialogOpen, setIsAddCreditorDialogOpen] = useState(false);
-  const [isAddPaymentDialogOpen, setIsAddPaymentDialogOpen] = useState(false);
+  const [isAddTransactionDialogOpen, setIsAddTransactionDialogOpen] = useState(false); // Renombrado
   const [isHistoryDialogOpen, setIsHistoryDialogOpen] = useState(false);
-  const [isEditPaymentDialogOpen, setIsEditPaymentDialogOpen] = useState(false);
+  const [isEditTransactionDialogOpen, setIsEditTransactionDialogOpen] = useState(false); // Renombrado
   const [selectedCreditorId, setSelectedCreditorId] = useState<string | null>(null);
   const [historyCreditor, setHistoryCreditor] = useState<Creditor | null>(null);
-  const [editingPayment, setEditingPayment] = useState<Payment | null>(null);
+  const [editingTransaction, setEditingTransaction] = useState<CreditorTransaction | null>(null); // Renombrado
   const [newCreditor, setNewCreditor] = useState({ name: "", initial_balance: "" });
-  const [paymentAmount, setPaymentAmount] = useState("");
+  const [newTransaction, setNewTransaction] = useState({ // Nuevo estado para transacciones
+    type: "payment" as "charge" | "payment",
+    amount: "",
+    description: "",
+  });
 
   // Filter state
   const [searchTerm, setSearchTerm] = useState("");
@@ -58,7 +65,7 @@ const Creditors = () => {
 
     const { data, error } = await supabase
       .from('creditors')
-      .select('*, creditor_payments(*)')
+      .select('*, creditor_transactions(*)') // Seleccionar la nueva tabla
       .eq('user_id', user.id)
       .order('created_at', { ascending: false });
 
@@ -108,7 +115,7 @@ const Creditors = () => {
     if (error) {
       showError('Error al registrar acreedor: ' + error.message);
     } else {
-      setCreditors((prev) => [...prev, { ...data[0], payments: [] }]);
+      setCreditors((prev) => [...prev, { ...data[0], creditor_transactions: [] }]);
       setNewCreditor({ name: "", initial_balance: "" });
       setIsAddCreditorDialogOpen(false);
       showSuccess("Acreedor registrado exitosamente.");
@@ -135,9 +142,10 @@ const Creditors = () => {
     }
   };
 
-  const handleOpenAddPaymentDialog = (creditorId: string) => {
+  const handleOpenAddTransactionDialog = (creditorId: string) => { // Renombrado
     setSelectedCreditorId(creditorId);
-    setIsAddPaymentDialogOpen(true);
+    setNewTransaction({ type: "payment", amount: "", description: "" }); // Resetear formulario
+    setIsAddTransactionDialogOpen(true);
   };
 
   const handleOpenHistoryDialog = (creditor: Creditor) => {
@@ -145,20 +153,29 @@ const Creditors = () => {
     setIsHistoryDialogOpen(true);
   };
 
-  const handlePaymentAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setPaymentAmount(e.target.value);
+  const handleTransactionInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setNewTransaction((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleSubmitPayment = async (e: React.FormEvent) => {
+  const handleTransactionTypeChange = (value: "charge" | "payment") => {
+    setNewTransaction((prev) => ({ ...prev, type: value }));
+  };
+
+  const handleSubmitTransaction = async (e: React.FormEvent) => { // Renombrado
     e.preventDefault();
     if (!user || !selectedCreditorId) {
-      showError("Debes iniciar sesión para registrar pagos.");
+      showError("Debes iniciar sesión para registrar transacciones.");
       return;
     }
 
-    const amount = parseFloat(paymentAmount);
+    const amount = parseFloat(newTransaction.amount);
     if (isNaN(amount) || amount <= 0) {
-      showError("El monto del pago debe ser un número positivo.");
+      showError("El monto debe ser un número positivo.");
+      return;
+    }
+    if (!newTransaction.description.trim()) {
+      showError("La descripción no puede estar vacía.");
       return;
     }
 
@@ -168,24 +185,31 @@ const Creditors = () => {
       return;
     }
 
-    const newBalance = currentCreditor.current_balance - amount;
-    if (newBalance < 0) {
-      showError("El pago excede el saldo pendiente.");
-      return;
+    let newBalance = currentCreditor.current_balance;
+    if (newTransaction.type === "charge") {
+      newBalance += amount;
+    } else { // payment
+      if (newBalance < amount) {
+        showError("El pago excede el saldo pendiente.");
+        return;
+      }
+      newBalance -= amount;
     }
 
-    const { data: paymentData, error: paymentError } = await supabase
-      .from('creditor_payments')
+    const { data: transactionData, error: transactionError } = await supabase
+      .from('creditor_transactions') // Usar la nueva tabla
       .insert({
         user_id: user.id,
         creditor_id: selectedCreditorId,
+        type: newTransaction.type,
         amount,
+        description: newTransaction.description,
         date: new Date().toISOString().split('T')[0],
       })
       .select();
 
-    if (paymentError) {
-      showError('Error al registrar pago: ' + paymentError.message);
+    if (transactionError) {
+      showError('Error al registrar transacción: ' + transactionError.message);
       return;
     }
 
@@ -207,60 +231,86 @@ const Creditors = () => {
           return {
             ...creditor,
             current_balance: newBalance,
-            payments: [...creditor.payments, paymentData[0]],
+            creditor_transactions: [...creditor.creditor_transactions, transactionData[0]],
           };
         }
         return creditor;
       })
     );
-    setPaymentAmount("");
+    setNewTransaction({ type: "payment", amount: "", description: "" });
     setSelectedCreditorId(null);
-    setIsAddPaymentDialogOpen(false);
-    showSuccess("Pago registrado exitosamente.");
+    setIsAddTransactionDialogOpen(false);
+    showSuccess("Transacción registrada exitosamente.");
   };
 
-  const handleOpenEditPaymentDialog = (payment: Payment) => {
-    setEditingPayment(payment);
-    setPaymentAmount(payment.amount.toString());
-    setIsEditPaymentDialogOpen(true);
+  const handleOpenEditTransactionDialog = (transaction: CreditorTransaction, creditorId: string) => { // Renombrado
+    setEditingTransaction(transaction);
+    setSelectedCreditorId(creditorId);
+    setNewTransaction({
+      type: transaction.type,
+      amount: transaction.amount.toString(),
+      description: transaction.description,
+    });
+    setIsEditTransactionDialogOpen(true);
   };
 
-  const handleUpdatePayment = async (e: React.FormEvent) => {
+  const handleUpdateTransaction = async (e: React.FormEvent) => { // Renombrado
     e.preventDefault();
-    if (!user || !editingPayment || !historyCreditor) {
-      showError("Debes iniciar sesión para actualizar pagos.");
+    if (!user || !editingTransaction || !selectedCreditorId) {
+      showError("Debes iniciar sesión para actualizar transacciones.");
       return;
     }
 
-    const oldAmount = editingPayment.amount;
-    const newAmount = parseFloat(paymentAmount);
+    const oldAmount = editingTransaction.amount;
+    const oldType = editingTransaction.type;
+    const newAmount = parseFloat(newTransaction.amount);
+    const newType = newTransaction.type;
 
     if (isNaN(newAmount) || newAmount <= 0) {
-      showError("El monto del pago debe ser un número positivo.");
+      showError("El monto debe ser un número positivo.");
+      return;
+    }
+    if (!newTransaction.description.trim()) {
+      showError("La descripción no puede estar vacía.");
       return;
     }
 
-    const currentCreditor = creditors.find(d => d.id === historyCreditor.id);
+    const currentCreditor = creditors.find(d => d.id === selectedCreditorId);
     if (!currentCreditor) {
       showError("Acreedor no encontrado.");
       return;
     }
 
-    let newCreditorBalance = currentCreditor.current_balance + oldAmount - newAmount;
-    if (newCreditorBalance < 0) {
-      showError("El pago excede el saldo pendiente.");
-      return;
+    let newCreditorBalance = currentCreditor.current_balance;
+
+    // Revertir el impacto de la transacción antigua en el saldo
+    newCreditorBalance = oldType === "charge" ? newCreditorBalance - oldAmount : newCreditorBalance + oldAmount;
+
+    // Aplicar el impacto de la nueva transacción en el saldo
+    if (newType === "charge") {
+      newCreditorBalance += newAmount;
+    } else { // payment
+      if (newCreditorBalance < newAmount) {
+        showError("El pago excede el saldo pendiente.");
+        return;
+      }
+      newCreditorBalance -= newAmount;
     }
 
-    const { data: updatedPaymentData, error: paymentError } = await supabase
-      .from('creditor_payments')
-      .update({ amount: newAmount })
-      .eq('id', editingPayment.id)
+    const { data: updatedTransactionData, error: transactionError } = await supabase
+      .from('creditor_transactions') // Usar la nueva tabla
+      .update({
+        type: newType,
+        amount: newAmount,
+        description: newTransaction.description,
+        date: new Date().toISOString().split('T')[0], // Mantener la fecha actual o permitir editar
+      })
+      .eq('id', editingTransaction.id)
       .eq('user_id', user.id)
       .select();
 
-    if (paymentError) {
-      showError('Error al actualizar pago: ' + paymentError.message);
+    if (transactionError) {
+      showError('Error al actualizar transacción: ' + transactionError.message);
       return;
     }
 
@@ -282,7 +332,7 @@ const Creditors = () => {
           return {
             ...creditor,
             current_balance: newCreditorBalance,
-            payments: creditor.payments.map(p => p.id === editingPayment.id ? updatedPaymentData[0] : p),
+            creditor_transactions: creditor.creditor_transactions.map(t => t.id === editingTransaction.id ? updatedTransactionData[0] : t),
           };
         }
         return creditor;
@@ -294,14 +344,15 @@ const Creditors = () => {
       return {
         ...prev,
         current_balance: newCreditorBalance,
-        payments: prev.payments.map(p => p.id === editingPayment.id ? updatedPaymentData[0] : p),
+        creditor_transactions: prev.creditor_transactions.map(t => t.id === editingTransaction.id ? updatedTransactionData[0] : t),
       };
     });
 
-    setPaymentAmount("");
-    setEditingPayment(null);
-    setIsEditPaymentDialogOpen(false);
-    showSuccess("Pago actualizado exitosamente.");
+    setNewTransaction({ type: "payment", amount: "", description: "" });
+    setEditingTransaction(null);
+    setSelectedCreditorId(null);
+    setIsEditTransactionDialogOpen(false);
+    showSuccess("Transacción actualizada exitosamente.");
   };
 
   const filteredCreditors = creditors.filter((creditor) =>
@@ -443,11 +494,11 @@ const Creditors = () => {
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => handleOpenAddPaymentDialog(creditor.id)}
+                        onClick={() => handleOpenAddTransactionDialog(creditor.id)} // Renombrado
                         className="h-8 gap-1"
                       >
                         <DollarSign className="h-3.5 w-3.5" />
-                        Pagar
+                        Transacción
                       </Button>
                       <Button
                         variant="outline"
@@ -473,7 +524,7 @@ const Creditors = () => {
                             <AlertDialogTitle>¿Estás absolutamente seguro?</AlertDialogTitle>
                             <AlertDialogDescription>
                               Esta acción no se puede deshacer. Esto eliminará permanentemente al acreedor 
-                              **{creditor.name}** y todos sus pagos asociados.
+                              **{creditor.name}** y todas sus transacciones asociadas.
                             </AlertDialogDescription>
                           </AlertDialogHeader>
                           <AlertDialogFooter>
@@ -490,29 +541,56 @@ const Creditors = () => {
               </TableBody>
             </Table>
           </div>
-          <Dialog open={isAddPaymentDialogOpen} onOpenChange={setIsAddPaymentDialogOpen}>
+          <Dialog open={isAddTransactionDialogOpen} onOpenChange={setIsAddTransactionDialogOpen}> {/* Renombrado */}
             <DialogContent className="sm:max-w-[425px]">
               <DialogHeader>
-                <DialogTitle>Registrar Pago para {creditors.find(c => c.id === selectedCreditorId)?.name}</DialogTitle>
+                <DialogTitle>Registrar Transacción para {creditors.find(c => c.id === selectedCreditorId)?.name}</DialogTitle>
               </DialogHeader>
-              <form onSubmit={handleSubmitPayment} className="grid gap-4 py-4">
+              <form onSubmit={handleSubmitTransaction} className="grid gap-4 py-4"> {/* Renombrado */}
                 <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="paymentAmount" className="text-right">
-                    Monto del Pago
+                  <Label htmlFor="transactionType" className="text-right">
+                    Tipo
+                  </Label>
+                  <Select value={newTransaction.type} onValueChange={handleTransactionTypeChange}>
+                    <SelectTrigger id="transactionType" className="col-span-3">
+                      <SelectValue placeholder="Selecciona tipo" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="charge">Cargo</SelectItem>
+                      <SelectItem value="payment">Pago</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="transactionAmount" className="text-right">
+                    Monto
                   </Label>
                   <Input
-                    id="paymentAmount"
-                    name="paymentAmount"
+                    id="transactionAmount"
+                    name="amount"
                     type="number"
                     step="0.01"
-                    value={paymentAmount}
-                    onChange={handlePaymentAmountChange}
+                    value={newTransaction.amount}
+                    onChange={handleTransactionInputChange}
+                    className="col-span-3"
+                    required
+                  />
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="transactionDescription" className="text-right">
+                    Descripción
+                  </Label>
+                  <Input
+                    id="transactionDescription"
+                    name="description"
+                    value={newTransaction.description}
+                    onChange={handleTransactionInputChange}
                     className="col-span-3"
                     required
                   />
                 </div>
                 <DialogFooter>
-                  <Button type="submit">Registrar Pago</Button>
+                  <Button type="submit">Registrar Transacción</Button>
                 </DialogFooter>
               </form>
             </DialogContent>
@@ -521,28 +599,36 @@ const Creditors = () => {
           <Dialog open={isHistoryDialogOpen} onOpenChange={setIsHistoryDialogOpen}>
             <DialogContent className="sm:max-w-[600px]">
               <DialogHeader>
-                <DialogTitle>Historial de Pagos para {historyCreditor?.name}</DialogTitle>
+                <DialogTitle>Historial de Transacciones para {historyCreditor?.name}</DialogTitle>
               </DialogHeader>
               <div className="py-4 overflow-x-auto">
-                {historyCreditor?.payments && historyCreditor.payments.length > 0 ? (
+                {historyCreditor?.creditor_transactions && historyCreditor.creditor_transactions.length > 0 ? (
                   <Table>
                     <TableHeader>
                       <TableRow>
                         <TableHead>Fecha</TableHead>
+                        <TableHead>Tipo</TableHead>
+                        <TableHead>Descripción</TableHead>
                         <TableHead className="text-right">Monto</TableHead>
                         <TableHead className="text-right">Acciones</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {historyCreditor.payments.map((payment, index) => (
-                        <TableRow key={payment.id || index}>
-                          <TableCell>{payment.date}</TableCell>
-                          <TableCell className="text-right">${payment.amount.toFixed(2)}</TableCell>
+                      {historyCreditor.creditor_transactions.map((transaction, index) => (
+                        <TableRow key={transaction.id || index}>
+                          <TableCell>{format(new Date(transaction.date), "dd/MM/yyyy", { locale: es })}</TableCell>
+                          <TableCell className={transaction.type === "charge" ? "text-red-600" : "text-green-600"}>
+                            {transaction.type === "charge" ? "Cargo" : "Pago"}
+                          </TableCell>
+                          <TableCell>{transaction.description}</TableCell>
+                          <TableCell className="text-right">
+                            {transaction.type === "charge" ? "+" : "-"}${transaction.amount.toFixed(2)}
+                          </TableCell>
                           <TableCell className="text-right">
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={() => handleOpenEditPaymentDialog(payment)}
+                              onClick={() => handleOpenEditTransactionDialog(transaction, historyCreditor.id)}
                               className="h-8 w-8 p-0"
                             >
                               <Edit className="h-3.5 w-3.5" />
@@ -554,7 +640,7 @@ const Creditors = () => {
                     </TableBody>
                   </Table>
                 ) : (
-                  <p className="text-center text-muted-foreground">No hay historial de pagos para este acreedor.</p>
+                  <p className="text-center text-muted-foreground">No hay historial de transacciones para este acreedor.</p>
                 )}
               </div>
               <DialogFooter>
@@ -563,29 +649,56 @@ const Creditors = () => {
             </DialogContent>
           </Dialog>
 
-          <Dialog open={isEditPaymentDialogOpen} onOpenChange={setIsEditPaymentDialogOpen}>
+          <Dialog open={isEditTransactionDialogOpen} onOpenChange={setIsEditTransactionDialogOpen}>
             <DialogContent className="sm:max-w-[425px]">
               <DialogHeader>
-                <DialogTitle>Editar Pago</DialogTitle>
+                <DialogTitle>Editar Transacción</DialogTitle>
               </DialogHeader>
-              <form onSubmit={handleUpdatePayment} className="grid gap-4 py-4">
+              <form onSubmit={handleUpdateTransaction} className="grid gap-4 py-4">
                 <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="editPaymentAmount" className="text-right">
-                    Monto del Pago
+                  <Label htmlFor="editTransactionType" className="text-right">
+                    Tipo
+                  </Label>
+                  <Select value={newTransaction.type} onValueChange={handleTransactionTypeChange}>
+                    <SelectTrigger id="editTransactionType" className="col-span-3">
+                      <SelectValue placeholder="Selecciona tipo" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="charge">Cargo</SelectItem>
+                      <SelectItem value="payment">Pago</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="editTransactionAmount" className="text-right">
+                    Monto
                   </Label>
                   <Input
-                    id="editPaymentAmount"
+                    id="editTransactionAmount"
                     name="amount"
                     type="number"
                     step="0.01"
-                    value={paymentAmount}
-                    onChange={handlePaymentAmountChange}
+                    value={newTransaction.amount}
+                    onChange={handleTransactionInputChange}
+                    className="col-span-3"
+                    required
+                  />
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="editTransactionDescription" className="text-right">
+                    Descripción
+                  </Label>
+                  <Input
+                    id="editTransactionDescription"
+                    name="description"
+                    value={newTransaction.description}
+                    onChange={handleTransactionInputChange}
                     className="col-span-3"
                     required
                   />
                 </div>
                 <DialogFooter>
-                  <Button type="submit">Actualizar Pago</Button>
+                  <Button type="submit">Actualizar Transacción</Button>
                 </DialogFooter>
               </form>
             </DialogContent>
