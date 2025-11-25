@@ -66,7 +66,7 @@ const GroupedPaymentDueDatesCard: React.FC<GroupedPaymentDueDatesCardProps> = ({
           <img
             src="https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Cochinito%20Calendario.png" // Updated URL
             alt="Calendario"
-            className="h-[180px] w-[180px] mb-4 md:absolute md:top-[25px] md:right-4 md:z-10" // Static on mobile, absolute on desktop
+            className="h-[180px] w-[180px] mb-4 md:absolute md:top-[-10px] md:right-4 md:z-10" // Static on mobile, absolute on desktop
           />
           <div className="text-lg font-bold text-center md:text-left"> {/* Center text on mobile */}
             No hay pagos de tarjetas<br />
@@ -92,7 +92,7 @@ const GroupedPaymentDueDatesCard: React.FC<GroupedPaymentDueDatesCardProps> = ({
         <img
           src="https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Cochinito%20Calendario.png" // Updated URL
           alt="Calendario de Pagos"
-          className="h-[180px] w-[180px] mb-4 md:absolute md:top-[25px] md:right-4 md:z-10" // Static on mobile, absolute on desktop
+          className="h-[180px] w-[180px] mb-4 md:absolute md:top-[-10px] md:right-4 md:z-10" // Static on mobile, absolute on desktop
         />
         {upcomingPayments.map((payment, index) => {
           if (!payment) return null; // Double check for nulls
