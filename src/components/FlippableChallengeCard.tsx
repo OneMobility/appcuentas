@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useState, useEffect } from "react"; // Importar useEffect
+import React, { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import DynamicLucideIcon from "./DynamicLucideIcon"; // Para iconos de fallback
+import { XCircle } from "lucide-react"; // Importar XCircle para el fallback de depuración
 
 interface FlippableChallengeCardProps {
   frontImageSrc?: string;
@@ -21,25 +22,27 @@ const FlippableChallengeCard: React.FC<FlippableChallengeCardProps> = ({
   iconComponent: Icon = DynamicLucideIcon, // Default to DynamicLucideIcon if not provided
 }) => {
   const [isFlipped, setIsFlipped] = useState(false);
-  const [imageError, setImageError] = useState(false); // Nuevo estado para rastrear errores de carga de imagen
+  const [imageError, setImageError] = useState(false);
 
   useEffect(() => {
-    // Resetear el estado de error de la imagen cuando la fuente de la imagen cambie
-    setImageError(false);
+    setImageError(false); // Resetear el estado de error de la imagen cuando la fuente de la imagen cambie
+    console.log("FlippableChallengeCard: frontImageSrc changed to", frontImageSrc);
   }, [frontImageSrc]);
 
   const handleFlip = () => {
     setIsFlipped(!isFlipped);
+    console.log("FlippableChallengeCard: isFlipped toggled to", !isFlipped);
   };
 
   const handleImageError = () => {
     setImageError(true);
+    console.error("FlippableChallengeCard: Image failed to load for src:", frontImageSrc);
   };
 
   return (
     <motion.div
       className={cn(
-        "relative w-full h-full cursor-pointer rounded-lg shadow-md",
+        "relative w-full h-full cursor-pointer rounded-lg shadow-md bg-white", // Añadido bg-white para asegurar un fondo
         cardClasses
       )}
       onClick={handleFlip}
@@ -53,16 +56,16 @@ const FlippableChallengeCard: React.FC<FlippableChallengeCardProps> = ({
         className="absolute inset-0 backface-hidden rounded-lg flex items-center justify-center p-4"
         style={{ backfaceVisibility: "hidden" }}
       >
-        {frontImageSrc && !imageError ? ( // Solo intentar renderizar la imagen si hay src y no hay error
+        {frontImageSrc && !imageError ? (
           <img
             src={frontImageSrc}
             alt={frontImageAlt}
             className="max-h-full max-w-full object-contain"
-            onError={handleImageError} // Usar el nuevo manejador de errores
+            onError={handleImageError}
           />
         ) : (
-          // Fallback a un icono si no hay src o la imagen falló en cargar
-          <Icon iconName="Lightbulb" className="h-24 w-24 text-gray-400" />
+          // Fallback a un icono si no hay src, o la imagen falló en cargar
+          <XCircle className="h-32 w-32 text-red-500" /> // Icono de depuración más grande y visible
         )}
       </div>
 

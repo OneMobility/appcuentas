@@ -255,14 +255,17 @@ const Challenges: React.FC<ChallengesProps> = ({ challengeRefreshKey, setChallen
     const isFailed = challenge.status === "failed";
     const isRegular = challenge.status === "regular";
 
+    let imageUrl: string | undefined;
+
     if (isCompleted) {
-      return COMPLETED_CHALLENGE_IMAGES[challenge.challenge_template_id] || challenge.badge?.image_url || GENERIC_COMPLETED_IMAGE;
+      imageUrl = COMPLETED_CHALLENGE_IMAGES[challenge.challenge_template_id] || challenge.badge?.image_url || GENERIC_COMPLETED_IMAGE;
     } else if (isFailed) {
-      return FAILED_CHALLENGE_IMAGE;
+      imageUrl = FAILED_CHALLENGE_IMAGE;
     } else if (isRegular) {
-      return GENERIC_REGULAR_IMAGE;
+      imageUrl = GENERIC_REGULAR_IMAGE;
     }
-    return undefined; // Should not happen for past challenges
+    console.log(`Challenge ${challenge.name} (status: ${challenge.status}): Front image URL: ${imageUrl}`);
+    return imageUrl;
   };
 
   if (isLoadingChallenges) {
