@@ -11,7 +11,7 @@ import { useCategoryContext } from "@/context/CategoryContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/context/SessionContext";
 import { showError, showSuccess } from "@/utils/toast";
-import { format, isBefore, isSameDay, addDays } from "date-fns";
+import { format, isBefore, isSameDay, addDays, parseISO } from "date-fns"; // Importar parseISO
 import { es } from "date-fns/locale";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { getUpcomingPaymentDueDate } from "@/utils/date-helpers";
@@ -250,8 +250,8 @@ const Dashboard = () => {
     const summaryMap = new Map<string, MonthlySummary>(); // Key: YYYY-MM
 
     cashTransactions.forEach(tx => {
-      const monthKey = format(new Date(tx.date), "yyyy-MM");
-      const monthName = format(new Date(tx.date), "MMMM", { locale: es }); // Full month name
+      const monthKey = format(parseISO(tx.date), "yyyy-MM"); // Usar parseISO
+      const monthName = format(parseISO(tx.date), "MMMM", { locale: es }); // Usar parseISO
 
       if (!summaryMap.has(monthKey)) {
         summaryMap.set(monthKey, { name: monthName, ingresos: 0, egresos: 0 });
@@ -278,8 +278,8 @@ const Dashboard = () => {
     cards.forEach(card => {
       (card.transactions || []).forEach(tx => {
         if (tx.type === "charge") {
-          const monthKey = format(new Date(tx.date), "yyyy-MM");
-          const monthName = format(new Date(tx.date), "MMM", { locale: es });
+          const monthKey = format(parseISO(tx.date), "yyyy-MM"); // Usar parseISO
+          const monthName = format(parseISO(tx.date), "MMM", { locale: es }); // Usar parseISO
 
           if (!monthlyDataMap.has(monthKey)) {
             monthlyDataMap.set(monthKey, { name: monthName });

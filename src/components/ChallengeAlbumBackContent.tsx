@@ -2,7 +2,7 @@
 
 import React from "react";
 import { ChallengeData } from "./ChallengeCard";
-import { format, parseISO } from "date-fns";
+import { format, parseISO } from "date-fns"; // Importar parseISO
 import { es } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { Progress } from "@/components/ui/progress";
@@ -23,9 +23,9 @@ const ChallengeAlbumBackContent: React.FC<ChallengeAlbumBackContentProps> = ({ c
     progress = (savingGoal.current_balance / savingGoal.target_amount) * 100;
   }
 
-  const formattedStartDate = challenge.start_date ? format(parseISO(challenge.start_date), "dd/MM/yyyy", { locale: es }) : "N/A";
-  const formattedEndDate = challenge.end_date ? format(parseISO(challenge.end_date), "dd/MM/yyyy", { locale: es }) : "N/A";
-  const formattedCompletionDate = isSavingGoal && savingGoal?.completion_date ? format(parseISO(savingGoal.completion_date), "dd/MM/yyyy", { locale: es }) : "N/A";
+  const formattedStartDate = challenge.start_date ? format(parseISO(challenge.start_date), "dd/MM/yyyy", { locale: es }) : "N/A"; // Usar parseISO
+  const formattedEndDate = challenge.end_date ? format(parseISO(challenge.end_date), "dd/MM/yyyy", { locale: es }) : "N/A"; // Usar parseISO
+  const formattedCompletionDate = isSavingGoal && savingGoal?.completion_date ? format(parseISO(savingGoal.completion_date), "dd/MM/yyyy", { locale: es }) : "N/A"; // Usar parseISO
 
 
   let statusText = "";

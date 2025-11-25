@@ -10,7 +10,7 @@ import { showError, showSuccess } from "@/utils/toast";
 import ChallengeCard, { ChallengeData } from "@/components/ChallengeCard";
 import ChallengeCreationDialog from "@/components/ChallengeCreationDialog";
 import LoadingSpinner from "@/components/LoadingSpinner";
-import { isAfter, isSameDay, format } from "date-fns";
+import { isAfter, isSameDay, format, parseISO } from "date-fns"; // Importar parseISO
 import { es } from "date-fns/locale";
 import { useCategoryContext } from "@/context/CategoryContext";
 import DynamicLucideIcon from "@/components/DynamicLucideIcon";
@@ -45,7 +45,7 @@ const badgeMapping: { [key: string]: string } = {
 const FAILED_CHALLENGE_IMAGE = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Fallido.png";
 const COMPLETED_CHALLENGE_IMAGES: { [key: string]: string } = {
   "saving-goal-150": "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Reto%20150%20pesos.png",
-  "no-netflix-more-books": "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Reto%20menos%20netflix.png", // Corregido el typo aquí
+  "no-netflix-more-books": "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Reto%20menos%20netflix.png",
   // Añadir otras imágenes específicas para retos completados aquí
 };
 const GENERIC_COMPLETED_IMAGE = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Meta%202.png";
@@ -100,7 +100,7 @@ const Challenges: React.FC<ChallengesProps> = ({ challengeRefreshKey, setChallen
       setActiveChallenge(challenge);
 
       // Check if challenge needs evaluation
-      const endDate = new Date(challenge.end_date);
+      const endDate = parseISO(challenge.end_date); // Usar parseISO
       endDate.setHours(23, 59, 59, 999);
       const today = new Date();
       today.setHours(0, 0, 0, 0);

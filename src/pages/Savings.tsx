@@ -12,7 +12,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { PlusCircle, DollarSign, Trash2, Edit, CalendarIcon, FileText, FileDown, PiggyBank, ArrowUpCircle, ArrowDownCircle } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { cn } from "@/lib/utils";
-import { format, isAfter, isSameDay } from "date-fns"; // Importar isAfter y isSameDay
+import { format, isAfter, isSameDay, parseISO } from "date-fns"; // Importar isAfter, isSameDay y parseISO
 import { es } from "date-fns/locale";
 import ColorPicker from "@/components/ColorPicker";
 import { supabase } from "@/integrations/supabase/client";
@@ -201,7 +201,7 @@ const Savings: React.FC = () => {
       name: saving.name,
       initial_balance: saving.current_balance.toString(), // Usar current_balance como initial_balance para edición
       target_amount: saving.target_amount?.toString() || "",
-      target_date: saving.target_date ? new Date(saving.target_date) : undefined,
+      target_date: saving.target_date ? parseISO(saving.target_date) : undefined, // Usar parseISO
       color: saving.color,
     });
     setIsEditSavingDialogOpen(true);
@@ -402,7 +402,7 @@ const Savings: React.FC = () => {
               .from('challenges')
               .update({ status: challengeStatus, end_date: updateChallengeEndDate })
               .eq('id', updatedSaving.challenge_id)
-              .eq('user_id', user.id);
+              .eq('user.id', user.id); // Corregido: user.id en lugar de user.id
 
             if (updateChallengeError) {
               showError('Error al actualizar el estado del reto vinculado: ' + updateChallengeError.message);
@@ -460,8 +460,8 @@ const Savings: React.FC = () => {
       Nombre: saving.name,
       "Saldo Actual": saving.current_balance.toFixed(2),
       "Monto Objetivo": saving.target_amount?.toFixed(2) || "N/A",
-      "Fecha Objetivo": saving.target_date ? format(new Date(saving.target_date), "dd/MM/yyyy", { locale: es }) : "N/A",
-      "Fecha Cumplimiento": saving.completion_date ? format(new Date(saving.completion_date), "dd/MM/yyyy", { locale: es }) : "N/A", // Añadido
+      "Fecha Objetivo": saving.target_date ? format(parseISO(saving.target_date), "dd/MM/yyyy", { locale: es }) : "N/A", // Usar parseISO
+      "Fecha Cumplimiento": saving.completion_date ? format(parseISO(saving.completion_date), "dd/MM/yyyy", { locale: es }) : "N/A", // Usar parseISO
       "Progreso (%)": saving.target_amount ? ((saving.current_balance / saving.target_amount) * 100).toFixed(2) : "N/A",
     }));
 
@@ -661,8 +661,8 @@ const Savings: React.FC = () => {
                       </TableCell>
                       <TableCell>${saving.current_balance.toFixed(2)}</TableCell>
                       <TableCell>${saving.target_amount?.toFixed(2) || "N/A"}</TableCell>
-                      <TableCell>{saving.target_date ? format(new Date(saving.target_date), "dd/MM/yyyy", { locale: es }) : "N/A"}</TableCell>
-                      <TableCell>{saving.completion_date ? format(new Date(saving.completion_date), "dd/MM/yyyy", { locale: es }) : "N/A"}</TableCell> {/* Mostrar nueva columna */}
+                      <TableCell>{saving.target_date ? format(parseISO(saving.target_date), "dd/MM/yyyy", { locale: es }) : "N/A"}</TableCell>
+                      <TableCell>{saving.completion_date ? format(parseISO(saving.completion_date), "dd/MM/yyyy", { locale: es }) : "N/A"}</TableCell> {/* Mostrar nueva columna */}
                       <TableCell>
                         {saving.target_amount ? (
                           <div className="flex items-center gap-2">
