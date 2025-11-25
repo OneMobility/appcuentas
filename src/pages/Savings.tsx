@@ -32,7 +32,7 @@ interface Saving {
   name: string;
   current_balance: number;
   target_amount?: number;
-  target_date?: string;
+  target_date?: string; // Fecha objetivo o fecha de cumplimiento
   color: string;
   user_id?: string;
   challenge_id?: string; // Añadir challenge_id
@@ -314,6 +314,7 @@ const Savings: React.FC = () => {
       newBalance -= amount;
     }
 
+    // Update saving balance
     const { data, error } = await supabase
       .from('savings')
       .update({ current_balance: newBalance })
@@ -324,7 +325,29 @@ const Savings: React.FC = () => {
     if (error) {
       showError('Error al registrar transacción: ' + error.message);
     } else {
-      const updatedSaving = data[0];
+      let updatedSaving = data[0];
+      const todayFormatted = format(new Date(), "yyyy-MM-dd");
+
+      // Check if goal is reached after this transaction
+      if (updatedSaving.target_amount && newBalance >= updatedSaving.target_amount) {
+        // If target_date is not set or is in the future, set it to today
+        if (!updatedSaving.target_date || isAfter(new Date(updatedSaving.target_date), new Date())) {
+          const { data: updatedSavingWithDate, error: dateUpdateError } = await supabase
+            .from('savings')
+            .update({ target_date: todayFormatted })
+            .eq('id', selectedSavingId)
+            .eq('user_id', user.id)
+            .select()
+            .single();
+          if (dateUpdateError) {
+            console.error("Error updating saving target_date:", dateUpdateError.message);
+            showError("Error al actualizar la fecha de cumplimiento del ahorro.");
+          } else {
+            updatedSaving = updatedSavingWithDate; // Use the updated saving data
+          }
+        }
+      }
+
       setSavings((prev) =>
         prev.map((saving) => (saving.id === selectedSavingId ? updatedSaving : saving))
       );
@@ -347,18 +370,24 @@ const Savings: React.FC = () => {
         // Fetch current challenge status to avoid unnecessary updates
         const { data: currentChallenge, error: fetchChallengeError } = await supabase
           .from('challenges')
-          .select('status')
+          .select('status, end_date')
           .eq('id', updatedSaving.challenge_id)
           .single();
 
         if (fetchChallengeError && fetchChallengeError.code !== 'PGRST116') {
           console.error("Error fetching linked challenge:", fetchChallengeError.message);
-        } else if (currentChallenge && currentChallenge.status !== challengeStatus) {
+        } else if (currentChallenge) {
+          let updateChallengeEndDate = currentChallenge.end_date;
+          // If challenge is completed and saving has a completion date, use that date
+          if (challengeStatus === "completed" && updatedSaving.target_date) {
+            updateChallengeEndDate = updatedSaving.target_date;
+          }
+
           // Only update if the new status is 'completed' or if the current status is 'active'
           if (challengeStatus === "completed" || currentChallenge.status === "active") {
             const { error: updateChallengeError } = await supabase
               .from('challenges')
-              .update({ status: challengeStatus })
+              .update({ status: challengeStatus, end_date: updateChallengeEndDate })
               .eq('id', updatedSaving.challenge_id)
               .eq('user_id', user.id);
 

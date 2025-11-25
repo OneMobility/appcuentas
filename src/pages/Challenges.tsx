@@ -15,7 +15,8 @@ import { es } from "date-fns/locale";
 import { useCategoryContext } from "@/context/CategoryContext";
 import DynamicLucideIcon from "@/components/DynamicLucideIcon";
 import { cn } from "@/lib/utils";
-import ChallengeAlbumImage from "@/components/ChallengeAlbumImage"; // Importar el nuevo componente
+import FlippableChallengeCard from "@/components/FlippableChallengeCard"; // Importar el componente flippable
+import ChallengeAlbumBackContent from "@/components/ChallengeAlbumBackContent"; // Importar el contenido trasero
 import { challengeTemplates, ChallengeTemplate } from "@/utils/challenge-templates"; // Importar plantillas
 
 interface ChallengesProps {
@@ -40,6 +41,16 @@ const badgeMapping: { [key: string]: string } = {
   "saving-goal-200": "Ahorrador Nivel 1.5",
   "saving-goal-500": "Ahorrador Nivel 3",
 };
+
+const FAILED_CHALLENGE_IMAGE = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Fallido.png";
+const COMPLETED_CHALLENGE_IMAGES: { [key: string]: string } = {
+  "saving-goal-150": "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Reto%20150%20pesos.png",
+  "no-netflix-more-books": "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Reto%20menos%20netflix.png",
+  // Añadir otras imágenes específicas para retos completados aquí
+};
+const GENERIC_COMPLETED_IMAGE = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Meta%202.png";
+const GENERIC_REGULAR_IMAGE = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Cochinito%20Calendario.png";
+
 
 const Challenges: React.FC<ChallengesProps> = ({ challengeRefreshKey, setChallengeRefreshKey }) => {
   const { user } = useSession();
@@ -239,6 +250,21 @@ const Challenges: React.FC<ChallengesProps> = ({ challengeRefreshKey, setChallen
     showSuccess("Retos actualizados.");
   };
 
+  const getFrontImageSrc = (challenge: ChallengeData) => {
+    const isCompleted = challenge.status === "completed";
+    const isFailed = challenge.status === "failed";
+    const isRegular = challenge.status === "regular";
+
+    if (isCompleted) {
+      return COMPLETED_CHALLENGE_IMAGES[challenge.challenge_template_id] || challenge.badge?.image_url || GENERIC_COMPLETED_IMAGE;
+    } else if (isFailed) {
+      return FAILED_CHALLENGE_IMAGE;
+    } else if (isRegular) {
+      return GENERIC_REGULAR_IMAGE;
+    }
+    return undefined; // Should not happen for past challenges
+  };
+
   if (isLoadingChallenges) {
     return <LoadingSpinner />;
   }
@@ -273,13 +299,16 @@ const Challenges: React.FC<ChallengesProps> = ({ challengeRefreshKey, setChallen
             Álbum de Retos Anteriores
           </CardTitle>
         </CardHeader>
-        <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 gap-4">
+        <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {userPastChallenges.length > 0 ? (
             userPastChallenges.map((challenge) => (
-              <ChallengeAlbumImage
-                key={challenge.id}
-                challenge={challenge}
-              />
+              <div key={challenge.id} className="w-[350px] h-[350px] mx-auto"> {/* Contenedor de 350x350 */}
+                <FlippableChallengeCard
+                  frontImageSrc={getFrontImageSrc(challenge)}
+                  frontImageAlt={challenge.name}
+                  backContent={<ChallengeAlbumBackContent challenge={challenge} />}
+                />
+              </div>
             ))
           ) : (
             <p className="col-span-full text-center text-muted-foreground">
