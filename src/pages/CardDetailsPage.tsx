@@ -831,6 +831,23 @@ const CardDetailsPage: React.FC = () => {
                   {filteredTransactions.map((transaction) => {
                     const isPaymentToCreditCard = card.type === "credit" && transaction.type === "payment";
                     const category = transaction.category_id ? getCategoryById(transaction.category_id, "expense") : undefined;
+
+                    let deleteDescription = `Esta acción no se puede deshacer. Esto eliminará permanentemente la transacción de ${transaction.type === "charge" ? "cargo" : "pago"} por $${transaction.amount.toFixed(2)}: "${transaction.description}".`;
+
+                    if (card.type === "credit") {
+                      if (transaction.type === "payment") {
+                        deleteDescription = `Esta acción no se puede deshacer. Esto eliminará permanentemente el pago de $${transaction.amount.toFixed(2)}: "${transaction.description}" y aumentará la deuda de tu tarjeta de crédito.`;
+                      } else { // charge on credit card
+                        deleteDescription = `Esta acción no se puede deshacer. Esto eliminará permanentemente el cargo de $${transaction.amount.toFixed(2)}: "${transaction.description}" y reducirá la deuda de tu tarjeta de crédito.`;
+                      }
+                    } else { // debit card
+                      if (transaction.type === "payment") {
+                        deleteDescription = `Esta acción no se puede deshacer. Esto eliminará permanentemente el ingreso de $${transaction.amount.toFixed(2)}: "${transaction.description}" y reducirá el saldo de tu tarjeta de débito.`;
+                      } else { // charge on debit card
+                        deleteDescription = `Esta acción no se puede deshacer. Esto eliminará permanentemente el egreso de $${transaction.amount.toFixed(2)}: "${transaction.description}" y aumentará el saldo de tu tarjeta de débito.`;
+                      }
+                    }
+
                     return (
                       <TableRow 
                         key={transaction.id}
@@ -882,7 +899,7 @@ const CardDetailsPage: React.FC = () => {
                               <AlertDialogHeader>
                                 <AlertDialogTitle>¿Estás absolutamente seguro?</AlertDialogTitle>
                                 <AlertDialogDescription>
-                                  Esta acción no se puede deshacer. Esto eliminará permanentemente la transacción de {transaction.type === "charge" ? "cargo" : "pago"} por ${transaction.amount.toFixed(2)}: "{transaction.description}".
+                                  {deleteDescription}
                                   {transaction.installments_count && transaction.installments_count > 1 && (
                                     <p className="mt-2 text-sm text-red-500">
                                       Nota: Esta es una cuota de una transacción a meses. Eliminarla afectará el saldo de la tarjeta.
