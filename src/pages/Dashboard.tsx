@@ -16,6 +16,7 @@ import { es } from "date-fns/locale";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { getUpcomingPaymentDueDate } from "@/utils/date-helpers";
 import { Button } from "@/components/ui/button";
+import PaymentDueDateCard from "@/components/PaymentDueDateCard"; // Importar el nuevo componente
 
 // Tasas de cambio de ejemplo (MXN como base)
 const exchangeRates: { [key: string]: number } = {
@@ -137,11 +138,11 @@ const Dashboard = () => {
       setDebtors(debtorsData || []);
 
       // Fetch Creditors
-      const { data: creditorsData, error: creditorError } = await supabase // Corrected variable name
+      const { data: creditorsData, error: creditorError } = await supabase
         .from('creditors')
         .select('*')
         .eq('user_id', user.id);
-      if (creditorError) throw creditorError; // Corrected variable name
+      if (creditorError) throw creditorError;
       setCreditors(creditorsData || []);
 
     } catch (error: any) {
@@ -431,6 +432,13 @@ const Dashboard = () => {
           </CardContent>
         </Card>
       )}
+
+      {/* Tarjetas de cuenta regresiva para fechas de pago */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        {cards.map(card => (
+          <PaymentDueDateCard key={card.id} card={card} />
+        ))}
+      </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>

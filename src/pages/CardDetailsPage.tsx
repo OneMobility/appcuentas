@@ -25,6 +25,7 @@ import { getUpcomingPaymentDueDate } from "@/utils/date-helpers";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { exportToCsv, exportToPdf } from "@/utils/export";
 import LoadingSpinner from "@/components/LoadingSpinner";
+import PaymentDueDateCard from "@/components/PaymentDueDateCard"; // Importar el nuevo componente
 
 interface CardTransaction {
   id: string;
@@ -470,6 +471,9 @@ const CardDetailsPage: React.FC = () => {
         </Button>
         <h1 className="text-3xl font-bold">Detalles de la Tarjeta: {card.name}</h1>
       </div>
+
+      {/* Tarjeta de cuenta regresiva para la fecha de pago */}
+      <PaymentDueDateCard card={card} />
 
       <Card className="p-6" style={{ backgroundColor: card.color, color: 'white' }}>
         <CardHeader className="p-0 mb-4 relative z-10">
