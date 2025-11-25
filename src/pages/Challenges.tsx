@@ -15,7 +15,7 @@ import { es } from "date-fns/locale";
 import { useCategoryContext } from "@/context/CategoryContext";
 import DynamicLucideIcon from "@/components/DynamicLucideIcon";
 import { cn } from "@/lib/utils";
-import PastChallengeItem from "@/components/PastChallengeItem";
+import ChallengeAlbumImage from "@/components/ChallengeAlbumImage"; // Importar el nuevo componente
 import { challengeTemplates, ChallengeTemplate } from "@/utils/challenge-templates"; // Importar plantillas
 
 interface ChallengesProps {
@@ -273,19 +273,19 @@ const Challenges: React.FC<ChallengesProps> = ({ challengeRefreshKey, setChallen
             Álbum de Retos Anteriores
           </CardTitle>
         </CardHeader>
-        <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {challengeTemplates.map((template) => {
-            const userChallenge = userPastChallenges.find(
-              (uc) => uc.challenge_template_id === template.id
-            );
-            return (
-              <PastChallengeItem
-                key={template.id}
-                template={template}
-                userChallenge={userChallenge}
+        <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 gap-4">
+          {userPastChallenges.length > 0 ? (
+            userPastChallenges.map((challenge) => (
+              <ChallengeAlbumImage
+                key={challenge.id}
+                challenge={challenge}
               />
-            );
-          })}
+            ))
+          ) : (
+            <p className="col-span-full text-center text-muted-foreground">
+              Aún no has completado ningún reto. ¡Empieza uno nuevo!
+            </p>
+          )}
         </CardContent>
       </Card>
     </div>
