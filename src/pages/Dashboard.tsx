@@ -11,7 +11,7 @@ import { useCategoryContext } from "@/context/CategoryContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/context/SessionContext";
 import { showError } from "@/utils/toast";
-import { format, isBefore, isSameDay } from "date-fns";
+import { format, isBefore, isSameDay, addDays } from "date-fns"; // Importar addDays
 import { es } from "date-fns/locale";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { getUpcomingPaymentDueDate } from "@/utils/date-helpers";
@@ -316,38 +316,97 @@ const Dashboard = () => {
     });
   }, [cards]);
 
-  const allCardsInOrder = useMemo(() => {
+  const cardHealthStatus = useMemo(() => {
     const today = new Date();
-    today.setHours(0, 0, 0, 0); // Normalizar today al inicio del día
+    today.setHours(0, 0, 0, 0);
+    const twoDaysFromNow = addDays(today, 2);
+
+    let hasCriticalIssue = false;
+    let hasWarningIssue = false;
+    const criticalCards: string[] = [];
+    const warningCards: string[] = [];
 
     for (const card of cards) {
-      if (card.type === "credit") {
+      const isCredit = card.type === "credit";
+
+      if (isCredit) {
         // Check if current balance exceeds credit limit
         if (card.credit_limit !== undefined && card.current_balance > card.credit_limit) {
-          return false;
+          hasCriticalIssue = true;
+          criticalCards.push(`${card.name} (límite excedido)`);
         }
-        // Check for overdue payments (if payment due date is in the past and not today)
+
+        // Check for overdue payments
         if (card.cut_off_day !== undefined && card.days_to_pay_after_cut_off !== undefined) {
           const paymentDueDate = getUpcomingPaymentDueDate(card.cut_off_day, card.days_to_pay_after_cut_off, today);
           if (isBefore(paymentDueDate, today) && !isSameDay(paymentDueDate, today)) {
-            return false;
+            hasCriticalIssue = true;
+            criticalCards.push(`${card.name} (pago vencido el ${format(paymentDueDate, "dd/MM/yyyy", { locale: es })})`);
+          } else if ((isBefore(paymentDueDate, twoDaysFromNow) || isSameDay(paymentDueDate, twoDaysFromNow)) && !isSameDay(paymentDueDate, today)) {
+            // Upcoming payment within 2 days, but not today and not overdue
+            hasWarningIssue = true;
+            warningCards.push(`${card.name} (pago próximo el ${format(paymentDueDate, "dd/MM/yyyy", { locale: es })})`);
           }
         }
       } else { // Debit card
         // Check if debit card balance is negative
         if (card.current_balance < 0) {
-          return false;
+          hasCriticalIssue = true;
+          criticalCards.push(`${card.name} (saldo negativo)`);
         }
       }
     }
-    return true;
+
+    if (hasCriticalIssue) {
+      return { status: "critical", cards: criticalCards };
+    } else if (hasWarningIssue) {
+      return { status: "warning", cards: warningCards };
+    } else {
+      return { status: "all_good", cards: [] };
+    }
   }, [cards]);
 
   return (
     <div className="flex flex-col gap-6 p-4">
       <h1 className="text-3xl font-bold">Dashboard</h1>
 
-      {allCardsInOrder ? (
+      {cardHealthStatus.status === "critical" ? (
+        <Card className="border-blue-600 bg-blue-50 text-blue-800">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-blue-800">Estado de Tarjetas</CardTitle>
+            <AlertTriangle className="h-4 w-4 text-blue-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-lg font-bold">Oye, pon atención en tus saldos</div>
+            <p className="text-xs text-blue-700">
+              Hay problemas críticos con las siguientes tarjetas:
+              <ul className="list-disc pl-5 mt-1">
+                {cardHealthStatus.cards.map((msg, index) => (
+                  <li key={index}>{msg}</li>
+                ))}
+              </ul>
+            </p>
+          </CardContent>
+        </Card>
+      ) : cardHealthStatus.status === "warning" ? (
+        <Card className="border-orange-600 bg-orange-50 text-orange-800">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-orange-800">Estado de Tarjetas</CardTitle>
+            <Meh className="h-4 w-4 text-orange-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-lg font-bold">Atención: Algo no cuadra</div>
+            <p className="text-xs text-orange-700">
+              Revisa tus tarjetas, hay eventos próximos:
+              <ul className="list-disc pl-5 mt-1">
+                {cardHealthStatus.cards.map((msg, index) => (
+                  <li key={index}>{msg}</li>
+                ))}
+              </ul>
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
         <Card className="border-green-600 bg-green-50 text-green-800">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-green-800">Estado de Tarjetas</CardTitle>
@@ -356,17 +415,6 @@ const Dashboard = () => {
           <CardContent>
             <div className="text-lg font-bold">¡Todo está en orden aquí!</div>
             <p className="text-xs text-green-700">Tus tarjetas están al día y dentro de los límites.</p>
-          </CardContent>
-        </Card>
-      ) : (
-        <Card className="border-orange-600 bg-orange-50 text-orange-800"> {/* Cambiado a naranja */}
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-orange-800">Estado de Tarjetas</CardTitle>
-            <Meh className="h-4 w-4 text-orange-600" /> {/* Cambiado a ícono Meh */}
-          </CardHeader>
-          <CardContent>
-            <div className="text-lg font-bold">Atención: Algo no cuadra</div> {/* Texto actualizado */}
-            <p className="text-xs text-orange-700">Revisa tus tarjetas, puede haber saldos negativos o pagos próximos/vencidos.</p> {/* Descripción actualizada */}
           </CardContent>
         </Card>
       )}
