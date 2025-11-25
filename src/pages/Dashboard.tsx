@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
-import { Home, Users, DollarSign, CreditCard, AlertTriangle, Meh, RefreshCw, PiggyBank } from "lucide-react"; // Eliminar Smile
+import { Home, Users, DollarSign, CreditCard, AlertTriangle, Meh, RefreshCw, PiggyBank } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -11,13 +11,13 @@ import { useCategoryContext } from "@/context/CategoryContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/context/SessionContext";
 import { showError, showSuccess } from "@/utils/toast";
-import { format, isBefore, isSameDay, addDays, parseISO } from "date-fns"; // Importar parseISO
+import { format, isBefore, isSameDay, addDays, parseISO } from "date-fns";
 import { es } from "date-fns/locale";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { getUpcomingPaymentDueDate } from "@/utils/date-helpers";
 import { Button } from "@/components/ui/button";
-import GroupedPaymentDueDatesCard from "@/components/GroupedPaymentDueDatesCard"; // Importar el nuevo componente
-import { cn } from "@/lib/utils"; // Importar cn para combinar clases
+import GroupedPaymentDueDatesCard from "@/components/GroupedPaymentDueDatesCard";
+import { cn } from "@/lib/utils";
 
 // Tasas de cambio de ejemplo (MXN como base)
 const exchangeRates: { [key: string]: number } = {
@@ -203,21 +203,20 @@ const Dashboard = () => {
     return creditors.reduce((sum, creditor) => sum + creditor.current_balance, 0);
   }, [creditors]);
 
-  const totalCardsBalance = useMemo(() => {
-    return cards.reduce((sum, card) => {
-      return sum + (card.type === "credit" ? -card.current_balance : card.current_balance);
-    }, 0);
-  }, [cards]);
-
   // Nuevo cálculo para el saldo total de tarjetas de débito
   const totalDebitCardsBalance = useMemo(() => {
     return cards.filter(card => card.type === "debit").reduce((sum, card) => sum + card.current_balance, 0);
   }, [cards]);
 
+  // Nuevo cálculo para la deuda total de tarjetas de crédito
+  const totalCreditCardDebt = useMemo(() => {
+    return cards.filter(card => card.type === "credit").reduce((sum, card) => sum + card.current_balance, 0);
+  }, [cards]);
+
   // Nuevo cálculo para el balance total
   const totalOverallBalance = useMemo(() => {
-    return totalCashBalance + totalDebitCardsBalance + totalDebtorsBalance - totalCreditorsBalance;
-  }, [totalCashBalance, totalDebitCardsBalance, totalDebtorsBalance, totalCreditorsBalance]);
+    return totalCashBalance + totalDebtorsBalance + totalDebitCardsBalance - totalCreditorsBalance - totalCreditCardDebt;
+  }, [totalCashBalance, totalDebtorsBalance, totalDebitCardsBalance, totalCreditorsBalance, totalCreditCardDebt]);
 
 
   const incomeCategoryData = useMemo(() => {
@@ -250,8 +249,8 @@ const Dashboard = () => {
     const summaryMap = new Map<string, MonthlySummary>(); // Key: YYYY-MM
 
     cashTransactions.forEach(tx => {
-      const monthKey = format(parseISO(tx.date), "yyyy-MM"); // Usar parseISO
-      const monthName = format(parseISO(tx.date), "MMMM", { locale: es }); // Usar parseISO
+      const monthKey = format(parseISO(tx.date), "yyyy-MM");
+      const monthName = format(parseISO(tx.date), "MMMM", { locale: es });
 
       if (!summaryMap.has(monthKey)) {
         summaryMap.set(monthKey, { name: monthName, ingresos: 0, egresos: 0 });
@@ -278,8 +277,8 @@ const Dashboard = () => {
     cards.forEach(card => {
       (card.transactions || []).forEach(tx => {
         if (tx.type === "charge") {
-          const monthKey = format(parseISO(tx.date), "yyyy-MM"); // Usar parseISO
-          const monthName = format(parseISO(tx.date), "MMM", { locale: es }); // Usar parseISO
+          const monthKey = format(parseISO(tx.date), "yyyy-MM");
+          const monthName = format(parseISO(tx.date), "MMM", { locale: es });
 
           if (!monthlyDataMap.has(monthKey)) {
             monthlyDataMap.set(monthKey, { name: monthName });
@@ -386,14 +385,14 @@ const Dashboard = () => {
 
   const piggyBankImageSrc = cardHealthStatus.status === "critical"
     ? "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Cochinito%20Fuego.png"
-    : "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Conchinito%20feliz.png"; // Updated URL
+    : "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Conchinito%20feliz.png";
 
-  const userFirstName = user?.user_metadata?.first_name || user?.email?.split('@')[0] || 'Usuario'; // Fallback a email o 'Usuario'
+  const userFirstName = user?.user_metadata?.first_name || user?.email?.split('@')[0] || 'Usuario';
 
   return (
     <div className="flex flex-col gap-6 p-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold">Hola, {userFirstName}</h1> {/* Saludo personalizado */}
+        <h1 className="text-3xl font-bold">Hola, {userFirstName}</h1>
         <Button variant="outline" size="sm" onClick={handleRefreshData}>
           <RefreshCw className="h-4 w-4 mr-2" />
           Actualizar Datos
@@ -405,11 +404,11 @@ const Dashboard = () => {
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-blue-800">Estado de Tarjetas</CardTitle>
           </CardHeader>
-          <CardContent className="flex flex-col items-center pr-4 md:block md:pr-48"> {/* Flex column on mobile, block on desktop */}
+          <CardContent className="flex flex-col items-center pr-4 md:block md:pr-48">
             <img 
               src={piggyBankImageSrc} 
               alt="Conchinito en problemas" 
-              className="h-[180px] w-[180px] mb-4 mx-auto md:absolute md:top-[54px] md:right-[34px] md:z-10"
+              className="h-[180px] w-[180px] mb-4 mx-auto md:absolute md:top-[54px] md:right-[4px] md:z-10"
             />
             <div className="text-lg font-bold text-center md:text-left">Oye, pon atención en tus saldos</div>
             <p className="text-xs text-blue-700 mt-1 text-center md:text-left">
@@ -427,11 +426,11 @@ const Dashboard = () => {
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-orange-800">Estado de Tarjetas</CardTitle>
           </CardHeader>
-          <CardContent className="flex flex-col items-center pr-4 md:block md:pr-48"> {/* Flex column on mobile, block on desktop */}
+          <CardContent className="flex flex-col items-center pr-4 md:block md:pr-48">
             <img 
               src={piggyBankImageSrc} 
               alt="Conchinito en advertencia" 
-              className="h-[180px] w-[180px] mb-4 mx-auto md:absolute md:top-[54px] md:right-[34px] md:z-10"
+              className="h-[180px] w-[180px] mb-4 mx-auto md:absolute md:top-[54px] md:right-[4px] md:z-10"
             />
             <div className="text-lg font-bold text-center md:text-left">Atención: Algo no cuadra</div>
             <p className="text-xs text-orange-700 mt-1 text-center md:text-left">
@@ -449,11 +448,11 @@ const Dashboard = () => {
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-green-800">Estado de Tarjetas</CardTitle>
           </CardHeader>
-          <CardContent className="flex flex-col items-center pr-4 md:block md:pr-48"> {/* Flex column on mobile, block on desktop */}
+          <CardContent className="flex flex-col items-center pr-4 md:block md:pr-48">
             <img 
               src={piggyBankImageSrc} 
               alt="Conchinito feliz" 
-              className="h-[180px] w-[180px] mb-4 mx-auto md:absolute md:top-[54px] md:right-[34px] md:z-10"
+              className="h-[180px] w-[180px] mb-4 mx-auto md:absolute md:top-[54px] md:right-[4px] md:z-10"
             />
             <div className="text-lg font-bold text-center md:text-left">¡Todo está en orden aquí!</div>
             <p className="text-xs text-green-700 mt-1 text-center md:text-left">Tus tarjetas están al día y dentro de los límites.</p>
@@ -510,12 +509,12 @@ const Dashboard = () => {
         </Card>
         <Card className={cn("border-l-4 border-yellow-500 bg-yellow-50 text-yellow-800")}>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-yellow-800">TARJETAS</CardTitle>
+            <CardTitle className="text-sm font-medium text-yellow-800">DEUDA TARJETAS CRÉDITO</CardTitle>
             <CreditCard className="h-4 w-4 text-yellow-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">${totalCardsBalance.toFixed(2)}</div>
-            <p className="text-xs text-yellow-700">+1.8% desde el mes pasado</p> {/* Placeholder */}
+            <div className="text-2xl font-bold">${totalCreditCardDebt.toFixed(2)}</div>
+            <p className="text-xs text-yellow-700">Deuda total en tus tarjetas de crédito.</p>
           </CardContent>
         </Card>
 
@@ -527,7 +526,7 @@ const Dashboard = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">${totalOverallBalance.toFixed(2)}</div>
-            <p className="text-xs text-pink-700">Efectivo + Débito + Deudores - Acreedores.</p>
+            <p className="text-xs text-pink-700">Efectivo + Deudores + Débito - Acreedores - Crédito.</p>
           </CardContent>
         </Card>
       </div>
@@ -657,8 +656,8 @@ const Dashboard = () => {
                 <YAxis />
                 <Tooltip formatter={(value: number) => `$${value.toFixed(2)}`} />
                 <Legend />
-                <Bar dataKey="LimiteOInicial" fill="#87CEEB" name="Límite / Saldo Inicial" /> {/* Azul Celeste */}
-                <Bar dataKey="SaldoActualODeuda" fill="#FFB6C1" name="Saldo Actual / Deuda" /> {/* Rosa Claro */}
+                <Bar dataKey="LimiteOInicial" fill="#87CEEB" name="Límite / Saldo Inicial" />
+                <Bar dataKey="SaldoActualODeuda" fill="#FFB6C1" name="Saldo Actual / Deuda" />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -686,8 +685,8 @@ const Dashboard = () => {
                 <YAxis />
                 <Tooltip />
                 <Legend />
-                <Bar dataKey="ingresos" fill="#87CEEB" name="Ingresos" /> {/* Azul Celeste */}
-                <Bar dataKey="egresos" fill="#FFB6C1" name="Egresos" /> {/* Rosa Claro */}
+                <Bar dataKey="ingresos" fill="#87CEEB" name="Ingresos" />
+                <Bar dataKey="egresos" fill="#FFB6C1" name="Egresos" />
               </BarChart>
             </ResponsiveContainer>
           </div>
