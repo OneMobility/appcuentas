@@ -15,6 +15,7 @@ import { es } from "date-fns/locale"; // Importar el objeto de localización 'es
 import { useCategoryContext } from "@/context/CategoryContext"; // Importar useCategoryContext
 import DynamicLucideIcon from "@/components/DynamicLucideIcon"; // Importar DynamicLucideIcon
 import { cn } from "@/lib/utils";
+import PastChallengeItem from "@/components/PastChallengeItem"; // Importar el nuevo componente
 
 interface ChallengesProps {
   challengeRefreshKey: number;
@@ -277,58 +278,7 @@ const Challenges: React.FC<ChallengesProps> = ({ challengeRefreshKey, setChallen
           </CardHeader>
           <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {pastChallenges.map((challenge) => (
-              <Card key={challenge.id} className={cn(
-                "p-4 shadow-sm",
-                challenge.status === "completed" ? "border-l-4 border-green-500 bg-green-50" :
-                challenge.status === "failed" ? "border-l-4 border-red-500 bg-red-50" :
-                "border-l-4 border-gray-300 bg-gray-50"
-              )}>
-                <CardHeader className="p-0 pb-2">
-                  <CardTitle className={cn(
-                    "text-base font-semibold",
-                    (challenge.status === "completed" || challenge.status === "failed") && "line-through"
-                  )}>
-                    {challenge.name}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="p-0">
-                  <p className={cn(
-                    "text-sm text-muted-foreground",
-                    (challenge.status === "completed" || challenge.status === "failed") && "line-through"
-                  )}>
-                    {challenge.description}
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Finalizado: {format(new Date(challenge.end_date), "dd/MM/yyyy", { locale: es })}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    Estado: <span className={cn(
-                      challenge.status === "completed" && "text-green-600 font-medium",
-                      challenge.status === "failed" && "text-red-600 font-medium",
-                      challenge.status === "regular" && "text-orange-600 font-medium"
-                    )}>
-                      {challenge.status === "completed" ? "Completado" :
-                       challenge.status === "failed" ? "Fallido" :
-                       challenge.status === "regular" ? "Regular" : "Desconocido"}
-                    </span>
-                  </p>
-                  {challenge.badge && challenge.status === "completed" && (
-                    <div className="mt-3 flex items-center gap-2">
-                      <img src={challenge.badge.image_url} alt={challenge.badge.name} className="h-10 w-10" />
-                      <div className="flex flex-col">
-                        <span className="text-sm font-medium">Insignia: {challenge.badge.name}</span>
-                        <span className="text-xs text-muted-foreground">{challenge.badge.description}</span>
-                      </div>
-                    </div>
-                  )}
-                  {challenge.status === "failed" && (
-                    <div className="mt-3 flex items-center gap-2 text-red-600">
-                      <XCircle className="h-6 w-6" />
-                      <span className="text-sm font-medium">No se obtuvo insignia.</span>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
+              <PastChallengeItem key={challenge.id} challenge={challenge} />
             ))}
           </CardContent>
         </Card>
