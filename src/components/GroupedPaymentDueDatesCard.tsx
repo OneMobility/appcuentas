@@ -52,11 +52,15 @@ const GroupedPaymentDueDatesCard: React.FC<GroupedPaymentDueDatesCardProps> = ({
 
   return (
     <Card className="relative p-4 shadow-md border-l-4 border-blue-500 bg-blue-50 text-blue-800">
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium text-blue-800">
-          Próximas Fechas Límite de Pago
+      <CardHeader className="relative flex flex-row items-center justify-between space-y-0 pb-2">
+        <CardTitle className="text-lg font-bold text-blue-800">
+          Tu calendario de pagos
         </CardTitle>
-        <CalendarIcon className="h-4 w-4 text-blue-600" />
+        <img
+          src="https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Calendario.png"
+          alt="Calendario de Pagos"
+          className="absolute top-0 right-[50px] h-[150px] w-[150px] z-10 -mt-8"
+        />
       </CardHeader>
       <CardContent>
         {upcomingPayments.map((payment, index) => {
