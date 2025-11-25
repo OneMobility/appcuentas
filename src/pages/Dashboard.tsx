@@ -137,11 +137,11 @@ const Dashboard = () => {
       setDebtors(debtorsData || []);
 
       // Fetch Creditors
-      const { data: creditorsData, error: creditorsError } = await supabase
+      const { data: creditorsData, error: creditorError } = await supabase // Corrected variable name
         .from('creditors')
         .select('*')
         .eq('user_id', user.id);
-      if (creditorError) throw creditorsError;
+      if (creditorError) throw creditorError; // Corrected variable name
       setCreditors(creditorsData || []);
 
     } catch (error: any) {
