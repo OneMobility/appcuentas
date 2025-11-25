@@ -7,8 +7,7 @@ import { es } from "date-fns/locale";
 import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/context/SessionContext";
 import { showError, showSuccess } from "@/utils/toast";
-import { Capacitor } from '@capacitor/core';
-import { PushNotifications, PushNotificationSchema, Token, ActionPerformed } from '@capacitor/push-notifications';
+import { Capacitor } from '@capacitor/core'; // Mantener para isNativePlatform
 
 interface CardData {
   id: string;
@@ -17,7 +16,7 @@ interface CardData {
   expiration_date: string;
   type: "credit" | "debit";
   cut_off_day?: number;
-  days_to_pay_after_cut_off?: number; // Nuevo campo
+  days_to_pay_after_cut_off?: number;
 }
 
 const CardNotifications: React.FC = () => {
@@ -33,7 +32,7 @@ const CardNotifications: React.FC = () => {
 
       const { data, error } = await supabase
         .from('cards')
-        .select('id, name, bank_name, expiration_date, type, cut_off_day, days_to_pay_after_cut_off') // Seleccionar nuevo campo
+        .select('id, name, bank_name, expiration_date, type, cut_off_day, days_to_pay_after_cut_off')
         .eq('user_id', user.id);
 
       if (error) {
@@ -48,6 +47,7 @@ const CardNotifications: React.FC = () => {
 
   // Display toast notifications for upcoming card dates (Web only)
   useEffect(() => {
+    // Solo mostrar toasts si no es una plataforma móvil nativa
     if (!isMobilePlatform && cards.length > 0) {
       const today = new Date();
       const twoDaysFromNow = addDays(today, 2);
@@ -96,7 +96,7 @@ const CardNotifications: React.FC = () => {
 
   // PWA Install Prompt (Web only)
   useEffect(() => {
-    if (!isMobilePlatform) {
+    if (!isMobilePlatform) { // Solo para web
       const isPWA = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone;
       if (!isPWA) {
         const handler = (e: Event) => {
@@ -134,56 +134,8 @@ const CardNotifications: React.FC = () => {
     }
   }, [deferredPrompt, isMobilePlatform]);
 
-  // Capacitor Push Notifications (Mobile only)
-  useEffect(() => {
-    if (isMobilePlatform && user) {
-      const registerPushNotifications = async () => {
-        let permStatus = await PushNotifications.requestPermissions();
-
-        if (permStatus.receive === 'granted') {
-          await PushNotifications.register();
-        } else {
-          showError('Permisos de notificación no concedidos.');
-        }
-
-        PushNotifications.addListener('registration', async (token: Token) => {
-          console.log('Push registration success, token: ' + token.value);
-          // Save token to Supabase
-          const { error } = await supabase
-            .from('user_devices')
-            .upsert({ user_id: user.id, push_token: token.value }, { onConflict: 'push_token' });
-          if (error) {
-            showError('Error al guardar el token de notificación: ' + error.message);
-          } else {
-            showSuccess('Notificaciones push registradas.');
-          }
-        });
-
-        PushNotifications.addListener('registrationError', (error: any) => {
-          showError('Error en el registro de notificaciones push: ' + JSON.stringify(error));
-        });
-
-        PushNotifications.addListener('pushNotificationReceived', (notification: PushNotificationSchema) => {
-          console.log('Push received: ' + JSON.stringify(notification));
-          toast.info(notification.title || 'Notificación', {
-            description: notification.body,
-            duration: 5000,
-          });
-        });
-
-        PushNotifications.addListener('pushNotificationActionPerformed', (notification: ActionPerformed) => {
-          console.log('Push action performed: ' + JSON.stringify(notification));
-          // Handle navigation or specific actions based on notification data
-        });
-      };
-
-      registerPushNotifications();
-
-      return () => {
-        PushNotifications.removeAllListeners();
-      };
-    }
-  }, [isMobilePlatform, user]);
+  // Eliminado: Capacitor Push Notifications (Mobile only)
+  // La lógica de notificaciones push se ha eliminado según la solicitud del usuario.
 
   return null;
 };

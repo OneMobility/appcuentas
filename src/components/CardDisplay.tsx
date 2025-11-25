@@ -29,7 +29,7 @@ interface CardData {
   current_balance: number;
   credit_limit?: number;
   cut_off_day?: number;
-  payment_due_day?: number;
+  days_to_pay_after_cut_off?: number;
   color: string;
   transactions: CardTransaction[];
 }
@@ -44,6 +44,7 @@ interface CardDisplayProps {
 
 const CardDisplay: React.FC<CardDisplayProps> = ({ card, onAddTransaction, onViewDetails, onDeleteCard, onEditCard }) => {
   const isCredit = card.type === "credit";
+  const creditAvailable = isCredit && card.credit_limit !== undefined ? card.credit_limit - card.current_balance : 0;
 
   return (
     <Card className={cn(
@@ -66,6 +67,11 @@ const CardDisplay: React.FC<CardDisplayProps> = ({ card, onAddTransaction, onVie
           <p className="text-3xl font-extrabold">
             ${card.current_balance.toFixed(2)}
           </p>
+          {isCredit && card.credit_limit !== undefined && (
+            <p className="text-sm opacity-80 mt-1">
+              Crédito Disponible: ${creditAvailable.toFixed(2)}
+            </p>
+          )}
         </div>
 
         <div className="grid grid-cols-2 gap-2 text-sm mb-4">
