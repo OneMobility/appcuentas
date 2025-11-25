@@ -242,7 +242,7 @@ const Cards = () => {
 
   const handleOpenAddTransactionDialog = (cardId: string) => {
     setSelectedCardId(cardId);
-    setNewTransaction({ type: "charge", amount: "", description: "", date: undefined, installments_count: undefined, category_id: "" });
+    setNewTransaction({ type: "charge", amount: "", description: "", date: new Date(), installments_count: undefined, category_id: "" }); // Default to current date
     setIsAddTransactionDialogOpen(true);
   };
 
