@@ -141,7 +141,7 @@ const Dashboard = () => {
         .from('creditors')
         .select('*')
         .eq('user_id', user.id);
-      if (creditorsError) throw creditorsError;
+      if (creditorError) throw creditorsError;
       setCreditors(creditorsData || []);
 
     } catch (error: any) {
@@ -337,10 +337,10 @@ const Dashboard = () => {
       const isCredit = card.type === "credit";
 
       if (isCredit) {
-        // Check if current balance exceeds credit limit
-        if (card.credit_limit !== undefined && card.current_balance > card.credit_limit) {
+        // Check if current balance is at or exceeds credit limit
+        if (card.credit_limit !== undefined && card.current_balance >= card.credit_limit) {
           hasCriticalIssue = true;
-          criticalCards.push(`${card.name} (límite excedido)`);
+          criticalCards.push(`${card.name} (límite alcanzado o excedido)`);
         }
 
         // Check for overdue payments
