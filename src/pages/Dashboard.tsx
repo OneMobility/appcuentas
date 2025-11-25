@@ -17,6 +17,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { getUpcomingPaymentDueDate } from "@/utils/date-helpers";
 import { Button } from "@/components/ui/button";
 import GroupedPaymentDueDatesCard from "@/components/GroupedPaymentDueDatesCard"; // Importar el nuevo componente
+import { cn } from "@/lib/utils"; // Importar cn para combinar clases
 
 // Tasas de cambio de ejemplo (MXN como base)
 const exchangeRates: { [key: string]: number } = {
@@ -457,68 +458,68 @@ const Dashboard = () => {
       <GroupedPaymentDueDatesCard cards={cards} />
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card className="bg-card text-foreground">
+        <Card className={cn("border-l-4 border-green-600 bg-green-50 text-green-800")}>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">TU DINERITO</CardTitle>
-            <Home className="h-4 w-4 text-primary" />
+            <CardTitle className="text-sm font-medium text-green-800">TU DINERITO</CardTitle>
+            <Home className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">${totalCashBalance.toFixed(2)}</div>
-            <p className="text-xs text-muted-foreground">+20.1% desde el mes pasado</p> {/* Placeholder */}
+            <p className="text-xs text-green-700">+20.1% desde el mes pasado</p> {/* Placeholder */}
           </CardContent>
         </Card>
-        <Card className="bg-card text-foreground">
+        <Card className={cn("border-l-4 border-green-600 bg-green-50 text-green-800")}>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">QUIEN TE DEBE</CardTitle>
-            <Users className="h-4 w-4 text-primary" />
+            <CardTitle className="text-sm font-medium text-green-800">QUIEN TE DEBE</CardTitle>
+            <Users className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">${totalDebtorsBalance.toFixed(2)}</div>
-            <p className="text-xs text-muted-foreground">-5.2% desde el mes pasado</p> {/* Placeholder */}
+            <p className="text-xs text-green-700">-5.2% desde el mes pasado</p> {/* Placeholder */}
           </CardContent>
         </Card>
-        <Card className="bg-card text-foreground">
+        <Card className={cn("border-l-4 border-yellow-500 bg-yellow-50 text-yellow-800")}>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">A QUIEN LE DEBES</CardTitle>
-            <DollarSign className="h-4 w-4 text-primary" />
+            <CardTitle className="text-sm font-medium text-yellow-800">A QUIEN LE DEBES</CardTitle>
+            <DollarSign className="h-4 w-4 text-yellow-600" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">${totalCreditorsBalance.toFixed(2)}</div>
-            <p className="text-xs text-muted-foreground">+10.5% desde el mes pasado</p> {/* Placeholder */}
+            <p className="text-xs text-yellow-700">+10.5% desde el mes pasado</p> {/* Placeholder */}
           </CardContent>
         </Card>
-        <Card className="bg-card text-foreground">
+        <Card className={cn("border-l-4 border-yellow-500 bg-yellow-50 text-yellow-800")}>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">TARJETAS</CardTitle>
-            <CreditCard className="h-4 w-4 text-primary" />
+            <CardTitle className="text-sm font-medium text-yellow-800">TARJETAS</CardTitle>
+            <CreditCard className="h-4 w-4 text-yellow-600" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">${totalCardsBalance.toFixed(2)}</div>
-            <p className="text-xs text-muted-foreground">+1.8% desde el mes pasado</p> {/* Placeholder */}
+            <p className="text-xs text-yellow-700">+1.8% desde el mes pasado</p> {/* Placeholder */}
           </CardContent>
         </Card>
 
         {/* Nueva tarjeta para Saldo de Tarjetas de Débito */}
-        <Card className="bg-card text-foreground">
+        <Card className={cn("border-l-4 border-green-600 bg-green-50 text-green-800")}>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">SALDO TARJETAS DÉBITO</CardTitle>
-            <CreditCard className="h-4 w-4 text-primary" />
+            <CardTitle className="text-sm font-medium text-green-800">SALDO TARJETAS DÉBITO</CardTitle>
+            <CreditCard className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">${totalDebitCardsBalance.toFixed(2)}</div>
-            <p className="text-xs text-muted-foreground">Saldo total en tus tarjetas de débito.</p>
+            <p className="text-xs text-green-700">Saldo total en tus tarjetas de débito.</p>
           </CardContent>
         </Card>
 
         {/* Nueva tarjeta para Balance Total */}
-        <Card className="bg-card text-foreground">
+        <Card className={cn("border-l-4 border-pink-500 bg-pink-50 text-pink-800")}>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">BALANCE TOTAL</CardTitle>
-            <PiggyBank className="h-4 w-4 text-primary" />
+            <CardTitle className="text-sm font-medium text-pink-800">BALANCE TOTAL</CardTitle>
+            <PiggyBank className="h-4 w-4 text-pink-600" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">${totalOverallBalance.toFixed(2)}</div>
-            <p className="text-xs text-muted-foreground">Efectivo + Débito + Deudores - Acreedores.</p>
+            <p className="text-xs text-pink-700">Efectivo + Débito + Deudores - Acreedores.</p>
           </CardContent>
         </Card>
       </div>
