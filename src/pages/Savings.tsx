@@ -180,7 +180,7 @@ const Savings = () => {
       setFeedbackOverlay({
         isVisible: true,
         message: "¡Muy bien! ¡Cumpliremos esa meta!",
-        imageSrc: "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Cochinito%20Ahorro.png",
+        imageSrc: "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/cochinito%20love.png", // Corregido aquí
         bgColor: "bg-pink-100",
         textColor: "text-pink-800",
       });
