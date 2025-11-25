@@ -257,8 +257,12 @@ const Cards = () => {
 
   const handleSubmitTransaction = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user || !selectedCardId) {
+    if (!user) {
       showError("Debes iniciar sesión para registrar transacciones.");
+      return;
+    }
+    if (!selectedCardId) { // Explicit check for selectedCardId
+      showError("No se ha seleccionado una tarjeta para la transacción.");
       return;
     }
 
@@ -274,7 +278,7 @@ const Cards = () => {
 
     const currentCard = cards.find(c => c.id === selectedCardId);
     if (!currentCard) {
-      showError("Tarjeta no encontrada.");
+      showError("Tarjeta no encontrada o eliminada.");
       return;
     }
 
@@ -380,8 +384,12 @@ const Cards = () => {
 
   const handleUpdateTransaction = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user || !editingTransaction || !selectedCardId) {
+    if (!user) {
       showError("Debes iniciar sesión para actualizar transacciones.");
+      return;
+    }
+    if (!editingTransaction || !selectedCardId) { // Explicit check for editingTransaction and selectedCardId
+      showError("No se ha seleccionado una transacción o tarjeta para actualizar.");
       return;
     }
 
@@ -616,6 +624,9 @@ const Cards = () => {
     card.bank_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     card.last_four_digits.includes(searchTerm)
   );
+
+  // Obtener la tarjeta actual para el diálogo de transacción, si selectedCardId está definido
+  const currentCardForDialog = selectedCardId ? cards.find(c => c.id === selectedCardId) : null;
 
   return (
     <div className="flex flex-col gap-6 p-4">
@@ -854,7 +865,7 @@ const Cards = () => {
           <Dialog open={isAddTransactionDialogOpen} onOpenChange={setIsAddTransactionDialogOpen}>
             <DialogContent className="sm:max-w-[425px]">
               <DialogHeader>
-                <DialogTitle>Registrar Transacción para {cards.find(c => c.id === selectedCardId)?.name}</DialogTitle>
+                <DialogTitle>Registrar Transacción para {currentCardForDialog?.name}</DialogTitle>
               </DialogHeader>
               <form onSubmit={handleSubmitTransaction} className="grid gap-4 py-4">
                 <div className="grid grid-cols-4 items-center gap-4">
@@ -886,7 +897,7 @@ const Cards = () => {
                     required
                   />
                 </div>
-                {newTransaction.type === "charge" && currentCard?.type === "credit" && (
+                {newTransaction.type === "charge" && currentCardForDialog?.type === "credit" && (
                   <div className="grid grid-cols-4 items-center gap-4">
                     <Label htmlFor="installments_count" className="text-right">
                       Meses
@@ -1094,7 +1105,7 @@ const Cards = () => {
                     required
                   />
                 </div>
-                {newTransaction.type === "charge" && currentCard?.type === "credit" && (
+                {newTransaction.type === "charge" && currentCardForDialog?.type === "credit" && (
                   <div className="grid grid-cols-4 items-center gap-4">
                     <Label htmlFor="editInstallmentsCount" className="text-right">
                       Meses
