@@ -3,19 +3,19 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
-import { Home, Users, DollarSign, CreditCard, Smile, AlertTriangle, Meh, RefreshCw } from "lucide-react"; // Importar RefreshCw
+import { Home, Users, DollarSign, CreditCard, Smile, AlertTriangle, Meh, RefreshCw } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useCategoryContext } from "@/context/CategoryContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/context/SessionContext";
-import { showError } from "@/utils/toast";
+import { showError, showSuccess } from "@/utils/toast"; // Importar showSuccess
 import { format, isBefore, isSameDay, addDays } from "date-fns";
 import { es } from "date-fns/locale";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { getUpcomingPaymentDueDate } from "@/utils/date-helpers";
-import { Button } from "@/components/ui/button"; // Importar Button
+import { Button } from "@/components/ui/button";
 
 // Tasas de cambio de ejemplo (MXN como base)
 const exchangeRates: { [key: string]: number } = {
@@ -512,7 +512,7 @@ const Dashboard = () => {
               <Select value={toCurrency} onValueChange={setToCurrency}>
                 <SelectTrigger id="to-currency">
                   <SelectValue placeholder="Selecciona divisa" />
-                </SelectTrigger>
+                    </SelectTrigger>
                 <SelectContent>
                   {currencies.map((currency) => (
                     <SelectItem key={currency.value} value={currency.value}>
