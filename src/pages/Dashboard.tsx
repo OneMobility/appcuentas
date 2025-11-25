@@ -373,10 +373,12 @@ const Dashboard = () => {
     ? "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Cochinito%20Fuego.png"
     : "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Conchinito%20Good.png";
 
+  const userFirstName = user?.user_metadata?.first_name || user?.email?.split('@')[0] || 'Usuario'; // Fallback a email o 'Usuario'
+
   return (
     <div className="flex flex-col gap-6 p-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold">Dashboard</h1>
+        <h1 className="text-3xl font-bold">Hola, {userFirstName}</h1> {/* Saludo personalizado */}
         <Button variant="outline" size="sm" onClick={handleRefreshData}>
           <RefreshCw className="h-4 w-4 mr-2" />
           Actualizar Datos
