@@ -8,6 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/context/SessionContext";
 import { showError, showSuccess } from "@/utils/toast";
 import { Capacitor } from '@capacitor/core'; // Mantener para isNativePlatform
+import { getUpcomingPaymentDueDate } from "@/utils/date-helpers"; // Importar la nueva función
 
 interface CardData {
   id: string;
@@ -50,6 +51,7 @@ const CardNotifications: React.FC = () => {
     // Solo mostrar toasts si no es una plataforma móvil nativa
     if (!isMobilePlatform && cards.length > 0) {
       const today = new Date();
+      today.setHours(0, 0, 0, 0); // Normalizar today al inicio del día
       const twoDaysFromNow = addDays(today, 2);
 
       cards.forEach(card => {
@@ -57,8 +59,12 @@ const CardNotifications: React.FC = () => {
           // Check Cut-off Day
           if (card.cut_off_day !== undefined && card.cut_off_day > 0) {
             let cutOffDate = new Date(today.getFullYear(), today.getMonth(), card.cut_off_day);
+            cutOffDate.setHours(0, 0, 0, 0); // Normalizar
+
+            // Si el día de corte ya pasó este mes, se considera el del próximo mes para la notificación de corte
             if (isBefore(cutOffDate, today)) {
               cutOffDate = new Date(today.getFullYear(), today.getMonth() + 1, card.cut_off_day);
+              cutOffDate.setHours(0, 0, 0, 0); // Normalizar
             }
 
             if (isBefore(cutOffDate, twoDaysFromNow) || isSameDay(cutOffDate, twoDaysFromNow)) {
@@ -69,18 +75,9 @@ const CardNotifications: React.FC = () => {
             }
           }
 
-          // Check Payment Due Day (calculated from days_to_pay_after_cut_off)
+          // Check Payment Due Day (calculated using the new helper function)
           if (card.cut_off_day !== undefined && card.days_to_pay_after_cut_off !== undefined) {
-            let cutOffDateForPayment = new Date(today.getFullYear(), today.getMonth(), card.cut_off_day);
-            // Si el día de corte ya pasó este mes, se considera el del próximo mes para calcular la fecha de pago
-            if (cutOffDateForPayment.getDate() < today.getDate() && cutOffDateForPayment.getMonth() === today.getMonth()) {
-              cutOffDateForPayment = new Date(today.getFullYear(), today.getMonth() + 1, card.cut_off_day);
-            } else if (cutOffDateForPayment.getDate() > today.getDate() && cutOffDateForPayment.getMonth() !== today.getMonth()) {
-              // Si el día de corte es en un mes futuro (ej. hoy es 30 de enero, corte es 1 de marzo), usar el mes actual
-              cutOffDateForPayment = new Date(today.getFullYear(), today.getMonth(), card.cut_off_day);
-            }
-
-            const paymentDueDate = addDays(cutOffDateForPayment, card.days_to_pay_after_cut_off);
+            const paymentDueDate = getUpcomingPaymentDueDate(card.cut_off_day, card.days_to_pay_after_cut_off, today);
 
             if (isBefore(paymentDueDate, twoDaysFromNow) || isSameDay(paymentDueDate, twoDaysFromNow)) {
               toast.info(
@@ -133,9 +130,6 @@ const CardNotifications: React.FC = () => {
       }
     }
   }, [deferredPrompt, isMobilePlatform]);
-
-  // Eliminado: Capacitor Push Notifications (Mobile only)
-  // La lógica de notificaciones push se ha eliminado según la solicitud del usuario.
 
   return null;
 };

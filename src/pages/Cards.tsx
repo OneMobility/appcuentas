@@ -10,10 +10,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { PlusCircle, DollarSign, History, CalendarIcon, Trash2, Edit } from "lucide-react";
+import { PlusCircle, DollarSign, History, Trash2, Edit, CalendarIcon } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { cn } from "@/lib/utils";
-import { format, addDays } from "date-fns"; // Importar addDays
+import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { DateRange } from "react-day-picker";
 import CardDisplay from "@/components/CardDisplay";
@@ -21,11 +21,12 @@ import ColorPicker from "@/components/ColorPicker";
 import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/context/SessionContext";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { getUpcomingPaymentDueDate } from "@/utils/date-helpers"; // Importar la nueva función
 
 interface CardTransaction {
   id: string;
-  type: "charge" | "payment";
-  amount: number; // Monto mensual si es a meses, o monto total si es pago único
+  type: "charge" | "payment"; // Monto mensual si es a meses, o monto total si es pago único
+  amount: number;
   description: string;
   date: string;
   card_id?: string;
@@ -384,11 +385,7 @@ const Cards = () => {
 
   const handleUpdateTransaction = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user) {
-      showError("Debes iniciar sesión para actualizar transacciones.");
-      return;
-    }
-    if (!editingTransaction || !selectedCardId) { // Explicit check for editingTransaction and selectedCardId
+    if (!user || !editingTransaction || !selectedCardId) { // Explicit check for editingTransaction and selectedCardId
       showError("No se ha seleccionado una transacción o tarjeta para actualizar.");
       return;
     }
@@ -624,22 +621,6 @@ const Cards = () => {
     card.bank_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     card.last_four_digits.includes(searchTerm)
   );
-
-  // Helper para calcular la fecha límite de pago
-  const calculatePaymentDueDate = (cutOffDay: number, daysToPay: number) => {
-    const today = new Date();
-    let currentCutOffDate = new Date(today.getFullYear(), today.getMonth(), cutOffDay);
-    
-    // Si el día de corte ya pasó este mes, se considera el del próximo mes
-    if (currentCutOffDate.getDate() < today.getDate() && currentCutOffDate.getMonth() === today.getMonth()) {
-      currentCutOffDate = new Date(today.getFullYear(), today.getMonth() + 1, cutOffDay);
-    } else if (currentCutOffDate.getDate() > today.getDate() && currentCutOffDate.getMonth() !== today.getMonth()) {
-      // Si el día de corte es en un mes futuro (ej. hoy es 30 de enero, corte es 1 de marzo), usar el mes actual
-      currentCutOffDate = new Date(today.getFullYear(), today.getMonth(), cutOffDay);
-    }
-
-    return addDays(currentCutOffDate, daysToPay);
-  };
 
   // Obtener la tarjeta actual para el diálogo de transacción, si selectedCardId está definido
   const currentCardForDialog = selectedCardId ? cards.find(c => c.id === selectedCardId) : null;
@@ -1018,7 +999,7 @@ const Cards = () => {
                             <div>
                               <p className="text-muted-foreground">Fecha Límite de Pago (Estimada):</p>
                               <p className="font-medium">
-                                {format(calculatePaymentDueDate(detailedCard.cut_off_day, detailedCard.days_to_pay_after_cut_off), "dd 'de' MMMM, yyyy", { locale: es })}
+                                {format(getUpcomingPaymentDueDate(detailedCard.cut_off_day, detailedCard.days_to_pay_after_cut_off), "dd 'de' MMMM, yyyy", { locale: es })}
                               </p>
                             </div>
                           )}
