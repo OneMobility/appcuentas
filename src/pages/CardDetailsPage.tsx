@@ -837,7 +837,7 @@ const CardDetailsPage: React.FC = () => {
                         )}>
                           {isPaymentToCreditCard && (
                             <img
-                              src="https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/cochinito_love.gif"
+                              src="https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/cochinito_love.png"
                               alt="Cochinito Love"
                               className="h-4 w-4 inline-block mr-1"
                             />
