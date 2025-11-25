@@ -60,7 +60,7 @@ const IconPicker: React.FC<IconPickerProps> = ({ selectedIcon, onSelectIcon }) =
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button variant="outline" className="w-full justify-start">
-          <CurrentIcon className="mr-2 h-4 w-4" />
+          <CurrentIcon className="mr-2 h-4 w-4 text-black" /> {/* Añadido text-black */}
           {selectedIcon || "Seleccionar Icono"}
         </Button>
       </PopoverTrigger>
@@ -91,7 +91,7 @@ const IconPicker: React.FC<IconPickerProps> = ({ selectedIcon, onSelectIcon }) =
                     "hover:bg-muted"
                   )}
                 >
-                  <IconComponent className="h-4 w-4" />
+                  <IconComponent className="h-4 w-4 text-black" /> {/* Añadido text-black */}
                 </Button>
               );
             })}
