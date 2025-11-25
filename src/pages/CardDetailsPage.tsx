@@ -166,6 +166,12 @@ const CardDetailsPage: React.FC = () => {
     let categoryId: string | undefined = undefined;
     let categoryType: "income" | "expense" | undefined = undefined;
 
+    console.log("--- Antes de registrar transacción ---");
+    console.log("Saldo actual de la tarjeta:", card.current_balance);
+    console.log("Tipo de tarjeta:", card.type);
+    console.log("Tipo de nueva transacción:", newTransaction.type);
+    console.log("Monto de nueva transacción:", amount);
+
     if (newTransaction.type === "charge") {
       categoryId = newTransaction.category_id;
       categoryType = "expense";
@@ -204,6 +210,8 @@ const CardDetailsPage: React.FC = () => {
         newBalance -= transactionAmountToStore;
       }
     }
+
+    console.log("Nuevo saldo calculado:", newBalance);
 
     const { data: transactionData, error: transactionError } = await supabase
       .from('card_transactions')
@@ -250,6 +258,8 @@ const CardDetailsPage: React.FC = () => {
     setNewTransaction({ type: "charge", amount: "", description: "", date: undefined, installments_count: undefined, category_id: "" });
     setIsAddTransactionDialogOpen(false);
     showSuccess("Transacción registrada exitosamente.");
+    console.log("--- Transacción registrada exitosamente ---");
+    console.log("Saldo final de la tarjeta:", newBalance);
   };
 
   const handleOpenEditTransactionDialog = (transaction: CardTransaction) => {
@@ -293,6 +303,11 @@ const CardDetailsPage: React.FC = () => {
       showError("Por favor, selecciona una categoría para el cargo.");
       return;
     }
+
+    console.log("--- Antes de actualizar transacción ---");
+    console.log("Saldo actual de la tarjeta:", card.current_balance);
+    console.log("Transacción antigua:", editingTransaction);
+    console.log("Nueva transacción propuesta:", newTransaction);
 
     let newAmountPerInstallment = newAmountTotal;
     let newInstallmentsTotalAmount: number | undefined = undefined;
@@ -348,6 +363,8 @@ const CardDetailsPage: React.FC = () => {
       }
     }
 
+    console.log("Nuevo saldo calculado:", newCardBalance);
+
     const { data: updatedTransactionData, error: transactionError } = await supabase
       .from('card_transactions')
       .update({
@@ -395,6 +412,8 @@ const CardDetailsPage: React.FC = () => {
     setEditingTransaction(null);
     setIsEditTransactionDialogOpen(false);
     showSuccess("Transacción actualizada exitosamente.");
+    console.log("--- Transacción actualizada exitosamente ---");
+    console.log("Saldo final de la tarjeta:", newCardBalance);
   };
 
   const handleDeleteCardTransaction = async (transactionId: string, transactionAmount: number, transactionType: "charge" | "payment", installmentsTotalAmount?: number, installmentsCount?: number) => {
@@ -403,11 +422,21 @@ const CardDetailsPage: React.FC = () => {
       return;
     }
 
+    console.log("--- Antes de eliminar transacción ---");
+    console.log("Saldo actual de la tarjeta:", card.current_balance);
+    console.log("ID de transacción a eliminar:", transactionId);
+    console.log("Monto de transacción a eliminar:", transactionAmount);
+    console.log("Tipo de transacción a eliminar:", transactionType);
+    console.log("Monto total a meses (si aplica):", installmentsTotalAmount);
+    console.log("Número de cuotas (si aplica):", installmentsCount);
+
     let newCardBalance = card.current_balance;
     const effectiveAmount = installmentsTotalAmount ? installmentsTotalAmount / (installmentsCount || 1) : transactionAmount;
 
     // Revertir el impacto de la transacción eliminada en el saldo
     newCardBalance = transactionType === "charge" ? newCardBalance - effectiveAmount : newCardBalance + effectiveAmount;
+
+    console.log("Nuevo saldo calculado después de revertir:", newCardBalance);
 
     const { error: transactionError } = await supabase
       .from('card_transactions')
@@ -441,6 +470,8 @@ const CardDetailsPage: React.FC = () => {
     });
 
     showSuccess("Transacción eliminada exitosamente.");
+    console.log("--- Transacción eliminada exitosamente ---");
+    console.log("Saldo final de la tarjeta:", newCardBalance);
   };
 
   const filteredTransactions = useMemo(() => {
@@ -774,43 +805,6 @@ const CardDetailsPage: React.FC = () => {
                   </SelectItem>
                 ))}
               </SelectContent>
-            </Select>
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  id="date"
-                  variant={"outline"}
-                  className={cn(
-                    "w-[300px] justify-start text-left font-normal",
-                    !dateRange && "text-muted-foreground"
-                  )}
-                >
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {dateRange?.from ? (
-                    dateRange.to ? (
-                      <>
-                        {format(dateRange.from, "dd/MM/yyyy", { locale: es })} -{" "}
-                        {format(dateRange.to, "dd/MM/yyyy", { locale: es })}
-                      </>
-                    ) : (
-                      format(dateRange.from, "dd/MM/yyyy", { locale: es })
-                    )
-                  ) : (
-                    <span>Filtrar por fecha</span>
-                  )}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0">
-                <Calendar
-                  initialFocus
-                  mode="range"
-                  defaultMonth={dateRange?.from}
-                  selected={dateRange}
-                  onSelect={setDateRange}
-                  numberOfMonths={2}
-                  locale={es}
-                />
-              </PopoverContent>
             </Popover>
           </div>
           <div className="overflow-x-auto">
@@ -858,7 +852,7 @@ const CardDetailsPage: React.FC = () => {
                             <img
                               src="https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/cochinito_love.png"
                               alt="Cochinito Love"
-                              className="h-4 w-4"
+                              className="h-8 w-8 ml-2" // Aumentado el tamaño y añadido margen
                             />
                           )}
                         </TableCell>
