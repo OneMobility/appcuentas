@@ -621,7 +621,7 @@ const Savings: React.FC = () => {
                   <TableHead>Nombre</TableHead>
                   <TableHead>Saldo Actual</TableHead>
                   <TableHead>Monto Objetivo</TableHead>
-                  <TableHead>Fecha Objetivo</TableHead>
+                  <TableHead>Fecha Objetivo / Cumplimiento</TableHead> {/* Actualizado */}
                   <TableHead>Progreso</TableHead>
                   <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>

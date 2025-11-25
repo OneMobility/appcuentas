@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react"; // Importar useEffect
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import DynamicLucideIcon from "./DynamicLucideIcon"; // Para iconos de fallback
@@ -21,9 +21,19 @@ const FlippableChallengeCard: React.FC<FlippableChallengeCardProps> = ({
   iconComponent: Icon = DynamicLucideIcon, // Default to DynamicLucideIcon if not provided
 }) => {
   const [isFlipped, setIsFlipped] = useState(false);
+  const [imageError, setImageError] = useState(false); // Nuevo estado para rastrear errores de carga de imagen
+
+  useEffect(() => {
+    // Resetear el estado de error de la imagen cuando la fuente de la imagen cambie
+    setImageError(false);
+  }, [frontImageSrc]);
 
   const handleFlip = () => {
     setIsFlipped(!isFlipped);
+  };
+
+  const handleImageError = () => {
+    setImageError(true);
   };
 
   return (
@@ -43,31 +53,16 @@ const FlippableChallengeCard: React.FC<FlippableChallengeCardProps> = ({
         className="absolute inset-0 backface-hidden rounded-lg flex items-center justify-center p-4"
         style={{ backfaceVisibility: "hidden" }}
       >
-        {frontImageSrc ? (
+        {frontImageSrc && !imageError ? ( // Solo intentar renderizar la imagen si hay src y no hay error
           <img
             src={frontImageSrc}
             alt={frontImageAlt}
             className="max-h-full max-w-full object-contain"
-            onError={(e) => {
-              // Fallback a un icono si la imagen falla en cargar
-              e.currentTarget.style.display = 'none'; // Ocultar la imagen rota
-              const parent = e.currentTarget.parentElement;
-              if (parent && !parent.querySelector('.fallback-icon')) {
-                const fallbackDiv = document.createElement('div');
-                fallbackDiv.className = 'fallback-icon flex items-center justify-center w-full h-full';
-                parent.appendChild(fallbackDiv);
-                // Renderizar el icono de fallback dentro del div
-                // Esto es un poco más complejo en React, pero para un fallback simple, podemos usar un icono estático
-                // Para una solución más robusta, se podría pasar un prop `onImageError` al componente padre
-                // Por ahora, solo mostraremos un mensaje o un icono simple si la imagen falla
-                const FallbackIconComponent = Icon;
-                const root = (window as any).ReactDOM.createRoot(fallbackDiv);
-                root.render(<FallbackIconComponent iconName="ImageOff" className="h-24 w-24 text-gray-400" />);
-              }
-            }}
+            onError={handleImageError} // Usar el nuevo manejador de errores
           />
         ) : (
-          <Icon iconName="Lightbulb" className="h-24 w-24 text-gray-400" /> // Fallback icon si no hay src
+          // Fallback a un icono si no hay src o la imagen falló en cargar
+          <Icon iconName="Lightbulb" className="h-24 w-24 text-gray-400" />
         )}
       </div>
 
