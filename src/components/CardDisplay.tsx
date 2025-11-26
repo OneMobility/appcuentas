@@ -69,7 +69,7 @@ const CardDisplay: React.FC<CardDisplayProps> = ({ card, onAddTransaction, onDel
         // Only include charges that fall within the currently active billing cycle
         return isWithinInterval(txDate, { start: currentCycleStartDate, end: currentCycleEndDate });
       })
-      .reduce((sum, tx) => sum + (tx.installments_total_amount || tx.amount), 0);
+      .reduce((sum, tx) => sum + tx.amount, 0); // Sum only tx.amount for monthly charges/single charges
   }, [card, isCredit]);
 
   const handleViewDetails = () => {

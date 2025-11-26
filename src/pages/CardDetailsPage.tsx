@@ -21,7 +21,7 @@ import ColorPicker from "@/components/ColorPicker";
 import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/context/SessionContext";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { getUpcomingPaymentDueDate, getRelevantBillingCycle, getInstallmentFirstPaymentDueDate, getCurrentActiveBillingCycle } from "@/utils/date-helpers"; // Importar las nuevas funciones
+import { getUpcomingPaymentDueDate, getRelevantBillingCycle, getInstallmentFirstPaymentDueDate, getCurrentActiveBillingCycle } from "@/utils/date-helpers";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { exportToCsv, exportToPdf } from "@/utils/export";
 import LoadingSpinner from "@/components/LoadingSpinner";
@@ -136,13 +136,13 @@ const CardDetailsPage: React.FC = () => {
       );
 
       // Calculate the statement balance for this relevant cycle
-      const statementBalanceForDueCycle = (card.transactions || [])
+      const statementCharges = (card.transactions || [])
         .filter(tx => tx.type === "charge")
         .filter(tx => {
           const txDate = parseISO(tx.date);
           return isWithinInterval(txDate, { start: billingCycleStartDate, end: billingCycleEndDate });
         })
-        .reduce((sum, tx) => sum + (tx.installments_total_amount || tx.amount), 0); // Sum total amount for charges
+        .reduce((sum, tx) => sum + tx.amount, 0); // Sum only tx.amount for charges in the statement cycle
 
       // Subtract payments made specifically for this cycle's statement
       const paymentsForDueCycle = (card.transactions || [])
@@ -154,7 +154,7 @@ const CardDetailsPage: React.FC = () => {
         })
         .reduce((sum, tx) => sum + tx.amount, 0);
 
-      const netStatementBalance = statementBalanceForDueCycle - paymentsForDueCycle;
+      const netStatementBalance = statementCharges - paymentsForDueCycle;
 
       // If today is strictly after the payment due date AND there's still a positive net statement balance
       if (isAfter(today, paymentDueDate) && netStatementBalance > 0) {
@@ -700,7 +700,7 @@ const CardDetailsPage: React.FC = () => {
         // Only include charges that fall within the currently active billing cycle
         return isWithinInterval(txDate, { start: currentCycleStartDate, end: currentCycleEndDate });
       })
-      .reduce((sum, tx) => sum + (tx.installments_total_amount || tx.amount), 0);
+      .reduce((sum, tx) => sum + tx.amount, 0); // Sum only tx.amount for monthly charges/single charges
   }, [card]);
 
   if (isLoading || isLoadingCategories) {
