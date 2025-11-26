@@ -124,10 +124,6 @@ const Cards = () => {
     }
   }, [user, isLoadingCategories]); // Añadir isLoadingCategories a las dependencias
 
-  const totalCardsBalance = cards.reduce((sum, card) => {
-    return sum + (card.type === "credit" ? -card.current_balance : card.current_balance);
-  }, 0);
-
   // Nuevos cálculos para las tarjetas de resumen
   const totalCreditAvailable = useMemo(() => {
     return cards
@@ -606,15 +602,6 @@ const Cards = () => {
   return (
     <div className="flex flex-col gap-6 p-4">
       <h1 className="text-3xl font-bold">Tus Tarjetas</h1>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Saldo Total de Tarjetas</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="text-4xl font-bold">${totalCardsBalance.toFixed(2)}</div>
-        </CardContent>
-      </Card>
 
       {/* Nuevas tarjetas de resumen */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
