@@ -277,33 +277,77 @@ const Dashboard = () => {
       .map(([, value]) => value);
   }, [cashTransactions]);
 
-  const monthlyCardSpendingData = useMemo(() => {
-    if (!cards.length) return [];
+  // OLD: monthlyCardSpendingData (by card name)
+  // const monthlyCardSpendingData = useMemo(() => {
+  //   if (!cards.length) return [];
 
-    const monthlyDataMap = new Map<string, { [key: string]: any }>(); // Key: YYYY-MM
+  //   const monthlyDataMap = new Map<string, { [key: string]: any }>(); // Key: YYYY-MM
+
+  //   cards.forEach(card => {
+  //     (card.transactions || []).forEach(tx => {
+  //       if (tx.type === "charge") {
+  //         const monthKey = format(parseISO(tx.date), "yyyy-MM");
+  //         const monthName = format(parseISO(tx.date), "MMM", { locale: es });
+
+  //         if (!monthlyDataMap.has(monthKey)) {
+  //           monthlyDataMap.set(monthKey, { name: monthName });
+  //         }
+
+  //         const currentMonthData = monthlyDataMap.get(monthKey)!;
+  //         const cardName = card.name;
+  //         currentMonthData[cardName] = (currentMonthData[cardName] || 0) + (tx.installments_total_amount || tx.amount);
+  //         monthlyDataMap.set(monthKey, currentMonthData);
+  //       }
+  //     });
+  //   });
+
+  //   return Array.from(monthlyDataMap.entries())
+  //     .sort(([keyA], [keyB]) => keyA.localeCompare(keyB))
+  //     .map(([, value]) => value);
+  // }, [cards]);
+
+  // NEW: monthlyCardCategorySpendingData (by expense category)
+  const monthlyCardCategorySpendingData = useMemo(() => {
+    const dataMap = new Map<string, { [key: string]: any }>(); // Key: YYYY-MM -> { name: 'Month', category1: amount, category2: amount }
 
     cards.forEach(card => {
       (card.transactions || []).forEach(tx => {
-        if (tx.type === "charge") {
+        if (tx.type === "charge" && tx.expense_category_id) {
           const monthKey = format(parseISO(tx.date), "yyyy-MM");
           const monthName = format(parseISO(tx.date), "MMM", { locale: es });
+          const category = getCategoryById(tx.expense_category_id);
+          const categoryName = category?.name || "Sin Categoría";
 
-          if (!monthlyDataMap.has(monthKey)) {
-            monthlyDataMap.set(monthKey, { name: monthName });
+          if (!dataMap.has(monthKey)) {
+            dataMap.set(monthKey, { name: monthName });
           }
-
-          const currentMonthData = monthlyDataMap.get(monthKey)!;
-          const cardName = card.name;
-          currentMonthData[cardName] = (currentMonthData[cardName] || 0) + (tx.installments_total_amount || tx.amount);
-          monthlyDataMap.set(monthKey, currentMonthData);
+          const currentMonthData = dataMap.get(monthKey)!;
+          currentMonthData[categoryName] = (currentMonthData[categoryName] || 0) + tx.amount;
+          dataMap.set(monthKey, currentMonthData);
         }
       });
     });
 
-    return Array.from(monthlyDataMap.entries())
+    return Array.from(dataMap.entries())
       .sort(([keyA], [keyB]) => keyA.localeCompare(keyB))
       .map(([, value]) => value);
-  }, [cards]);
+  }, [cards, getCategoryById]);
+
+  const uniqueCardExpenseCategories = useMemo(() => {
+    const categoryNames = new Set<string>();
+    cards.forEach(card => {
+      (card.transactions || []).forEach(tx => {
+        if (tx.type === "charge" && tx.expense_category_id) {
+          const category = getCategoryById(tx.expense_category_id);
+          if (category) {
+            categoryNames.add(category.name);
+          }
+        }
+      });
+    });
+    return Array.from(categoryNames);
+  }, [cards, getCategoryById]);
+
 
   const uniqueCardNames = useMemo(() => {
     const names = new Set<string>();
@@ -341,7 +385,7 @@ const Dashboard = () => {
     }));
   }, [cards]);
 
-  // NEW: Credit Card Balance Chart Data
+  // NEW: Credit Card Available vs. Used Balance Chart
   const creditCardBalanceChartData = useMemo(() => {
     return cards
       .filter(card => card.type === "credit" && card.credit_limit !== undefined)
@@ -752,35 +796,42 @@ const Dashboard = () => {
 
       <Card>
         <CardHeader>
-          <CardTitle>Gastos Mensuales por Tarjeta</CardTitle>
+          <CardTitle>Gastos Mensuales por Categoría (Tarjetas)</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="h-[300px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={monthlyCardSpendingData}
-                margin={{
-                  top: 5,
-                  right: 30,
-                  left: 20,
-                  bottom: 5,
-                }}
-              >
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="name" />
-                <YAxis />
-                <Tooltip />
-                <Legend />
-                {uniqueCardNames.map((cardName, index) => (
-                  <Bar
-                    key={cardName}
-                    dataKey={cardName}
-                    fill={cards.find(c => c.name === cardName)?.color || `#${Math.floor(Math.random()*16777215).toString(16)}`}
-                    name={cardName}
-                  />
-                ))}
-              </BarChart>
-            </ResponsiveContainer>
+            {monthlyCardCategorySpendingData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={monthlyCardCategorySpendingData}
+                  margin={{
+                    top: 5,
+                    right: 30,
+                    left: 20,
+                    bottom: 5,
+                  }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="name" />
+                  <YAxis />
+                  <Tooltip formatter={(value: number) => `$${value.toFixed(2)}`} />
+                  <Legend />
+                  {uniqueCardExpenseCategories.map((categoryName, index) => (
+                    <Bar
+                      key={categoryName}
+                      dataKey={categoryName}
+                      stackId="a" // Stack bars for categories
+                      fill={expenseCategories.find(cat => cat.name === categoryName)?.color || `#${Math.floor(Math.random()*16777215).toString(16)}`}
+                      name={categoryName}
+                    />
+                  ))}
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex items-center justify-center h-full text-muted-foreground">
+                No hay datos de gastos por categoría de tarjeta para mostrar.
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>

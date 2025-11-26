@@ -19,38 +19,38 @@ import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { getLocalDateString } from "@/utils/date-helpers"; // Importar la nueva función de utilidad
 
-interface DebtorTransaction {
+interface CreditorTransaction {
   id: string;
-  type: "charge" | "payment"; // 'charge' para cargo, 'payment' para abono
+  type: "charge" | "payment"; // 'charge' para cargo (nosotros le debemos más), 'payment' para abono (nosotros le pagamos)
   amount: number;
   description: string;
   date: string;
-  debtor_id?: string;
+  creditor_id?: string;
   user_id?: string;
 }
 
-interface Debtor {
+interface Creditor {
   id: string;
   name: string;
   initial_balance: number;
   current_balance: number;
-  debtor_transactions: DebtorTransaction[]; // Renombrado de 'payments'
+  creditor_transactions: CreditorTransaction[];
   user_id?: string;
 }
 
-const Debtors = () => {
+const Creditors = () => {
   const { user } = useSession();
-  const [debtors, setDebtors] = useState<Debtor[]>([]);
-  const [isAddDebtorDialogOpen, setIsAddDebtorDialogOpen] = useState(false);
-  const [isAddTransactionDialogOpen, setIsAddTransactionDialogOpen] = useState(false); // Renombrado
+  const [creditors, setCreditors] = useState<Creditor[]>([]);
+  const [isAddCreditorDialogOpen, setIsAddCreditorDialogOpen] = useState(false);
+  const [isAddTransactionDialogOpen, setIsAddTransactionDialogOpen] = useState(false);
   const [isHistoryDialogOpen, setIsHistoryDialogOpen] = useState(false);
-  const [isEditTransactionDialogOpen, setIsEditTransactionDialogOpen] = useState(false); // Renombrado
-  const [selectedDebtorId, setSelectedDebtorId] = useState<string | null>(null);
-  const [historyDebtor, setHistoryDebtor] = useState<Debtor | null>(null);
-  const [editingTransaction, setEditingTransaction] = useState<DebtorTransaction | null>(null); // Renombrado
-  const [newDebtor, setNewDebtor] = useState({ name: "", initial_balance: "" });
-  const [newTransaction, setNewTransaction] = useState({ // Nuevo estado para transacciones
-    type: "payment" as "charge" | "payment",
+  const [isEditTransactionDialogOpen, setIsEditTransactionDialogOpen] = useState(false);
+  const [selectedCreditorId, setSelectedCreditorId] = useState<string | null>(null);
+  const [historyCreditor, setHistoryCreditor] = useState<Creditor | null>(null);
+  const [editingTransaction, setEditingTransaction] = useState<CreditorTransaction | null>(null);
+  const [newCreditor, setNewCreditor] = useState({ name: "", initial_balance: "" });
+  const [newTransaction, setNewTransaction] = useState({
+    type: "payment" as "charge" | "payment", // Default to payment (we pay them)
     amount: "",
     description: "",
   });
@@ -58,99 +58,99 @@ const Debtors = () => {
   // Filter state
   const [searchTerm, setSearchTerm] = useState("");
 
-  const fetchDebtors = async () => {
+  const fetchCreditors = async () => {
     if (!user) {
-      setDebtors([]);
+      setCreditors([]);
       return;
     }
 
     const { data, error } = await supabase
-      .from('debtors')
-      .select('*, debtor_transactions(*)') // Seleccionar la nueva tabla
+      .from('creditors')
+      .select('*, creditor_transactions(*)')
       .eq('user_id', user.id)
       .order('created_at', { ascending: false });
 
     if (error) {
-      showError('Error al cargar deudores: ' + error.message);
+      showError('Error al cargar acreedores: ' + error.message);
     } else {
-      setDebtors(data || []);
+      setCreditors(data || []);
     }
   };
 
   useEffect(() => {
     if (user) {
-      fetchDebtors();
+      fetchCreditors();
     }
   }, [user]);
 
-  const totalDebtorsBalance = debtors.reduce((sum, debtor) => sum + debtor.current_balance, 0);
+  const totalCreditorsBalance = creditors.reduce((sum, creditor) => sum + creditor.current_balance, 0);
 
-  const handleNewDebtorChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleNewCreditorChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    setNewDebtor((prev) => ({ ...prev, [name]: value }));
+    setNewCreditor((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleSubmitNewDebtor = async (e: React.FormEvent) => {
+  const handleSubmitNewCreditor = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) {
-      showError("Debes iniciar sesión para añadir deudores.");
+      showError("Debes iniciar sesión para añadir acreedores.");
       return;
     }
 
-    const initialBalance = parseFloat(newDebtor.initial_balance);
+    const initialBalance = parseFloat(newCreditor.initial_balance);
     if (isNaN(initialBalance) || initialBalance <= 0) {
       showError("El saldo inicial debe ser un número positivo.");
       return;
     }
 
     const { data, error } = await supabase
-      .from('debtors')
+      .from('creditors')
       .insert({
         user_id: user.id,
-        name: newDebtor.name,
+        name: newCreditor.name,
         initial_balance: initialBalance,
         current_balance: initialBalance,
       })
       .select();
 
     if (error) {
-      showError('Error al registrar deudor: ' + error.message);
+      showError('Error al registrar acreedor: ' + error.message);
     } else {
-      setDebtors((prev) => [...prev, { ...data[0], debtor_transactions: [] }]);
-      setNewDebtor({ name: "", initial_balance: "" });
-      setIsAddDebtorDialogOpen(false);
-      showSuccess("Deudor registrado exitosamente.");
+      setCreditors((prev) => [...prev, { ...data[0], creditor_transactions: [] }]);
+      setNewCreditor({ name: "", initial_balance: "" });
+      setIsAddCreditorDialogOpen(false);
+      showSuccess("Acreedor registrado exitosamente.");
     }
   };
 
-  const handleDeleteDebtor = async (debtorId: string) => {
+  const handleDeleteCreditor = async (creditorId: string) => {
     if (!user) {
-      showError("Debes iniciar sesión para eliminar deudores.");
+      showError("Debes iniciar sesión para eliminar acreedores.");
       return;
     }
 
     const { error } = await supabase
-      .from('debtors')
+      .from('creditors')
       .delete()
-      .eq('id', debtorId)
+      .eq('id', creditorId)
       .eq('user_id', user.id);
 
     if (error) {
-      showError('Error al eliminar deudor: ' + error.message);
+      showError('Error al eliminar acreedor: ' + error.message);
     } else {
-      setDebtors((prev) => prev.filter((debtor) => debtor.id !== debtorId));
-      showSuccess("Deudor eliminado exitosamente.");
+      setCreditors((prev) => prev.filter((creditor) => creditor.id !== creditorId));
+      showSuccess("Acreedor eliminado exitosamente.");
     }
   };
 
-  const handleOpenAddTransactionDialog = (debtorId: string) => { // Renombrado
-    setSelectedDebtorId(debtorId);
+  const handleOpenAddTransactionDialog = (creditorId: string) => {
+    setSelectedCreditorId(creditorId);
     setNewTransaction({ type: "payment", amount: "", description: "" }); // Resetear formulario
     setIsAddTransactionDialogOpen(true);
   };
 
-  const handleOpenHistoryDialog = (debtor: Debtor) => {
-    setHistoryDebtor(debtor);
+  const handleOpenHistoryDialog = (creditor: Creditor) => {
+    setHistoryCreditor(creditor);
     setIsHistoryDialogOpen(true);
   };
 
@@ -163,9 +163,9 @@ const Debtors = () => {
     setNewTransaction((prev) => ({ ...prev, type: value }));
   };
 
-  const handleSubmitTransaction = async (e: React.FormEvent) => { // Renombrado
+  const handleSubmitTransaction = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user || !selectedDebtorId) {
+    if (!user || !selectedCreditorId) {
       showError("Debes iniciar sesión para registrar transacciones.");
       return;
     }
@@ -180,32 +180,32 @@ const Debtors = () => {
       return;
     }
 
-    const currentDebtor = debtors.find(d => d.id === selectedDebtorId);
-    if (!currentDebtor) {
-      showError("Deudor no encontrado.");
+    const currentCreditor = creditors.find(d => d.id === selectedCreditorId);
+    if (!currentCreditor) {
+      showError("Acreedor no encontrado.");
       return;
     }
 
-    let newBalance = currentDebtor.current_balance;
-    if (newTransaction.type === "charge") {
+    let newBalance = currentCreditor.current_balance;
+    if (newTransaction.type === "charge") { // We owe them more
       newBalance += amount;
-    } else { // payment
+    } else { // payment (we pay them)
       if (newBalance < amount) {
-        showError("El abono excede el saldo pendiente.");
+        showError("El pago excede el saldo pendiente.");
         return;
       }
       newBalance -= amount;
     }
 
     const { data: transactionData, error: transactionError } = await supabase
-      .from('debtor_transactions') // Usar la nueva tabla
+      .from('creditor_transactions')
       .insert({
         user_id: user.id,
-        debtor_id: selectedDebtorId,
+        creditor_id: selectedCreditorId,
         type: newTransaction.type,
         amount,
         description: newTransaction.description,
-        date: getLocalDateString(new Date()), // Usar getLocalDateString
+        date: getLocalDateString(new Date()),
       })
       .select();
 
@@ -214,39 +214,39 @@ const Debtors = () => {
       return;
     }
 
-    const { data: debtorData, error: debtorError } = await supabase
-      .from('debtors')
+    const { data: creditorData, error: creditorError } = await supabase
+      .from('creditors')
       .update({ current_balance: newBalance })
-      .eq('id', selectedDebtorId)
+      .eq('id', selectedCreditorId)
       .eq('user_id', user.id)
       .select();
 
-    if (debtorError) {
-      showError('Error al actualizar saldo del deudor: ' + debtorError.message);
+    if (creditorError) {
+      showError('Error al actualizar saldo del acreedor: ' + creditorError.message);
       return;
     }
 
-    setDebtors((prevDebtors) =>
-      prevDebtors.map((debtor) => {
-        if (debtor.id === selectedDebtorId) {
+    setCreditors((prevCreditors) =>
+      prevCreditors.map((creditor) => {
+        if (creditor.id === selectedCreditorId) {
           return {
-            ...debtor,
+            ...creditor,
             current_balance: newBalance,
-            debtor_transactions: [...debtor.debtor_transactions, transactionData[0]],
+            creditor_transactions: [...creditor.creditor_transactions, transactionData[0]],
           };
         }
-        return debtor;
+        return creditor;
       })
     );
     setNewTransaction({ type: "payment", amount: "", description: "" });
-    setSelectedDebtorId(null);
+    setSelectedCreditorId(null);
     setIsAddTransactionDialogOpen(false);
     showSuccess("Transacción registrada exitosamente.");
   };
 
-  const handleOpenEditTransactionDialog = (transaction: DebtorTransaction, debtorId: string) => { // Renombrado
+  const handleOpenEditTransactionDialog = (transaction: CreditorTransaction, creditorId: string) => {
     setEditingTransaction(transaction);
-    setSelectedDebtorId(debtorId);
+    setSelectedCreditorId(creditorId);
     setNewTransaction({
       type: transaction.type,
       amount: transaction.amount.toString(),
@@ -255,10 +255,10 @@ const Debtors = () => {
     setIsEditTransactionDialogOpen(true);
   };
 
-  const handleUpdateTransaction = async (e: React.FormEvent) => { // Renombrado
+  const handleUpdateTransaction = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user || !editingTransaction || !selectedDebtorId) {
-      showError("No se ha seleccionado una transacción o deudor para actualizar.");
+    if (!user || !editingTransaction || !selectedCreditorId) {
+      showError("No se ha seleccionado una transacción o acreedor para actualizar.");
       return;
     }
 
@@ -276,35 +276,35 @@ const Debtors = () => {
       return;
     }
 
-    const currentDebtor = debtors.find(d => d.id === selectedDebtorId);
-    if (!currentDebtor) {
-      showError("Deudor no encontrado.");
+    const currentCreditor = creditors.find(d => d.id === selectedCreditorId);
+    if (!currentCreditor) {
+      showError("Acreedor no encontrado.");
       return;
     }
 
-    let newDebtorBalance = currentDebtor.current_balance;
+    let newCreditorBalance = currentCreditor.current_balance;
 
     // Revertir el impacto de la transacción antigua en el saldo
-    newDebtorBalance = oldType === "charge" ? newDebtorBalance - oldAmount : newDebtorBalance + oldAmount;
+    newCreditorBalance = oldType === "charge" ? newCreditorBalance - oldAmount : newCreditorBalance + oldAmount;
 
     // Aplicar el impacto de la nueva transacción en el saldo
     if (newType === "charge") {
-      newDebtorBalance += newAmount;
+      newCreditorBalance += newAmount;
     } else { // payment
-      if (newDebtorBalance < newAmount) {
-        showError("El abono excede el saldo pendiente.");
+      if (newCreditorBalance < newAmount) {
+        showError("El pago excede el saldo pendiente.");
         return;
       }
-      newDebtorBalance -= newAmount;
+      newCreditorBalance -= newAmount;
     }
 
     const { data: updatedTransactionData, error: transactionError } = await supabase
-      .from('debtor_transactions') // Usar la nueva tabla
+      .from('creditor_transactions')
       .update({
         type: newType,
         amount: newAmount,
         description: newTransaction.description,
-        date: getLocalDateString(new Date()), // Usar getLocalDateString
+        date: getLocalDateString(new Date()),
       })
       .eq('id', editingTransaction.id)
       .eq('user_id', user.id)
@@ -315,65 +315,65 @@ const Debtors = () => {
       return;
     }
 
-    const { data: debtorData, error: debtorError } = await supabase
-      .from('debtors')
-      .update({ current_balance: newDebtorBalance })
-      .eq('id', currentDebtor.id)
+    const { data: creditorData, error: creditorError } = await supabase
+      .from('creditors')
+      .update({ current_balance: newCreditorBalance })
+      .eq('id', currentCreditor.id)
       .eq('user_id', user.id)
       .select();
 
-    if (debtorError) {
-      showError('Error al actualizar saldo del deudor: ' + debtorError.message);
+    if (creditorError) {
+      showError('Error al actualizar saldo del acreedor: ' + creditorError.message);
       return;
     }
 
-    setDebtors((prevDebtors) =>
-      prevDebtors.map((debtor) => {
-        if (debtor.id === currentDebtor.id) {
+    setCreditors((prevCreditors) =>
+      prevCreditors.map((creditor) => {
+        if (creditor.id === currentCreditor.id) {
           return {
-            ...debtor,
-            current_balance: newDebtorBalance,
-            debtor_transactions: debtor.debtor_transactions.map(t => t.id === editingTransaction.id ? updatedTransactionData[0] : t),
+            ...creditor,
+            current_balance: newCreditorBalance,
+            creditor_transactions: creditor.creditor_transactions.map(t => t.id === editingTransaction.id ? updatedTransactionData[0] : t),
           };
         }
-        return debtor;
+        return creditor;
       })
     );
 
-    setHistoryDebtor((prev) => {
+    setHistoryCreditor((prev) => {
       if (!prev) return null;
       return {
         ...prev,
-        current_balance: newDebtorBalance,
-        debtor_transactions: prev.debtor_transactions.map(t => t.id === editingTransaction.id ? updatedTransactionData[0] : t),
+        current_balance: newCreditorBalance,
+        creditor_transactions: prev.creditor_transactions.map(t => t.id === editingTransaction.id ? updatedTransactionData[0] : t),
       };
     });
 
     setNewTransaction({ type: "payment", amount: "", description: "" });
     setEditingTransaction(null);
-    setSelectedDebtorId(null);
+    setSelectedCreditorId(null);
     setIsEditTransactionDialogOpen(false);
     showSuccess("Transacción actualizada exitosamente.");
   };
 
-  const handleDeleteDebtorTransaction = async (transactionId: string, debtorId: string, transactionAmount: number, transactionType: "charge" | "payment") => {
+  const handleDeleteCreditorTransaction = async (transactionId: string, creditorId: string, transactionAmount: number, transactionType: "charge" | "payment") => {
     if (!user) {
       showError("Debes iniciar sesión para eliminar transacciones.");
       return;
     }
 
-    const currentDebtor = debtors.find(d => d.id === debtorId);
-    if (!currentDebtor) {
-      showError("Deudor no encontrado.");
+    const currentCreditor = creditors.find(d => d.id === creditorId);
+    if (!currentCreditor) {
+      showError("Acreedor no encontrado.");
       return;
     }
 
-    let newDebtorBalance = currentDebtor.current_balance;
+    let newCreditorBalance = currentCreditor.current_balance;
     // Revertir el impacto de la transacción eliminada en el saldo
-    newDebtorBalance = transactionType === "charge" ? newDebtorBalance - transactionAmount : newDebtorBalance + transactionAmount;
+    newCreditorBalance = transactionType === "charge" ? newCreditorBalance - transactionAmount : newCreditorBalance + transactionAmount;
 
     const { error: transactionError } = await supabase
-      .from('debtor_transactions')
+      .from('creditor_transactions')
       .delete()
       .eq('id', transactionId)
       .eq('user_id', user.id);
@@ -383,98 +383,98 @@ const Debtors = () => {
       return;
     }
 
-    const { error: debtorError } = await supabase
-      .from('debtors')
-      .update({ current_balance: newDebtorBalance })
-      .eq('id', debtorId)
+    const { error: creditorError } = await supabase
+      .from('creditors')
+      .update({ current_balance: newCreditorBalance })
+      .eq('id', creditorId)
       .eq('user_id', user.id);
 
-    if (debtorError) {
-      showError('Error al actualizar saldo del deudor después de eliminar transacción: ' + debtorError.message);
+    if (creditorError) {
+      showError('Error al actualizar saldo del acreedor después de eliminar transacción: ' + creditorError.message);
       return;
     }
 
-    setDebtors((prevDebtors) =>
-      prevDebtors.map((debtor) => {
-        if (debtor.id === debtorId) {
+    setCreditors((prevCreditors) =>
+      prevCreditors.map((creditor) => {
+        if (creditor.id === creditorId) {
           return {
-            ...debtor,
-            current_balance: newDebtorBalance,
-            debtor_transactions: debtor.debtor_transactions.filter(t => t.id !== transactionId),
+            ...creditor,
+            current_balance: newCreditorBalance,
+            creditor_transactions: creditor.creditor_transactions.filter(t => t.id !== transactionId),
           };
         }
-        return debtor;
+        return creditor;
       })
     );
 
-    setHistoryDebtor((prev) => {
-      if (!prev || prev.id !== debtorId) return prev;
+    setHistoryCreditor((prev) => {
+      if (!prev || prev.id !== creditorId) return prev;
       return {
         ...prev,
-        current_balance: newDebtorBalance,
-        debtor_transactions: prev.debtor_transactions.filter(t => t.id !== transactionId),
+        current_balance: newCreditorBalance,
+        creditor_transactions: prev.creditor_transactions.filter(t => t.id !== transactionId),
       };
     });
 
     showSuccess("Transacción eliminada exitosamente.");
   };
 
-  const filteredDebtors = debtors.filter((debtor) =>
-    debtor.name.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredCreditors = creditors.filter((creditor) =>
+    creditor.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const handleExport = (formatType: 'csv' | 'pdf') => {
-    const dataToExport = filteredDebtors.map(debtor => ({
-      Nombre: debtor.name,
-      "Saldo Inicial": debtor.initial_balance.toFixed(2),
-      "Saldo Actual": debtor.current_balance.toFixed(2),
+    const dataToExport = filteredCreditors.map(creditor => ({
+      Nombre: creditor.name,
+      "Saldo Inicial": creditor.initial_balance.toFixed(2),
+      "Saldo Actual": creditor.current_balance.toFixed(2),
     }));
 
-    const filename = `deudores_${format(new Date(), "yyyyMMdd_HHmmss")}`;
-    const title = "Reporte de Deudores";
+    const filename = `acreedores_${format(new Date(), "yyyyMMdd_HHmmss")}`;
+    const title = "Reporte de Acreedores";
     const headers = ["Nombre", "Saldo Inicial", "Saldo Actual"];
     const pdfData = dataToExport.map(row => Object.values(row));
 
     if (formatType === 'csv') {
       exportToCsv(`${filename}.csv`, dataToExport);
-      showSuccess("Deudores exportados a CSV.");
+      showSuccess("Acreedores exportados a CSV.");
     } else {
       exportToPdf(`${filename}.pdf`, title, headers, pdfData);
-      showSuccess("Deudores exportados a PDF.");
+      showSuccess("Acreedores exportados a PDF.");
     }
   };
 
   return (
     <div className="flex flex-col gap-6 p-4">
-      <h1 className="text-3xl font-bold">Los que te deben</h1>
+      <h1 className="text-3xl font-bold">A quien le debes</h1>
 
-      <Card className="border-l-4 border-blue-500 bg-blue-50 text-blue-800">
+      <Card className="border-l-4 border-red-500 bg-red-50 text-red-800">
         <CardHeader>
-          <CardTitle>Saldo Total de Deudores</CardTitle>
+          <CardTitle>Saldo Total de Acreedores</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="text-4xl font-bold">${totalDebtorsBalance.toFixed(2)}</div>
+          <div className="text-4xl font-bold">${totalCreditorsBalance.toFixed(2)}</div>
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>Lista de Deudores</CardTitle>
+          <CardTitle>Lista de Acreedores</CardTitle>
           <div className="flex gap-2">
-            <Dialog open={isAddDebtorDialogOpen} onOpenChange={setIsAddDebtorDialogOpen}>
+            <Dialog open={isAddCreditorDialogOpen} onOpenChange={setIsAddCreditorDialogOpen}>
               <DialogTrigger asChild>
                 <Button size="sm" className="h-8 gap-1">
                   <PlusCircle className="h-3.5 w-3.5" />
                   <span className="sr-only sm:not-sr-only sm:whitespace-nowrap">
-                    Añadir Deudor
+                    Añadir Acreedor
                   </span>
                 </Button>
               </DialogTrigger>
               <DialogContent className="sm:max-w-[425px]">
                 <DialogHeader>
-                  <DialogTitle>Añadir Nuevo Deudor</DialogTitle>
+                  <DialogTitle>Añadir Nuevo Acreedor</DialogTitle>
                 </DialogHeader>
-                <form onSubmit={handleSubmitNewDebtor} className="grid gap-4 py-4">
+                <form onSubmit={handleSubmitNewCreditor} className="grid gap-4 py-4">
                   <div className="grid grid-cols-4 items-center gap-4">
                     <Label htmlFor="name" className="text-right">
                       Nombre
@@ -482,8 +482,8 @@ const Debtors = () => {
                     <Input
                       id="name"
                       name="name"
-                      value={newDebtor.name}
-                      onChange={handleNewDebtorChange}
+                      value={newCreditor.name}
+                      onChange={handleNewCreditorChange}
                       className="col-span-3"
                       required
                     />
@@ -497,14 +497,14 @@ const Debtors = () => {
                       name="initial_balance"
                       type="number"
                       step="0.01"
-                      value={newDebtor.initial_balance}
-                      onChange={handleNewDebtorChange}
+                      value={newCreditor.initial_balance}
+                      onChange={handleNewCreditorChange}
                       className="col-span-3"
                       required
                     />
                   </div>
                   <DialogFooter>
-                    <Button type="submit">Guardar Deudor</Button>
+                    <Button type="submit">Guardar Acreedor</Button>
                   </DialogFooter>
                 </form>
               </DialogContent>
@@ -532,7 +532,7 @@ const Debtors = () => {
         <CardContent>
           <div className="mb-4">
             <Input
-              placeholder="Buscar deudor por nombre..."
+              placeholder="Buscar acreedor por nombre..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="max-w-sm"
@@ -549,16 +549,16 @@ const Debtors = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredDebtors.map((debtor) => (
-                  <TableRow key={debtor.id}>
-                    <TableCell>{debtor.name}</TableCell>
-                    <TableCell>${debtor.initial_balance.toFixed(2)}</TableCell>
-                    <TableCell>${debtor.current_balance.toFixed(2)}</TableCell>
+                {filteredCreditors.map((creditor) => (
+                  <TableRow key={creditor.id}>
+                    <TableCell>{creditor.name}</TableCell>
+                    <TableCell>${creditor.initial_balance.toFixed(2)}</TableCell>
+                    <TableCell>${creditor.current_balance.toFixed(2)}</TableCell>
                     <TableCell className="text-right flex gap-2 justify-end">
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => handleOpenAddTransactionDialog(debtor.id)} // Renombrado
+                        onClick={() => handleOpenAddTransactionDialog(creditor.id)}
                         className="h-8 gap-1"
                       >
                         <DollarSign className="h-3.5 w-3.5" />
@@ -567,7 +567,7 @@ const Debtors = () => {
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => handleOpenHistoryDialog(debtor)}
+                        onClick={() => handleOpenHistoryDialog(creditor)}
                         className="h-8 gap-1"
                       >
                         <History className="h-3.5 w-3.5" />
@@ -587,13 +587,13 @@ const Debtors = () => {
                           <AlertDialogHeader>
                             <AlertDialogTitle>¿Estás absolutamente seguro?</AlertDialogTitle>
                             <AlertDialogDescription>
-                              Esta acción no se puede deshacer. Esto eliminará permanentemente al deudor 
-                              **{debtor.name}** y todas sus transacciones asociadas.
+                              Esta acción no se puede deshacer. Esto eliminará permanentemente al acreedor 
+                              **{creditor.name}** y todas sus transacciones asociadas.
                             </AlertDialogDescription>
                           </AlertDialogHeader>
                           <AlertDialogFooter>
                             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                            <AlertDialogAction onClick={() => handleDeleteDebtor(debtor.id)}>
+                            <AlertDialogAction onClick={() => handleDeleteCreditor(creditor.id)}>
                               Eliminar
                             </AlertDialogAction>
                           </AlertDialogFooter>
@@ -605,12 +605,12 @@ const Debtors = () => {
               </TableBody>
             </Table>
           </div>
-          <Dialog open={isAddTransactionDialogOpen} onOpenChange={setIsAddTransactionDialogOpen}> {/* Renombrado */}
+          <Dialog open={isAddTransactionDialogOpen} onOpenChange={setIsAddTransactionDialogOpen}>
             <DialogContent className="sm:max-w-[425px]">
               <DialogHeader>
-                <DialogTitle>Registrar Transacción para {debtors.find(d => d.id === selectedDebtorId)?.name}</DialogTitle>
+                <DialogTitle>Registrar Transacción para {creditors.find(d => d.id === selectedCreditorId)?.name}</DialogTitle>
               </DialogHeader>
-              <form onSubmit={handleSubmitTransaction} className="grid gap-4 py-4"> {/* Renombrado */}
+              <form onSubmit={handleSubmitTransaction} className="grid gap-4 py-4">
                 <div className="grid grid-cols-4 items-center gap-4">
                   <Label htmlFor="transactionType" className="text-right">
                     Tipo
@@ -620,8 +620,8 @@ const Debtors = () => {
                       <SelectValue placeholder="Selecciona tipo" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="charge">Cargo</SelectItem>
-                      <SelectItem value="payment">Abono</SelectItem>
+                      <SelectItem value="charge">Cargo (Debemos más)</SelectItem>
+                      <SelectItem value="payment">Pago (Abonamos)</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -663,10 +663,10 @@ const Debtors = () => {
           <Dialog open={isHistoryDialogOpen} onOpenChange={setIsHistoryDialogOpen}>
             <DialogContent className="sm:max-w-[600px]">
               <DialogHeader>
-                <DialogTitle>Historial de Transacciones para {historyDebtor?.name}</DialogTitle>
+                <DialogTitle>Historial de Transacciones para {historyCreditor?.name}</DialogTitle>
               </DialogHeader>
               <div className="py-4 overflow-x-auto">
-                {historyDebtor?.debtor_transactions && historyDebtor.debtor_transactions.length > 0 ? (
+                {historyCreditor?.creditor_transactions && historyCreditor.creditor_transactions.length > 0 ? (
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -678,11 +678,11 @@ const Debtors = () => {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {historyDebtor.debtor_transactions.map((transaction, index) => (
+                      {historyCreditor.creditor_transactions.map((transaction, index) => (
                         <TableRow key={transaction.id || index}>
                           <TableCell>{format(new Date(transaction.date), "dd/MM/yyyy", { locale: es })}</TableCell>
                           <TableCell className={transaction.type === "charge" ? "text-red-600" : "text-green-600"}>
-                            {transaction.type === "charge" ? "Cargo" : "Abono"}
+                            {transaction.type === "charge" ? "Cargo" : "Pago"}
                           </TableCell>
                           <TableCell>{transaction.description}</TableCell>
                           <TableCell className="text-right">
@@ -692,7 +692,7 @@ const Debtors = () => {
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={() => handleOpenEditTransactionDialog(transaction, historyDebtor.id)}
+                              onClick={() => handleOpenEditTransactionDialog(transaction, historyCreditor.id)}
                               className="h-8 w-8 p-0"
                             >
                               <Edit className="h-3.5 w-3.5" />
@@ -713,12 +713,12 @@ const Debtors = () => {
                                 <AlertDialogHeader>
                                   <AlertDialogTitle>¿Estás absolutamente seguro?</AlertDialogTitle>
                                   <AlertDialogDescription>
-                                    Esta acción no se puede deshacer. Esto eliminará permanentemente la transacción de {transaction.type === "charge" ? "cargo" : "abono"} por ${transaction.amount.toFixed(2)}: "{transaction.description}".
+                                    Esta acción no se puede deshacer. Esto eliminará permanentemente la transacción de {transaction.type === "charge" ? "cargo" : "pago"} por ${transaction.amount.toFixed(2)}: "{transaction.description}".
                                   </AlertDialogDescription>
                                 </AlertDialogHeader>
                                 <AlertDialogFooter>
                                   <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                  <AlertDialogAction onClick={() => handleDeleteDebtorTransaction(transaction.id, historyDebtor.id, transaction.amount, transaction.type)}>
+                                  <AlertDialogAction onClick={() => handleDeleteCreditorTransaction(transaction.id, historyCreditor.id, transaction.amount, transaction.type)}>
                                     Eliminar
                                   </AlertDialogAction>
                                 </AlertDialogFooter>
@@ -730,7 +730,7 @@ const Debtors = () => {
                     </TableBody>
                   </Table>
                 ) : (
-                  <p className="text-center text-muted-foreground">No hay historial de transacciones para este deudor.</p>
+                  <p className="text-center text-muted-foreground">No hay historial de transacciones para este acreedor.</p>
                 )}
               </div>
               <DialogFooter>
@@ -754,8 +754,8 @@ const Debtors = () => {
                       <SelectValue placeholder="Selecciona tipo" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="charge">Cargo</SelectItem>
-                      <SelectItem value="payment">Abono</SelectItem>
+                      <SelectItem value="charge">Cargo (Debemos más)</SelectItem>
+                      <SelectItem value="payment">Pago (Abonamos)</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -799,4 +799,4 @@ const Debtors = () => {
   );
 };
 
-export default Debtors;
+export default Creditors;
