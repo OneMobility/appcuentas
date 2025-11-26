@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
-import { Home, Users, DollarSign, CreditCard, AlertTriangle, Meh, RefreshCw, PiggyBank } from "lucide-react";
+import { Home, Users, DollarSign, CreditCard, AlertTriangle, Meh, RefreshCw, PiggyBank, Wallet, ArrowUpCircle, ArrowDownCircle } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -49,7 +49,7 @@ interface CardData {
   expiration_date: string;
   type: "credit" | "debit";
   initial_balance: number;
-  current_balance: number;
+  current_balance: number; // Deuda total para crédito, saldo para débito
   credit_limit?: number;
   cut_off_day?: number;
   days_to_pay_after_cut_off?: number;
@@ -213,6 +213,13 @@ const Dashboard = () => {
     return cards.filter(card => card.type === "credit").reduce((sum, card) => sum + card.current_balance, 0);
   }, [cards]);
 
+  // Nuevo cálculo para el crédito disponible total de tarjetas de crédito
+  const totalCreditAvailable = useMemo(() => {
+    return cards
+      .filter(card => card.type === "credit" && card.credit_limit !== undefined)
+      .reduce((sum, card) => sum + (card.credit_limit! - card.current_balance), 0);
+  }, [cards]);
+
   // Nuevo cálculo para el balance total
   const totalOverallBalance = useMemo(() => {
     return totalCashBalance + totalDebtorsBalance + totalDebitCardsBalance - totalCreditorsBalance - totalCreditCardDebt;
@@ -325,14 +332,6 @@ const Dashboard = () => {
     });
   }, [cards]);
 
-  const cardStatusChartData = useMemo(() => {
-    return cards.map(card => ({
-      name: card.name,
-      LimiteOInicial: card.type === "credit" ? card.credit_limit : card.initial_balance,
-      SaldoActualODeuda: card.current_balance,
-    }));
-  }, [cards]);
-
   const cardHealthStatus = useMemo(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -400,9 +399,9 @@ const Dashboard = () => {
       </div>
 
       {cardHealthStatus.status === "critical" ? (
-        <Card className="border-blue-600 bg-blue-50 text-blue-800">
+        <Card className="border-l-4 border-red-600 bg-red-50 text-red-800">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-blue-800">Estado de Tarjetas</CardTitle>
+            <CardTitle className="text-sm font-medium text-red-800">Estado de Tarjetas</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col items-center pr-4 md:block md:pr-48">
             <img 
@@ -411,7 +410,7 @@ const Dashboard = () => {
               className="h-[180px] w-[180px] mb-4 mx-auto md:absolute md:top-[54px] md:right-[4px] md:z-10"
             />
             <div className="text-lg font-bold text-center md:text-left">Oye, pon atención en tus saldos</div>
-            <p className="text-xs text-blue-700 mt-1 text-center md:text-left">
+            <p className="text-xs text-red-700 mt-1 text-center md:text-left">
               Hay problemas críticos con las siguientes tarjetas:
               <ul className="list-disc pl-5 mt-1">
                 {cardHealthStatus.cards.map((msg, index) => (
@@ -422,7 +421,7 @@ const Dashboard = () => {
           </CardContent>
         </Card>
       ) : cardHealthStatus.status === "warning" ? (
-        <Card className="border-orange-600 bg-orange-50 text-orange-800">
+        <Card className="border-l-4 border-orange-600 bg-orange-50 text-orange-800">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-orange-800">Estado de Tarjetas</CardTitle>
           </CardHeader>
@@ -444,7 +443,7 @@ const Dashboard = () => {
           </CardContent>
         </Card>
       ) : (
-        <Card className="border-green-600 bg-green-50 text-green-800">
+        <Card className="border-l-4 border-green-600 bg-green-50 text-green-800">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-green-800">Estado de Tarjetas</CardTitle>
           </CardHeader>
@@ -464,39 +463,27 @@ const Dashboard = () => {
       <GroupedPaymentDueDatesCard cards={cards} />
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {/* Tarjetas Verdes */}
-        <Card className={cn("border-l-4 border-green-600 bg-green-50 text-green-800")}>
+        {/* Tarjetas de Saldo General */}
+        <Card className={cn("border-l-4 border-green-500 bg-green-50 text-green-800")}>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-green-800">TU DINERITO</CardTitle>
             <Home className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">${totalCashBalance.toFixed(2)}</div>
-            <p className="text-xs text-green-700">+20.1% desde el mes pasado</p> {/* Placeholder */}
+            <p className="text-xs text-green-700">Saldo en efectivo.</p>
           </CardContent>
         </Card>
-        <Card className={cn("border-l-4 border-green-600 bg-green-50 text-green-800")}>
+        <Card className={cn("border-l-4 border-green-500 bg-green-50 text-green-800")}>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-green-800">QUIEN TE DEBE</CardTitle>
+            <CardTitle className="text-sm font-medium text-green-800">LOS QUE TE DEBEN</CardTitle>
             <Users className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">${totalDebtorsBalance.toFixed(2)}</div>
-            <p className="text-xs text-green-700">-5.2% desde el mes pasado</p> {/* Placeholder */}
+            <p className="text-xs text-green-700">Total que te deben.</p>
           </CardContent>
         </Card>
-        <Card className={cn("border-l-4 border-green-600 bg-green-50 text-green-800")}>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-green-800">SALDO TARJETAS DÉBITO</CardTitle>
-            <CreditCard className="h-4 w-4 text-green-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">${totalDebitCardsBalance.toFixed(2)}</div>
-            <p className="text-xs text-green-700">Saldo total en tus tarjetas de débito.</p>
-          </CardContent>
-        </Card>
-
-        {/* Tarjetas Amarillas */}
         <Card className={cn("border-l-4 border-yellow-500 bg-yellow-50 text-yellow-800")}>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-yellow-800">A QUIEN LE DEBES</CardTitle>
@@ -504,21 +491,43 @@ const Dashboard = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">${totalCreditorsBalance.toFixed(2)}</div>
-            <p className="text-xs text-yellow-700">+10.5% desde el mes pasado</p> {/* Placeholder */}
+            <p className="text-xs text-yellow-700">Total que debes a terceros.</p>
+          </CardContent>
+        </Card>
+
+        {/* Nuevas Tarjetas de Resumen de Tarjetas */}
+        <Card className={cn("border-l-4 border-green-500 bg-green-50 text-green-800")}>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-green-800">CRÉDITO DISPONIBLE</CardTitle>
+            <ArrowUpCircle className="h-4 w-4 text-green-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">${totalCreditAvailable.toFixed(2)}</div>
+            <p className="text-xs text-green-700">Crédito total disponible en tus tarjetas.</p>
           </CardContent>
         </Card>
         <Card className={cn("border-l-4 border-yellow-500 bg-yellow-50 text-yellow-800")}>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-yellow-800">DEUDA TARJETAS CRÉDITO</CardTitle>
-            <CreditCard className="h-4 w-4 text-yellow-600" />
+            <ArrowDownCircle className="h-4 w-4 text-yellow-600" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">${totalCreditCardDebt.toFixed(2)}</div>
             <p className="text-xs text-yellow-700">Deuda total en tus tarjetas de crédito.</p>
           </CardContent>
         </Card>
+        <Card className={cn("border-l-4 border-pink-500 bg-pink-50 text-pink-800")}>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-pink-800">SALDO TARJETAS DÉBITO</CardTitle>
+            <CreditCard className="h-4 w-4 text-pink-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">${totalDebitCardsBalance.toFixed(2)}</div>
+            <p className="text-xs text-pink-700">Saldo total en tus tarjetas de débito.</p>
+          </CardContent>
+        </Card>
 
-        {/* Tarjeta Rosa */}
+        {/* Tarjeta Rosa para Balance Total */}
         <Card className={cn("border-l-4 border-pink-500 bg-pink-50 text-pink-800")}>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-pink-800">BALANCE TOTAL</CardTitle>
