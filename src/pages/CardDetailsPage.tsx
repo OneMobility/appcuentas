@@ -14,7 +14,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { DollarSign, History, Trash2, Edit, CalendarIcon, ArrowLeft, FileText, FileDown, Heart, AlertTriangle } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { cn } from "@/lib/utils";
-import { format, addMonths, parseISO, isWithinInterval, isBefore, isAfter } from "date-fns";
+import { format, addMonths, parseISO, isWithinInterval, isBefore, isAfter, isSameDay } from "date-fns";
 import { es } from "date-fns/locale";
 import { DateRange } from "react-day-picker";
 import ColorPicker from "@/components/ColorPicker";
@@ -240,7 +240,7 @@ const CardDetailsPage: React.FC = () => {
 
       // Check if credit limit is exceeded
       if (card.credit_limit !== undefined && newCardBalance > card.credit_limit) {
-        toast.info(`Tu tarjeta de crédito ha excedido su límite. Saldo actual: $${newCardBalance.toFixed(2)}`, {
+        toast.info(`¡Atención! El saldo actual de tu tarjeta ${card.name} excede tu límite de crédito.`, {
           style: { backgroundColor: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))' },
           duration: 10000
         });
@@ -284,7 +284,7 @@ const CardDetailsPage: React.FC = () => {
         if (newTransaction.type === "charge") {
           newCardBalance += totalAmount;
           if (card.credit_limit !== undefined && newCardBalance > card.credit_limit) {
-            toast.info(`Tu tarjeta de crédito ha excedido su límite. Saldo actual: $${newCardBalance.toFixed(2)}`, {
+            toast.info(`¡Atención! El saldo actual de tu tarjeta ${card.name} excede tu límite de crédito.`, {
               style: { backgroundColor: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))' },
               duration: 10000
             });
@@ -425,7 +425,7 @@ const CardDetailsPage: React.FC = () => {
         .delete()
         .eq('installments_total_amount', oldTransaction.installments_total_amount)
         .eq('card_id', card.id)
-        .eq('user.id', user.id); // Corrected user.id
+        .eq('user_id', user.id); // Corrected user.id
       if (deleteOldInstallmentsError) throw deleteOldInstallmentsError;
     } else {
       // Si era una transacción única, simplemente eliminarla
@@ -447,7 +447,7 @@ const CardDetailsPage: React.FC = () => {
       newCardBalance += newTotalAmount;
 
       if (card.credit_limit !== undefined && newCardBalance > card.credit_limit) {
-        toast.info(`Tu tarjeta de crédito ha excedido su límite. Saldo actual: $${newCardBalance.toFixed(2)}`, {
+        toast.info(`¡Atención! El saldo actual de tu tarjeta ${card.name} excede tu límite de crédito.`, {
           style: { backgroundColor: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))' },
           duration: 10000
         });
@@ -491,7 +491,7 @@ const CardDetailsPage: React.FC = () => {
         if (newType === "charge") {
           newCardBalance += newTotalAmount;
           if (card.credit_limit !== undefined && newCardBalance > card.credit_limit) {
-            toast.info(`Tu tarjeta de crédito ha excedido su límite. Saldo actual: $${newCardBalance.toFixed(2)}`, {
+            toast.info(`¡Atención! El saldo actual de tu tarjeta ${card.name} excede tu límite de crédito.`, {
               style: { backgroundColor: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))' },
               duration: 10000
             });
@@ -547,7 +547,7 @@ const CardDetailsPage: React.FC = () => {
         .from('card_transactions')
         .select('*')
         .eq('card_id', card.id)
-        .eq('user_id', user.id);
+        .eq('user.id', user.id);
       if (fetchTxError) throw fetchTxError;
 
       setCard((prevCard) => {
@@ -684,14 +684,52 @@ const CardDetailsPage: React.FC = () => {
     }
   };
 
-  // Calcular la "Deuda del Mes"
-  const debtOfTheMonth = useMemo(() => {
-    if (!card || card.type !== "credit") {
-      return 0;
+  // Calcular la "Deuda del Ciclo Actual" y "Deuda Pendiente de Pago"
+  const { currentCycleDebt, pendingPaymentDebt } = useMemo(() => {
+    if (!card || card.type !== "credit" || card.cut_off_day === undefined || card.days_to_pay_after_cut_off === undefined) {
+      return { currentCycleDebt: 0, pendingPaymentDebt: 0 };
     }
-    // La "Deuda del Mes" ahora es el saldo actual de la tarjeta de crédito
-    return card.current_balance;
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // 1. Deuda del Ciclo Actual (gastos desde el último corte hasta hoy/próximo corte)
+    const { currentCycleStartDate, currentCycleEndDate } = getCurrentActiveBillingCycle(card.cut_off_day, today);
+    const chargesInCurrentCycle = (card.transactions || [])
+      .filter(tx => tx.type === "charge")
+      .filter(tx => {
+        const txDate = parseISO(tx.date);
+        return isWithinInterval(txDate, { start: currentCycleStartDate, end: today }); // Charges up to today
+      })
+      .reduce((sum, tx) => sum + (tx.installments_total_amount || tx.amount), 0); // Sum total amount for charges
+
+    // 2. Deuda Pendiente de Pago (saldo del último estado de cuenta)
+    const { billingCycleStartDate, billingCycleEndDate, paymentDueDate } = getRelevantBillingCycle(card.cut_off_day, card.days_to_pay_after_cut_off, today);
+
+    const chargesInRelevantBillingCycle = (card.transactions || [])
+      .filter(tx => tx.type === "charge")
+      .filter(tx => {
+        const txDate = parseISO(tx.date);
+        return isWithinInterval(txDate, { start: billingCycleStartDate, end: billingCycleEndDate });
+      })
+      .reduce((sum, tx) => sum + (tx.installments_total_amount || tx.amount), 0);
+
+    const paymentsInRelevantBillingCycle = (card.transactions || [])
+      .filter(tx => tx.type === "payment")
+      .filter(tx => {
+        const txDate = parseISO(tx.date);
+        return isWithinInterval(txDate, { start: billingCycleStartDate, end: paymentDueDate });
+      })
+      .reduce((sum, tx) => sum + tx.amount, 0);
+
+    const calculatedPendingPaymentDebt = chargesInRelevantBillingCycle - paymentsInRelevantBillingCycle;
+
+    return {
+      currentCycleDebt: chargesInCurrentCycle,
+      pendingPaymentDebt: Math.max(0, calculatedPendingPaymentDebt), // Ensure it's not negative
+    };
   }, [card]);
+
 
   if (isLoading || isLoadingCategories) {
     return <LoadingSpinner />;
@@ -764,7 +802,10 @@ const CardDetailsPage: React.FC = () => {
                   Crédito Utilizado: ${creditUsed.toFixed(2)}
                 </p>
                 <p className="text-sm opacity-80 mt-1">
-                  Deuda del Mes: ${debtOfTheMonth.toFixed(2)}
+                  Deuda del Ciclo Actual: ${currentCycleDebt.toFixed(2)}
+                </p>
+                <p className="text-sm opacity-80 mt-1">
+                  Deuda Pendiente de Pago: ${pendingPaymentDebt.toFixed(2)}
                 </p>
               </>
             ) : (

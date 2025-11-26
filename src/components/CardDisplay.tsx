@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { useNavigate } from "react-router-dom";
 import { getRelevantBillingCycle, getCurrentActiveBillingCycle } from "@/utils/date-helpers"; // Importar las nuevas funciones
-import { parseISO, isWithinInterval } from "date-fns";
+import { parseISO, isWithinInterval, isSameDay, isBefore } from "date-fns";
 
 interface CardTransaction {
   id: string;
@@ -53,13 +53,50 @@ const CardDisplay: React.FC<CardDisplayProps> = ({ card, onAddTransaction, onDel
   const creditUsed = isCredit ? card.current_balance : 0; // Crédito utilizado es la deuda total
   const navigate = useNavigate();
 
-  // Calcular la "Deuda del Mes"
-  const debtOfTheMonth = useMemo(() => {
-    if (!isCredit) {
-      return 0;
+  // Calcular la "Deuda del Ciclo Actual" y "Deuda Pendiente de Pago"
+  const { currentCycleDebt, pendingPaymentDebt } = useMemo(() => {
+    if (!isCredit || card.cut_off_day === undefined || card.days_to_pay_after_cut_off === undefined) {
+      return { currentCycleDebt: 0, pendingPaymentDebt: 0 };
     }
-    // La "Deuda del Mes" ahora es el saldo actual de la tarjeta de crédito
-    return card.current_balance;
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // 1. Deuda del Ciclo Actual (gastos desde el último corte hasta hoy/próximo corte)
+    const { currentCycleStartDate, currentCycleEndDate } = getCurrentActiveBillingCycle(card.cut_off_day, today);
+    const chargesInCurrentCycle = (card.transactions || [])
+      .filter(tx => tx.type === "charge")
+      .filter(tx => {
+        const txDate = parseISO(tx.date);
+        return isWithinInterval(txDate, { start: currentCycleStartDate, end: today }); // Charges up to today
+      })
+      .reduce((sum, tx) => sum + (tx.installments_total_amount || tx.amount), 0); // Sum total amount for charges
+
+    // 2. Deuda Pendiente de Pago (saldo del último estado de cuenta)
+    const { billingCycleStartDate, billingCycleEndDate, paymentDueDate } = getRelevantBillingCycle(card.cut_off_day, card.days_to_pay_after_cut_off, today);
+
+    const chargesInRelevantBillingCycle = (card.transactions || [])
+      .filter(tx => tx.type === "charge")
+      .filter(tx => {
+        const txDate = parseISO(tx.date);
+        return isWithinInterval(txDate, { start: billingCycleStartDate, end: billingCycleEndDate });
+      })
+      .reduce((sum, tx) => sum + (tx.installments_total_amount || tx.amount), 0);
+
+    const paymentsInRelevantBillingCycle = (card.transactions || [])
+      .filter(tx => tx.type === "payment")
+      .filter(tx => {
+        const txDate = parseISO(tx.date);
+        return isWithinInterval(txDate, { start: billingCycleStartDate, end: paymentDueDate });
+      })
+      .reduce((sum, tx) => sum + tx.amount, 0);
+
+    const calculatedPendingPaymentDebt = chargesInRelevantBillingCycle - paymentsInRelevantBillingCycle;
+
+    return {
+      currentCycleDebt: chargesInCurrentCycle,
+      pendingPaymentDebt: Math.max(0, calculatedPendingPaymentDebt), // Ensure it's not negative
+    };
   }, [card, isCredit]);
 
   const handleViewDetails = () => {
@@ -91,7 +128,10 @@ const CardDisplay: React.FC<CardDisplayProps> = ({ card, onAddTransaction, onDel
                 Crédito Utilizado: ${creditUsed.toFixed(2)}
               </p>
               <p className="text-sm opacity-80 mt-1">
-                Deuda del Mes: ${debtOfTheMonth.toFixed(2)}
+                Deuda del Ciclo Actual: ${currentCycleDebt.toFixed(2)}
+              </p>
+              <p className="text-sm opacity-80 mt-1">
+                Deuda Pendiente de Pago: ${pendingPaymentDebt.toFixed(2)}
               </p>
             </>
           ) : (
