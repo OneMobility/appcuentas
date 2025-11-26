@@ -11,25 +11,25 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { DollarSign, History, Trash2, Edit, CalendarIcon, ArrowLeft, FileText, FileDown, Heart } from "lucide-react";
+import { DollarSign, History, Trash2, Edit, CalendarIcon, ArrowLeft, FileText, FileDown, Heart, AlertTriangle } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { cn } from "@/lib/utils";
-import { format, addMonths, parseISO, isWithinInterval } from "date-fns"; // Importar isWithinInterval
+import { format, addMonths, parseISO, isWithinInterval, isBefore } from "date-fns"; // Importar isBefore
 import { es } from "date-fns/locale";
 import { DateRange } from "react-day-picker";
 import ColorPicker from "@/components/ColorPicker";
 import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/context/SessionContext";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { getUpcomingPaymentDueDate, getBillingCycleDates } from "@/utils/date-helpers"; // Importar getBillingCycleDates
+import { getUpcomingPaymentDueDate, getBillingCycleDates } from "@/utils/date-helpers";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { exportToCsv, exportToPdf } from "@/utils/export";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import PaymentDueDateCard from "@/components/PaymentDueDateCard";
-import CutOffDateCard from "@/components/CutOffDateCard"; // Importar el nuevo componente
+import CutOffDateCard from "@/components/CutOffDateCard";
 import { useCategoryContext } from "@/context/CategoryContext";
-import { toast } from "sonner"; // Importar toast de sonner
-import DynamicLucideIcon from "@/components/DynamicLucideIcon"; // Importar DynamicLucideIcon
+import { toast } from "sonner";
+import DynamicLucideIcon from "@/components/DynamicLucideIcon";
 
 interface CardTransaction {
   id: string;
@@ -87,6 +87,7 @@ const CardDetailsPage: React.FC = () => {
   const [filterType, setFilterType] = useState<"all" | "charge" | "payment">("all");
   const [filterCategory, setFilterCategory] = useState<string>("all");
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
+  const [isOverdue, setIsOverdue] = useState(false); // New state for overdue notification
 
   useEffect(() => {
     const fetchCardDetails = async () => {
@@ -104,7 +105,7 @@ const CardDetailsPage: React.FC = () => {
         .single();
 
       if (error) {
-        console.error("Error fetching card details:", error); // Log the error
+        console.error("Error fetching card details:", error);
         showError('Error al cargar detalles de la tarjeta: ' + error.message);
         navigate('/cards');
       } else {
@@ -119,6 +120,31 @@ const CardDetailsPage: React.FC = () => {
 
     fetchCardDetails();
   }, [cardId, user, navigate, isLoadingCategories]);
+
+  // Effect to calculate if payment is overdue
+  useEffect(() => {
+    if (card && card.type === "credit" && card.cut_off_day !== undefined && card.days_to_pay_after_cut_off !== undefined) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      // Get the billing cycle dates for the *current* reference date (today)
+      const { paymentDueDate } = getBillingCycleDates(
+        card.cut_off_day,
+        card.days_to_pay_after_cut_off,
+        today
+      );
+      paymentDueDate.setHours(0, 0, 0, 0);
+
+      // If today is strictly after the payment due date AND there's still a positive balance (debt)
+      if (isBefore(paymentDueDate, today) && card.current_balance > 0) {
+        setIsOverdue(true);
+      } else {
+        setIsOverdue(false);
+      }
+    } else {
+      setIsOverdue(false);
+    }
+  }, [card]); // Recalculate when card data changes
 
   const handleTransactionInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -669,6 +695,23 @@ const CardDetailsPage: React.FC = () => {
         <h1 className="text-3xl font-bold">Detalles de la Tarjeta: {card.name}</h1>
       </div>
 
+      {/* Overdue Payment Notification */}
+      {isOverdue && (
+        <Card className="border-l-4 border-red-600 bg-red-50 text-red-800">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-red-800">¡ATENCIÓN!</CardTitle>
+            <AlertTriangle className="h-4 w-4 text-red-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-lg font-bold">Tienes adeudos con la entidad financiera.</div>
+            <p className="text-xs text-red-700 mt-1">
+              El pago para el ciclo anterior de tu tarjeta {card.name} está vencido.
+              Tu saldo actual es de ${card.current_balance.toFixed(2)}.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Tarjetas de notificación */}
       {isCredit && (
         <div className="grid gap-4 md:grid-cols-2">
@@ -1033,7 +1076,7 @@ const CardDetailsPage: React.FC = () => {
                         <TableCell className="w-12 flex items-center justify-center"> {/* Celda para el icono */}
                           {isPaymentToCreditCard && (
                             <img
-                              src="https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Love%20Cochinito%20Card.png" // Updated URL
+                              src="https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Love%20Cochinito%20Card.png"
                               alt="Cochinito Love"
                               className="h-20 w-20"
                               onError={(e) => {
