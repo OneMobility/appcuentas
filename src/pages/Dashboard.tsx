@@ -51,7 +51,7 @@ interface CardData {
   expiration_date: string;
   type: "credit" | "debit";
   initial_balance: number;
-  current_balance: number;
+  current_balance: number; // Deuda total para crédito, saldo para débito
   credit_limit?: number;
   cut_off_day?: number;
   days_to_pay_after_cut_off?: number;
@@ -252,6 +252,49 @@ const Dashboard = () => {
     });
     return Array.from(dataMap.values()).filter(entry => entry.value > 0);
   }, [cashTransactions, expenseCategories]);
+
+  // NEW: Card Income Category Data
+  const cardIncomeCategoryData = useMemo(() => {
+    const dataMap = new Map<string, { name: string; value: number; color: string }>();
+    incomeCategories.forEach(cat => dataMap.set(cat.id, { name: cat.name, value: 0, color: cat.color }));
+
+    cards.forEach(card => {
+      (card.transactions || [])
+        .filter(tx => tx.type === "payment") // Payments to cards are considered income for the card
+        .forEach(tx => {
+          const categoryId = tx.income_category_id;
+          if (categoryId) {
+            const current = dataMap.get(categoryId);
+            if (current) {
+              dataMap.set(categoryId, { ...current, value: current.value + tx.amount });
+            }
+          }
+        });
+    });
+    return Array.from(dataMap.values()).filter(entry => entry.value > 0);
+  }, [cards, incomeCategories]);
+
+  // NEW: Card Expense Category Data
+  const cardExpenseCategoryData = useMemo(() => {
+    const dataMap = new Map<string, { name: string; value: number; color: string }>();
+    expenseCategories.forEach(cat => dataMap.set(cat.id, { name: cat.name, value: 0, color: cat.color }));
+
+    cards.forEach(card => {
+      (card.transactions || [])
+        .filter(tx => tx.type === "charge") // Charges on cards are considered expenses
+        .forEach(tx => {
+          const categoryId = tx.expense_category_id;
+          if (categoryId) {
+            const current = dataMap.get(categoryId);
+            if (current) {
+              dataMap.set(categoryId, { ...current, value: current.value + tx.amount });
+            }
+          }
+        });
+    });
+    return Array.from(dataMap.values()).filter(entry => entry.value > 0);
+  }, [cards, expenseCategories]);
+
 
   const monthlySummaryData = useMemo(() => {
     const summaryMap = new Map<string, MonthlySummary>(); // Key: YYYY-MM
@@ -785,6 +828,67 @@ const Dashboard = () => {
                   >
                     {expenseCategoryData.map((entry, index) => (
                       <Cell key={`cell-expense-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                  <Legend />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* NEW: Card Income and Expense Charts */}
+      <div className="grid gap-4 md:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Ingresos por Categoría (Tarjetas)</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="h-[300px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={cardIncomeCategoryData}
+                    cx="50%"
+                    cy="50%"
+                    labelLine={false}
+                    outerRadius={80}
+                    dataKey="value"
+                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                  >
+                    {cardIncomeCategoryData.map((entry, index) => (
+                      <Cell key={`cell-card-income-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                  <Legend />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Egresos por Categoría (Tarjetas)</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="h-[300px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={cardExpenseCategoryData}
+                    cx="50%"
+                    cy="50%"
+                    labelLine={false}
+                    outerRadius={80}
+                    dataKey="value"
+                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                  >
+                    {cardExpenseCategoryData.map((entry, index) => (
+                      <Cell key={`cell-card-expense-${index}`} fill={entry.color} />
                     ))}
                   </Pie>
                   <Tooltip />
