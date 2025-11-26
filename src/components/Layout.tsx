@@ -72,7 +72,7 @@ const Sidebar = ({ onClose }: { onClose?: () => void }) => {
   return (
     <nav className="flex flex-col gap-2 p-4 h-full">
       <Link to="/dashboard" className="flex items-center gap-2 mb-6 text-sidebar-foreground" onClick={onClose}>
-        <img src="https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Logo%203d.png" alt="Oinkash Logo" className="h-8 w-8" />
+        <img src="https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Logo%203d.png" alt="Oinkash Logo" className="h-12 w-12" />
         <h2 className="text-2xl font-bold">Oinkash</h2>
       </Link>
       <div className="flex-1">
@@ -121,7 +121,7 @@ const Layout: React.FC<LayoutProps> = () => { // Props actualizadas
       {isMobile ? (
         <>
           <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b bg-background px-4 shadow-sm">
-            <img src="https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Logo%203d.png" alt="Oinkash Logo" className="h-8 w-8" />
+            <img src="https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Logo%203d.png" alt="Oinkash Logo" className="h-10 w-10" />
             <h1 className="text-xl font-semibold">{currentPageName}</h1>
           </header>
           <main className="flex flex-1 flex-col gap-4 p-4 pb-20 lg:gap-6 lg:p-6">
