@@ -13,7 +13,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { PlusCircle, CalendarIcon, Edit, FileText, FileDown, Trash2 } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { cn } from "@/lib/utils";
-import { format } from "date-fns";
+import { format, parseISO } from "date-fns"; // Importar parseISO
 import { es } from "date-fns/locale";
 import { DateRange } from "react-day-picker";
 import { useCategoryContext } from "@/context/CategoryContext";
@@ -22,8 +22,8 @@ import { useSession } from "@/context/SessionContext";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { exportToCsv, exportToPdf } from "@/utils/export";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import DynamicLucideIcon from "@/components/DynamicLucideIcon"; // Importar DynamicLucideIcon
-import { getLocalDateString } from "@/utils/date-helpers"; // Importar la nueva función de utilidad
+import DynamicLucideIcon from "@/components/DynamicLucideIcon";
+import { getLocalDateString } from "@/utils/date-helpers";
 
 interface Transaction {
   id: string;
@@ -31,8 +31,8 @@ interface Transaction {
   amount: number;
   description: string;
   date: string;
-  income_category_id?: string | null; // New
-  expense_category_id?: string | null; // New
+  income_category_id?: string | null;
+  expense_category_id?: string | null;
   user_id?: string;
 }
 
@@ -48,8 +48,9 @@ const Cash = () => {
     type: "ingreso" as "ingreso" | "egreso",
     amount: "",
     description: "",
-    selectedCategoryId: "", // Single field for selected category ID
-    selectedCategoryType: "" as "income" | "expense" | "", // To track which type of category is selected
+    date: new Date() as Date | undefined, // Añadido campo de fecha
+    selectedCategoryId: "",
+    selectedCategoryType: "" as "income" | "expense" | "",
   });
 
   // Filter states
@@ -94,6 +95,10 @@ const Cash = () => {
     setNewTransaction((prev) => ({ ...prev, [name]: value }));
   };
 
+  const handleDateChange = (date: Date | undefined) => { // Nuevo manejador para la fecha
+    setNewTransaction((prev) => ({ ...prev, date: date }));
+  };
+
   const handleSelectChange = (value: "ingreso" | "egreso") => {
     setNewTransaction((prev) => ({ ...prev, type: value, selectedCategoryId: "", selectedCategoryType: "" }));
   };
@@ -127,6 +132,10 @@ const Cash = () => {
       showError("Por favor, selecciona una categoría.");
       return;
     }
+    if (!newTransaction.date) { // Validar que la fecha esté seleccionada
+      showError("Por favor, selecciona una fecha para la transacción.");
+      return;
+    }
 
     let incomeCategoryIdToInsert: string | null = null;
     let expenseCategoryIdToInsert: string | null = null;
@@ -147,9 +156,9 @@ const Cash = () => {
         type: newTransaction.type,
         amount,
         description: newTransaction.description,
-        income_category_id: incomeCategoryIdToInsert, // Use new column
-        expense_category_id: expenseCategoryIdToInsert, // Use new column
-        date: getLocalDateString(new Date()), // Usar getLocalDateString
+        income_category_id: incomeCategoryIdToInsert,
+        expense_category_id: expenseCategoryIdToInsert,
+        date: getLocalDateString(newTransaction.date), // Usar la fecha seleccionada
       })
       .select();
 
@@ -161,7 +170,7 @@ const Cash = () => {
       setBalance((prev) =>
         newTx.type === "ingreso" ? prev + newTx.amount : prev - newTx.amount
       );
-      setNewTransaction({ type: "ingreso", amount: "", description: "", selectedCategoryId: "", selectedCategoryType: "" });
+      setNewTransaction({ type: "ingreso", amount: "", description: "", date: new Date(), selectedCategoryId: "", selectedCategoryType: "" });
       setIsAddDialogOpen(false);
       showSuccess("Transacción registrada exitosamente.");
     }
@@ -176,6 +185,7 @@ const Cash = () => {
       type: transaction.type,
       amount: transaction.amount.toString(),
       description: transaction.description,
+      date: parseISO(transaction.date), // Usar parseISO para cargar la fecha
       selectedCategoryId: categoryId,
       selectedCategoryType: categoryType as "income" | "expense" | "",
     });
@@ -202,6 +212,10 @@ const Cash = () => {
       showError("Por favor, selecciona una categoría.");
       return;
     }
+    if (!newTransaction.date) { // Validar que la fecha esté seleccionada
+      showError("Por favor, selecciona una fecha para la transacción.");
+      return;
+    }
 
     let incomeCategoryIdToUpdate: string | null = null;
     let expenseCategoryIdToUpdate: string | null = null;
@@ -223,9 +237,9 @@ const Cash = () => {
         type: newType,
         amount: newAmount,
         description: newTransaction.description,
-        income_category_id: incomeCategoryIdToUpdate, // Use new column
-        expense_category_id: expenseCategoryIdToUpdate, // Use new column
-        date: getLocalDateString(new Date(editingTransaction.date)), // Usar getLocalDateString
+        income_category_id: incomeCategoryIdToUpdate,
+        expense_category_id: expenseCategoryIdToUpdate,
+        date: getLocalDateString(newTransaction.date), // Usar la fecha seleccionada
       })
       .eq('id', editingTransaction.id)
       .eq('user_id', user.id)
@@ -248,7 +262,7 @@ const Cash = () => {
 
       setIsEditDialogOpen(false);
       setEditingTransaction(null);
-      setNewTransaction({ type: "ingreso", amount: "", description: "", selectedCategoryId: "", selectedCategoryType: "" });
+      setNewTransaction({ type: "ingreso", amount: "", description: "", date: new Date(), selectedCategoryId: "", selectedCategoryType: "" });
       showSuccess("Transacción actualizada exitosamente.");
     }
   };
@@ -285,7 +299,7 @@ const Cash = () => {
     const categoryName = category?.name || "";
     const matchesCategory = filterCategory === "all" || categoryId === filterCategory || categoryName.toLowerCase().includes(filterCategory.toLowerCase());
     
-    const txDate = new Date(tx.date);
+    const txDate = parseISO(tx.date); // Usar parseISO aquí
     const matchesDate = !dateRange?.from || (txDate >= dateRange.from && (!dateRange.to || txDate <= dateRange.to));
 
     return matchesSearch && matchesType && matchesCategory && matchesDate;
@@ -298,7 +312,7 @@ const Cash = () => {
     const dataToExport = filteredTransactions.map(tx => {
       const category = getCategoryById(tx.income_category_id || tx.expense_category_id);
       return {
-        Fecha: format(new Date(tx.date), "dd/MM/yyyy", { locale: es }),
+        Fecha: format(parseISO(tx.date), "dd/MM/yyyy", { locale: es }), // Usar parseISO aquí
         Tipo: tx.type === "ingreso" ? "Ingreso" : "Egreso",
         Categoria: category?.name || "Desconocida",
         Descripcion: tx.description,
@@ -412,6 +426,34 @@ const Cash = () => {
                       className="col-span-3"
                       required
                     />
+                  </div>
+                  <div className="grid grid-cols-4 items-center gap-4"> {/* Nuevo campo de fecha */}
+                    <Label htmlFor="transactionDate" className="text-right">
+                      Fecha
+                    </Label>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant={"outline"}
+                          className={cn(
+                            "col-span-3 justify-start text-left font-normal",
+                            !newTransaction.date && "text-muted-foreground"
+                          )}
+                        >
+                          <CalendarIcon className="mr-2 h-4 w-4" />
+                          {newTransaction.date ? format(newTransaction.date, "dd/MM/yyyy", { locale: es }) : <span>Selecciona una fecha</span>}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0">
+                        <Calendar
+                          mode="single"
+                          selected={newTransaction.date}
+                          onSelect={handleDateChange}
+                          initialFocus
+                          locale={es}
+                        />
+                      </PopoverContent>
+                    </Popover>
                   </div>
                   <DialogFooter>
                     <Button type="submit">Guardar Transacción</Button>
@@ -528,7 +570,7 @@ const Cash = () => {
                   const category = getCategoryById(tx.income_category_id || tx.expense_category_id);
                   return (
                     <TableRow key={tx.id}>
-                      <TableCell>{format(new Date(tx.date), "dd/MM/yyyy", { locale: es })}</TableCell>
+                      <TableCell>{format(parseISO(tx.date), "dd/MM/yyyy", { locale: es })}</TableCell> {/* Usar parseISO aquí */}
                       <TableCell className={tx.type === "ingreso" ? "text-green-600" : "text-red-600"}>
                         {tx.type === "ingreso" ? "Ingreso" : "Egreso"}
                       </TableCell>
@@ -652,6 +694,34 @@ const Cash = () => {
                     className="col-span-3"
                     required
                   />
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4"> {/* Campo de fecha en edición */}
+                  <Label htmlFor="editTransactionDate" className="text-right">
+                    Fecha
+                  </Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant={"outline"}
+                        className={cn(
+                          "col-span-3 justify-start text-left font-normal",
+                          !newTransaction.date && "text-muted-foreground"
+                        )}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {newTransaction.date ? format(newTransaction.date, "dd/MM/yyyy", { locale: es }) : <span>Selecciona una fecha</span>}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0">
+                      <Calendar
+                        mode="single"
+                        selected={newTransaction.date}
+                        onSelect={handleDateChange}
+                        initialFocus
+                        locale={es}
+                      />
+                    </PopoverContent>
+                  </Popover>
                 </div>
                 <DialogFooter>
                   <Button type="submit">Actualizar Transacción</Button>
