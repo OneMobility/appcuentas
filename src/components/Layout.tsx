@@ -71,7 +71,7 @@ const Sidebar = ({ onClose }: { onClose?: () => void }) => {
 
   return (
     <nav className="flex flex-col gap-2 p-4 h-full">
-      <Link to="/dashboard" className="flex flex-col items-center gap-1 mb-6 text-sidebar-foreground" onClick={onClose}>
+      <Link to="/dashboard" className="flex items-center gap-2 mb-6 text-sidebar-foreground" onClick={onClose}>
         <img src="https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Logo%203d.png" alt="Oinkash Logo" className="h-12 w-12" />
         <h2 className="text-2xl font-bold">Oinkash</h2>
       </Link>
