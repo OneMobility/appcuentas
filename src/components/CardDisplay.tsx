@@ -70,7 +70,7 @@ const CardDisplay: React.FC<CardDisplayProps> = ({ card, onAddTransaction, onDel
         const txDate = parseISO(tx.date);
         return isWithinInterval(txDate, { start: currentCycleStartDate, end: today }); // Charges up to today
       })
-      .reduce((sum, tx) => sum + (tx.installments_total_amount || tx.amount), 0); // Sum total amount for charges
+      .reduce((sum, tx) => sum + tx.amount, 0); // Sumar tx.amount para cargos (incluye mensualidades)
 
     // 2. Deuda Pendiente de Pago (saldo del último estado de cuenta)
     const { billingCycleStartDate, billingCycleEndDate, paymentDueDate } = getRelevantBillingCycle(card.cut_off_day, card.days_to_pay_after_cut_off, today);
@@ -81,7 +81,7 @@ const CardDisplay: React.FC<CardDisplayProps> = ({ card, onAddTransaction, onDel
         const txDate = parseISO(tx.date);
         return isWithinInterval(txDate, { start: billingCycleStartDate, end: billingCycleEndDate });
       })
-      .reduce((sum, tx) => sum + (tx.installments_total_amount || tx.amount), 0);
+      .reduce((sum, tx) => sum + tx.amount, 0); // Sumar tx.amount para cargos (incluye mensualidades)
 
     const paymentsInRelevantBillingCycle = (card.transactions || [])
       .filter(tx => tx.type === "payment")

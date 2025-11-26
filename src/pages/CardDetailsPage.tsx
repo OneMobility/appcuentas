@@ -240,7 +240,7 @@ const CardDetailsPage: React.FC = () => {
 
       // Check if credit limit is exceeded
       if (card.credit_limit !== undefined && newCardBalance > card.credit_limit) {
-        toast.info(`¡Atención! El saldo actual de tu tarjeta ${card.name} excede tu límite de crédito.`, {
+        toast.info(`Tu tarjeta de crédito ha excedido su límite. Saldo actual: $${newCardBalance.toFixed(2)}`, {
           style: { backgroundColor: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))' },
           duration: 10000
         });
@@ -284,7 +284,7 @@ const CardDetailsPage: React.FC = () => {
         if (newTransaction.type === "charge") {
           newCardBalance += totalAmount;
           if (card.credit_limit !== undefined && newCardBalance > card.credit_limit) {
-            toast.info(`¡Atención! El saldo actual de tu tarjeta ${card.name} excede tu límite de crédito.`, {
+            toast.info(`Tu tarjeta de crédito ha excedido su límite. Saldo actual: $${newCardBalance.toFixed(2)}`, {
               style: { backgroundColor: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))' },
               duration: 10000
             });
@@ -547,7 +547,7 @@ const CardDetailsPage: React.FC = () => {
         .from('card_transactions')
         .select('*')
         .eq('card_id', card.id)
-        .eq('user.id', user.id);
+        .eq('user_id', user.id);
       if (fetchTxError) throw fetchTxError;
 
       setCard((prevCard) => {
@@ -701,7 +701,7 @@ const CardDetailsPage: React.FC = () => {
         const txDate = parseISO(tx.date);
         return isWithinInterval(txDate, { start: currentCycleStartDate, end: today }); // Charges up to today
       })
-      .reduce((sum, tx) => sum + (tx.installments_total_amount || tx.amount), 0); // Sum total amount for charges
+      .reduce((sum, tx) => sum + tx.amount, 0); // Sumar tx.amount para cargos (incluye mensualidades)
 
     // 2. Deuda Pendiente de Pago (saldo del último estado de cuenta)
     const { billingCycleStartDate, billingCycleEndDate, paymentDueDate } = getRelevantBillingCycle(card.cut_off_day, card.days_to_pay_after_cut_off, today);
@@ -712,7 +712,7 @@ const CardDetailsPage: React.FC = () => {
         const txDate = parseISO(tx.date);
         return isWithinInterval(txDate, { start: billingCycleStartDate, end: billingCycleEndDate });
       })
-      .reduce((sum, tx) => sum + (tx.installments_total_amount || tx.amount), 0);
+      .reduce((sum, tx) => sum + tx.amount, 0); // Sumar tx.amount para cargos (incluye mensualidades)
 
     const paymentsInRelevantBillingCycle = (card.transactions || [])
       .filter(tx => tx.type === "payment")
