@@ -307,7 +307,7 @@ const Debtors = () => {
         date: getLocalDateString(new Date()), // Usar getLocalDateString
       })
       .eq('id', editingTransaction.id)
-      .eq('user.id', user.id)
+      .eq('user_id', user.id)
       .select();
 
     if (transactionError) {
@@ -448,7 +448,7 @@ const Debtors = () => {
     <div className="flex flex-col gap-6 p-4">
       <h1 className="text-3xl font-bold">Los que te deben</h1>
 
-      <Card>
+      <Card className="border-l-4 border-yellow-500 bg-yellow-50 text-yellow-800">
         <CardHeader>
           <CardTitle>Saldo Total de Deudores</CardTitle>
         </CardHeader>
