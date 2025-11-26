@@ -105,7 +105,7 @@ const Dashboard = () => {
   const [debtors, setDebtors] = useState<DebtorData[]>([]);
   const [creditors, setCreditors] = useState<CreditorData[]>([]);
   const [refreshKey, setRefreshKey] = useState(0); // Nuevo estado para forzar el refresco
-  const [cardSpendingFilter, setCardSpendingFilter] = useState<"all" | "credit" | "debit">("all"); // Nuevo estado para el filtro
+  // const [cardSpendingFilter, setCardSpendingFilter] = useState<"all" | "credit" | "debit">("all"); // Eliminado
 
   const fetchDashboardData = async () => {
     if (!user) {
@@ -278,13 +278,8 @@ const Dashboard = () => {
       .map(([, value]) => value);
   }, [cashTransactions]);
 
-  // Filtered cards based on cardSpendingFilter
-  const filteredCardsForSpendingChart = useMemo(() => {
-    if (cardSpendingFilter === "all") {
-      return cards;
-    }
-    return cards.filter(card => card.type === cardSpendingFilter);
-  }, [cards, cardSpendingFilter]);
+  // Filtered cards based on cardSpendingFilter (removed, now it's all cards)
+  const filteredCardsForSpendingChart = cards;
 
   // NEW: monthlyCardCategorySpendingData (by expense category)
   const monthlyCardCategorySpendingData = useMemo(() => {
@@ -527,6 +522,7 @@ const Dashboard = () => {
           <CardContent>
             <div className="text-2xl font-bold">${totalDebtorsBalance.toFixed(2)}</div>
             <p className="text-xs text-green-700">-5.2% desde el mes pasado</p> {/* Placeholder */}
+          </p> {/* Placeholder */}
           </CardContent>
         </Card>
         <Card className={cn("border-l-4 border-green-600 bg-green-50 text-green-800")}>
@@ -751,30 +747,37 @@ const Dashboard = () => {
         </CardHeader>
         <CardContent>
           <div className="h-[300px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={monthlySummaryData}
-                margin={{
-                  top: 5,
-                  right: 30,
-                  left: 20,
-                  bottom: 5,
-                }}
-              >
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="name" />
-                <YAxis />
-                <Tooltip />
-                <Legend />
-                <Bar dataKey="ingresos" fill="#87CEEB" name="Ingresos" />
-                <Bar dataKey="egresos" fill="#FFB6C1" name="Egresos" />
-              </BarChart>
-            </ResponsiveContainer>
+            {monthlySummaryData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={monthlySummaryData}
+                  margin={{
+                    top: 5,
+                    right: 30,
+                    left: 20,
+                    bottom: 5,
+                  }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="name" />
+                  <YAxis />
+                  <Tooltip />
+                  <Legend />
+                  <Bar dataKey="ingresos" fill="#87CEEB" name="Ingresos" />
+                  <Bar dataKey="egresos" fill="#FFB6C1" name="Egresos" />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex items-center justify-center h-full text-muted-foreground">
+                No hay datos de ingresos y egresos en efectivo para mostrar.
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
 
-      <Card>
+      {/* REMOVED: Gastos Mensuales por Categoría (Tarjetas) */}
+      {/* <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>Gastos Mensuales por Categoría (Tarjetas)</CardTitle>
           <Select value={cardSpendingFilter} onValueChange={(value: "all" | "credit" | "debit") => setCardSpendingFilter(value)}>
@@ -824,7 +827,7 @@ const Dashboard = () => {
             )}
           </div>
         </CardContent>
-      </Card>
+      </Card> */}
 
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
@@ -833,25 +836,31 @@ const Dashboard = () => {
           </CardHeader>
           <CardContent>
             <div className="h-[300px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={incomeCategoryData}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={false}
-                    outerRadius={80}
-                    dataKey="value"
-                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                  >
-                    {incomeCategoryData.map((entry, index) => (
-                      <Cell key={`cell-income-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                  <Legend />
-                </PieChart>
-              </ResponsiveContainer>
+              {incomeCategoryData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={incomeCategoryData}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={false}
+                      outerRadius={80}
+                      dataKey="value"
+                      label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                    >
+                      {incomeCategoryData.map((entry, index) => (
+                        <Cell key={`cell-income-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip />
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex items-center justify-center h-full text-muted-foreground">
+                  No hay datos de ingresos por categoría en efectivo para mostrar.
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -862,25 +871,31 @@ const Dashboard = () => {
           </CardHeader>
           <CardContent>
             <div className="h-[300px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={expenseCategoryData}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={false}
-                    outerRadius={80}
-                    dataKey="value"
-                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                  >
-                    {expenseCategoryData.map((entry, index) => (
-                      <Cell key={`cell-expense-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                  <Legend />
-                </PieChart>
-              </ResponsiveContainer>
+              {expenseCategoryData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={expenseCategoryData}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={false}
+                      outerRadius={80}
+                      dataKey="value"
+                      label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                    >
+                      {expenseCategoryData.map((entry, index) => (
+                        <Cell key={`cell-expense-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip />
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex items-center justify-center h-full text-muted-foreground">
+                  No hay datos de egresos por categoría en efectivo para mostrar.
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
