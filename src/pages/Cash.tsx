@@ -31,8 +31,8 @@ interface Transaction {
   amount: number;
   description: string;
   date: string;
-  category_id: string;
-  category_type: "income" | "expense";
+  income_category_id?: string | null; // New
+  expense_category_id?: string | null; // New
   user_id?: string;
 }
 
@@ -48,7 +48,8 @@ const Cash = () => {
     type: "ingreso" as "ingreso" | "egreso",
     amount: "",
     description: "",
-    category_id: "",
+    selectedCategoryId: "", // Single field for selected category ID
+    selectedCategoryType: "" as "income" | "expense" | "", // To track which type of category is selected
   });
 
   // Filter states
@@ -94,11 +95,20 @@ const Cash = () => {
   };
 
   const handleSelectChange = (value: "ingreso" | "egreso") => {
-    setNewTransaction((prev) => ({ ...prev, type: value, category_id: "" }));
+    setNewTransaction((prev) => ({ ...prev, type: value, selectedCategoryId: "", selectedCategoryType: "" }));
   };
 
   const handleCategorySelectChange = (value: string) => {
-    setNewTransaction((prev) => ({ ...prev, category_id: value }));
+    const category = [...incomeCategories, ...expenseCategories].find(cat => cat.id === value);
+    if (category) {
+      setNewTransaction((prev) => ({
+        ...prev,
+        selectedCategoryId: value,
+        selectedCategoryType: incomeCategories.some(c => c.id === value) ? "income" : "expense",
+      }));
+    } else {
+      setNewTransaction((prev) => ({ ...prev, selectedCategoryId: value, selectedCategoryType: "" }));
+    }
   };
 
   const handleSubmitTransaction = async (e: React.FormEvent) => {
@@ -113,13 +123,22 @@ const Cash = () => {
       showError("El monto debe ser un número positivo.");
       return;
     }
-    if (!newTransaction.category_id) {
+    if (!newTransaction.selectedCategoryId) {
       showError("Por favor, selecciona una categoría.");
       return;
     }
 
-    // Correctly determine categoryType based on transaction type
-    const categoryType = newTransaction.type === "ingreso" ? "income" : "expense";
+    let incomeCategoryIdToInsert: string | null = null;
+    let expenseCategoryIdToInsert: string | null = null;
+
+    if (newTransaction.selectedCategoryType === "income") {
+      incomeCategoryIdToInsert = newTransaction.selectedCategoryId;
+    } else if (newTransaction.selectedCategoryType === "expense") {
+      expenseCategoryIdToInsert = newTransaction.selectedCategoryId;
+    } else {
+      showError("Tipo de categoría no válido.");
+      return;
+    }
 
     const { data, error } = await supabase
       .from('cash_transactions')
@@ -128,8 +147,8 @@ const Cash = () => {
         type: newTransaction.type,
         amount,
         description: newTransaction.description,
-        category_id: newTransaction.category_id,
-        category_type: categoryType,
+        income_category_id: incomeCategoryIdToInsert, // Use new column
+        expense_category_id: expenseCategoryIdToInsert, // Use new column
         date: getLocalDateString(new Date()), // Usar getLocalDateString
       })
       .select();
@@ -142,54 +161,23 @@ const Cash = () => {
       setBalance((prev) =>
         newTx.type === "ingreso" ? prev + newTx.amount : prev - newTx.amount
       );
-      setNewTransaction({ type: "ingreso", amount: "", description: "", category_id: "" });
+      setNewTransaction({ type: "ingreso", amount: "", description: "", selectedCategoryId: "", selectedCategoryType: "" });
       setIsAddDialogOpen(false);
       showSuccess("Transacción registrada exitosamente.");
-
-      // Check for active no-spend challenge if this is an expense // Eliminado
-      // if (newTx.type === "egreso") { // Eliminado
-      //   const { data: activeChallenge, error: challengeError } = await supabase // Eliminado
-      //     .from('challenges') // Eliminado
-      //     .select('*') // Eliminado
-      //     .eq('user_id', user.id) // Eliminado
-      //     .eq('status', 'active') // Eliminado
-      //     .single(); // Eliminado
-
-      //   if (challengeError && challengeError.code !== 'PGRST116') { // Eliminado
-      //     console.error("Error fetching active challenge:", challengeError.message); // Eliminado
-      //   } else if (activeChallenge && activeChallenge.challenge_template_id.startsWith("no-spend")) { // Eliminado
-      //     const endDate = new Date(activeChallenge.end_date); // Eliminado
-      //     endDate.setHours(23, 59, 59, 999); // Eliminado
-      //     const today = new Date(); // Eliminado
-      //     today.setHours(0, 0, 0, 0); // Eliminado
-
-      //     if (today >= new Date(activeChallenge.start_date) && today <= endDate) { // Eliminado
-      //       if (activeChallenge.forbidden_category_ids.includes(newTx.category_id)) { // Eliminado
-      //         const { error: updateChallengeError } = await supabase // Eliminado
-      //           .from('challenges') // Eliminado
-      //           .update({ status: 'failed' }) // Eliminado
-      //           .eq('id', activeChallenge.id) // Eliminado
-      //           .eq('user_id', user.id); // Eliminado
-
-      //         if (updateChallengeError) { // Eliminado
-      //           showError('Error al actualizar el reto de cero gastos: ' + updateChallengeError.message); // Eliminado
-      //         } else { // Eliminado
-      //           showError(`¡Reto '${activeChallenge.name}' fallido! Registraste un gasto en una categoría prohibida.`); // Eliminado
-      //         } // Eliminado
-      //       } // Eliminado
-      //     } // Eliminado
-      //   } // Eliminado
-      // } // Eliminado
     }
   };
 
   const handleOpenEditDialog = (transaction: Transaction) => {
     setEditingTransaction(transaction);
+    const categoryId = transaction.income_category_id || transaction.expense_category_id || "";
+    const categoryType = transaction.income_category_id ? "income" : (transaction.expense_category_id ? "expense" : "");
+
     setNewTransaction({
       type: transaction.type,
       amount: transaction.amount.toString(),
       description: transaction.description,
-      category_id: transaction.category_id,
+      selectedCategoryId: categoryId,
+      selectedCategoryType: categoryType as "income" | "expense" | "",
     });
     setIsEditDialogOpen(true);
   };
@@ -210,13 +198,24 @@ const Cash = () => {
       showError("El monto debe ser un número positivo.");
       return;
     }
-    if (!newTransaction.category_id) {
+    if (!newTransaction.selectedCategoryId) {
       showError("Por favor, selecciona una categoría.");
       return;
     }
 
-    // Correctly determine categoryType based on new transaction type
-    const categoryType = newTransaction.type === "ingreso" ? "income" : "expense";
+    let incomeCategoryIdToUpdate: string | null = null;
+    let expenseCategoryIdToUpdate: string | null = null;
+
+    if (newTransaction.selectedCategoryId) {
+      if (newTransaction.selectedCategoryType === "income") {
+        incomeCategoryIdToUpdate = newTransaction.selectedCategoryId;
+      } else if (newTransaction.selectedCategoryType === "expense") {
+        expenseCategoryIdToUpdate = newTransaction.selectedCategoryId;
+      } else {
+        showError("Tipo de categoría no válido.");
+        return;
+      }
+    }
 
     const { data, error } = await supabase
       .from('cash_transactions')
@@ -224,8 +223,8 @@ const Cash = () => {
         type: newType,
         amount: newAmount,
         description: newTransaction.description,
-        category_id: newTransaction.category_id,
-        category_type: categoryType,
+        income_category_id: incomeCategoryIdToUpdate, // Use new column
+        expense_category_id: expenseCategoryIdToUpdate, // Use new column
         date: getLocalDateString(new Date(editingTransaction.date)), // Usar getLocalDateString
       })
       .eq('id', editingTransaction.id)
@@ -249,7 +248,7 @@ const Cash = () => {
 
       setIsEditDialogOpen(false);
       setEditingTransaction(null);
-      setNewTransaction({ type: "ingreso", amount: "", description: "", category_id: "" });
+      setNewTransaction({ type: "ingreso", amount: "", description: "", selectedCategoryId: "", selectedCategoryType: "" });
       showSuccess("Transacción actualizada exitosamente.");
     }
   };
@@ -281,8 +280,10 @@ const Cash = () => {
     const matchesSearch = tx.description.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesType = filterType === "all" || tx.type === filterType;
     
-    const categoryName = getCategoryById(tx.category_id, tx.category_type)?.name || "";
-    const matchesCategory = filterCategory === "all" || tx.category_id === filterCategory || categoryName.toLowerCase().includes(filterCategory.toLowerCase());
+    const categoryId = tx.income_category_id || tx.expense_category_id;
+    const category = getCategoryById(categoryId);
+    const categoryName = category?.name || "";
+    const matchesCategory = filterCategory === "all" || categoryId === filterCategory || categoryName.toLowerCase().includes(filterCategory.toLowerCase());
     
     const txDate = new Date(tx.date);
     const matchesDate = !dateRange?.from || (txDate >= dateRange.from && (!dateRange.to || txDate <= dateRange.to));
@@ -295,7 +296,7 @@ const Cash = () => {
 
   const handleExport = (formatType: 'csv' | 'pdf') => {
     const dataToExport = filteredTransactions.map(tx => {
-      const category = getCategoryById(tx.category_id, tx.category_type);
+      const category = getCategoryById(tx.income_category_id || tx.expense_category_id);
       return {
         Fecha: format(new Date(tx.date), "dd/MM/yyyy", { locale: es }),
         Tipo: tx.type === "ingreso" ? "Ingreso" : "Egreso",
@@ -368,7 +369,7 @@ const Cash = () => {
                     <Label htmlFor="category_id" className="text-right">
                       Categoría
                     </Label>
-                    <Select value={newTransaction.category_id} onValueChange={handleCategorySelectChange}>
+                    <Select value={newTransaction.selectedCategoryId} onValueChange={handleCategorySelectChange}>
                       <SelectTrigger className="col-span-3">
                         <SelectValue placeholder="Selecciona categoría" />
                       </SelectTrigger>
@@ -466,7 +467,7 @@ const Cash = () => {
                   <SelectItem key={cat.id} value={cat.id}>
                     <div className="flex items-center gap-2">
                       <DynamicLucideIcon iconName={cat.icon || "Tag"} className="h-4 w-4" />
-                      {cat.name} ({cat.id.startsWith("inc") ? "Ingreso" : "Egreso"})
+                      {cat.name} ({cat.is_fixed ? "Fija" : "Personal"})
                     </div>
                   </SelectItem>
                 ))}
@@ -524,7 +525,7 @@ const Cash = () => {
               </TableHeader>
               <TableBody>
                 {filteredTransactions.map((tx) => {
-                  const category = getCategoryById(tx.category_id, tx.category_type);
+                  const category = getCategoryById(tx.income_category_id || tx.expense_category_id);
                   return (
                     <TableRow key={tx.id}>
                       <TableCell>{format(new Date(tx.date), "dd/MM/yyyy", { locale: es })}</TableCell>
@@ -608,7 +609,7 @@ const Cash = () => {
                   <Label htmlFor="editCategory" className="text-right">
                     Categoría
                   </Label>
-                  <Select value={newTransaction.category_id} onValueChange={handleCategorySelectChange}>
+                  <Select value={newTransaction.selectedCategoryId} onValueChange={handleCategorySelectChange}>
                     <SelectTrigger id="editCategory" className="col-span-3">
                       <SelectValue placeholder="Selecciona categoría" />
                     </SelectTrigger>

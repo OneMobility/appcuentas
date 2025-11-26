@@ -19,6 +19,8 @@ interface CardTransaction {
   installments_total_amount?: number; // Monto total del cargo original si es a meses
   installments_count?: number; // Número total de meses si es a meses
   installment_number?: number; // Número de cuota actual (1, 2, 3...)
+  income_category_id?: string | null; // New
+  expense_category_id?: string | null; // New
 }
 
 interface CardData {
@@ -35,6 +37,7 @@ interface CardData {
   days_to_pay_after_cut_off?: number;
   color: string;
   transactions: CardTransaction[];
+  user_id?: string;
 }
 
 interface CardDisplayProps {

@@ -63,7 +63,7 @@ const CardTransferDialog: React.FC<CardTransferDialogProps> = ({ isOpen, onClose
     if (sourceCardId === destinationCardId) {
       showError("La tarjeta de origen y destino no pueden ser la misma.");
       return;
-    }
+      }
 
     const transferAmount = parseFloat(amount);
     if (isNaN(transferAmount) || transferAmount <= 0) {
@@ -125,6 +125,9 @@ const CardTransferDialog: React.FC<CardTransferDialogProps> = ({ isOpen, onClose
           amount: transferAmount,
           description: `Transferencia a ${destinationCard.name} (${destinationCard.bank_name}): ${transferDescription}`,
           date: transactionDate,
+          // No category for transfers between cards, or use a generic one if needed
+          expense_category_id: null, // Explicitly set to null
+          income_category_id: null, // Explicitly set to null
         });
       if (sourceTxError) throw sourceTxError;
 
@@ -146,6 +149,9 @@ const CardTransferDialog: React.FC<CardTransferDialogProps> = ({ isOpen, onClose
           amount: transferAmount,
           description: `Transferencia desde ${sourceCard.name} (${sourceCard.bank_name}): ${transferDescription}`,
           date: transactionDate,
+          // No category for transfers between cards, or use a generic one if needed
+          expense_category_id: null, // Explicitly set to null
+          income_category_id: null, // Explicitly set to null
         });
       if (destTxError) throw destTxError;
 

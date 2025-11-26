@@ -39,6 +39,8 @@ interface CardTransaction {
   installments_total_amount?: number;
   installments_count?: number;
   installment_number?: number;
+  income_category_id?: string | null; // New
+  expense_category_id?: string | null; // New
 }
 
 interface CardData {
@@ -64,8 +66,8 @@ interface CashTransaction {
   amount: number;
   description: string;
   date: string;
-  category_id: string;
-  category_type: "income" | "expense";
+  income_category_id?: string | null; // New
+  expense_category_id?: string | null; // New
   user_id?: string;
 }
 
@@ -93,7 +95,7 @@ interface MonthlySummary {
 
 const Dashboard = () => {
   const { user } = useSession();
-  const { incomeCategories, expenseCategories, isLoadingCategories } = useCategoryContext();
+  const { incomeCategories, expenseCategories, getCategoryById, isLoadingCategories } = useCategoryContext();
   const [amountToConvert, setAmountToConvert] = useState<string>("");
   const [fromCurrency, setFromCurrency] = useState<string>("USD");
   const [toCurrency, setToCurrency] = useState<string>("MXN");
@@ -224,9 +226,12 @@ const Dashboard = () => {
     incomeCategories.forEach(cat => dataMap.set(cat.id, { name: cat.name, value: 0, color: cat.color }));
 
     cashTransactions.filter(tx => tx.type === "ingreso").forEach(tx => {
-      const current = dataMap.get(tx.category_id);
-      if (current) {
-        dataMap.set(tx.category_id, { ...current, value: current.value + tx.amount });
+      const categoryId = tx.income_category_id;
+      if (categoryId) {
+        const current = dataMap.get(categoryId);
+        if (current) {
+          dataMap.set(categoryId, { ...current, value: current.value + tx.amount });
+        }
       }
     });
     return Array.from(dataMap.values()).filter(entry => entry.value > 0);
@@ -237,9 +242,12 @@ const Dashboard = () => {
     expenseCategories.forEach(cat => dataMap.set(cat.id, { name: cat.name, value: 0, color: cat.color }));
 
     cashTransactions.filter(tx => tx.type === "egreso").forEach(tx => {
-      const current = dataMap.get(tx.category_id);
-      if (current) {
-        dataMap.set(tx.category_id, { ...current, value: current.value + tx.amount });
+      const categoryId = tx.expense_category_id;
+      if (categoryId) {
+        const current = dataMap.get(categoryId);
+        if (current) {
+          dataMap.set(categoryId, { ...current, value: current.value + tx.amount });
+        }
       }
     });
     return Array.from(dataMap.values()).filter(entry => entry.value > 0);

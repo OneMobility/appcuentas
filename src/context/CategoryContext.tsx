@@ -21,7 +21,7 @@ interface CategoryContextType {
   addCategory: (category: Omit<Category, "id" | "user_id" | "is_fixed">, type: "income" | "expense") => Promise<void>;
   updateCategory: (category: Category, type: "income" | "expense") => Promise<void>;
   deleteCategory: (id: string, type: "income" | "expense") => Promise<void>;
-  getCategoryById: (id: string, type: "income" | "expense") => Category | undefined;
+  getCategoryById: (id: string | null | undefined) => Category | undefined; // Simplified signature
   isLoadingCategories: boolean;
 }
 
@@ -255,12 +255,10 @@ export const CategoryProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const getCategoryById = (id: string, type: "income" | "expense") => {
-    if (type === "income") {
-      return incomeCategories.find(cat => cat.id === id);
-    } else {
-      return expenseCategories.find(cat => cat.id === id);
-    }
+  const getCategoryById = (id: string | null | undefined) => {
+    if (!id) return undefined;
+    // Search in both income and expense categories
+    return [...incomeCategories, ...expenseCategories].find(cat => cat.id === id);
   };
 
   return (

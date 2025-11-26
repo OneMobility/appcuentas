@@ -42,8 +42,8 @@ interface CardTransaction {
   installments_total_amount?: number; // Monto total del cargo original si es a meses
   installments_count?: number; // Número total de meses si es a meses
   installment_number?: number; // Número de cuota actual (1, 2, 3...)
-  category_id?: string;
-  category_type?: "income" | "expense";
+  income_category_id?: string | null; // New
+  expense_category_id?: string | null; // New
 }
 
 interface CardData {
@@ -79,7 +79,8 @@ const CardDetailsPage: React.FC = () => {
     description: "",
     date: undefined as Date | undefined,
     installments_count: undefined as number | undefined,
-    category_id: "",
+    selectedCategoryId: "", // Single field for selected category ID
+    selectedCategoryType: "" as "income" | "expense" | "", // To track which type of category is selected
   });
 
   // Filter states
@@ -152,7 +153,7 @@ const CardDetailsPage: React.FC = () => {
   };
 
   const handleTransactionTypeChange = (value: "charge" | "payment") => {
-    setNewTransaction((prev) => ({ ...prev, type: value, installments_count: undefined, category_id: "" }));
+    setNewTransaction((prev) => ({ ...prev, type: value, installments_count: undefined, selectedCategoryId: "", selectedCategoryType: "" }));
   };
 
   const handleTransactionDateChange = (date: Date | undefined) => {
@@ -164,7 +165,16 @@ const CardDetailsPage: React.FC = () => {
   };
 
   const handleCategorySelectChange = (value: string) => {
-    setNewTransaction((prev) => ({ ...prev, category_id: value }));
+    const category = [...incomeCategories, ...expenseCategories].find(cat => cat.id === value);
+    if (category) {
+      setNewTransaction((prev) => ({
+        ...prev,
+        selectedCategoryId: value,
+        selectedCategoryType: incomeCategories.some(c => c.id === value) ? "income" : "expense",
+      }));
+    } else {
+      setNewTransaction((prev) => ({ ...prev, selectedCategoryId: value, selectedCategoryType: "" }));
+    }
   };
 
   const handleSubmitTransaction = async (e: React.FormEvent) => {
@@ -184,23 +194,18 @@ const CardDetailsPage: React.FC = () => {
       return;
     }
 
-    let categoryId: string | undefined = undefined;
-    let categoryType: "income" | "expense" | undefined = undefined;
+    let incomeCategoryIdToInsert: string | null = null;
+    let expenseCategoryIdToInsert: string | null = null;
 
-    if (newTransaction.type === "charge") {
-      if (!newTransaction.category_id) {
-        showError("Por favor, selecciona una categoría para el cargo.");
-        return;
+    if (newTransaction.selectedCategoryId) {
+      if (newTransaction.selectedCategoryType === "income") {
+        incomeCategoryIdToInsert = newTransaction.selectedCategoryId;
+      } else if (newTransaction.selectedCategoryType === "expense") {
+        expenseCategoryIdToInsert = newTransaction.selectedCategoryId;
       }
-      categoryId = newTransaction.category_id;
-      categoryType = "expense";
-    } else if (newTransaction.type === "payment" && card.type === "debit") {
-      if (!newTransaction.category_id) {
-        showError("Por favor, selecciona una categoría para el ingreso.");
-        return;
-      }
-      categoryId = newTransaction.category_id;
-      categoryType = "income";
+    } else if (newTransaction.type === "charge" || (newTransaction.type === "payment" && card.type === "debit")) {
+      showError("Por favor, selecciona una categoría.");
+      return;
     }
 
     let newCardBalance = card.current_balance;
@@ -240,8 +245,7 @@ const CardDetailsPage: React.FC = () => {
           installments_total_amount: totalAmount,
           installments_count: newTransaction.installments_count,
           installment_number: i + 1,
-          category_id: categoryId,
-          category_type: categoryType,
+          expense_category_id: expenseCategoryIdToInsert, // Use new column
         });
       }
     } else {
@@ -289,8 +293,8 @@ const CardDetailsPage: React.FC = () => {
         installments_total_amount: undefined,
         installments_count: undefined,
         installment_number: undefined,
-        category_id: categoryId,
-        category_type: categoryType,
+        income_category_id: incomeCategoryIdToInsert, // Use new column
+        expense_category_id: expenseCategoryIdToInsert, // Use new column
       });
     }
 
@@ -306,20 +310,28 @@ const CardDetailsPage: React.FC = () => {
         .from('cards')
         .update({ current_balance: newCardBalance })
         .eq('id', card.id)
-        .eq('user_id', user.id) // Corrected line
+        .eq('user_id', user.id)
         .select();
 
       if (cardError) throw cardError;
+
+      // Re-fetch all transactions for the card to ensure consistency
+      const { data: updatedTransactions, error: fetchTxError } = await supabase
+        .from('card_transactions')
+        .select('*')
+        .eq('card_id', card.id)
+        .eq('user_id', user.id);
+      if (fetchTxError) throw fetchTxError;
 
       setCard((prevCard) => {
         if (!prevCard) return null;
         return {
           ...prevCard,
           current_balance: newCardBalance,
-          transactions: [...(prevCard.transactions || []), ...insertedTransactions],
+          transactions: updatedTransactions || [],
         };
       });
-      setNewTransaction({ type: "charge", amount: "", description: "", date: undefined, installments_count: undefined, category_id: "" });
+      setNewTransaction({ type: "charge", amount: "", description: "", date: undefined, installments_count: undefined, selectedCategoryId: "", selectedCategoryType: "" });
       setIsAddTransactionDialogOpen(false);
       showSuccess("Transacción(es) registrada(s) exitosamente.");
     } catch (error: any) {
@@ -330,13 +342,17 @@ const CardDetailsPage: React.FC = () => {
 
   const handleOpenEditTransactionDialog = (transaction: CardTransaction) => {
     setEditingTransaction(transaction);
+    const categoryId = transaction.income_category_id || transaction.expense_category_id || "";
+    const categoryType = transaction.income_category_id ? "income" : (transaction.expense_category_id ? "expense" : "");
+
     setNewTransaction({
       type: transaction.type,
       amount: (transaction.installments_total_amount || transaction.amount).toString(), // Mostrar monto total para edición
       description: transaction.description.replace(/\s\(Cuota\s\d+\/\d+\)/, ''), // Limpiar descripción de cuota
       date: new Date(transaction.date),
       installments_count: transaction.installments_count,
-      category_id: transaction.category_id || "",
+      selectedCategoryId: categoryId,
+      selectedCategoryType: categoryType as "income" | "expense" | "",
     });
     setIsEditTransactionDialogOpen(true);
   };
@@ -362,23 +378,18 @@ const CardDetailsPage: React.FC = () => {
       return;
     }
 
-    let newCategoryId: string | undefined = undefined;
-    let newCategoryType: "income" | "expense" | undefined = undefined;
+    let newIncomeCategoryId: string | null = null;
+    let newExpenseCategoryId: string | null = null;
 
-    if (newType === "charge") {
-      if (!newTransaction.category_id) {
-        showError("Por favor, selecciona una categoría para el cargo.");
-        return;
+    if (newTransaction.selectedCategoryId) {
+      if (newTransaction.selectedCategoryType === "income") {
+        newIncomeCategoryId = newTransaction.selectedCategoryId;
+      } else if (newTransaction.selectedCategoryType === "expense") {
+        newExpenseCategoryId = newTransaction.selectedCategoryId;
       }
-      newCategoryId = newTransaction.category_id;
-      newCategoryType = "expense";
-    } else if (newType === "payment" && card.type === "debit") {
-      if (!newTransaction.category_id) {
-        showError("Por favor, selecciona una categoría para el ingreso.");
-        return;
-      }
-      newCategoryId = newTransaction.category_id;
-      newCategoryType = "income";
+    } else if (newType === "charge" || (newType === "payment" && card.type === "debit")) {
+      showError("Por favor, selecciona una categoría.");
+      return;
     }
 
     let newCardBalance = card.current_balance;
@@ -441,8 +452,7 @@ const CardDetailsPage: React.FC = () => {
           installments_total_amount: newTotalAmount,
           installments_count: newInstallmentsCount,
           installment_number: i + 1,
-          category_id: newCategoryId,
-          category_type: newCategoryType,
+          expense_category_id: newExpenseCategoryId, // Use new column
         });
       }
     } else {
@@ -490,8 +500,8 @@ const CardDetailsPage: React.FC = () => {
         installments_total_amount: undefined,
         installments_count: undefined,
         installment_number: undefined,
-        category_id: newCategoryId,
-        category_type: newCategoryType,
+        income_category_id: newIncomeCategoryId, // Use new column
+        expense_category_id: newExpenseCategoryId, // Use new column
       });
     }
 
@@ -507,7 +517,7 @@ const CardDetailsPage: React.FC = () => {
         .from('cards')
         .update({ current_balance: newCardBalance })
         .eq('id', card.id)
-        .eq('user_id', user.id) // Corrected line
+        .eq('user_id', user.id)
         .select();
 
       if (cardError) throw cardError;
@@ -529,7 +539,7 @@ const CardDetailsPage: React.FC = () => {
         };
       });
 
-      setNewTransaction({ type: "charge", amount: "", description: "", date: undefined, installments_count: undefined, category_id: "" });
+      setNewTransaction({ type: "charge", amount: "", description: "", date: undefined, installments_count: undefined, selectedCategoryId: "", selectedCategoryType: "" });
       setEditingTransaction(null);
       setIsEditTransactionDialogOpen(false);
       showSuccess("Transacción(es) actualizada(s) exitosamente.");
@@ -575,7 +585,7 @@ const CardDetailsPage: React.FC = () => {
         .from('cards')
         .update({ current_balance: newCardBalance })
         .eq('id', card.id)
-        .eq('user_id', user.id); // Corrected line
+        .eq('user_id', user.id);
       if (cardError) throw cardError;
 
       // Re-fetch all transactions for the card to ensure consistency
@@ -608,8 +618,10 @@ const CardDetailsPage: React.FC = () => {
       const matchesSearch = tx.description.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesType = filterType === "all" || tx.type === filterType;
       
-      const categoryName = tx.category_id && tx.category_type ? getCategoryById(tx.category_id, tx.category_type)?.name || "" : "";
-      const matchesCategory = filterCategory === "all" || tx.category_id === filterCategory || categoryName.toLowerCase().includes(filterCategory.toLowerCase());
+      const categoryId = tx.income_category_id || tx.expense_category_id;
+      const category = getCategoryById(categoryId);
+      const categoryName = category?.name || "";
+      const matchesCategory = filterCategory === "all" || categoryId === filterCategory || categoryName.toLowerCase().includes(filterCategory.toLowerCase());
       
       const txDate = parseISO(tx.date); // Usar parseISO
       const matchesDate = !dateRange?.from || (txDate >= dateRange.from && (!dateRange.to || txDate <= dateRange.to));
@@ -625,7 +637,7 @@ const CardDetailsPage: React.FC = () => {
     }
 
     const dataToExport = filteredTransactions.map(tx => {
-      const category = tx.category_id && tx.category_type ? getCategoryById(tx.category_id, tx.category_type) : undefined;
+      const category = getCategoryById(tx.income_category_id || tx.expense_category_id);
       return {
         Fecha: format(parseISO(tx.date), "dd/MM/yyyy", { locale: es }), // Usar parseISO
         Tipo: tx.type === "charge" ? "Cargo" : "Pago",
@@ -829,7 +841,7 @@ const CardDetailsPage: React.FC = () => {
                       <Label htmlFor="category_id" className="text-right">
                         Categoría
                       </Label>
-                      <Select value={newTransaction.category_id} onValueChange={handleCategorySelectChange}>
+                      <Select value={newTransaction.selectedCategoryId} onValueChange={handleCategorySelectChange}>
                         <SelectTrigger className="col-span-3">
                           <SelectValue placeholder="Selecciona categoría" />
                         </SelectTrigger>
@@ -1051,7 +1063,7 @@ const CardDetailsPage: React.FC = () => {
                 <TableBody>
                   {filteredTransactions.map((transaction) => {
                     const isPaymentToCreditCard = card.type === "credit" && transaction.type === "payment";
-                    const category = transaction.category_id && transaction.category_type ? getCategoryById(transaction.category_id, transaction.category_type) : undefined;
+                    const category = getCategoryById(transaction.income_category_id || transaction.expense_category_id);
 
                     let deleteDescription = `Esta acción no se puede deshacer. Esto eliminará permanentemente la transacción de ${transaction.type === "charge" ? "cargo" : "pago"} por $${transaction.amount.toFixed(2)}: "${transaction.description}".`;
 
@@ -1181,7 +1193,7 @@ const CardDetailsPage: React.FC = () => {
                     <Label htmlFor="editCategory" className="text-right">
                       Categoría
                     </Label>
-                    <Select value={newTransaction.category_id} onValueChange={handleCategorySelectChange}>
+                    <Select value={newTransaction.selectedCategoryId} onValueChange={handleCategorySelectChange}>
                       <SelectTrigger id="editCategory" className="col-span-3">
                         <SelectValue placeholder="Selecciona categoría" />
                       </SelectTrigger>

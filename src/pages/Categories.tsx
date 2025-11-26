@@ -32,14 +32,14 @@ const Categories = () => {
     if (editingCategory) {
       setNewCategory({
         name: editingCategory.name,
-        type: editingCategory.user_id === null ? "income" : (incomeCategories.some(c => c.id === editingCategory.id) ? "income" : "expense"),
+        type: incomeCategories.some(c => c.id === editingCategory.id) ? "income" : "expense", // Determine type based on which list it's in
         color: editingCategory.color,
         icon: editingCategory.icon || "Tag",
       });
     } else {
       resetForm();
     }
-  }, [editingCategory, incomeCategories]);
+  }, [editingCategory, incomeCategories, expenseCategories]); // Add expenseCategories to dependencies
 
   // Sincronizar el tipo de nueva categoría con la pestaña activa
   useEffect(() => {
