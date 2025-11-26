@@ -13,7 +13,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { PlusCircle, DollarSign, History, Trash2, Edit, CalendarIcon, ArrowRightLeft, FileText, FileDown } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { cn } from "@/lib/utils";
-import { format } from "date-fns";
+import { format, addMonths, parseISO } from "date-fns"; // Importar parseISO
 import { es } from "date-fns/locale";
 import { DateRange } from "react-day-picker";
 import CardDisplay from "@/components/CardDisplay";
@@ -21,7 +21,7 @@ import ColorPicker from "@/components/ColorPicker";
 import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/context/SessionContext";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { getUpcomingPaymentDueDate } from "@/utils/date-helpers"; // Importar la nueva función
+import { getUpcomingPaymentDueDate, getUpcomingCutOffDate, getBillingCycleDates } from "@/utils/date-helpers"; // Importar las nuevas funciones
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { exportToCsv, exportToPdf } from "@/utils/export";
 import CardTransferDialog from "@/components/CardTransferDialog"; // Importar el nuevo componente
@@ -84,7 +84,7 @@ const Cards = () => {
   });
   const [newTransaction, setNewTransaction] = useState({
     type: "charge" as "charge" | "payment",
-    amount: "",
+    amount: "", // Este será el monto TOTAL para cargos a meses
     description: "",
     date: undefined as Date | undefined,
     installments_count: undefined as number | undefined, // Nuevo campo para meses
@@ -269,45 +269,34 @@ const Cards = () => {
 
   const handleSubmitTransaction = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log("handleSubmitTransaction called from Cards page.");
-    console.log("Current user:", user);
-    console.log("Selected card ID:", selectedCardId);
-    console.log("New transaction data:", newTransaction);
-
     if (!user) {
       showError("Debes iniciar sesión para registrar transacciones.");
-      console.error("User not loaded.");
       return;
     }
-    if (!selectedCardId) { // Explicit check for selectedCardId
+    if (!selectedCardId) {
       showError("No se ha seleccionado una tarjeta para la transacción.");
-      console.error("No card selected for transaction.");
       return;
     }
 
-    const amount = parseFloat(newTransaction.amount);
-    if (isNaN(amount) || amount <= 0) {
+    const totalAmount = parseFloat(newTransaction.amount); // Monto total ingresado por el usuario
+    if (isNaN(totalAmount) || totalAmount <= 0) {
       showError("El monto de la transacción debe ser un número positivo.");
-      console.error("Invalid amount:", newTransaction.amount);
       return;
     }
     if (!newTransaction.date) {
       showError("Por favor, selecciona una fecha para la transacción.");
-      console.error("No date selected.");
       return;
     }
 
     const currentCard = cards.find(c => c.id === selectedCardId);
     if (!currentCard) {
       showError("Tarjeta no encontrada o eliminada.");
-      console.error("Card not found for ID:", selectedCardId);
       return;
     }
 
     let categoryId: string | undefined = undefined;
     let categoryType: "income" | "expense" | undefined = undefined;
 
-    // Determine category requirements and type
     if (newTransaction.type === "charge") {
       if (!newTransaction.category_id) {
         showError("Por favor, selecciona una categoría para el cargo.");
@@ -323,153 +312,171 @@ const Cards = () => {
       categoryId = newTransaction.category_id;
       categoryType = "income";
     }
-    // For credit card payments, category is not required/applicable.
 
-    let newBalance = currentCard.current_balance;
-    let transactionAmountToStore = amount;
-    let installmentsTotalAmount: number | undefined = undefined;
-    let installmentsCount: number | undefined = undefined;
+    let newCardBalance = currentCard.current_balance;
+    const transactionsToInsert: Omit<CardTransaction, 'id'>[] = [];
 
-    console.log("--- Antes de registrar transacción ---");
-    console.log("Saldo actual de la tarjeta:", currentCard.current_balance);
-    console.log("Tipo de tarjeta:", currentCard.type);
-    console.log("Tipo de nueva transacción:", newTransaction.type);
-    console.log("Monto de nueva transacción:", amount);
+    if (currentCard.type === "credit" && newTransaction.type === "charge" && newTransaction.installments_count && newTransaction.installments_count > 1) {
+      // Logic for installment charges on credit cards
+      const amountPerInstallment = totalAmount / newTransaction.installments_count;
+      
+      // Update card balance with the total amount immediately
+      newCardBalance += totalAmount;
 
-    if (newTransaction.type === "charge") {
-      if (newTransaction.installments_count && newTransaction.installments_count > 1) {
-        installmentsTotalAmount = amount;
-        installmentsCount = newTransaction.installments_count;
-        transactionAmountToStore = amount / installmentsCount; // Monto mensual
+      // Check if credit limit is exceeded
+      if (currentCard.credit_limit !== undefined && newCardBalance > currentCard.credit_limit) {
+        toast.info(`Tu tarjeta de crédito ha excedido su límite. Saldo actual: $${newCardBalance.toFixed(2)}`, {
+          style: { backgroundColor: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))' },
+          duration: 10000
+        });
       }
-    }
 
-    if (currentCard.type === "debit") {
-      if (newTransaction.type === "charge") {
-        if (newBalance < transactionAmountToStore) {
-          showError("Saldo insuficiente en la tarjeta de débito.");
-          console.error("Insufficient debit card balance.");
-          return;
-        }
-        newBalance -= transactionAmountToStore;
-      } else { // payment to debit card
-        newBalance += transactionAmountToStore;
+      // Determine the first installment's due date based on the card's cut-off and payment days
+      // For simplicity, let's assume the first installment is due on the *next* payment due date after the transaction date.
+      // And subsequent installments are due on the payment due dates of consecutive months.
+      const { paymentDueDate: firstPaymentDueDate } = getBillingCycleDates(
+        currentCard.cut_off_day!,
+        currentCard.days_to_pay_after_cut_off!,
+        newTransaction.date // Use transaction date as reference
+      );
+
+      for (let i = 0; i < newTransaction.installments_count; i++) {
+        const installmentDate = addMonths(firstPaymentDueDate, i);
+        transactionsToInsert.push({
+          user_id: user.id,
+          card_id: selectedCardId,
+          type: "charge",
+          amount: amountPerInstallment,
+          description: `${newTransaction.description} (Cuota ${i + 1}/${newTransaction.installments_count})`,
+          date: format(installmentDate, "yyyy-MM-dd"),
+          installments_total_amount: totalAmount,
+          installments_count: newTransaction.installments_count,
+          installment_number: i + 1,
+          category_id: categoryId,
+          category_type: categoryType,
+        });
       }
-    } else { // Credit card
-      if (newTransaction.type === "charge") {
-        if (currentCard.credit_limit !== undefined && newBalance + transactionAmountToStore > currentCard.credit_limit) {
-          toast.info(`Tu tarjeta de crédito ha excedido su límite. Saldo actual: $${(newBalance + transactionAmountToStore).toFixed(2)}`, {
-            style: { backgroundColor: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))' },
-            duration: 10000
-          });
+    } else {
+      // Logic for single charges or payments
+      if (currentCard.type === "debit") {
+        if (newTransaction.type === "charge") {
+          if (newCardBalance < totalAmount) {
+            showError("Saldo insuficiente en la tarjeta de débito.");
+            return;
+          }
+          newCardBalance -= totalAmount;
+        } else { // payment to debit card
+          newCardBalance += totalAmount;
         }
-        newBalance += transactionAmountToStore;
-      } else { // Payment to credit card
-        if (newBalance < transactionAmountToStore) {
-          showError("El pago excede la deuda pendiente.");
-          console.error("Payment exceeds outstanding debt.");
-          return;
-        }
-        newBalance -= transactionAmountToStore;
-        if (newBalance < 0) {
-          toast.info(`Has sobrepagado tu tarjeta ${currentCard.name}. Tu saldo actual es de $${newBalance.toFixed(2)} (a tu favor).`, {
-            style: { backgroundColor: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))' },
-            duration: 10000
-          });
+      } else { // Credit card (single charge or payment)
+        if (newTransaction.type === "charge") {
+          newCardBalance += totalAmount;
+          if (currentCard.credit_limit !== undefined && newCardBalance > currentCard.credit_limit) {
+            toast.info(`Tu tarjeta de crédito ha excedido su límite. Saldo actual: $${newCardBalance.toFixed(2)}`, {
+              style: { backgroundColor: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))' },
+              duration: 10000
+            });
+          }
+        } else { // Payment to credit card
+          if (newCardBalance < totalAmount) {
+            showError("El pago excede la deuda pendiente.");
+            return;
+          }
+          newCardBalance -= totalAmount;
+          if (newCardBalance < 0) {
+            toast.info(`Has sobrepagado tu tarjeta ${currentCard.name}. Tu saldo actual es de $${newCardBalance.toFixed(2)} (a tu favor).`, {
+              style: { backgroundColor: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))' },
+              duration: 10000
+            });
+          }
         }
       }
-    }
-
-    console.log("Nuevo saldo calculado:", newBalance);
-
-    const { data: transactionData, error: transactionError } = await supabase
-      .from('card_transactions')
-      .insert({
+      transactionsToInsert.push({
         user_id: user.id,
         card_id: selectedCardId,
         type: newTransaction.type,
-        amount: transactionAmountToStore,
+        amount: totalAmount,
         description: newTransaction.description,
         date: format(newTransaction.date, "yyyy-MM-dd"),
-        installments_total_amount: installmentsTotalAmount,
-        installments_count: installmentsCount,
-        installment_number: installmentsCount ? 1 : undefined, // Siempre la primera cuota al registrar
-        category_id: categoryId, // Guardar category_id
-        category_type: categoryType, // Guardar category_type
-      })
-      .select();
-
-    if (transactionError) {
-      showError('Error al registrar transacción: ' + transactionError.message);
-      console.error("Supabase transaction insert error:", transactionError);
-      return;
+        installments_total_amount: undefined,
+        installments_count: undefined,
+        installment_number: undefined,
+        category_id: categoryId,
+        category_type: categoryType,
+      });
     }
 
-    const { data: cardData, error: cardError } = await supabase
-      .from('cards')
-      .update({ current_balance: newBalance })
-      .eq('id', selectedCardId)
-      .eq('user_id', user.id)
-      .select();
+    try {
+      const { data: insertedTransactions, error: transactionError } = await supabase
+        .from('card_transactions')
+        .insert(transactionsToInsert)
+        .select();
 
-    if (cardError) {
-      showError('Error al actualizar saldo de la tarjeta: ' + cardError.message);
-      console.error("Supabase card balance update error:", cardError);
-      return;
-    }
+      if (transactionError) throw transactionError;
 
-    setCards((prevCards) =>
-      prevCards.map((card) => {
-        if (card.id === selectedCardId) {
-          return {
-            ...card,
-            current_balance: newBalance,
-            transactions: [...(card.transactions || []), transactionData[0]], // Asegurar que transactions sea un array
-          };
-        }
-        return card;
-      })
-    );
-    setNewTransaction({ type: "charge", amount: "", description: "", date: undefined, installments_count: undefined, category_id: "" });
-    setSelectedCardId(null);
-    setIsAddTransactionDialogOpen(false);
-    showSuccess("Transacción registrada exitosamente.");
-    console.log("--- Transacción registrada exitosamente ---");
-    console.log("Saldo final de la tarjeta:", newBalance);
-
-    // Check for active no-spend challenge if this is a charge
-    if (newTransaction.type === "charge" && categoryId) {
-      const { data: activeChallenge, error: challengeError } = await supabase
-        .from('challenges')
-        .select('*')
+      const { data: cardData, error: cardError } = await supabase
+        .from('cards')
+        .update({ current_balance: newCardBalance })
+        .eq('id', selectedCardId)
         .eq('user_id', user.id)
-        .eq('status', 'active')
-        .single();
+        .select();
 
-      if (challengeError && challengeError.code !== 'PGRST116') {
-        console.error("Error fetching active challenge:", challengeError.message);
-      } else if (activeChallenge && activeChallenge.challenge_template_id.startsWith("no-spend")) {
-        const endDate = new Date(activeChallenge.end_date);
-        endDate.setHours(23, 59, 59, 999);
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
+      if (cardError) throw cardError;
 
-        if (today >= new Date(activeChallenge.start_date) && today <= endDate) {
-          if (activeChallenge.forbidden_category_ids.includes(categoryId)) {
-            const { error: updateChallengeError } = await supabase
-              .from('challenges')
-              .update({ status: 'failed' })
-              .eq('id', activeChallenge.id)
-              .eq('user_id', user.id);
+      setCards((prevCards) =>
+        prevCards.map((card) => {
+          if (card.id === selectedCardId) {
+            return {
+              ...card,
+              current_balance: newCardBalance,
+              transactions: [...(card.transactions || []), ...insertedTransactions],
+            };
+          }
+          return card;
+        })
+      );
+      setNewTransaction({ type: "charge", amount: "", description: "", date: undefined, installments_count: undefined, category_id: "" });
+      setSelectedCardId(null);
+      setIsAddTransactionDialogOpen(false);
+      showSuccess("Transacción(es) registrada(s) exitosamente.");
 
-            if (updateChallengeError) {
-              showError('Error al actualizar el reto de cero gastos: ' + updateChallengeError.message);
-            } else {
-              showError(`¡Reto '${activeChallenge.name}' fallido! Registraste un gasto en una categoría prohibida.`);
+      // Check for active no-spend challenge if this is a charge
+      if (newTransaction.type === "charge" && categoryId) {
+        const { data: activeChallenge, error: challengeError } = await supabase
+          .from('challenges')
+          .select('*')
+          .eq('user_id', user.id)
+          .eq('status', 'active')
+          .single();
+
+        if (challengeError && challengeError.code !== 'PGRST116') {
+          console.error("Error fetching active challenge:", challengeError.message);
+        } else if (activeChallenge && activeChallenge.challenge_template_id.startsWith("no-spend")) {
+          const endDate = new Date(activeChallenge.end_date);
+          endDate.setHours(23, 59, 59, 999);
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+
+          if (today >= new Date(activeChallenge.start_date) && today <= endDate) {
+            if (activeChallenge.forbidden_category_ids.includes(categoryId)) {
+              const { error: updateChallengeError } = await supabase
+                .from('challenges')
+                .update({ status: 'failed' })
+                .eq('id', activeChallenge.id)
+                .eq('user_id', user.id);
+
+              if (updateChallengeError) {
+                showError('Error al actualizar el reto de cero gastos: ' + updateChallengeError.message);
+              } else {
+                showError(`¡Reto '${activeChallenge.name}' fallido! Registraste un gasto en una categoría prohibida.`);
+              }
             }
           }
         }
       }
+    } catch (error: any) {
+      showError('Error al registrar transacción: ' + error.message);
+      console.error("Supabase transaction error:", error);
     }
   };
 
@@ -481,7 +488,7 @@ const Cards = () => {
       last_four_digits: card.last_four_digits,
       expiration_date: card.expiration_date,
       type: card.type,
-      initial_balance: card.initial_balance.toString(),
+      initial_balance: card.initial_balance.toString(), // Usar initial_balance para edición
       credit_limit: card.credit_limit?.toString() || "",
       cut_off_day: card.cut_off_day,
       days_to_pay_after_cut_off: card.days_to_pay_after_cut_off, // Cargar nuevo campo
@@ -546,7 +553,7 @@ const Cards = () => {
         expiration_date: newCard.expiration_date,
         type: newCard.type,
         initial_balance: initialBalance,
-        current_balance: parseFloat(newCard.initial_balance),
+        current_balance: parseFloat(newCard.initial_balance), // Al editar, el current_balance se resetea al initial_balance
         credit_limit: newCard.type === "credit" ? creditLimit : null,
         cut_off_day: newCard.type === "credit" ? cutOffDay : null,
         days_to_pay_after_cut_off: newCard.type === "credit" ? daysToPayAfterCutOff : null, // Actualizar nuevo campo

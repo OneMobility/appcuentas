@@ -14,14 +14,14 @@ import { Calendar } from "@/components/ui/calendar";
 import { DollarSign, History, Trash2, Edit, CalendarIcon, ArrowLeft, FileText, FileDown, Heart } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { cn } from "@/lib/utils";
-import { format } from "date-fns";
+import { format, addMonths, parseISO, isWithinInterval } from "date-fns"; // Importar isWithinInterval
 import { es } from "date-fns/locale";
 import { DateRange } from "react-day-picker";
 import ColorPicker from "@/components/ColorPicker";
 import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/context/SessionContext";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { getUpcomingPaymentDueDate } from "@/utils/date-helpers";
+import { getUpcomingPaymentDueDate, getBillingCycleDates } from "@/utils/date-helpers"; // Importar getBillingCycleDates
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { exportToCsv, exportToPdf } from "@/utils/export";
 import LoadingSpinner from "@/components/LoadingSpinner";
@@ -33,14 +33,14 @@ import DynamicLucideIcon from "@/components/DynamicLucideIcon"; // Importar Dyna
 interface CardTransaction {
   id: string;
   type: "charge" | "payment";
-  amount: number;
+  amount: number; // Monto por cuota si es a meses, o monto total si es pago único
   description: string;
   date: string;
   card_id?: string;
   user_id?: string;
-  installments_total_amount?: number;
-  installments_count?: number;
-  installment_number?: number;
+  installments_total_amount?: number; // Monto total del cargo original si es a meses
+  installments_count?: number; // Número total de meses si es a meses
+  installment_number?: number; // Número de cuota actual (1, 2, 3...)
   category_id?: string;
   category_type?: "income" | "expense";
 }
@@ -53,7 +53,7 @@ interface CardData {
   expiration_date: string;
   type: "credit" | "debit";
   initial_balance: number;
-  current_balance: number;
+  current_balance: number; // Deuda total para crédito, saldo para débito
   credit_limit?: number;
   cut_off_day?: number;
   days_to_pay_after_cut_off?: number;
@@ -74,7 +74,7 @@ const CardDetailsPage: React.FC = () => {
   const [editingTransaction, setEditingTransaction] = useState<CardTransaction | null>(null);
   const [newTransaction, setNewTransaction] = useState({
     type: "charge" as "charge" | "payment",
-    amount: "",
+    amount: "", // Este será el monto TOTAL para cargos a meses
     description: "",
     date: undefined as Date | undefined,
     installments_count: undefined as number | undefined,
@@ -142,33 +142,24 @@ const CardDetailsPage: React.FC = () => {
 
   const handleSubmitTransaction = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log("handleSubmitTransaction called.");
-    console.log("Current user:", user);
-    console.log("Current card:", card);
-    console.log("New transaction data:", newTransaction);
-
     if (!user || !card) {
       showError("Debes iniciar sesión o la tarjeta no está cargada.");
-      console.error("User or card not loaded.");
       return;
     }
 
-    const amount = parseFloat(newTransaction.amount);
-    if (isNaN(amount) || amount <= 0) {
+    const totalAmount = parseFloat(newTransaction.amount); // Monto total ingresado por el usuario
+    if (isNaN(totalAmount) || totalAmount <= 0) {
       showError("El monto de la transacción debe ser un número positivo.");
-      console.error("Invalid amount:", newTransaction.amount);
       return;
     }
     if (!newTransaction.date) {
       showError("Por favor, selecciona una fecha para la transacción.");
-      console.error("No date selected.");
       return;
     }
 
     let categoryId: string | undefined = undefined;
     let categoryType: "income" | "expense" | undefined = undefined;
 
-    // Determine category requirements and type
     if (newTransaction.type === "charge") {
       if (!newTransaction.category_id) {
         showError("Por favor, selecciona una categoría para el cargo.");
@@ -184,159 +175,138 @@ const CardDetailsPage: React.FC = () => {
       categoryId = newTransaction.category_id;
       categoryType = "income";
     }
-    // For credit card payments, category is not required/applicable.
 
-    let newBalance = card.current_balance;
-    let transactionAmountToStore = amount;
-    let installmentsTotalAmount: number | undefined = undefined;
-    let installmentsCount: number | undefined = undefined;
+    let newCardBalance = card.current_balance;
+    const transactionsToInsert: Omit<CardTransaction, 'id'>[] = [];
 
-    console.log("--- Antes de registrar transacción ---");
-    console.log("Saldo actual de la tarjeta:", card.current_balance);
-    console.log("Tipo de tarjeta:", card.type);
-    console.log("Tipo de nueva transacción:", newTransaction.type);
-    console.log("Monto de nueva transacción:", amount);
+    if (card.type === "credit" && newTransaction.type === "charge" && newTransaction.installments_count && newTransaction.installments_count > 1) {
+      // Logic for installment charges on credit cards
+      const amountPerInstallment = totalAmount / newTransaction.installments_count;
+      
+      // Update card balance with the total amount immediately
+      newCardBalance += totalAmount;
 
-    if (newTransaction.type === "charge") {
-      if (newTransaction.installments_count && newTransaction.installments_count > 1) {
-        installmentsTotalAmount = amount;
-        installmentsCount = newTransaction.installments_count;
-        transactionAmountToStore = amount / installmentsCount;
+      // Check if credit limit is exceeded
+      if (card.credit_limit !== undefined && newCardBalance > card.credit_limit) {
+        toast.info(`Tu tarjeta de crédito ha excedido su límite. Saldo actual: $${newCardBalance.toFixed(2)}`, {
+          style: { backgroundColor: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))' },
+          duration: 10000
+        });
       }
-    }
 
-    if (card.type === "debit") {
-      if (newTransaction.type === "charge") {
-        if (newBalance < transactionAmountToStore) {
-          showError("Saldo insuficiente en la tarjeta de débito.");
-          console.error("Insufficient debit card balance.");
-          return;
-        }
-        newBalance -= transactionAmountToStore;
-      } else { // payment to debit card
-        newBalance += transactionAmountToStore;
+      // Determine the first installment's due date based on the card's cut-off and payment days
+      const { paymentDueDate: firstPaymentDueDate } = getBillingCycleDates(
+        card.cut_off_day!,
+        card.days_to_pay_after_cut_off!,
+        newTransaction.date // Use transaction date as reference
+      );
+
+      for (let i = 0; i < newTransaction.installments_count; i++) {
+        const installmentDate = addMonths(firstPaymentDueDate, i);
+        transactionsToInsert.push({
+          user_id: user.id,
+          card_id: card.id,
+          type: "charge",
+          amount: amountPerInstallment,
+          description: `${newTransaction.description} (Cuota ${i + 1}/${newTransaction.installments_count})`,
+          date: format(installmentDate, "yyyy-MM-dd"),
+          installments_total_amount: totalAmount,
+          installments_count: newTransaction.installments_count,
+          installment_number: i + 1,
+          category_id: categoryId,
+          category_type: categoryType,
+        });
       }
-    } else { // Credit card
-      if (newTransaction.type === "charge") {
-        // Permitir que el saldo exceda el límite, pero mostrar una notificación
-        if (card.credit_limit !== undefined && newBalance + transactionAmountToStore > card.credit_limit) {
-          toast.info(`Tu tarjeta de crédito ha excedido su límite. Saldo actual: $${(newBalance + transactionAmountToStore).toFixed(2)}`, {
-            style: { backgroundColor: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))' },
-            duration: 10000
-          });
+    } else {
+      // Logic for single charges or payments
+      if (card.type === "debit") {
+        if (newTransaction.type === "charge") {
+          if (newCardBalance < totalAmount) {
+            showError("Saldo insuficiente en la tarjeta de débito.");
+            return;
+          }
+          newCardBalance -= totalAmount;
+        } else { // payment to debit card
+          newCardBalance += totalAmount;
         }
-        newBalance += transactionAmountToStore;
-      } else { // Payment to credit card
-        if (newBalance < transactionAmountToStore) {
-          showError("El pago excede la deuda pendiente.");
-          console.error("Payment exceeds outstanding debt.");
-          return;
-        }
-        newBalance -= transactionAmountToStore;
-        // New: Notification for overpayment on credit card
-        if (newBalance < 0) {
-          toast.info(`Has sobrepagado tu tarjeta ${card.name}. Tu saldo actual es de $${newBalance.toFixed(2)} (a tu favor).`, {
-            style: { backgroundColor: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))' },
-            duration: 10000
-          });
+      } else { // Credit card (single charge or payment)
+        if (newTransaction.type === "charge") {
+          newCardBalance += totalAmount;
+          if (card.credit_limit !== undefined && newCardBalance > card.credit_limit) {
+            toast.info(`Tu tarjeta de crédito ha excedido su límite. Saldo actual: $${newCardBalance.toFixed(2)}`, {
+              style: { backgroundColor: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))' },
+              duration: 10000
+            });
+          }
+        } else { // Payment to credit card
+          if (newCardBalance < totalAmount) {
+            showError("El pago excede la deuda pendiente.");
+            return;
+          }
+          newCardBalance -= totalAmount;
+          if (newCardBalance < 0) {
+            toast.info(`Has sobrepagado tu tarjeta ${card.name}. Tu saldo actual es de $${newCardBalance.toFixed(2)} (a tu favor).`, {
+              style: { backgroundColor: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))' },
+              duration: 10000
+            });
+          }
         }
       }
-    }
-
-    console.log("Nuevo saldo calculado:", newBalance);
-
-    const { data: transactionData, error: transactionError } = await supabase
-      .from('card_transactions')
-      .insert({
+      transactionsToInsert.push({
         user_id: user.id,
         card_id: card.id,
         type: newTransaction.type,
-        amount: transactionAmountToStore,
+        amount: totalAmount,
         description: newTransaction.description,
         date: format(newTransaction.date, "yyyy-MM-dd"),
-        installments_total_amount: installmentsTotalAmount,
-        installments_count: installmentsCount,
-        installment_number: installmentsCount ? 1 : undefined,
+        installments_total_amount: undefined,
+        installments_count: undefined,
+        installment_number: undefined,
         category_id: categoryId,
         category_type: categoryType,
-      })
-      .select();
-
-    if (transactionError) {
-      showError('Error al registrar transacción: ' + transactionError.message);
-      console.error("Supabase transaction insert error:", transactionError);
-      return;
+      });
     }
 
-    const { data: cardData, error: cardError } = await supabase
-      .from('cards')
-      .update({ current_balance: newBalance })
-      .eq('id', card.id)
-      .eq('user_id', user.id)
-      .select();
+    try {
+      const { data: insertedTransactions, error: transactionError } = await supabase
+        .from('card_transactions')
+        .insert(transactionsToInsert)
+        .select();
 
-    if (cardError) {
-      showError('Error al actualizar saldo de la tarjeta: ' + cardError.message);
-      console.error("Supabase card balance update error:", cardError);
-      return;
+      if (transactionError) throw transactionError;
+
+      const { data: cardData, error: cardError } = await supabase
+        .from('cards')
+        .update({ current_balance: newCardBalance })
+        .eq('id', card.id)
+        .eq('user_id', user.id)
+        .select();
+
+      if (cardError) throw cardError;
+
+      setCard((prevCard) => {
+        if (!prevCard) return null;
+        return {
+          ...prevCard,
+          current_balance: newCardBalance,
+          transactions: [...(prevCard.transactions || []), ...insertedTransactions],
+        };
+      });
+      setNewTransaction({ type: "charge", amount: "", description: "", date: undefined, installments_count: undefined, category_id: "" });
+      setIsAddTransactionDialogOpen(false);
+      showSuccess("Transacción(es) registrada(s) exitosamente.");
+    } catch (error: any) {
+      showError('Error al registrar transacción: ' + error.message);
+      console.error("Supabase transaction error:", error);
     }
-
-    setCard((prevCard) => {
-      if (!prevCard) return null;
-      return {
-        ...prevCard,
-        current_balance: newBalance,
-        transactions: [...(prevCard.transactions || []), transactionData[0]],
-      };
-    });
-    setNewTransaction({ type: "charge", amount: "", description: "", date: undefined, installments_count: undefined, category_id: "" });
-    setIsAddTransactionDialogOpen(false);
-    showSuccess("Transacción registrada exitosamente.");
-    console.log("--- Transacción registrada exitosamente ---");
-    console.log("Saldo final de la tarjeta:", newBalance);
-
-    // Check for active no-spend challenge if this is a charge // Eliminado
-    // if (newTransaction.type === "charge" && categoryId) { // Eliminado
-    //   const { data: activeChallenge, error: challengeError } = await supabase // Eliminado
-    //     .from('challenges') // Eliminado
-    //     .select('*') // Eliminado
-    //     .eq('user_id', user.id) // Eliminado
-    //     .eq('status', 'active') // Eliminado
-    //     .single(); // Eliminado
-
-    //   if (challengeError && challengeError.code !== 'PGRST116') { // Eliminado
-    //     console.error("Error fetching active challenge:", challengeError.message); // Eliminado
-    //   } else if (activeChallenge && activeChallenge.challenge_template_id.startsWith("no-spend")) { // Eliminado
-    //     const endDate = new Date(activeChallenge.end_date); // Eliminado
-    //     endDate.setHours(23, 59, 59, 999); // Eliminado
-    //     const today = new Date(); // Eliminado
-    //     today.setHours(0, 0, 0, 0); // Eliminado
-
-    //     if (today >= new Date(activeChallenge.start_date) && today <= endDate) { // Eliminado
-    //       if (activeChallenge.forbidden_category_ids.includes(categoryId)) { // Eliminado
-    //         const { error: updateChallengeError } = await supabase // Eliminado
-    //           .from('challenges') // Eliminado
-    //           .update({ status: 'failed' }) // Eliminado
-    //           .eq('id', activeChallenge.id) // Eliminado
-    //           .eq('user_id', user.id); // Eliminado
-
-    //         if (updateChallengeError) { // Eliminado
-    //           showError('Error al actualizar el reto de cero gastos: ' + updateChallengeError.message); // Eliminado
-    //         } else { // Eliminado
-    //           showError(`¡Reto '${activeChallenge.name}' fallido! Registraste un gasto en una categoría prohibida.`); // Eliminado
-    //         } // Eliminado
-    //       } // Eliminado
-    //     } // Eliminado
-    //   } // Eliminado
-    // } // Eliminado
   };
 
   const handleOpenEditTransactionDialog = (transaction: CardTransaction) => {
     setEditingTransaction(transaction);
     setNewTransaction({
       type: transaction.type,
-      amount: (transaction.installments_total_amount || transaction.amount).toString(),
-      description: transaction.description,
+      amount: (transaction.installments_total_amount || transaction.amount).toString(), // Mostrar monto total para edición
+      description: transaction.description.replace(/\s\(Cuota\s\d+\/\d+\)/, ''), // Limpiar descripción de cuota
       date: new Date(transaction.date),
       installments_count: transaction.installments_count,
       category_id: transaction.category_id || "",
@@ -351,16 +321,12 @@ const CardDetailsPage: React.FC = () => {
       return;
     }
 
-    const oldAmount = editingTransaction.amount;
-    const oldType = editingTransaction.type;
-    const oldInstallmentsTotalAmount = editingTransaction.installments_total_amount;
-    const oldInstallmentsCount = editingTransaction.installments_count;
-
-    const newAmountTotal = parseFloat(newTransaction.amount);
+    const oldTransaction = editingTransaction;
+    const newTotalAmount = parseFloat(newTransaction.amount);
     const newType = newTransaction.type;
     const newInstallmentsCount = newTransaction.installments_count;
 
-    if (isNaN(newAmountTotal) || newAmountTotal <= 0) {
+    if (isNaN(newTotalAmount) || newTotalAmount <= 0) {
       showError("El monto de la transacción debe ser un número positivo.");
       return;
     }
@@ -369,18 +335,9 @@ const CardDetailsPage: React.FC = () => {
       return;
     }
 
-    console.log("--- Antes de actualizar transacción ---");
-    console.log("Saldo actual de la tarjeta:", card.current_balance);
-    console.log("Transacción antigua:", editingTransaction);
-    console.log("Nueva transacción propuesta:", newTransaction);
-
-    let newAmountPerInstallment = newAmountTotal;
-    let newInstallmentsTotalAmount: number | undefined = undefined;
-    let newInstallmentNumber: number | undefined = undefined;
     let newCategoryId: string | undefined = undefined;
     let newCategoryType: "income" | "expense" | undefined = undefined;
 
-    // Determine category requirements and type for the new transaction
     if (newType === "charge") {
       if (!newTransaction.category_id) {
         showError("Por favor, selecciona una categoría para el cargo.");
@@ -388,11 +345,6 @@ const CardDetailsPage: React.FC = () => {
       }
       newCategoryId = newTransaction.category_id;
       newCategoryType = "expense";
-      if (newInstallmentsCount && newInstallmentsCount > 1) {
-        newInstallmentsTotalAmount = newAmountTotal;
-        newAmountPerInstallment = newAmountTotal / newInstallmentsCount;
-        newInstallmentNumber = editingTransaction.installment_number || 1;
-      }
     } else if (newType === "payment" && card.type === "debit") {
       if (!newTransaction.category_id) {
         showError("Por favor, selecciona una categoría para el ingreso.");
@@ -401,165 +353,225 @@ const CardDetailsPage: React.FC = () => {
       newCategoryId = newTransaction.category_id;
       newCategoryType = "income";
     }
-    // For credit card payments, category is not required/applicable.
 
     let newCardBalance = card.current_balance;
 
     // Revertir el impacto de la transacción antigua en el saldo
-    const oldEffectiveAmount = oldInstallmentsTotalAmount ? oldInstallmentsTotalAmount / (oldInstallmentsCount || 1) : oldAmount;
-    newCardBalance = oldType === "charge" ? newCardBalance - oldEffectiveAmount : newCardBalance + oldEffectiveAmount;
+    const oldEffectiveAmount = oldTransaction.installments_total_amount || oldTransaction.amount;
+    newCardBalance = oldTransaction.type === "charge" ? newCardBalance - oldEffectiveAmount : newCardBalance + oldEffectiveAmount;
 
-    // Aplicar el impacto de la nueva transacción en el saldo
-    const newEffectiveAmount = newInstallmentsTotalAmount ? newInstallmentsTotalAmount / (newInstallmentsCount || 1) : newAmountTotal;
-
-    if (card.type === "debit") {
-      if (newType === "charge") {
-        if (newCardBalance < newEffectiveAmount) {
-          showError("Saldo insuficiente en la tarjeta de débito.");
-          return;
-        }
-        newCardBalance -= newEffectiveAmount;
-      } else { // payment to debit card
-        newCardBalance += newEffectiveAmount;
-      }
-    } else { // Credit card
-      if (newType === "charge") {
-        // Permitir que el saldo exceda el límite, pero mostrar una notificación
-        if (card.credit_limit !== undefined && newCardBalance + newEffectiveAmount > card.credit_limit) {
-          toast.info(`Tu tarjeta de crédito ha excedido su límite. Saldo actual: $${(newCardBalance + newEffectiveAmount).toFixed(2)}`, {
-            style: { backgroundColor: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))' },
-            duration: 10000
-          });
-        }
-        newCardBalance += newEffectiveAmount;
-      } else { // Payment to credit card
-        if (newCardBalance < newEffectiveAmount) {
-          showError("El pago excede la deuda pendiente.");
-          return;
-        }
-        newCardBalance -= newEffectiveAmount;
-        // New: Notification for overpayment on credit card
-        if (newCardBalance < 0) {
-          toast.info(`Has sobrepagado tu tarjeta ${card.name}. Tu saldo actual es de $${newCardBalance.toFixed(2)} (a tu favor).`, {
-            style: { backgroundColor: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))' },
-            duration: 10000
-          });
-        }
-      }
+    // Eliminar todas las cuotas antiguas si la transacción editada era a meses
+    if (oldTransaction.installments_count && oldTransaction.installments_count > 1) {
+      const { error: deleteOldInstallmentsError } = await supabase
+        .from('card_transactions')
+        .delete()
+        .eq('installments_total_amount', oldTransaction.installments_total_amount)
+        .eq('card_id', card.id)
+        .eq('user_id', user.id);
+      if (deleteOldInstallmentsError) throw deleteOldInstallmentsError;
+    } else {
+      // Si era una transacción única, simplemente eliminarla
+      const { error: deleteOldTransactionError } = await supabase
+        .from('card_transactions')
+        .delete()
+        .eq('id', oldTransaction.id)
+        .eq('user_id', user.id);
+      if (deleteOldTransactionError) throw deleteOldTransactionError;
     }
 
-    console.log("Nuevo saldo calculado:", newCardBalance);
+    const transactionsToInsert: Omit<CardTransaction, 'id'>[] = [];
 
-    const { data: updatedTransactionData, error: transactionError } = await supabase
-      .from('card_transactions')
-      .update({
+    if (card.type === "credit" && newType === "charge" && newInstallmentsCount && newInstallmentsCount > 1) {
+      // Logic for new installment charges on credit cards
+      const amountPerInstallment = newTotalAmount / newInstallmentsCount;
+      
+      // Apply new total amount to card balance
+      newCardBalance += newTotalAmount;
+
+      if (card.credit_limit !== undefined && newCardBalance > card.credit_limit) {
+        toast.info(`Tu tarjeta de crédito ha excedido su límite. Saldo actual: $${newCardBalance.toFixed(2)}`, {
+          style: { backgroundColor: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))' },
+          duration: 10000
+        });
+      }
+
+      const { paymentDueDate: firstPaymentDueDate } = getBillingCycleDates(
+        card.cut_off_day!,
+        card.days_to_pay_after_cut_off!,
+        newTransaction.date // Use transaction date as reference
+      );
+
+      for (let i = 0; i < newInstallmentsCount; i++) {
+        const installmentDate = addMonths(firstPaymentDueDate, i);
+        transactionsToInsert.push({
+          user_id: user.id,
+          card_id: card.id,
+          type: "charge",
+          amount: amountPerInstallment,
+          description: `${newTransaction.description} (Cuota ${i + 1}/${newInstallmentsCount})`,
+          date: format(installmentDate, "yyyy-MM-dd"),
+          installments_total_amount: newTotalAmount,
+          installments_count: newInstallmentsCount,
+          installment_number: i + 1,
+          category_id: newCategoryId,
+          category_type: newCategoryType,
+        });
+      }
+    } else {
+      // Logic for new single charges or payments
+      if (card.type === "debit") {
+        if (newType === "charge") {
+          if (newCardBalance < newTotalAmount) {
+            showError("Saldo insuficiente en la tarjeta de débito.");
+            return;
+          }
+          newCardBalance -= newTotalAmount;
+        } else { // payment to debit card
+          newCardBalance += newTotalAmount;
+        }
+      } else { // Credit card (single charge or payment)
+        if (newType === "charge") {
+          newCardBalance += newTotalAmount;
+          if (card.credit_limit !== undefined && newCardBalance > card.credit_limit) {
+            toast.info(`Tu tarjeta de crédito ha excedido su límite. Saldo actual: $${newCardBalance.toFixed(2)}`, {
+              style: { backgroundColor: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))' },
+              duration: 10000
+            });
+          }
+        } else { // Payment to credit card
+          if (newCardBalance < newTotalAmount) {
+            showError("El pago excede la deuda pendiente.");
+            return;
+          }
+          newCardBalance -= newTotalAmount;
+          if (newCardBalance < 0) {
+            toast.info(`Has sobrepagado tu tarjeta ${card.name}. Tu saldo actual es de $${newCardBalance.toFixed(2)} (a tu favor).`, {
+              style: { backgroundColor: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))' },
+              duration: 10000
+            });
+          }
+        }
+      }
+      transactionsToInsert.push({
+        user_id: user.id,
+        card_id: card.id,
         type: newType,
-        amount: newAmountPerInstallment,
+        amount: newTotalAmount,
         description: newTransaction.description,
         date: format(newTransaction.date, "yyyy-MM-dd"),
-        installments_total_amount: newInstallmentsTotalAmount,
-        installments_count: newInstallmentsCount,
-        installment_number: newInstallmentNumber,
+        installments_total_amount: undefined,
+        installments_count: undefined,
+        installment_number: undefined,
         category_id: newCategoryId,
         category_type: newCategoryType,
-      })
-      .eq('id', editingTransaction.id)
-      .eq('user_id', user.id)
-      .select();
-
-    if (transactionError) {
-      showError('Error al actualizar transacción: ' + transactionError.message);
-      console.error("Supabase transaction update error:", transactionError);
-      return;
+      });
     }
 
-    const { data: cardData, error: cardError } = await supabase
-      .from('cards')
-      .update({ current_balance: newCardBalance })
-      .eq('id', card.id)
-      .eq('user_id', user.id)
-      .select();
+    try {
+      const { data: insertedTransactions, error: transactionError } = await supabase
+        .from('card_transactions')
+        .insert(transactionsToInsert)
+        .select();
 
-    if (cardError) {
-      showError('Error al actualizar saldo de la tarjeta: ' + cardError.message);
-      console.error("Supabase card balance update error:", cardError);
-      return;
+      if (transactionError) throw transactionError;
+
+      const { data: cardData, error: cardError } = await supabase
+        .from('cards')
+        .update({ current_balance: newCardBalance })
+        .eq('id', card.id)
+        .eq('user_id', user.id)
+        .select();
+
+      if (cardError) throw cardError;
+
+      // Re-fetch all transactions for the card to ensure consistency
+      const { data: updatedTransactions, error: fetchTxError } = await supabase
+        .from('card_transactions')
+        .select('*')
+        .eq('card_id', card.id)
+        .eq('user_id', user.id);
+      if (fetchTxError) throw fetchTxError;
+
+      setCard((prevCard) => {
+        if (!prevCard) return null;
+        return {
+          ...prevCard,
+          current_balance: newCardBalance,
+          transactions: updatedTransactions || [],
+        };
+      });
+
+      setNewTransaction({ type: "charge", amount: "", description: "", date: undefined, installments_count: undefined, category_id: "" });
+      setEditingTransaction(null);
+      setIsEditTransactionDialogOpen(false);
+      showSuccess("Transacción(es) actualizada(s) exitosamente.");
+    } catch (error: any) {
+      showError('Error al actualizar transacción: ' + error.message);
+      console.error("Supabase transaction update error:", error);
     }
-
-    setCard((prevCard) => {
-      if (!prevCard) return null;
-      return {
-        ...prevCard,
-        current_balance: newCardBalance,
-        transactions: (prevCard.transactions || []).map(t => t.id === editingTransaction.id ? updatedTransactionData[0] : t),
-      };
-    });
-
-    setNewTransaction({ type: "charge", amount: "", description: "", date: undefined, installments_count: undefined, category_id: "" });
-    setEditingTransaction(null);
-    setIsEditTransactionDialogOpen(false);
-    showSuccess("Transacción actualizada exitosamente.");
-    console.log("--- Transacción actualizada exitosamente ---");
-    console.log("Saldo final de la tarjeta:", newCardBalance);
   };
 
-  const handleDeleteCardTransaction = async (transactionId: string, transactionAmount: number, transactionType: "charge" | "payment", installmentsTotalAmount?: number, installmentsCount?: number) => {
+  const handleDeleteCardTransaction = async (transaction: CardTransaction) => {
     if (!user || !card) {
       showError("Debes iniciar sesión o la tarjeta no está cargada.");
       return;
     }
 
-    console.log("--- Antes de eliminar transacción ---");
-    console.log("Saldo actual de la tarjeta:", card.current_balance);
-    console.log("ID de transacción a eliminar:", transactionId);
-    console.log("Monto de transacción a eliminar:", transactionAmount);
-    console.log("Tipo de transacción a eliminar:", transactionType);
-    console.log("Monto total a meses (si aplica):", installmentsTotalAmount);
-    console.log("Número de cuotas (si aplica):", installmentsCount);
-
     let newCardBalance = card.current_balance;
-    const effectiveAmount = installmentsTotalAmount ? installmentsTotalAmount / (installmentsCount || 1) : transactionAmount;
+    const effectiveAmount = transaction.installments_total_amount || transaction.amount;
 
     // Revertir el impacto de la transacción eliminada en el saldo
-    newCardBalance = transactionType === "charge" ? newCardBalance - effectiveAmount : newCardBalance + effectiveAmount;
+    newCardBalance = transaction.type === "charge" ? newCardBalance - effectiveAmount : newCardBalance + effectiveAmount;
 
-    console.log("Nuevo saldo calculado después de revertir:", newCardBalance);
+    try {
+      if (transaction.installments_count && transaction.installments_count > 1) {
+        // Si es una cuota, eliminar todas las cuotas de la misma compra
+        const { error: deleteInstallmentsError } = await supabase
+          .from('card_transactions')
+          .delete()
+          .eq('installments_total_amount', transaction.installments_total_amount)
+          .eq('card_id', card.id)
+          .eq('user_id', user.id);
+        if (deleteInstallmentsError) throw deleteInstallmentsError;
+      } else {
+        // Si es una transacción única, eliminar solo esa
+        const { error: deleteTransactionError } = await supabase
+          .from('card_transactions')
+          .delete()
+          .eq('id', transaction.id)
+          .eq('user_id', user.id);
+        if (deleteTransactionError) throw deleteTransactionError;
+      }
 
-    const { error: transactionError } = await supabase
-      .from('card_transactions')
-      .delete()
-      .eq('id', transactionId)
-      .eq('user_id', user.id);
+      const { error: cardError } = await supabase
+        .from('cards')
+        .update({ current_balance: newCardBalance })
+        .eq('id', card.id)
+        .eq('user_id', user.id);
+      if (cardError) throw cardError;
 
-    if (transactionError) {
-      showError('Error al eliminar transacción: ' + transactionError.message);
-      console.error("Supabase transaction delete error:", transactionError);
-      return;
+      // Re-fetch all transactions for the card to ensure consistency
+      const { data: updatedTransactions, error: fetchTxError } = await supabase
+        .from('card_transactions')
+        .select('*')
+        .eq('card_id', card.id)
+        .eq('user_id', user.id);
+      if (fetchTxError) throw fetchTxError;
+
+      setCard((prevCard) => {
+        if (!prevCard) return null;
+        return {
+          ...prevCard,
+          current_balance: newCardBalance,
+          transactions: updatedTransactions || [],
+        };
+      });
+
+      showSuccess("Transacción(es) eliminada(s) exitosamente.");
+    } catch (error: any) {
+      showError('Error al eliminar transacción: ' + error.message);
+      console.error("Supabase transaction delete error:", error);
     }
-
-    const { error: cardError } = await supabase
-      .from('cards')
-      .update({ current_balance: newCardBalance })
-      .eq('id', card.id)
-      .eq('user_id', user.id);
-
-    if (cardError) {
-      showError('Error al actualizar saldo de la tarjeta después de eliminar transacción: ' + cardError.message);
-      return;
-    }
-
-    setCard((prevCard) => {
-      if (!prevCard) return null;
-      return {
-        ...prevCard,
-        current_balance: newCardBalance,
-        transactions: (prevCard.transactions || []).filter(t => t.id !== transactionId),
-      };
-    });
-
-    showSuccess("Transacción eliminada exitosamente.");
-    console.log("--- Transacción eliminada exitosamente ---");
-    console.log("Saldo final de la tarjeta:", newCardBalance);
   };
 
   const filteredTransactions = useMemo(() => {
@@ -571,11 +583,11 @@ const CardDetailsPage: React.FC = () => {
       const categoryName = tx.category_id && tx.category_type ? getCategoryById(tx.category_id, tx.category_type)?.name || "" : "";
       const matchesCategory = filterCategory === "all" || tx.category_id === filterCategory || categoryName.toLowerCase().includes(filterCategory.toLowerCase());
       
-      const txDate = new Date(tx.date);
+      const txDate = parseISO(tx.date); // Usar parseISO
       const matchesDate = !dateRange?.from || (txDate >= dateRange.from && (!dateRange.to || txDate <= dateRange.to));
 
       return matchesSearch && matchesType && matchesCategory && matchesDate;
-    }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    }).sort((a, b) => parseISO(b.date).getTime() - parseISO(a.date).getTime()); // Usar parseISO
   }, [card, searchTerm, filterType, filterCategory, dateRange, getCategoryById]);
 
   const handleExportCardTransactions = (formatType: 'csv' | 'pdf') => {
@@ -587,7 +599,7 @@ const CardDetailsPage: React.FC = () => {
     const dataToExport = filteredTransactions.map(tx => {
       const category = tx.category_id && tx.category_type ? getCategoryById(tx.category_id, tx.category_type) : undefined;
       return {
-        Fecha: format(new Date(tx.date), "dd/MM/yyyy", { locale: es }),
+        Fecha: format(parseISO(tx.date), "dd/MM/yyyy", { locale: es }), // Usar parseISO
         Tipo: tx.type === "charge" ? "Cargo" : "Pago",
         Categoria: category?.name || "N/A",
         Descripcion: tx.description,
@@ -612,6 +624,23 @@ const CardDetailsPage: React.FC = () => {
     }
   };
 
+  // Calcular la "Deuda del Mes"
+  const debtOfTheMonth = useMemo(() => {
+    if (!card || card.type !== "credit" || !card.cut_off_day || !card.days_to_pay_after_cut_off) {
+      return 0;
+    }
+
+    const { cycleStartDate, cycleEndDate } = getBillingCycleDates(card.cut_off_day, card.days_to_pay_after_cut_off);
+    
+    return (card.transactions || [])
+      .filter(tx => tx.type === "charge")
+      .filter(tx => {
+        const txDate = parseISO(tx.date);
+        return isWithinInterval(txDate, { start: cycleStartDate, end: cycleEndDate });
+      })
+      .reduce((sum, tx) => sum + tx.amount, 0); // tx.amount ya es el monto por cuota
+  }, [card]);
+
   if (isLoading || isLoadingCategories) {
     return <LoadingSpinner />;
   }
@@ -627,12 +656,7 @@ const CardDetailsPage: React.FC = () => {
 
   const isCredit = card.type === "credit";
   const creditAvailable = isCredit && card.credit_limit !== undefined ? card.credit_limit - card.current_balance : 0;
-
-  console.log("--- Valores de la tarjeta antes de renderizar ---");
-  console.log("card.current_balance:", card.current_balance);
-  console.log("card.credit_limit:", card.credit_limit);
-  console.log("creditAvailable (calculado):", creditAvailable);
-  console.log("-------------------------------------------------");
+  const creditUsed = isCredit ? card.current_balance : 0;
 
   return (
     <div className="flex flex-col gap-6 p-4">
@@ -663,7 +687,10 @@ const CardDetailsPage: React.FC = () => {
                   ${creditAvailable.toFixed(2)}
                 </p>
                 <p className="text-sm opacity-80 mt-1">
-                  Deuda Pendiente: ${card.current_balance.toFixed(2)}
+                  Crédito Utilizado: ${creditUsed.toFixed(2)}
+                </p>
+                <p className="text-sm opacity-80 mt-1">
+                  Deuda del Mes: ${debtOfTheMonth.toFixed(2)}
                 </p>
               </>
             ) : (
@@ -1010,7 +1037,7 @@ const CardDetailsPage: React.FC = () => {
                             />
                           )}
                         </TableCell>
-                        <TableCell>{format(new Date(transaction.date), "dd/MM/yyyy", { locale: es })}</TableCell>
+                        <TableCell>{format(parseISO(transaction.date), "dd/MM/yyyy", { locale: es })}</TableCell>
                         <TableCell className={cn(
                           transaction.type === "charge" ? "text-red-600" : "text-green-600",
                           isPaymentToCreditCard && "text-pink-800 font-medium"
@@ -1055,14 +1082,14 @@ const CardDetailsPage: React.FC = () => {
                                   {deleteDescription}
                                   {transaction.installments_count && transaction.installments_count > 1 && (
                                     <p className="mt-2 text-sm text-red-500">
-                                      Nota: Esta es una cuota de una transacción a meses. Eliminarla afectará el saldo de la tarjeta.
+                                      Nota: Esta es una cuota de una transacción a meses. Eliminarla eliminará TODAS las cuotas de esta compra y ajustará el saldo de la tarjeta.
                                     </p>
                                   )}
                                 </AlertDialogDescription>
                               </AlertDialogHeader>
                               <AlertDialogFooter>
                                 <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                <AlertDialogAction onClick={() => handleDeleteCardTransaction(transaction.id, transaction.amount, transaction.type, transaction.installments_total_amount, transaction.installments_count)}>
+                                <AlertDialogAction onClick={() => handleDeleteCardTransaction(transaction)}>
                                   Eliminar
                                 </AlertDialogAction>
                               </AlertDialogFooter>

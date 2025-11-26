@@ -1,12 +1,14 @@
 "use client";
 
-import React from "react";
+import React, { useMemo } from "react"; // Importar useMemo
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { CreditCard, DollarSign, History, Trash2, Edit } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { useNavigate } from "react-router-dom"; // Importar useNavigate
+import { getBillingCycleDates, getUpcomingPaymentDueDate } from "@/utils/date-helpers"; // Importar getBillingCycleDates
+import { parseISO, isWithinInterval } from "date-fns"; // Importar parseISO y isWithinInterval
 
 interface CardTransaction {
   id: string;
@@ -27,7 +29,7 @@ interface CardData {
   expiration_date: string;
   type: "credit" | "debit";
   initial_balance: number;
-  current_balance: number;
+  current_balance: number; // Deuda total para crédito, saldo para débito
   credit_limit?: number;
   cut_off_day?: number;
   days_to_pay_after_cut_off?: number;
@@ -45,7 +47,25 @@ interface CardDisplayProps {
 const CardDisplay: React.FC<CardDisplayProps> = ({ card, onAddTransaction, onDeleteCard, onEditCard }) => {
   const isCredit = card.type === "credit";
   const creditAvailable = isCredit && card.credit_limit !== undefined ? card.credit_limit - card.current_balance : 0;
+  const creditUsed = isCredit ? card.current_balance : 0; // Crédito utilizado es la deuda total
   const navigate = useNavigate(); // Inicializar useNavigate
+
+  // Calcular la "Deuda del Mes"
+  const debtOfTheMonth = useMemo(() => {
+    if (!isCredit || !card.cut_off_day || !card.days_to_pay_after_cut_off) {
+      return 0;
+    }
+
+    const { cycleStartDate, cycleEndDate } = getBillingCycleDates(card.cut_off_day, card.days_to_pay_after_cut_off);
+    
+    return (card.transactions || [])
+      .filter(tx => tx.type === "charge")
+      .filter(tx => {
+        const txDate = parseISO(tx.date);
+        return isWithinInterval(txDate, { start: cycleStartDate, end: cycleEndDate });
+      })
+      .reduce((sum, tx) => sum + tx.amount, 0); // tx.amount ya es el monto por cuota
+  }, [card, isCredit]);
 
   const handleViewDetails = () => {
     navigate(`/cards/${card.id}`); // Navegar a la nueva página de detalles
@@ -73,7 +93,10 @@ const CardDisplay: React.FC<CardDisplayProps> = ({ card, onAddTransaction, onDel
                 ${creditAvailable.toFixed(2)}
               </p>
               <p className="text-sm opacity-80 mt-1">
-                Deuda Pendiente: ${card.current_balance.toFixed(2)}
+                Crédito Utilizado: ${creditUsed.toFixed(2)}
+              </p>
+              <p className="text-sm opacity-80 mt-1">
+                Deuda del Mes: ${debtOfTheMonth.toFixed(2)}
               </p>
             </>
           ) : (
