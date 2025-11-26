@@ -55,21 +55,11 @@ const CardDisplay: React.FC<CardDisplayProps> = ({ card, onAddTransaction, onDel
 
   // Calcular la "Deuda del Mes"
   const debtOfTheMonth = useMemo(() => {
-    if (!isCredit || !card.cut_off_day || !card.days_to_pay_after_cut_off) {
+    if (!isCredit) {
       return 0;
     }
-
-    // Get the currently active billing cycle
-    const { currentCycleStartDate, currentCycleEndDate } = getCurrentActiveBillingCycle(card.cut_off_day);
-    
-    return (card.transactions || [])
-      .filter(tx => tx.type === "charge")
-      .filter(tx => {
-        const txDate = parseISO(tx.date);
-        // Only include charges that fall within the currently active billing cycle
-        return isWithinInterval(txDate, { start: currentCycleStartDate, end: currentCycleEndDate });
-      })
-      .reduce((sum, tx) => sum + tx.amount, 0); // Sum only tx.amount for monthly charges/single charges
+    // La "Deuda del Mes" ahora es el saldo actual de la tarjeta de crédito
+    return card.current_balance;
   }, [card, isCredit]);
 
   const handleViewDetails = () => {
