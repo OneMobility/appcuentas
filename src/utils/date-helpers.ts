@@ -34,60 +34,66 @@ export const getLocalDateString = (date: Date): string => {
 };
 
 /**
- * Calculates the dates for the billing cycle whose payment is currently relevant (due or upcoming).
- * This is the cycle for which a statement has been generated or is about to be generated,
- * and its payment is either due soon, due today, or recently became overdue.
+ * Calculates the dates for the billing cycle whose *statement is currently due for payment*.
+ * This is the cycle for which a statement has been generated, and its payment is either due soon, due today, or recently became overdue.
  *
- * @param cutOffDay The day of the month the card's billing cycle cuts off (e.g., 12).
- * @param daysToPayAfterCutOff The number of days after the cut-off date for the payment due date (e.g., 7).
- * @param referenceDate The date to determine the relevant cycle (defaults to today).
+ * @param cutOffDay The day of the month the card's billing cycle cuts off (e.g., 15).
+ * @param daysToPayAfterCutOff The number of days after the cut-off date for the payment due date (e.g., 20).
+ * @param referenceDate The date to determine the relevant statement (defaults to today).
  * @returns An object containing:
- *   - `billingCycleStartDate`: The start date of the billing cycle.
- *   - `billingCycleEndDate`: The end date (cut-off date) of the billing cycle.
- *   - `paymentDueDate`: The payment due date for this billing cycle.
+ *   - `statementStartDate`: The start date of the billing cycle for the statement.
+ *   - `statementEndDate`: The end date (cut-off date) of the billing cycle for the statement.
+ *   - `statementPaymentDueDate`: The payment due date for this statement.
  */
-export const getRelevantBillingCycle = (cutOffDay: number, daysToPayAfterCutOff: number, referenceDate: Date = new Date()) => {
+export const getRelevantStatementForPayment = (cutOffDay: number, daysToPayAfterCutOff: number, referenceDate: Date = new Date()) => {
   const today = new Date(referenceDate);
   today.setHours(0, 0, 0, 0);
 
-  // 1. Determine the cut-off date for the *current month* based on referenceDate
-  let currentMonthCutOff = setDate(new Date(today.getFullYear(), today.getMonth()), cutOffDay);
-  currentMonthCutOff.setHours(0, 0, 0, 0);
-
-  // 2. Determine the payment due date for the cycle that *just ended or is about to end*
-  // This is the payment due date for the statement that includes charges up to `currentMonthCutOff` (or previous month's cut-off)
-
-  // Let's find the payment due date for the cycle that ended *last month*.
-  const lastMonthCutOff = addMonths(currentMonthCutOff, -1);
-  const lastMonthPaymentDueDate = addDays(lastMonthCutOff, daysToPayAfterCutOff);
-  lastMonthPaymentDueDate.setHours(0, 0, 0, 0);
-
-  // If today is before or on the payment due date for the cycle that ended *last month*,
-  // then the relevant cycle for payment is the one that ended last month.
-  // Otherwise, the relevant cycle for payment is the one that ended this month.
-  let cycleEndDateForPaymentCheck: Date;
-  let paymentDueDateForCheck: Date;
-
-  if (isBefore(today, lastMonthPaymentDueDate) || isSameDay(today, lastMonthPaymentDueDate)) {
-    // We are still within the payment period for the cycle that ended LAST month.
-    cycleEndDateForPaymentCheck = lastMonthCutOff;
-    paymentDueDateForCheck = lastMonthPaymentDueDate;
-  } else {
-    // The payment period for the cycle that ended LAST month has passed.
-    // Now we are looking at the payment for the cycle that ended *this month*.
-    cycleEndDateForPaymentCheck = currentMonthCutOff;
-    paymentDueDateForCheck = addDays(currentMonthCutOff, daysToPayAfterCutOff);
-    paymentDueDateForCheck.setHours(0, 0, 0, 0);
+  // 1. Determine the cut-off date for the *previous month* relative to today.
+  // This is the cut-off that would have generated the statement whose payment is currently due or was just due.
+  let previousCutOff = setDate(new Date(today.getFullYear(), today.getMonth()), cutOffDay);
+  previousCutOff.setHours(0, 0, 0, 0);
+  if (isAfter(previousCutOff, today) || isSameDay(previousCutOff, today)) {
+    // If current month's cut-off is today or in the future, the *previous* cut-off is the one that generated the statement.
+    previousCutOff = addMonths(previousCutOff, -1);
+    previousCutOff.setHours(0, 0, 0, 0);
   }
 
-  const billingCycleStartDate = addDays(addMonths(cycleEndDateForPaymentCheck, -1), 1);
-  billingCycleStartDate.setHours(0, 0, 0, 0);
+  // The payment due date for the cycle that ended at `previousCutOff`
+  const paymentDueDateForPreviousCycle = addDays(previousCutOff, daysToPayAfterCutOff);
+  paymentDueDateForPreviousCycle.setHours(0, 0, 0, 0);
 
-  return {
-    billingCycleStartDate: billingCycleStartDate,
-    billingCycleEndDate: cycleEndDateForPaymentCheck,
-    paymentDueDate: paymentDueDateForCheck,
-  };
+  // If today is before or on the payment due date for the *previous* cycle,
+  // then the relevant statement for payment is the one that closed at `previousCutOff`.
+  if (isBefore(today, paymentDueDateForPreviousCycle) || isSameDay(today, paymentDueDateForPreviousCycle)) {
+    const statementStartDate = addDays(addMonths(previousCutOff, -1), 1);
+    statementStartDate.setHours(0, 0, 0, 0);
+    return {
+      statementStartDate: statementStartDate,
+      statementEndDate: previousCutOff,
+      statementPaymentDueDate: paymentDueDateForPreviousCycle,
+    };
+  } else {
+    // The payment due date for the previous cycle has passed.
+    // The relevant statement for payment is now the one that will close at the *current month's* cut-off.
+    // This means we are in the period where the *next* statement is being generated.
+    let currentCutOff = setDate(new Date(today.getFullYear(), today.getMonth()), cutOffDay);
+    currentCutOff.setHours(0, 0, 0, 0);
+    // If today is after current month's cut-off, the statement will close next month.
+    if (isAfter(today, currentCutOff)) {
+      currentCutOff = addMonths(currentCutOff, 1);
+      currentCutOff.setHours(0, 0, 0, 0);
+    }
+    const statementStartDate = addDays(addMonths(currentCutOff, -1), 1);
+    statementStartDate.setHours(0, 0, 0, 0);
+    const statementPaymentDueDate = addDays(currentCutOff, daysToPayAfterCutOff);
+    statementPaymentDueDate.setHours(0, 0, 0, 0);
+    return {
+      statementStartDate: statementStartDate,
+      statementEndDate: currentCutOff,
+      statementPaymentDueDate: statementPaymentDueDate,
+    };
+  }
 };
 
 /**

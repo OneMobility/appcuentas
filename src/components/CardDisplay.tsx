@@ -7,7 +7,7 @@ import { CreditCard, DollarSign, History, Trash2, Edit } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { useNavigate } from "react-router-dom";
-import { getRelevantBillingCycle, getCurrentActiveBillingCycle, getUpcomingPaymentDueDate } from "@/utils/date-helpers"; // Importar las nuevas funciones
+import { getRelevantStatementForPayment, getCurrentActiveBillingCycle } from "@/utils/date-helpers"; // Importar las nuevas funciones
 import { parseISO, isWithinInterval, isSameDay, isBefore } from "date-fns";
 
 interface CardTransaction {
@@ -62,29 +62,28 @@ const CardDisplay: React.FC<CardDisplayProps> = ({ card, onAddTransaction, onDel
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    // Obtener el ciclo de facturación relevante (cuyo pago está próximo o ya venció)
-    const { billingCycleStartDate: relevantBillingCycleStart, billingCycleEndDate: relevantBillingCycleEnd, paymentDueDate: relevantPaymentDueDate } = getRelevantBillingCycle(card.cut_off_day, card.days_to_pay_after_cut_off, today);
-
-    // Deuda Pendiente de Pago: Suma de cargos cuya fecha de pago coincide con la fecha de pago relevante.
-    const calculatedPendingPaymentDebt = (card.transactions || [])
-      .filter(tx => tx.type === "charge")
-      .filter(tx => {
-        const txPaymentDueDate = parseISO(tx.date);
-        return isSameDay(txPaymentDueDate, relevantPaymentDueDate);
-      })
-      .reduce((sum, tx) => sum + tx.amount, 0);
-
-    // Deuda del Ciclo Actual: Suma de cargos cuya fecha de pago cae dentro del periodo de facturación del ciclo relevante.
-    // Esto incluye las mensualidades que se reflejarán en el estado de cuenta actual/próximo.
+    // 1. Deuda del Ciclo Actual: Suma de mensualidades (o cargos únicos) cuya fecha de pago
+    // cae dentro del ciclo de facturación *actualmente activo*.
+    const { currentCycleStartDate, currentCycleEndDate } = getCurrentActiveBillingCycle(card.cut_off_day, today);
     const calculatedCurrentCycleDebt = (card.transactions || [])
       .filter(tx => tx.type === "charge")
       .filter(tx => {
-        const txPaymentDueDate = parseISO(tx.date);
-        // Un cargo (o mensualidad) es parte de la "Deuda del Ciclo Actual" si su fecha de pago
-        // cae dentro del intervalo desde el inicio del ciclo de facturación relevante hasta su fecha de pago.
-        return isWithinInterval(txPaymentDueDate, { start: relevantBillingCycleStart, end: relevantPaymentDueDate });
+        const txPaymentDueDate = parseISO(tx.date); // tx.date es la fecha de vencimiento de la mensualidad
+        return isWithinInterval(txPaymentDueDate, { start: currentCycleStartDate, end: currentCycleEndDate });
       })
-      .reduce((sum, tx) => sum + tx.amount, 0);
+      .reduce((sum, tx) => sum + tx.amount, 0); // Sumar tx.amount (monto de la mensualidad)
+
+    // 2. Deuda Pendiente de Pago: Suma de mensualidades (o cargos únicos) cuya fecha de pago
+    // coincide con la fecha de pago del *estado de cuenta más relevante* (el que está por vencer o acaba de vencer).
+    const { statementPaymentDueDate } = getRelevantStatementForPayment(card.cut_off_day, card.days_to_pay_after_cut_off, today);
+
+    const calculatedPendingPaymentDebt = (card.transactions || [])
+      .filter(tx => tx.type === "charge")
+      .filter(tx => {
+        const txPaymentDueDate = parseISO(tx.date); // tx.date es la fecha de vencimiento de la mensualidad
+        return isSameDay(txPaymentDueDate, statementPaymentDueDate);
+      })
+      .reduce((sum, tx) => sum + tx.amount, 0); // Sumar tx.amount (monto de la mensualidad)
 
     return {
       currentCycleDebt: calculatedCurrentCycleDebt,
