@@ -253,49 +253,6 @@ const Dashboard = () => {
     return Array.from(dataMap.values()).filter(entry => entry.value > 0);
   }, [cashTransactions, expenseCategories]);
 
-  // NEW: Card Income Category Data
-  const cardIncomeCategoryData = useMemo(() => {
-    const dataMap = new Map<string, { name: string; value: number; color: string }>();
-    incomeCategories.forEach(cat => dataMap.set(cat.id, { name: cat.name, value: 0, color: cat.color }));
-
-    cards.forEach(card => {
-      (card.transactions || [])
-        .filter(tx => tx.type === "payment") // Payments to cards are considered income for the card
-        .forEach(tx => {
-          const categoryId = tx.income_category_id;
-          if (categoryId) {
-            const current = dataMap.get(categoryId);
-            if (current) {
-              dataMap.set(categoryId, { ...current, value: current.value + tx.amount });
-            }
-          }
-        });
-    });
-    return Array.from(dataMap.values()).filter(entry => entry.value > 0);
-  }, [cards, incomeCategories]);
-
-  // NEW: Card Expense Category Data
-  const cardExpenseCategoryData = useMemo(() => {
-    const dataMap = new Map<string, { name: string; value: number; color: string }>();
-    expenseCategories.forEach(cat => dataMap.set(cat.id, { name: cat.name, value: 0, color: cat.color }));
-
-    cards.forEach(card => {
-      (card.transactions || [])
-        .filter(tx => tx.type === "charge") // Charges on cards are considered expenses
-        .forEach(tx => {
-          const categoryId = tx.expense_category_id;
-          if (categoryId) {
-            const current = dataMap.get(categoryId);
-            if (current) {
-              dataMap.set(categoryId, { ...current, value: current.value + tx.amount });
-            }
-          }
-        });
-    });
-    return Array.from(dataMap.values()).filter(entry => entry.value > 0);
-  }, [cards, expenseCategories]);
-
-
   const monthlySummaryData = useMemo(() => {
     const summaryMap = new Map<string, MonthlySummary>(); // Key: YYYY-MM
 
@@ -382,6 +339,18 @@ const Dashboard = () => {
       LimiteOInicial: card.type === "credit" ? card.credit_limit : card.initial_balance,
       SaldoActualODeuda: card.current_balance,
     }));
+  }, [cards]);
+
+  // NEW: Credit Card Balance Chart Data
+  const creditCardBalanceChartData = useMemo(() => {
+    return cards
+      .filter(card => card.type === "credit" && card.credit_limit !== undefined)
+      .map(card => ({
+        name: card.name,
+        "Crédito Disponible": card.credit_limit! - card.current_balance,
+        "Crédito Usado": card.current_balance,
+        "Límite de Crédito": card.credit_limit!,
+      }));
   }, [cards]);
 
   const cardHealthStatus = useMemo(() => {
@@ -715,6 +684,43 @@ const Dashboard = () => {
         </CardContent>
       </Card>
 
+      {/* NEW: Credit Card Available vs. Used Balance Chart */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Crédito Disponible vs. Usado (Tarjetas de Crédito)</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="h-[300px]">
+            {creditCardBalanceChartData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={creditCardBalanceChartData}
+                  margin={{
+                    top: 5,
+                    right: 30,
+                    left: 20,
+                    bottom: 5,
+                  }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="name" />
+                  <YAxis />
+                  <Tooltip formatter={(value: number) => `$${value.toFixed(2)}`} />
+                  <Legend />
+                  <Bar dataKey="Crédito Disponible" fill="#4CAF50" stackId="a" /> {/* Green for available */}
+                  <Bar dataKey="Crédito Usado" fill="#FFC107" stackId="a" /> {/* Amber for used */}
+                  <Bar dataKey="Límite de Crédito" fill="#9E9E9E" opacity={0.5} /> {/* Grey for limit */}
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex items-center justify-center h-full text-muted-foreground">
+                No hay tarjetas de crédito para mostrar este gráfico.
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader>
           <CardTitle>Resumen de Ingresos y Egresos (Efectivo)</CardTitle>
@@ -834,79 +840,6 @@ const Dashboard = () => {
                   <Legend />
                 </PieChart>
               </ResponsiveContainer>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* NEW: Card Income and Expense Charts */}
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Ingresos por Categoría (Tarjetas)</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="h-[300px]">
-              {cardIncomeCategoryData.length > 0 ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={cardIncomeCategoryData}
-                      cx="50%"
-                      cy="50%"
-                      labelLine={false}
-                      outerRadius={80}
-                      dataKey="value"
-                      label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                    >
-                      {cardIncomeCategoryData.map((entry, index) => (
-                        <Cell key={`cell-card-income-${index}`} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <Tooltip />
-                    <Legend />
-                  </PieChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="flex items-center justify-center h-full text-muted-foreground">
-                  No hay datos de ingresos por tarjeta para mostrar.
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Egresos por Categoría (Tarjetas)</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="h-[300px]">
-              {cardExpenseCategoryData.length > 0 ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={cardExpenseCategoryData}
-                      cx="50%"
-                      cy="50%"
-                      labelLine={false}
-                      outerRadius={80}
-                      dataKey="value"
-                      label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                    >
-                      {cardExpenseCategoryData.map((entry, index) => (
-                        <Cell key={`cell-card-expense-${index}`} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <Tooltip />
-                    <Legend />
-                  </PieChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="flex items-center justify-center h-full text-muted-foreground">
-                  No hay datos de egresos por tarjeta para mostrar.
-                </div>
-              )}
             </div>
           </CardContent>
         </Card>
