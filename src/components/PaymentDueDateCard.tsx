@@ -50,12 +50,14 @@ const PaymentDueDateCard: React.FC<PaymentDueDateCardProps> = ({ card }) => {
     message = `¡Mañana es el último día para pagar tu tarjeta ${card.name}!`;
     cardClasses = "border-red-400 bg-red-50 text-red-700";
     iconClasses = "text-red-500";
-  } else if (daysRemaining <= 7) {
+  } else if (daysRemaining < 10) { // Menos de 10 días (pero más de 1)
     message = `Faltan ${daysRemaining} días para el pago de tu tarjeta ${card.name}.`;
-    cardClasses = "border-yellow-500 bg-yellow-50 text-yellow-800";
-    iconClasses = "text-yellow-600";
-  } else {
+    cardClasses = "border-orange-500 bg-orange-50 text-orange-800";
+    iconClasses = "text-orange-600";
+  } else { // 10 días o más
     message = `Faltan ${daysRemaining} días para el pago de tu tarjeta ${card.name}.`;
+    cardClasses = "border-green-500 bg-green-50 text-green-800";
+    iconClasses = "text-green-600";
   }
 
   return (

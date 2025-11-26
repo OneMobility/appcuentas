@@ -26,6 +26,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { exportToCsv, exportToPdf } from "@/utils/export";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import PaymentDueDateCard from "@/components/PaymentDueDateCard";
+import CutOffDateCard from "@/components/CutOffDateCard"; // Importar el nuevo componente
 import { useCategoryContext } from "@/context/CategoryContext";
 import { toast } from "sonner"; // Importar toast de sonner
 import DynamicLucideIcon from "@/components/DynamicLucideIcon"; // Importar DynamicLucideIcon
@@ -668,8 +669,13 @@ const CardDetailsPage: React.FC = () => {
         <h1 className="text-3xl font-bold">Detalles de la Tarjeta: {card.name}</h1>
       </div>
 
-      {/* Tarjeta de cuenta regresiva para la fecha de pago */}
-      <PaymentDueDateCard card={card} />
+      {/* Tarjetas de notificación */}
+      {isCredit && (
+        <div className="grid gap-4 md:grid-cols-2">
+          <PaymentDueDateCard card={card} />
+          <CutOffDateCard card={card} />
+        </div>
+      )}
 
       <Card className="p-6" style={{ backgroundColor: card.color, color: 'white' }}>
         <CardHeader className="p-0 mb-4 relative z-10">
