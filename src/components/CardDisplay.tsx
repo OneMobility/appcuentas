@@ -7,8 +7,8 @@ import { CreditCard, DollarSign, History, Trash2, Edit } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { useNavigate } from "react-router-dom";
-import { getRelevantBillingCycle, getCurrentActiveBillingCycle, getUpcomingPaymentDueDate } from "@/utils/date-helpers"; // Importar getUpcomingPaymentDueDate
-import { parseISO, isWithinInterval, isSameDay, isBefore, isAfter, addDays, addMonths } from "date-fns";
+import { getRelevantBillingCycle, getCurrentActiveBillingCycle } from "@/utils/date-helpers"; // Importar las nuevas funciones
+import { parseISO, isWithinInterval, isSameDay, isBefore } from "date-fns";
 
 interface CardTransaction {
   id: string;
@@ -62,54 +62,40 @@ const CardDisplay: React.FC<CardDisplayProps> = ({ card, onAddTransaction, onDel
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    // Get the payment due date for the *current* statement (the one that is due soon or today)
-    const currentStatementPaymentDueDate = getUpcomingPaymentDueDate(card.cut_off_day, card.days_to_pay_after_cut_off, today);
+    // 1. Deuda del Ciclo Actual (gastos desde el último corte hasta hoy/próximo corte)
+    const { currentCycleStartDate, currentCycleEndDate } = getCurrentActiveBillingCycle(card.cut_off_day, today);
+    const chargesInCurrentCycle = (card.transactions || [])
+      .filter(tx => tx.type === "charge")
+      .filter(tx => {
+        const txDate = parseISO(tx.date);
+        return isWithinInterval(txDate, { start: currentCycleStartDate, end: today }); // Charges up to today
+      })
+      .reduce((sum, tx) => sum + (tx.installments_total_amount || tx.amount), 0); // Sum total amount for charges
 
-    // Get the payment due date for the *next* statement (after the current one)
-    const { billingCycleEndDate: lastClosedCycleCutOff } = getRelevantBillingCycle(card.cut_off_day, card.days_to_pay_after_cut_off, today);
-    const nextCycleCutOff = addMonths(lastClosedCycleCutOff, 1);
-    const nextStatementPaymentDueDate = addDays(nextCycleCutOff, card.days_to_pay_after_cut_off);
-    nextStatementPaymentDueDate.setHours(0,0,0,0);
+    // 2. Deuda Pendiente de Pago (saldo del último estado de cuenta)
+    const { billingCycleStartDate, billingCycleEndDate, paymentDueDate } = getRelevantBillingCycle(card.cut_off_day, card.days_to_pay_after_cut_off, today);
 
+    const chargesInRelevantBillingCycle = (card.transactions || [])
+      .filter(tx => tx.type === "charge")
+      .filter(tx => {
+        const txDate = parseISO(tx.date);
+        return isWithinInterval(txDate, { start: billingCycleStartDate, end: billingCycleEndDate });
+      })
+      .reduce((sum, tx) => sum + (tx.installments_total_amount || tx.amount), 0);
 
-    let calculatedPendingPaymentDebt = 0; // Debt from the current statement due
-    let calculatedCurrentCycleDebt = 0; // Charges that will appear on the *next* statement
+    const paymentsInRelevantBillingCycle = (card.transactions || [])
+      .filter(tx => tx.type === "payment")
+      .filter(tx => {
+        const txDate = parseISO(tx.date);
+        return isWithinInterval(txDate, { start: billingCycleStartDate, end: paymentDueDate });
+      })
+      .reduce((sum, tx) => sum + tx.amount, 0);
 
-    (card.transactions || []).forEach(tx => {
-      if (tx.type === "charge") {
-        const txPaymentDueDate = parseISO(tx.date); // This is the installment's payment due date
-
-        // If the installment's payment due date is on or before the current statement's due date
-        if (isBefore(txPaymentDueDate, currentStatementPaymentDueDate) || isSameDay(txPaymentDueDate, currentStatementPaymentDueDate)) {
-          calculatedPendingPaymentDebt += tx.amount;
-        } 
-        // If the installment's payment due date is after the current statement's due date
-        // but before or on the *next* statement's due date, it's part of the "current cycle debt"
-        // (meaning it will be on the next statement)
-        else if ((isAfter(txPaymentDueDate, currentStatementPaymentDueDate) || isSameDay(txPaymentDueDate, addDays(currentStatementPaymentDueDate, 1))) && 
-                 (isBefore(txPaymentDueDate, nextStatementPaymentDueDate) || isSameDay(txPaymentDueDate, nextStatementPaymentDueDate))) {
-          calculatedCurrentCycleDebt += tx.amount;
-        }
-      } else if (tx.type === "payment") {
-        const txPaymentDate = parseISO(tx.date);
-
-        // If the payment was made on or before the current statement's due date, it reduces pending debt
-        if (isBefore(txPaymentDate, currentStatementPaymentDueDate) || isSameDay(txPaymentDate, currentStatementPaymentDueDate)) {
-          calculatedPendingPaymentDebt -= tx.amount;
-        }
-        // For simplicity, payments made after the current statement's due date are not explicitly
-        // subtracted from 'currentCycleDebt' here, as they reduce the overall 'current_balance'.
-        // The 'currentCycleDebt' focuses on charges that will appear on the *next* statement.
-      }
-    });
-
-    // Ensure debts are not negative
-    calculatedPendingPaymentDebt = Math.max(0, calculatedPendingPaymentDebt);
-    calculatedCurrentCycleDebt = Math.max(0, calculatedCurrentCycleDebt);
+    const calculatedPendingPaymentDebt = chargesInRelevantBillingCycle - paymentsInRelevantBillingCycle;
 
     return {
-      currentCycleDebt: calculatedCurrentCycleDebt,
-      pendingPaymentDebt: calculatedPendingPaymentDebt,
+      currentCycleDebt: chargesInCurrentCycle,
+      pendingPaymentDebt: Math.max(0, calculatedPendingPaymentDebt), // Ensure it's not negative
     };
   }, [card, isCredit]);
 
