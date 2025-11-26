@@ -522,7 +522,6 @@ const Dashboard = () => {
           <CardContent>
             <div className="text-2xl font-bold">${totalDebtorsBalance.toFixed(2)}</div>
             <p className="text-xs text-green-700">-5.2% desde el mes pasado</p> {/* Placeholder */}
-          </p> {/* Placeholder */}
           </CardContent>
         </Card>
         <Card className={cn("border-l-4 border-green-600 bg-green-50 text-green-800")}>
@@ -775,59 +774,6 @@ const Dashboard = () => {
           </div>
         </CardContent>
       </Card>
-
-      {/* REMOVED: Gastos Mensuales por Categoría (Tarjetas) */}
-      {/* <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>Gastos Mensuales por Categoría (Tarjetas)</CardTitle>
-          <Select value={cardSpendingFilter} onValueChange={(value: "all" | "credit" | "debit") => setCardSpendingFilter(value)}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="Filtrar por tipo de tarjeta" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todas las Tarjetas</SelectItem>
-              <SelectItem value="credit">Tarjetas de Crédito</SelectItem>
-              <SelectItem value="debit">Tarjetas de Débito</SelectItem>
-            </SelectContent>
-          </Select>
-        </CardHeader>
-        <CardContent>
-          <div className="h-[300px]">
-            {monthlyCardCategorySpendingData.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={monthlyCardCategorySpendingData}
-                  margin={{
-                    top: 5,
-                    right: 30,
-                    left: 20,
-                    bottom: 5,
-                  }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="name" />
-                  <YAxis />
-                  <Tooltip formatter={(value: number) => `$${value.toFixed(2)}`} />
-                  <Legend />
-                  {uniqueCardExpenseCategories.map((categoryName, index) => (
-                    <Bar
-                      key={categoryName}
-                      dataKey={categoryName}
-                      stackId="a" // Stack bars for categories
-                      fill={expenseCategories.find(cat => cat.name === categoryName)?.color || `#${Math.floor(Math.random()*16777215).toString(16)}`}
-                      name={categoryName}
-                    />
-                  ))}
-                </BarChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="flex items-center justify-center h-full text-muted-foreground">
-                No hay datos de gastos por categoría de tarjeta para mostrar con los filtros aplicados.
-              </div>
-            )}
-          </div>
-        </CardContent>
-      </Card> */}
 
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
