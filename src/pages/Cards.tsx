@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { PlusCircle, DollarSign, History, Trash2, Edit, CalendarIcon, ArrowRightLeft, FileText, FileDown } from "lucide-react";
+import { PlusCircle, DollarSign, History, Trash2, Edit, CalendarIcon, ArrowRightLeft, FileText, FileDown, PiggyBank, Wallet, Banknote } from "lucide-react"; // Importar PiggyBank, Wallet, Banknote
 import { showSuccess, showError } from "@/utils/toast";
 import { cn } from "@/lib/utils";
 import { format, addMonths, parseISO } from "date-fns"; // Importar parseISO
@@ -127,6 +127,26 @@ const Cards = () => {
   const totalCardsBalance = cards.reduce((sum, card) => {
     return sum + (card.type === "credit" ? -card.current_balance : card.current_balance);
   }, 0);
+
+  // Nuevos cálculos para las tarjetas de resumen
+  const totalCreditAvailable = useMemo(() => {
+    return cards
+      .filter(c => c.type === "credit" && c.credit_limit !== undefined)
+      .reduce((sum, c) => sum + (c.credit_limit! - c.current_balance), 0);
+  }, [cards]);
+
+  const totalCreditDebt = useMemo(() => {
+    return cards
+      .filter(c => c.type === "credit")
+      .reduce((sum, c) => sum + c.current_balance, 0);
+  }, [cards]);
+
+  const totalDebitCardsBalance = useMemo(() => {
+    return cards
+      .filter(c => c.type === "debit")
+      .reduce((sum, c) => sum + c.current_balance, 0);
+  }, [cards]);
+
 
   const handleNewCardChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -416,7 +436,7 @@ const Cards = () => {
         .from('cards')
         .update({ current_balance: newCardBalance })
         .eq('id', selectedCardId)
-        .eq('user_id', user.id)
+        .eq('user.id', user.id)
         .select();
 
       if (cardError) throw cardError;
@@ -595,6 +615,42 @@ const Cards = () => {
           <div className="text-4xl font-bold">${totalCardsBalance.toFixed(2)}</div>
         </CardContent>
       </Card>
+
+      {/* Nuevas tarjetas de resumen */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <Card className="border-l-4 border-purple-500 bg-purple-50 text-purple-800">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-purple-800">Crédito Disponible</CardTitle>
+            <Wallet className="h-4 w-4 text-purple-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">${totalCreditAvailable.toFixed(2)}</div>
+            <p className="text-xs text-purple-700">Total disponible en tus tarjetas de crédito.</p>
+          </CardContent>
+        </Card>
+
+        <Card className="border-l-4 border-pink-500 bg-pink-50 text-pink-800">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-pink-800">Deuda Total de Crédito</CardTitle>
+            <PiggyBank className="h-4 w-4 text-pink-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">${totalCreditDebt.toFixed(2)}</div>
+            <p className="text-xs text-pink-700">Suma de todas tus deudas de tarjetas de crédito.</p>
+          </CardContent>
+        </Card>
+
+        <Card className="border-l-4 border-yellow-500 bg-yellow-50 text-yellow-800">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-yellow-800">Saldo Tarjetas Débito</CardTitle>
+            <Banknote className="h-4 w-4 text-yellow-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">${totalDebitCardsBalance.toFixed(2)}</div>
+            <p className="text-xs text-yellow-700">Saldo total en tus tarjetas de débito.</p>
+          </CardContent>
+        </Card>
+      </div>
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
