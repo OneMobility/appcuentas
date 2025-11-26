@@ -14,7 +14,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { DollarSign, History, Trash2, Edit, CalendarIcon, ArrowLeft, FileText, FileDown, Heart, AlertTriangle } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { cn } from "@/lib/utils";
-import { format, addMonths, parseISO, isWithinInterval, isBefore } from "date-fns"; // Importar isBefore
+import { format, addMonths, parseISO, isWithinInterval, isBefore, isAfter } from "date-fns"; // Importar isAfter
 import { es } from "date-fns/locale";
 import { DateRange } from "react-day-picker";
 import ColorPicker from "@/components/ColorPicker";
@@ -129,6 +129,7 @@ const CardDetailsPage: React.FC = () => {
       today.setHours(0, 0, 0, 0);
 
       // Get the billing cycle dates for the *current* reference date (today)
+      // This will give us the cycle whose payment is currently due.
       const { paymentDueDate } = getBillingCycleDates(
         card.cut_off_day,
         card.days_to_pay_after_cut_off,
@@ -137,7 +138,8 @@ const CardDetailsPage: React.FC = () => {
       paymentDueDate.setHours(0, 0, 0, 0);
 
       // If today is strictly after the payment due date AND there's still a positive balance (debt)
-      if (isBefore(paymentDueDate, today) && card.current_balance > 0) {
+      // then the payment is overdue.
+      if (isAfter(today, paymentDueDate) && card.current_balance > 0) {
         setIsOverdue(true);
       } else {
         setIsOverdue(false);
@@ -670,12 +672,14 @@ const CardDetailsPage: React.FC = () => {
       return 0;
     }
 
+    // Get the billing cycle for which payment is currently due
     const { cycleStartDate, cycleEndDate } = getBillingCycleDates(card.cut_off_day, card.days_to_pay_after_cut_off);
     
     return (card.transactions || [])
       .filter(tx => tx.type === "charge")
       .filter(tx => {
         const txDate = parseISO(tx.date);
+        // Only include charges that fall within the billing cycle whose payment is due
         return isWithinInterval(txDate, { start: cycleStartDate, end: cycleEndDate });
       })
       .reduce((sum, tx) => sum + tx.amount, 0); // tx.amount ya es el monto por cuota

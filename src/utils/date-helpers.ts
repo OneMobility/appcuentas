@@ -34,13 +34,12 @@ export const getLocalDateString = (date: Date): string => {
 };
 
 /**
- * Calcula las fechas de inicio y fin del ciclo de facturación *actualmente pendiente de pago*
- * y la fecha límite de pago.
+ * Calcula las fechas de inicio y fin del ciclo de facturación *cuya deuda está actualmente pendiente de pago*.
  *
  * @param cutOffDay El día del mes en que la tarjeta tiene su fecha de corte (ej. 15, 30).
  * @param daysToPayAfterCutOff El número de días después de la fecha de corte para la fecha límite de pago.
  * @param referenceDate La fecha de referencia para determinar el ciclo relevante (por defecto, hoy).
- * @returns Un objeto con cycleStartDate, cycleEndDate y paymentDueDate.
+ * @returns Un objeto con cycleStartDate, cycleEndDate y paymentDueDate para el ciclo cuyo pago está pendiente.
  */
 export const getBillingCycleDates = (cutOffDay: number, daysToPayAfterCutOff: number, referenceDate: Date = new Date()) => {
   const today = new Date(referenceDate);
@@ -53,17 +52,18 @@ export const getBillingCycleDates = (cutOffDay: number, daysToPayAfterCutOff: nu
   let currentMonthCutOff = setDate(new Date(today.getFullYear(), today.getMonth()), cutOffDay);
   currentMonthCutOff.setHours(0, 0, 0, 0);
 
-  // Si la fecha de referencia es posterior al día de corte del mes actual,
-  // el ciclo relevante para la "Deuda del Mes" es el que *acaba de cerrar*.
-  if (isAfter(today, currentMonthCutOff)) {
-    cycleEndDate = currentMonthCutOff; // El ciclo terminó en el día de corte de este mes
-    cycleStartDate = addDays(addMonths(cycleEndDate, -1), 1); // Inicia el día después del corte del mes anterior
+  // Si hoy es anterior o igual al día de corte de este mes,
+  // el ciclo cuyo pago está pendiente es el que terminó el mes pasado.
+  if (isBefore(today, currentMonthCutOff) || isSameDay(today, currentMonthCutOff)) {
+    cycleEndDate = addMonths(currentMonthCutOff, -1); // Fin del ciclo es el corte del mes anterior
   } else {
-    // Si la fecha de referencia es en o antes del día de corte del mes actual,
-    // el ciclo relevante para la "Deuda del Mes" es el que *terminará* en el día de corte de este mes.
-    cycleEndDate = currentMonthCutOff; // El ciclo terminará en el día de corte de este mes
-    cycleStartDate = addDays(addMonths(cycleEndDate, -1), 1); // Inicia el día después del corte del mes anterior
+    // Si hoy es posterior al día de corte de este mes,
+    // el ciclo cuyo pago está pendiente es el que terminó este mes.
+    cycleEndDate = currentMonthCutOff; // Fin del ciclo es el corte de este mes
   }
+
+  cycleStartDate = addDays(addMonths(cycleEndDate, -1), 1); // Inicia el día después del corte del mes anterior al ciclo
+  cycleStartDate.setHours(0, 0, 0, 0); // Normalizar
 
   const paymentDueDate = addDays(cycleEndDate, daysToPayAfterCutOff);
   paymentDueDate.setHours(0, 0, 0, 0);

@@ -59,12 +59,14 @@ const CardDisplay: React.FC<CardDisplayProps> = ({ card, onAddTransaction, onDel
       return 0;
     }
 
+    // Get the billing cycle for which payment is currently due
     const { cycleStartDate, cycleEndDate } = getBillingCycleDates(card.cut_off_day, card.days_to_pay_after_cut_off);
     
     return (card.transactions || [])
       .filter(tx => tx.type === "charge")
       .filter(tx => {
         const txDate = parseISO(tx.date);
+        // Only include charges that fall within the billing cycle whose payment is due
         return isWithinInterval(txDate, { start: cycleStartDate, end: cycleEndDate });
       })
       .reduce((sum, tx) => sum + tx.amount, 0); // tx.amount ya es el monto por cuota
