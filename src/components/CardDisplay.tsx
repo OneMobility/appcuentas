@@ -1,14 +1,14 @@
 "use client";
 
-import React, { useMemo } from "react"; // Importar useMemo
+import React, { useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { CreditCard, DollarSign, History, Trash2, Edit } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { useNavigate } from "react-router-dom"; // Importar useNavigate
-import { getBillingCycleDates, getUpcomingPaymentDueDate } from "@/utils/date-helpers"; // Importar getBillingCycleDates
-import { parseISO, isWithinInterval } from "date-fns"; // Importar parseISO y isWithinInterval
+import { useNavigate } from "react-router-dom";
+import { getRelevantBillingCycle, getCurrentActiveBillingCycle } from "@/utils/date-helpers"; // Importar las nuevas funciones
+import { parseISO, isWithinInterval } from "date-fns";
 
 interface CardTransaction {
   id: string;
@@ -19,8 +19,8 @@ interface CardTransaction {
   installments_total_amount?: number; // Monto total del cargo original si es a meses
   installments_count?: number; // Número total de meses si es a meses
   installment_number?: number; // Número de cuota actual (1, 2, 3...)
-  income_category_id?: string | null; // New
-  expense_category_id?: string | null; // New
+  income_category_id?: string | null;
+  expense_category_id?: string | null;
 }
 
 interface CardData {
@@ -51,7 +51,7 @@ const CardDisplay: React.FC<CardDisplayProps> = ({ card, onAddTransaction, onDel
   const isCredit = card.type === "credit";
   const creditAvailable = isCredit && card.credit_limit !== undefined ? card.credit_limit - card.current_balance : 0;
   const creditUsed = isCredit ? card.current_balance : 0; // Crédito utilizado es la deuda total
-  const navigate = useNavigate(); // Inicializar useNavigate
+  const navigate = useNavigate();
 
   // Calcular la "Deuda del Mes"
   const debtOfTheMonth = useMemo(() => {
@@ -59,21 +59,21 @@ const CardDisplay: React.FC<CardDisplayProps> = ({ card, onAddTransaction, onDel
       return 0;
     }
 
-    // Get the billing cycle for which payment is currently due
-    const { cycleStartDate, cycleEndDate } = getBillingCycleDates(card.cut_off_day, card.days_to_pay_after_cut_off);
+    // Get the currently active billing cycle
+    const { currentCycleStartDate, currentCycleEndDate } = getCurrentActiveBillingCycle(card.cut_off_day);
     
     return (card.transactions || [])
       .filter(tx => tx.type === "charge")
       .filter(tx => {
         const txDate = parseISO(tx.date);
-        // Only include charges that fall within the billing cycle whose payment is due
-        return isWithinInterval(txDate, { start: cycleStartDate, end: cycleEndDate });
+        // Only include charges that fall within the currently active billing cycle
+        return isWithinInterval(txDate, { start: currentCycleStartDate, end: currentCycleEndDate });
       })
-      .reduce((sum, tx) => sum + tx.amount, 0); // tx.amount ya es el monto por cuota
+      .reduce((sum, tx) => sum + (tx.installments_total_amount || tx.amount), 0);
   }, [card, isCredit]);
 
   const handleViewDetails = () => {
-    navigate(`/cards/${card.id}`); // Navegar a la nueva página de detalles
+    navigate(`/cards/${card.id}`);
   };
 
   return (
@@ -138,7 +138,7 @@ const CardDisplay: React.FC<CardDisplayProps> = ({ card, onAddTransaction, onDel
           <Button
             variant="secondary"
             size="sm"
-            onClick={handleViewDetails} // Usar la nueva función de navegación
+            onClick={handleViewDetails}
             className="flex-1 bg-white/20 hover:bg-white/30 text-white"
           >
             <History className="h-3.5 w-3.5 mr-1" />

@@ -14,14 +14,14 @@ import { Calendar } from "@/components/ui/calendar";
 import { DollarSign, History, Trash2, Edit, CalendarIcon, ArrowLeft, FileText, FileDown, Heart, AlertTriangle } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { cn } from "@/lib/utils";
-import { format, addMonths, parseISO, isWithinInterval, isBefore, isAfter } from "date-fns"; // Importar isAfter
+import { format, addMonths, parseISO, isWithinInterval, isBefore, isAfter } from "date-fns";
 import { es } from "date-fns/locale";
 import { DateRange } from "react-day-picker";
 import ColorPicker from "@/components/ColorPicker";
 import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/context/SessionContext";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { getUpcomingPaymentDueDate, getBillingCycleDates, getInstallmentFirstPaymentDueDate } from "@/utils/date-helpers";
+import { getUpcomingPaymentDueDate, getRelevantBillingCycle, getInstallmentFirstPaymentDueDate, getCurrentActiveBillingCycle } from "@/utils/date-helpers"; // Importar las nuevas funciones
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { exportToCsv, exportToPdf } from "@/utils/export";
 import LoadingSpinner from "@/components/LoadingSpinner";
@@ -42,8 +42,8 @@ interface CardTransaction {
   installments_total_amount?: number; // Monto total del cargo original si es a meses
   installments_count?: number; // Número total de meses si es a meses
   installment_number?: number; // Número de cuota actual (1, 2, 3...)
-  income_category_id?: string | null; // New
-  expense_category_id?: string | null; // New
+  income_category_id?: string | null;
+  expense_category_id?: string | null;
 }
 
 interface CardData {
@@ -128,18 +128,36 @@ const CardDetailsPage: React.FC = () => {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
 
-      // Get the billing cycle dates for the *current* reference date (today)
-      // This will give us the cycle whose payment is currently due.
-      const { paymentDueDate } = getBillingCycleDates(
+      // Get the billing cycle whose payment is currently relevant (due or upcoming)
+      const { billingCycleStartDate, billingCycleEndDate, paymentDueDate } = getRelevantBillingCycle(
         card.cut_off_day,
         card.days_to_pay_after_cut_off,
         today
       );
-      paymentDueDate.setHours(0, 0, 0, 0);
 
-      // If today is strictly after the payment due date AND there's still a positive balance (debt)
-      // then the payment is overdue.
-      if (isAfter(today, paymentDueDate) && card.current_balance > 0) {
+      // Calculate the statement balance for this relevant cycle
+      const statementBalanceForDueCycle = (card.transactions || [])
+        .filter(tx => tx.type === "charge")
+        .filter(tx => {
+          const txDate = parseISO(tx.date);
+          return isWithinInterval(txDate, { start: billingCycleStartDate, end: billingCycleEndDate });
+        })
+        .reduce((sum, tx) => sum + (tx.installments_total_amount || tx.amount), 0); // Sum total amount for charges
+
+      // Subtract payments made specifically for this cycle's statement
+      const paymentsForDueCycle = (card.transactions || [])
+        .filter(tx => tx.type === "payment")
+        .filter(tx => {
+          const txDate = parseISO(tx.date);
+          // Payments are considered for the statement if made up to the payment due date
+          return isWithinInterval(txDate, { start: billingCycleStartDate, end: paymentDueDate });
+        })
+        .reduce((sum, tx) => sum + tx.amount, 0);
+
+      const netStatementBalance = statementBalanceForDueCycle - paymentsForDueCycle;
+
+      // If today is strictly after the payment due date AND there's still a positive net statement balance
+      if (isAfter(today, paymentDueDate) && netStatementBalance > 0) {
         setIsOverdue(true);
       } else {
         setIsOverdue(false);
@@ -247,7 +265,7 @@ const CardDetailsPage: React.FC = () => {
           installments_total_amount: totalAmount,
           installments_count: newTransaction.installments_count,
           installment_number: i + 1,
-          expense_category_id: expenseCategoryIdToInsert, // Use new column
+          expense_category_id: expenseCategoryIdToInsert,
         });
       }
     } else {
@@ -295,8 +313,8 @@ const CardDetailsPage: React.FC = () => {
         installments_total_amount: undefined,
         installments_count: undefined,
         installment_number: undefined,
-        income_category_id: incomeCategoryIdToInsert, // Use new column
-        expense_category_id: expenseCategoryIdToInsert, // Use new column
+        income_category_id: incomeCategoryIdToInsert,
+        expense_category_id: expenseCategoryIdToInsert,
       });
     }
 
@@ -454,7 +472,7 @@ const CardDetailsPage: React.FC = () => {
           installments_total_amount: newTotalAmount,
           installments_count: newInstallmentsCount,
           installment_number: i + 1,
-          expense_category_id: newExpenseCategoryId, // Use new column
+          expense_category_id: newExpenseCategoryId,
         });
       }
     } else {
@@ -502,8 +520,8 @@ const CardDetailsPage: React.FC = () => {
         installments_total_amount: undefined,
         installments_count: undefined,
         installment_number: undefined,
-        income_category_id: newIncomeCategoryId, // Use new column
-        expense_category_id: newExpenseCategoryId, // Use new column
+        income_category_id: newIncomeCategoryId,
+        expense_category_id: newExpenseCategoryId,
       });
     }
 
@@ -625,11 +643,11 @@ const CardDetailsPage: React.FC = () => {
       const categoryName = category?.name || "";
       const matchesCategory = filterCategory === "all" || categoryId === filterCategory || categoryName.toLowerCase().includes(filterCategory.toLowerCase());
       
-      const txDate = parseISO(tx.date); // Usar parseISO
+      const txDate = parseISO(tx.date);
       const matchesDate = !dateRange?.from || (txDate >= dateRange.from && (!dateRange.to || txDate <= dateRange.to));
 
       return matchesSearch && matchesType && matchesCategory && matchesDate;
-    }).sort((a, b) => parseISO(b.date).getTime() - parseISO(a.date).getTime()); // Usar parseISO
+    }).sort((a, b) => parseISO(b.date).getTime() - parseISO(a.date).getTime());
   }, [card, searchTerm, filterType, filterCategory, dateRange, getCategoryById]);
 
   const handleExportCardTransactions = (formatType: 'csv' | 'pdf') => {
@@ -641,7 +659,7 @@ const CardDetailsPage: React.FC = () => {
     const dataToExport = filteredTransactions.map(tx => {
       const category = getCategoryById(tx.income_category_id || tx.expense_category_id);
       return {
-        Fecha: format(parseISO(tx.date), "dd/MM/yyyy", { locale: es }), // Usar parseISO
+        Fecha: format(parseISO(tx.date), "dd/MM/yyyy", { locale: es }),
         Tipo: tx.type === "charge" ? "Cargo" : "Pago",
         Categoria: category?.name || "N/A",
         Descripcion: tx.description,
@@ -672,17 +690,17 @@ const CardDetailsPage: React.FC = () => {
       return 0;
     }
 
-    // Get the billing cycle for which payment is currently due
-    const { cycleStartDate, cycleEndDate } = getBillingCycleDates(card.cut_off_day, card.days_to_pay_after_cut_off);
+    // Get the currently active billing cycle
+    const { currentCycleStartDate, currentCycleEndDate } = getCurrentActiveBillingCycle(card.cut_off_day);
     
     return (card.transactions || [])
       .filter(tx => tx.type === "charge")
       .filter(tx => {
         const txDate = parseISO(tx.date);
-        // Only include charges that fall within the billing cycle whose payment is due
-        return isWithinInterval(txDate, { start: cycleStartDate, end: cycleEndDate });
+        // Only include charges that fall within the currently active billing cycle
+        return isWithinInterval(txDate, { start: currentCycleStartDate, end: currentCycleEndDate });
       })
-      .reduce((sum, tx) => sum + tx.amount, 0); // tx.amount ya es el monto por cuota
+      .reduce((sum, tx) => sum + (tx.installments_total_amount || tx.amount), 0);
   }, [card]);
 
   if (isLoading || isLoadingCategories) {
