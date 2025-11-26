@@ -323,7 +323,7 @@ const Cash = () => {
     <div className="flex flex-col gap-6 p-4">
       <h1 className="text-3xl font-bold">Lo que tienes</h1>
 
-      <Card>
+      <Card className="border-l-4 border-primary bg-primary/10 text-primary-foreground">
         <CardHeader>
           <CardTitle>Saldo Actual</CardTitle>
         </CardHeader>
