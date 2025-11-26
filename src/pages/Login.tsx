@@ -14,7 +14,7 @@ const Login = () => {
           <img
             src="https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Logo%203d.png"
             alt="Oinkash Logo"
-            className="h-24 w-24 text-primary mb-2"
+            className="h-12 w-12 text-primary mb-2"
           />
           <h2 className="text-2xl font-bold text-center text-foreground">Bienvenido a Oinkash</h2>
           <p className="text-sm text-muted-foreground text-center">Organiza tus finanzas de forma sencilla.</p>
