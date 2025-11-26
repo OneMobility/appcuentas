@@ -14,6 +14,7 @@ import { useCategoryContext, Category } from "@/context/CategoryContext";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import IconPicker from "@/components/IconPicker"; // Importar IconPicker
 import * as LucideIcons from "lucide-react"; // Importar todos los iconos de Lucide
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"; // Importar componentes de Tabs
 
 const Categories = () => {
   const { incomeCategories, expenseCategories, addCategory, updateCategory, deleteCategory, isLoadingCategories } = useCategoryContext();
@@ -25,6 +26,7 @@ const Categories = () => {
     color: "#3B82F6", // Default color
     icon: "Tag", // Default icon
   });
+  const [activeTab, setActiveTab] = useState<"income" | "expense">("income"); // Estado para la pestaña activa
 
   useEffect(() => {
     if (editingCategory) {
@@ -39,17 +41,18 @@ const Categories = () => {
     }
   }, [editingCategory, incomeCategories]);
 
+  // Sincronizar el tipo de nueva categoría con la pestaña activa
+  useEffect(() => {
+    setNewCategory((prev) => ({ ...prev, type: activeTab }));
+  }, [activeTab]);
+
   const resetForm = () => {
-    setNewCategory({ name: "", type: "income", color: "#3B82F6", icon: "Tag" });
+    setNewCategory({ name: "", type: activeTab, color: "#3B82F6", icon: "Tag" });
     setEditingCategory(null);
   };
 
   const handleNewCategoryChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setNewCategory((prev) => ({ ...prev, name: e.target.value }));
-  };
-
-  const handleNewCategoryTypeChange = (type: "income" | "expense") => {
-    setNewCategory((prev) => ({ ...prev, type }));
   };
 
   const handleColorSelect = (color: string) => {
@@ -137,7 +140,7 @@ const Categories = () => {
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>Categorías de Ingresos y Egresos</CardTitle>
+          <CardTitle>Categorías</CardTitle>
           <Dialog open={isCategoryDialogOpen} onOpenChange={setIsCategoryDialogOpen}>
             <DialogTrigger asChild>
               <Button size="sm" className="h-8 gap-1" onClick={handleOpenAddCategoryDialog}>
@@ -172,7 +175,7 @@ const Categories = () => {
                     <Button
                       type="button"
                       variant={newCategory.type === "income" ? "default" : "outline"}
-                      onClick={() => handleNewCategoryTypeChange("income")}
+                      onClick={() => setNewCategory((prev) => ({ ...prev, type: "income" }))}
                       disabled={!!editingCategory} // Deshabilitar cambio de tipo al editar
                     >
                       Ingreso
@@ -180,7 +183,7 @@ const Categories = () => {
                     <Button
                       type="button"
                       variant={newCategory.type === "expense" ? "default" : "outline"}
-                      onClick={() => handleNewCategoryTypeChange("expense")}
+                      onClick={() => setNewCategory((prev) => ({ ...prev, type: "expense" }))}
                       disabled={!!editingCategory} // Deshabilitar cambio de tipo al editar
                     >
                       Egreso
@@ -213,8 +216,12 @@ const Categories = () => {
           </Dialog>
         </CardHeader>
         <CardContent>
-          <div className="grid md:grid-cols-2 gap-6">
-            <div>
+          <Tabs defaultValue="income" className="w-full" onValueChange={(value) => setActiveTab(value as "income" | "expense")}>
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="income">Ingresos</TabsTrigger>
+              <TabsTrigger value="expense">Egresos</TabsTrigger>
+            </TabsList>
+            <TabsContent value="income">
               <h3 className="text-lg font-semibold mb-2">Categorías de Ingresos</h3>
               {incomeCategories.length > 0 ? (
                 <div className="overflow-x-auto">
@@ -289,8 +296,8 @@ const Categories = () => {
               ) : (
                 <p className="text-muted-foreground">No hay categorías de ingresos.</p>
               )}
-            </div>
-            <div>
+            </TabsContent>
+            <TabsContent value="expense">
               <h3 className="text-lg font-semibold mb-2">Categorías de Egresos</h3>
               {expenseCategories.length > 0 ? (
                 <div className="overflow-x-auto">
@@ -365,8 +372,8 @@ const Categories = () => {
               ) : (
                 <p className="text-muted-foreground">No hay categorías de egresos.</p>
               )}
-            </div>
-          </div>
+            </TabsContent>
+          </Tabs>
         </CardContent>
       </Card>
     </div>

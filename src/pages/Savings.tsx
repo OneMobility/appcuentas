@@ -487,7 +487,7 @@ const Savings: React.FC = () => {
         <FixedSavingTipCard />
       </div>
 
-      <Card>
+      <Card className="border-l-4 border-green-500 bg-green-50 text-green-800">
         <CardHeader>
           <CardTitle>Saldo Total de Ahorros</CardTitle>
         </CardHeader>
