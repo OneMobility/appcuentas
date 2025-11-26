@@ -107,26 +107,9 @@ export const getInstallmentFirstPaymentDueDate = (transactionDate: Date, cutOffD
   const txDate = new Date(transactionDate);
   txDate.setHours(0, 0, 0, 0);
 
-  // Determinar la fecha de corte para el mes de la transacción
-  let currentMonthCutOff = setDate(new Date(txDate.getFullYear(), txDate.getMonth()), cutOffDay);
-  currentMonthCutOff.setHours(0, 0, 0, 0);
-
-  let effectiveCycleEndDate: Date;
-
-  // Si la fecha de la transacción es en o antes del día de corte de su mes,
-  // la primera cuota se difiere a la fecha límite de pago del *siguiente* ciclo de facturación.
-  if (getDate(txDate) <= cutOffDay) {
-    effectiveCycleEndDate = addMonths(currentMonthCutOff, 1); // Fecha de corte del siguiente mes
-  } else {
-    // Si la fecha de la transacción es después del día de corte de su mes,
-    // la primera cuota se debe a la fecha límite de pago del ciclo en el que cae.
-    // Este ciclo termina en la fecha de corte del siguiente mes.
-    effectiveCycleEndDate = addMonths(currentMonthCutOff, 1); // Fecha de corte del siguiente mes
-  }
-  effectiveCycleEndDate.setHours(0, 0, 0, 0);
-
-  const firstPaymentDueDate = addDays(effectiveCycleEndDate, daysToPayAfterCutOff);
-  firstPaymentDueDate.setHours(0, 0, 0, 0);
+  // Use getBillingCycleDates to find the correct paymentDueDate for the transactionDate's cycle.
+  // This paymentDueDate is exactly what we need for the first installment.
+  const { paymentDueDate: firstPaymentDueDate } = getBillingCycleDates(cutOffDay, daysToPayAfterCutOff, txDate);
 
   return firstPaymentDueDate;
 };
