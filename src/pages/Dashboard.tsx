@@ -105,6 +105,7 @@ const Dashboard = () => {
   const [debtors, setDebtors] = useState<DebtorData[]>([]);
   const [creditors, setCreditors] = useState<CreditorData[]>([]);
   const [refreshKey, setRefreshKey] = useState(0); // Nuevo estado para forzar el refresco
+  const [cardSpendingFilter, setCardSpendingFilter] = useState<"all" | "credit" | "debit">("all"); // Nuevo estado para el filtro
 
   const fetchDashboardData = async () => {
     if (!user) {
@@ -277,40 +278,19 @@ const Dashboard = () => {
       .map(([, value]) => value);
   }, [cashTransactions]);
 
-  // OLD: monthlyCardSpendingData (by card name)
-  // const monthlyCardSpendingData = useMemo(() => {
-  //   if (!cards.length) return [];
-
-  //   const monthlyDataMap = new Map<string, { [key: string]: any }>(); // Key: YYYY-MM
-
-  //   cards.forEach(card => {
-  //     (card.transactions || []).forEach(tx => {
-  //       if (tx.type === "charge") {
-  //         const monthKey = format(parseISO(tx.date), "yyyy-MM");
-  //         const monthName = format(parseISO(tx.date), "MMM", { locale: es });
-
-  //         if (!monthlyDataMap.has(monthKey)) {
-  //           monthlyDataMap.set(monthKey, { name: monthName });
-  //         }
-
-  //         const currentMonthData = monthlyDataMap.get(monthKey)!;
-  //         const cardName = card.name;
-  //         currentMonthData[cardName] = (currentMonthData[cardName] || 0) + (tx.installments_total_amount || tx.amount);
-  //         monthlyDataMap.set(monthKey, currentMonthData);
-  //       }
-  //     });
-  //   });
-
-  //   return Array.from(monthlyDataMap.entries())
-  //     .sort(([keyA], [keyB]) => keyA.localeCompare(keyB))
-  //     .map(([, value]) => value);
-  // }, [cards]);
+  // Filtered cards based on cardSpendingFilter
+  const filteredCardsForSpendingChart = useMemo(() => {
+    if (cardSpendingFilter === "all") {
+      return cards;
+    }
+    return cards.filter(card => card.type === cardSpendingFilter);
+  }, [cards, cardSpendingFilter]);
 
   // NEW: monthlyCardCategorySpendingData (by expense category)
   const monthlyCardCategorySpendingData = useMemo(() => {
     const dataMap = new Map<string, { [key: string]: any }>(); // Key: YYYY-MM -> { name: 'Month', category1: amount, category2: amount }
 
-    cards.forEach(card => {
+    filteredCardsForSpendingChart.forEach(card => { // Use filteredCardsForSpendingChart
       (card.transactions || []).forEach(tx => {
         if (tx.type === "charge" && tx.expense_category_id) {
           const monthKey = format(parseISO(tx.date), "yyyy-MM");
@@ -331,11 +311,11 @@ const Dashboard = () => {
     return Array.from(dataMap.entries())
       .sort(([keyA], [keyB]) => keyA.localeCompare(keyB))
       .map(([, value]) => value);
-  }, [cards, getCategoryById]);
+  }, [filteredCardsForSpendingChart, getCategoryById]);
 
   const uniqueCardExpenseCategories = useMemo(() => {
     const categoryNames = new Set<string>();
-    cards.forEach(card => {
+    filteredCardsForSpendingChart.forEach(card => { // Use filteredCardsForSpendingChart
       (card.transactions || []).forEach(tx => {
         if (tx.type === "charge" && tx.expense_category_id) {
           const category = getCategoryById(tx.expense_category_id);
@@ -346,7 +326,7 @@ const Dashboard = () => {
       });
     });
     return Array.from(categoryNames);
-  }, [cards, getCategoryById]);
+  }, [filteredCardsForSpendingChart, getCategoryById]);
 
 
   const uniqueCardNames = useMemo(() => {
@@ -795,8 +775,18 @@ const Dashboard = () => {
       </Card>
 
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>Gastos Mensuales por Categoría (Tarjetas)</CardTitle>
+          <Select value={cardSpendingFilter} onValueChange={(value: "all" | "credit" | "debit") => setCardSpendingFilter(value)}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="Filtrar por tipo de tarjeta" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas las Tarjetas</SelectItem>
+              <SelectItem value="credit">Tarjetas de Crédito</SelectItem>
+              <SelectItem value="debit">Tarjetas de Débito</SelectItem>
+            </SelectContent>
+          </Select>
         </CardHeader>
         <CardContent>
           <div className="h-[300px]">
@@ -829,7 +819,7 @@ const Dashboard = () => {
               </ResponsiveContainer>
             ) : (
               <div className="flex items-center justify-center h-full text-muted-foreground">
-                No hay datos de gastos por categoría de tarjeta para mostrar.
+                No hay datos de gastos por categoría de tarjeta para mostrar con los filtros aplicados.
               </div>
             )}
           </div>
