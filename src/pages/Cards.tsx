@@ -247,7 +247,7 @@ const Cards = () => {
       .delete()
       .eq('id', cardId)
       .eq('user_id', user.id);
-
+      
     if (error) {
       showError('Error al eliminar tarjeta: ' + error.message);
     } else {
@@ -432,7 +432,7 @@ const Cards = () => {
         .from('cards')
         .update({ current_balance: newCardBalance })
         .eq('id', selectedCardId)
-        .eq('user.id', user.id)
+        .eq('user_id', user.id) // Corrected line
         .select();
 
       if (cardError) throw cardError;
@@ -574,7 +574,7 @@ const Cards = () => {
         color: newCard.color,
       })
       .eq('id', editingCard.id)
-      .eq('user_id', user.id)
+      .eq('user_id', user.id) // Corrected line
       .select();
 
     if (error) {

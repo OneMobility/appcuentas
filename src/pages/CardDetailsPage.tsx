@@ -306,7 +306,7 @@ const CardDetailsPage: React.FC = () => {
         .from('cards')
         .update({ current_balance: newCardBalance })
         .eq('id', card.id)
-        .eq('user_id', user.id)
+        .eq('user_id', user.id) // Corrected line
         .select();
 
       if (cardError) throw cardError;
@@ -507,7 +507,7 @@ const CardDetailsPage: React.FC = () => {
         .from('cards')
         .update({ current_balance: newCardBalance })
         .eq('id', card.id)
-        .eq('user_id', user.id)
+        .eq('user_id', user.id) // Corrected line
         .select();
 
       if (cardError) throw cardError;
@@ -575,7 +575,7 @@ const CardDetailsPage: React.FC = () => {
         .from('cards')
         .update({ current_balance: newCardBalance })
         .eq('id', card.id)
-        .eq('user_id', user.id);
+        .eq('user_id', user.id); // Corrected line
       if (cardError) throw cardError;
 
       // Re-fetch all transactions for the card to ensure consistency
