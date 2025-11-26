@@ -12,7 +12,7 @@ const Login = () => {
       <div className="w-full max-w-md bg-white p-8 rounded-lg shadow-md">
         <div className="flex flex-col items-center justify-center mb-6">
           <img
-            src="https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Oinkash%20Logo.png"
+            src="https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Logo%203d.png"
             alt="Oinkash Logo"
             className="h-12 w-12 text-primary mb-2"
           />

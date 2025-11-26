@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <foreground>
+        <bitmap android:src="https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/icono%20app%20con%20fondo.png" />
+    </foreground>
+</adaptive-icon>
