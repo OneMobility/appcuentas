@@ -47,25 +47,27 @@ export const getBillingCycleDates = (cutOffDay: number, daysToPayAfterCutOff: nu
   const today = new Date(referenceDate);
   today.setHours(0, 0, 0, 0);
 
-  let currentCutOffDate = setDate(new Date(today.getFullYear(), today.getMonth()), cutOffDay);
-  currentCutOffDate.setHours(0, 0, 0, 0);
+  // Determine the cut-off date for the current month based on referenceDate
+  let currentMonthCutOff = setDate(new Date(today.getFullYear(), today.getMonth()), cutOffDay);
+  currentMonthCutOff.setHours(0, 0, 0, 0);
 
-  let previousCutOffDate: Date;
+  let cycleEndDate: Date;
+  let cycleStartDate: Date;
 
-  // Si hoy es el día de corte o después del día de corte, el ciclo actual termina en currentCutOffDate.
-  // El ciclo empezó el día después del corte del mes anterior.
-  if (getDate(today) >= cutOffDay) {
-    previousCutOffDate = addMonths(currentCutOffDate, -1);
+  // If the referenceDate is on or before the current month's cut-off day,
+  // the current billing cycle ends on the current month's cut-off.
+  if (getDate(today) <= cutOffDay) {
+    cycleEndDate = currentMonthCutOff;
+    cycleStartDate = addDays(addMonths(cycleEndDate, -1), 1); // Starts day after previous month's cut-off
   } else {
-    // Si hoy es antes del día de corte, el ciclo actual terminó el mes pasado.
-    // El ciclo actual es el que termina en currentCutOffDate del mes pasado.
-    currentCutOffDate = addMonths(currentCutOffDate, -1);
-    previousCutOffDate = addMonths(currentCutOffDate, -1);
+    // If the referenceDate is after the current month's cut-off day,
+    // the current billing cycle ends on the *next* month's cut-off.
+    cycleEndDate = addMonths(currentMonthCutOff, 1);
+    cycleStartDate = addDays(currentMonthCutOff, 1); // Starts day after current month's cut-off
   }
 
-  const cycleStartDate = addDays(previousCutOffDate, 1);
-  const cycleEndDate = currentCutOffDate;
   const paymentDueDate = addDays(cycleEndDate, daysToPayAfterCutOff);
+  paymentDueDate.setHours(0, 0, 0, 0);
 
   return { cycleStartDate, cycleEndDate, paymentDueDate };
 };
@@ -89,4 +91,42 @@ export const getUpcomingCutOffDate = (cutOffDay: number, referenceDate: Date = n
     upcomingCutOff = addMonths(upcomingCutOff, 1);
   }
   return upcomingCutOff;
+};
+
+/**
+ * Calcula la fecha de la primera cuota para una transacción a meses,
+ * basándose en la lógica de que si la compra es antes o en la fecha de corte,
+ * la primera cuota se difiere al siguiente ciclo de pago.
+ *
+ * @param transactionDate La fecha en que se realizó la transacción.
+ * @param cutOffDay El día del mes en que la tarjeta tiene su fecha de corte.
+ * @param daysToPayAfterCutOff El número de días después de la fecha de corte para la fecha límite de pago.
+ * @returns La fecha de la primera cuota.
+ */
+export const getInstallmentFirstPaymentDueDate = (transactionDate: Date, cutOffDay: number, daysToPayAfterCutOff: number): Date => {
+  const txDate = new Date(transactionDate);
+  txDate.setHours(0, 0, 0, 0);
+
+  // Determinar la fecha de corte para el mes de la transacción
+  let currentMonthCutOff = setDate(new Date(txDate.getFullYear(), txDate.getMonth()), cutOffDay);
+  currentMonthCutOff.setHours(0, 0, 0, 0);
+
+  let effectiveCycleEndDate: Date;
+
+  // Si la fecha de la transacción es en o antes del día de corte de su mes,
+  // la primera cuota se difiere a la fecha límite de pago del *siguiente* ciclo de facturación.
+  if (getDate(txDate) <= cutOffDay) {
+    effectiveCycleEndDate = addMonths(currentMonthCutOff, 1); // Fecha de corte del siguiente mes
+  } else {
+    // Si la fecha de la transacción es después del día de corte de su mes,
+    // la primera cuota se debe a la fecha límite de pago del ciclo en el que cae.
+    // Este ciclo termina en la fecha de corte del siguiente mes.
+    effectiveCycleEndDate = addMonths(currentMonthCutOff, 1); // Fecha de corte del siguiente mes
+  }
+  effectiveCycleEndDate.setHours(0, 0, 0, 0);
+
+  const firstPaymentDueDate = addDays(effectiveCycleEndDate, daysToPayAfterCutOff);
+  firstPaymentDueDate.setHours(0, 0, 0, 0);
+
+  return firstPaymentDueDate;
 };

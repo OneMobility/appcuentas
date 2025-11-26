@@ -21,7 +21,7 @@ import ColorPicker from "@/components/ColorPicker";
 import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/context/SessionContext";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { getUpcomingPaymentDueDate, getUpcomingCutOffDate, getBillingCycleDates } from "@/utils/date-helpers"; // Importar las nuevas funciones
+import { getUpcomingPaymentDueDate, getUpcomingCutOffDate, getBillingCycleDates, getInstallmentFirstPaymentDueDate } from "@/utils/date-helpers"; // Importar las nuevas funciones
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { exportToCsv, exportToPdf } from "@/utils/export";
 import CardTransferDialog from "@/components/CardTransferDialog"; // Importar el nuevo componente
@@ -51,7 +51,7 @@ interface CardData {
   expiration_date: string;
   type: "credit" | "debit";
   initial_balance: number;
-  current_balance: number;
+  current_balance: number; // Deuda total para crédito, saldo para débito
   credit_limit?: number;
   cut_off_day?: number;
   days_to_pay_after_cut_off?: number; // Nuevo campo
@@ -331,13 +331,11 @@ const Cards = () => {
         });
       }
 
-      // Determine the first installment's due date based on the card's cut-off and payment days
-      // For simplicity, let's assume the first installment is due on the *next* payment due date after the transaction date.
-      // And subsequent installments are due on the payment due dates of consecutive months.
-      const { paymentDueDate: firstPaymentDueDate } = getBillingCycleDates(
+      // Determine the first installment's due date using the new helper function
+      const firstPaymentDueDate = getInstallmentFirstPaymentDueDate(
+        newTransaction.date,
         currentCard.cut_off_day!,
-        currentCard.days_to_pay_after_cut_off!,
-        newTransaction.date // Use transaction date as reference
+        currentCard.days_to_pay_after_cut_off!
       );
 
       for (let i = 0; i < newTransaction.installments_count; i++) {

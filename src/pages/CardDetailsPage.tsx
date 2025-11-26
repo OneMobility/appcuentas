@@ -21,7 +21,7 @@ import ColorPicker from "@/components/ColorPicker";
 import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/context/SessionContext";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { getUpcomingPaymentDueDate, getBillingCycleDates } from "@/utils/date-helpers";
+import { getUpcomingPaymentDueDate, getBillingCycleDates, getInstallmentFirstPaymentDueDate } from "@/utils/date-helpers";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { exportToCsv, exportToPdf } from "@/utils/export";
 import LoadingSpinner from "@/components/LoadingSpinner";
@@ -221,11 +221,11 @@ const CardDetailsPage: React.FC = () => {
         });
       }
 
-      // Determine the first installment's due date based on the card's cut-off and payment days
-      const { paymentDueDate: firstPaymentDueDate } = getBillingCycleDates(
+      // Determine the first installment's due date using the new helper function
+      const firstPaymentDueDate = getInstallmentFirstPaymentDueDate(
+        newTransaction.date,
         card.cut_off_day!,
-        card.days_to_pay_after_cut_off!,
-        newTransaction.date // Use transaction date as reference
+        card.days_to_pay_after_cut_off!
       );
 
       for (let i = 0; i < newTransaction.installments_count; i++) {
@@ -422,10 +422,11 @@ const CardDetailsPage: React.FC = () => {
         });
       }
 
-      const { paymentDueDate: firstPaymentDueDate } = getBillingCycleDates(
+      // Determine the first installment's due date using the new helper function
+      const firstPaymentDueDate = getInstallmentFirstPaymentDueDate(
+        newTransaction.date,
         card.cut_off_day!,
-        card.days_to_pay_after_cut_off!,
-        newTransaction.date // Use transaction date as reference
+        card.days_to_pay_after_cut_off!
       );
 
       for (let i = 0; i < newInstallmentsCount; i++) {
@@ -1001,7 +1002,7 @@ const CardDetailsPage: React.FC = () => {
                   id="date"
                   variant={"outline"}
                   className={cn(
-                    "w-[300px] justify-start text-left font-normal",
+                    "col-span-3 justify-start text-left font-normal",
                     !dateRange && "text-muted-foreground"
                   )}
                 >
