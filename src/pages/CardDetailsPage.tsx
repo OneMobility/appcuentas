@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { DollarSign, History, Trash2, Edit, CalendarIcon, ArrowLeft, FileText, FileDown, Heart, AlertTriangle } from "lucide-react";
+import { DollarSign, History, Trash2, Edit, CalendarIcon, ArrowLeft, FileText, FileDown, Heart, AlertTriangle, Calculator } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { cn } from "@/lib/utils";
 import { format, addMonths, parseISO, isWithinInterval, isBefore, isAfter, isSameDay } from "date-fns";
@@ -90,35 +90,35 @@ const CardDetailsPage: React.FC = () => {
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
   const [isOverdue, setIsOverdue] = useState(false); // New state for overdue notification
 
-  useEffect(() => {
-    const fetchCardDetails = async () => {
-      if (!user || !cardId || isLoadingCategories) {
-        setIsLoading(false);
-        return;
-      }
-
-      setIsLoading(true);
-      const { data, error } = await supabase
-        .from('cards')
-        .select('*, card_transactions(*)')
-        .eq('id', cardId)
-        .eq('user_id', user.id)
-        .single();
-
-      if (error) {
-        console.error("Error fetching card details:", error);
-        showError('Error al cargar detalles de la tarjeta: ' + error.message);
-        navigate('/cards');
-      } else {
-        const formattedCard = {
-          ...(data as CardData),
-          transactions: (data as any).card_transactions || []
-        };
-        setCard(formattedCard);
-      }
+  const fetchCardDetails = async () => {
+    if (!user || !cardId || isLoadingCategories) {
       setIsLoading(false);
-    };
+      return;
+    }
 
+    setIsLoading(true);
+    const { data, error } = await supabase
+      .from('cards')
+      .select('*, card_transactions(*)')
+      .eq('id', cardId)
+      .eq('user_id', user.id)
+      .single();
+
+    if (error) {
+      console.error("Error fetching card details:", error);
+      showError('Error al cargar detalles de la tarjeta: ' + error.message);
+      navigate('/cards');
+    } else {
+      const formattedCard = {
+        ...(data as CardData),
+        transactions: (data as any).card_transactions || []
+      };
+      setCard(formattedCard);
+    }
+    setIsLoading(false);
+  };
+
+  useEffect(() => {
     fetchCardDetails();
   }, [cardId, user, navigate, isLoadingCategories]);
 
@@ -638,6 +638,60 @@ const CardDetailsPage: React.FC = () => {
     }
   };
 
+  const handleRecalculateBalance = async () => {
+    if (!user || !card) {
+      showError("No se puede recalcular el saldo sin usuario o tarjeta.");
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      // Fetch all transactions for this card
+      const { data: transactionsData, error: transactionsError } = await supabase
+        .from('card_transactions')
+        .select('*')
+        .eq('card_id', card.id)
+        .eq('user_id', user.id);
+
+      if (transactionsError) throw transactionsError;
+
+      let calculatedBalance = card.initial_balance; // Start with the initial balance
+
+      (transactionsData || []).forEach(tx => {
+        // For charges, add the total amount of the purchase to the balance
+        // For payments, subtract the amount
+        const amountToAffectBalance = tx.installments_total_amount && tx.installments_count && tx.installments_count > 1 && tx.installment_number === 1
+          ? tx.installments_total_amount // Only add the total amount once for installment purchases
+          : tx.amount; // For single charges or payments, use the transaction amount
+
+        if (tx.type === "charge") {
+          calculatedBalance += amountToAffectBalance;
+        } else { // payment
+          calculatedBalance -= amountToAffectBalance;
+        }
+      });
+
+      // Update the card's current_balance in the database
+      const { error: updateError } = await supabase
+        .from('cards')
+        .update({ current_balance: calculatedBalance })
+        .eq('id', card.id)
+        .eq('user_id', user.id);
+
+      if (updateError) throw updateError;
+
+      // Re-fetch card details to update UI with new balance and transactions
+      await fetchCardDetails();
+      showSuccess("Saldo de la tarjeta recalculado y actualizado.");
+    } catch (error: any) {
+      showError('Error al recalcular el saldo: ' + error.message);
+      console.error("Recalculate balance error:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+
   const filteredTransactions = useMemo(() => {
     if (!card) return [];
     return (card.transactions || []).filter((tx) => {
@@ -1051,6 +1105,12 @@ const CardDetailsPage: React.FC = () => {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+            <Button variant="outline" size="sm" className="h-8 gap-1" onClick={handleRecalculateBalance}>
+              <Calculator className="h-3.5 w-3.5" />
+              <span className="sr-only sm:not-sr-only sm:whitespace-nowrap">
+                Recalcular Saldo
+              </span>
+            </Button>
           </div>
         </CardHeader>
         <CardContent>
