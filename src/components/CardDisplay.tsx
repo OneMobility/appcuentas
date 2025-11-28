@@ -7,7 +7,7 @@ import { CreditCard, DollarSign, History, Trash2, Edit } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { useNavigate } from "react-router-dom";
-import { getRelevantStatementForPayment, getCurrentActiveBillingCycle } from "@/utils/date-helpers"; // Importar las nuevas funciones
+import { getLastClosedStatementDetails, getCurrentActiveBillingCycle } from "@/utils/date-helpers"; // Importar la nueva función
 import { parseISO, isWithinInterval, isSameDay, isBefore } from "date-fns";
 
 interface CardTransaction {
@@ -62,16 +62,44 @@ const CardDisplay: React.FC<CardDisplayProps> = ({ card, onAddTransaction, onDel
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    // --- Current Cycle Debt Calculation ---
+    // --- Get details for the last closed statement ---
+    const { statementStartDate: lastStatementStartDate, statementEndDate: lastStatementEndDate, statementPaymentDueDate: lastStatementPaymentDueDate } = getLastClosedStatementDetails(card.cut_off_day, card.days_to_pay_after_cut_off, today);
+
+    // --- Calculate Pending Payment Debt (from last closed statement) ---
+    let calculatedPendingPaymentDebt = (card.transactions || [])
+      .filter(tx => tx.type === "charge")
+      .reduce((sum, tx) => {
+        const txDateParsed = parseISO(tx.date);
+        // Sum charges that are part of the last closed statement's billing period
+        if (isWithinInterval(txDateParsed, { start: lastStatementStartDate, end: lastStatementEndDate })) {
+          return sum + tx.amount;
+        }
+        return sum;
+      }, 0);
+
+    // Subtract payments made towards the last closed statement (up to its payment due date)
+    const paymentsForLastStatement = (card.transactions || [])
+      .filter(tx => tx.type === "payment")
+      .reduce((sum, tx) => {
+        const txDateParsed = parseISO(tx.date);
+        if (isWithinInterval(txDateParsed, { start: lastStatementStartDate, end: lastStatementPaymentDueDate })) {
+          return sum + tx.amount;
+        }
+        return sum;
+      }, 0);
+
+    calculatedPendingPaymentDebt = Math.max(0, calculatedPendingPaymentDebt - paymentsForLastStatement);
+
+    // --- Calculate Current Cycle Debt (charges since last cut-off) ---
     const { currentCycleStartDate, currentCycleEndDate } = getCurrentActiveBillingCycle(card.cut_off_day, today);
+    
     let calculatedCurrentCycleDebt = (card.transactions || [])
       .filter(tx => tx.type === "charge")
       .reduce((sum, tx) => {
         const txDateParsed = parseISO(tx.date);
-        // For installments, the 'date' is the installment due date.
-        // For single charges, the 'date' is the transaction date.
+        // Sum charges that are part of the current active billing cycle
         if (isWithinInterval(txDateParsed, { start: currentCycleStartDate, end: currentCycleEndDate })) {
-          return sum + tx.amount; // Use tx.amount (monthly installment or single charge amount)
+          return sum + tx.amount;
         }
         return sum;
       }, 0);
@@ -87,39 +115,7 @@ const CardDisplay: React.FC<CardDisplayProps> = ({ card, onAddTransaction, onDel
         return sum;
       }, 0);
     
-    calculatedCurrentCycleDebt = Math.max(0, calculatedCurrentCycleDebt - paymentsInCurrentCycle); // Ensure it doesn't go negative
-
-    // --- Pending Payment Debt Calculation ---
-    const { statementStartDate, statementEndDate, statementPaymentDueDate } = getRelevantStatementForPayment(card.cut_off_day, card.days_to_pay_after_cut_off, today);
-
-    let calculatedPendingPaymentDebt = (card.transactions || [])
-      .filter(tx => tx.type === "charge")
-      .reduce((sum, tx) => {
-        const txDateParsed = parseISO(tx.date);
-        // For installments, the 'date' is the installment due date.
-        // For single charges, the 'date' is the transaction date.
-        // Sum charges that are part of the statement currently due for payment.
-        // This means charges within the statement's billing period (statementStartDate to statementEndDate)
-        // OR installments whose due date is the statementPaymentDueDate.
-        if (isWithinInterval(txDateParsed, { start: statementStartDate, end: statementEndDate }) || isSameDay(txDateParsed, statementPaymentDueDate)) {
-            return sum + tx.amount;
-        }
-        return sum;
-      }, 0);
-
-    // Subtract payments made specifically for this statement's payment due date
-    const paymentsForDueStatement = (card.transactions || [])
-      .filter(tx => tx.type === "payment")
-      .reduce((sum, tx) => {
-        const txDateParsed = parseISO(tx.date);
-        // Payments are considered for the statement if made up to the payment due date
-        if (isWithinInterval(txDateParsed, { start: statementStartDate, end: statementPaymentDueDate })) {
-          return sum + tx.amount;
-        }
-        return sum;
-      }, 0);
-
-    calculatedPendingPaymentDebt = Math.max(0, calculatedPendingPaymentDebt - paymentsForDueStatement); // Ensure it doesn't go negative
+    calculatedCurrentCycleDebt = Math.max(0, calculatedCurrentCycleDebt - paymentsInCurrentCycle);
 
     return {
       currentCycleDebt: calculatedCurrentCycleDebt,
