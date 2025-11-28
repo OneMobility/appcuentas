@@ -27,7 +27,7 @@ import { exportToCsv, exportToPdf } from "@/utils/export";
 import CardTransferDialog from "@/components/CardTransferDialog"; // Importar el nuevo componente
 import { useCategoryContext } from "@/context/CategoryContext"; // Importar useCategoryContext
 import { toast } from "sonner"; // Importar toast de sonner
-import DynamicLucideIcon from "@/components/DynamicLucideIcon";
+import DynamicLucideIcon from "@/components/DynamicLucideIcon"; // Importar DynamicLucideIcon
 
 interface CardTransaction {
   id: string;
@@ -315,6 +315,12 @@ const Cards = () => {
       return;
     }
 
+    const currentCard = cards.find(c => c.id === selectedCardId);
+    if (!currentCard) {
+      showError("Tarjeta no encontrada o eliminada.");
+      return;
+    }
+
     let incomeCategoryIdToInsert: string | null = null;
     let expenseCategoryIdToInsert: string | null = null;
 
@@ -324,15 +330,15 @@ const Cards = () => {
       } else if (newTransaction.selectedCategoryType === "expense") {
         expenseCategoryIdToInsert = newTransaction.selectedCategoryId;
       }
-    } else if (newTransaction.type === "charge" || (newTransaction.type === "payment" && currentCardForDialog?.type === "debit")) {
+    } else if (newTransaction.type === "charge" || (newTransaction.type === "payment" && currentCard.type === "debit")) {
       showError("Por favor, selecciona una categoría.");
       return;
     }
 
-    let newCardBalance = currentCardForDialog!.current_balance;
+    let newCardBalance = currentCard.current_balance;
     const transactionsToInsert: Omit<CardTransaction, 'id'>[] = [];
 
-    if (currentCardForDialog!.type === "credit" && newTransaction.type === "charge" && newTransaction.installments_count && newTransaction.installments_count > 1) {
+    if (currentCard.type === "credit" && newTransaction.type === "charge" && newTransaction.installments_count && newTransaction.installments_count > 1) {
       // Logic for installment charges on credit cards
       const amountPerInstallment = totalAmount / newTransaction.installments_count;
       
@@ -340,7 +346,7 @@ const Cards = () => {
       newCardBalance += totalAmount;
 
       // Check if credit limit is exceeded
-      if (currentCardForDialog!.credit_limit !== undefined && newCardBalance > currentCardForDialog!.credit_limit) {
+      if (currentCard.credit_limit !== undefined && newCardBalance > currentCard.credit_limit) {
         toast.info(`Tu tarjeta de crédito ha excedido su límite. Saldo actual: $${newCardBalance.toFixed(2)}`, {
           style: { backgroundColor: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))' },
           duration: 10000
@@ -350,8 +356,8 @@ const Cards = () => {
       // Determine the first installment's due date using the new helper function
       const firstPaymentDueDate = getInstallmentFirstPaymentDueDate(
         newTransaction.date,
-        currentCardForDialog!.cut_off_day!,
-        currentCardForDialog!.days_to_pay_after_cut_off!
+        currentCard.cut_off_day!,
+        currentCard.days_to_pay_after_cut_off!
       );
 
       for (let i = 0; i < newTransaction.installments_count; i++) {
@@ -371,7 +377,7 @@ const Cards = () => {
       }
     } else {
       // Logic for single charges or payments
-      if (currentCardForDialog!.type === "debit") {
+      if (currentCard.type === "debit") {
         if (newTransaction.type === "charge") {
           if (newCardBalance < totalAmount) {
             showError("Saldo insuficiente en la tarjeta de débito.");
@@ -384,7 +390,7 @@ const Cards = () => {
       } else { // Credit card (single charge or payment)
         if (newTransaction.type === "charge") {
           newCardBalance += totalAmount;
-          if (currentCardForDialog!.credit_limit !== undefined && newCardBalance > currentCardForDialog!.credit_limit) {
+          if (currentCard.credit_limit !== undefined && newCardBalance > currentCard.credit_limit) {
             toast.info(`Tu tarjeta de crédito ha excedido su límite. Saldo actual: $${newCardBalance.toFixed(2)}`, {
               style: { backgroundColor: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))' },
               duration: 10000
@@ -397,7 +403,7 @@ const Cards = () => {
           }
           newCardBalance -= totalAmount;
           if (newCardBalance < 0) {
-            toast.info(`Has sobrepagado tu tarjeta ${currentCardForDialog!.name}. Tu saldo actual es de $${newCardBalance.toFixed(2)} (a tu favor).`, {
+            toast.info(`Has sobrepagado tu tarjeta ${currentCard.name}. Tu saldo actual es de $${newCardBalance.toFixed(2)} (a tu favor).`, {
               style: { backgroundColor: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))' },
               duration: 10000
             });
@@ -566,7 +572,7 @@ const Cards = () => {
         expiration_date: newCard.expiration_date,
         type: newCard.type,
         initial_balance: initialBalance,
-        // current_balance: parseFloat(newCard.initial_balance), // ALERTA: NO RESETEAR current_balance aquí
+        current_balance: parseFloat(newCard.initial_balance), // Al editar, el current_balance se resetea al initial_balance
         credit_limit: newCard.type === "credit" ? creditLimit : null,
         cut_off_day: newCard.type === "credit" ? cutOffDay : null,
         days_to_pay_after_cut_off: newCard.type === "credit" ? daysToPayAfterCutOff : null, // Actualizar nuevo campo
