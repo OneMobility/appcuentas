@@ -699,50 +699,56 @@ const CardDetailsPage: React.FC = () => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    // 1. Deuda del Ciclo Actual: Suma de mensualidades (o cargos únicos) que pertenecen al ciclo activo actual.
+    // --- Current Cycle Debt Calculation ---
     const { currentCycleStartDate, currentCycleEndDate } = getCurrentActiveBillingCycle(card.cut_off_day, today);
-    const calculatedCurrentCycleDebt = (card.transactions || [])
+    let calculatedCurrentCycleDebt = (card.transactions || [])
       .filter(tx => tx.type === "charge")
       .reduce((sum, tx) => {
         const txDateParsed = parseISO(tx.date);
-        if (tx.installments_count && tx.installments_count > 1) {
-          // Para mensualidades, la fecha de la transacción es la fecha de vencimiento de la cuota.
-          // Sumar si la fecha de vencimiento de la cuota cae en el ciclo activo.
-          if (isWithinInterval(txDateParsed, { start: currentCycleStartDate, end: currentCycleEndDate })) {
-            return sum + tx.amount;
-          }
-        } else {
-          // Para cargos únicos, la fecha de la transacción es la fecha de la compra.
-          // Sumar si la fecha de la compra cae en el ciclo activo.
-          if (isWithinInterval(txDateParsed, { start: currentCycleStartDate, end: currentCycleEndDate })) {
-            return sum + tx.amount;
-          }
+        if (isWithinInterval(txDateParsed, { start: currentCycleStartDate, end: currentCycleEndDate })) {
+          return sum + tx.amount;
         }
         return sum;
       }, 0);
 
-    // 2. Deuda Pendiente de Pago: Suma de mensualidades (o cargos únicos) que pertenecen al estado de cuenta más relevante.
+    // Subtract payments made within the current active cycle
+    const paymentsInCurrentCycle = (card.transactions || [])
+      .filter(tx => tx.type === "payment")
+      .reduce((sum, tx) => {
+        const txDateParsed = parseISO(tx.date);
+        if (isWithinInterval(txDateParsed, { start: currentCycleStartDate, end: currentCycleEndDate })) {
+          return sum + tx.amount;
+        }
+        return sum;
+      }, 0);
+    
+    calculatedCurrentCycleDebt = Math.max(0, calculatedCurrentCycleDebt - paymentsInCurrentCycle);
+
+    // --- Pending Payment Debt Calculation ---
     const { statementStartDate, statementEndDate, statementPaymentDueDate } = getRelevantStatementForPayment(card.cut_off_day, card.days_to_pay_after_cut_off, today);
 
-    const calculatedPendingPaymentDebt = (card.transactions || [])
+    let calculatedPendingPaymentDebt = (card.transactions || [])
       .filter(tx => tx.type === "charge")
       .reduce((sum, tx) => {
         const txDateParsed = parseISO(tx.date);
-        if (tx.installments_count && tx.installments_count > 1) {
-          // Para mensualidades, la fecha de la transacción es la fecha de vencimiento de la cuota.
-          // Sumar si la fecha de vencimiento de la cuota coincide con la fecha de pago del estado de cuenta.
-          if (isSameDay(txDateParsed, statementPaymentDueDate)) {
+        if (isWithinInterval(txDateParsed, { start: statementStartDate, end: statementEndDate }) || isSameDay(txDateParsed, statementPaymentDueDate)) {
             return sum + tx.amount;
-          }
-        } else {
-          // Para cargos únicos, la fecha de la transacción es la fecha de la compra.
-          // Sumar si la fecha de la compra cae dentro del período de facturación del estado de cuenta.
-          if (isWithinInterval(txDateParsed, { start: statementStartDate, end: statementEndDate })) {
-            return sum + tx.amount;
-          }
         }
         return sum;
       }, 0);
+
+    // Subtract payments made specifically for this statement's payment due date
+    const paymentsForDueStatement = (card.transactions || [])
+      .filter(tx => tx.type === "payment")
+      .reduce((sum, tx) => {
+        const txDateParsed = parseISO(tx.date);
+        if (isWithinInterval(txDateParsed, { start: statementStartDate, end: statementPaymentDueDate })) {
+          return sum + tx.amount;
+        }
+        return sum;
+      }, 0);
+
+    calculatedPendingPaymentDebt = Math.max(0, calculatedPendingPaymentDebt - paymentsForDueStatement);
 
     return {
       currentCycleDebt: calculatedCurrentCycleDebt,
