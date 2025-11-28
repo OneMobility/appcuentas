@@ -138,29 +138,29 @@ const CardDetailsPage: React.FC = () => {
       // Calculate the statement balance for this relevant cycle
       const statementCharges = (card.transactions || [])
         .filter(tx => tx.type === "charge")
-        .filter(tx => {
+        .reduce((sum, tx) => {
           const txDateParsed = parseISO(tx.date);
-          if (tx.installments_count && tx.installments_count > 1) {
-            // For installments, check if the installment's due date matches the statement's payment due date
-            return isSameDay(txDateParsed, statementPaymentDueDate);
-          } else {
-            // For single charges, check if the transaction date is within the statement's billing period
-            return isWithinInterval(txDateParsed, { start: statementStartDate, end: statementEndDate });
+          // For both single charges and installments, tx.date is the date it's posted/due.
+          // We sum it if it falls within the statement's billing period.
+          if (isWithinInterval(txDateParsed, { start: statementStartDate, end: statementEndDate })) {
+            return sum + tx.amount; // tx.amount is the monthly installment amount or full single charge
           }
-        })
-        .reduce((sum, tx) => sum + tx.amount, 0); // Sum only tx.amount (monthly installment or single charge amount)
+          return sum;
+        }, 0);
 
       // Subtract payments made specifically for this cycle's statement
-      const paymentsForDueCycle = (card.transactions || [])
+      const paymentsForStatement = (card.transactions || [])
         .filter(tx => tx.type === "payment")
-        .filter(tx => {
-          const txDate = parseISO(tx.date);
-          // Payments are considered for the statement if made up to the payment due date
-          return isWithinInterval(txDate, { start: statementStartDate, end: statementPaymentDueDate });
-        })
-        .reduce((sum, tx) => sum + tx.amount, 0);
+        .reduce((sum, tx) => {
+          const txDateParsed = parseISO(tx.date);
+          // Payments are considered for this statement if made between its start and its payment due date
+          if (isWithinInterval(txDateParsed, { start: statementStartDate, end: statementPaymentDueDate })) {
+            return sum + tx.amount;
+          }
+          return sum;
+        }, 0);
 
-      const netStatementBalance = statementCharges - paymentsForDueCycle;
+      const netStatementBalance = statementCharges - paymentsForStatement;
 
       // If today is strictly after the payment due date AND there's still a positive net statement balance
       if (isAfter(today, statementPaymentDueDate) && netStatementBalance > 0) {
@@ -724,25 +724,32 @@ const CardDetailsPage: React.FC = () => {
     // 2. Deuda Pendiente de Pago: Suma de mensualidades (o cargos únicos) que pertenecen al estado de cuenta más relevante.
     const { statementStartDate, statementEndDate, statementPaymentDueDate } = getRelevantStatementForPayment(card.cut_off_day, card.days_to_pay_after_cut_off, today);
 
-    const calculatedPendingPaymentDebt = (card.transactions || [])
+    // Sum all charges (single or installment amounts) that fall within the statement period
+    const statementCharges = (card.transactions || [])
       .filter(tx => tx.type === "charge")
       .reduce((sum, tx) => {
         const txDateParsed = parseISO(tx.date);
-        if (tx.installments_count && tx.installments_count > 1) {
-          // Para mensualidades, la fecha de la transacción es la fecha de vencimiento de la cuota.
-          // Sumar si la fecha de vencimiento de la cuota coincide con la fecha de pago del estado de cuenta.
-          if (isSameDay(txDateParsed, statementPaymentDueDate)) {
-            return sum + tx.amount;
-          }
-        } else {
-          // Para cargos únicos, la fecha de la transacción es la fecha de la compra.
-          // Sumar si la fecha de la compra cae dentro del período de facturación del estado de cuenta.
-          if (isWithinInterval(txDateParsed, { start: statementStartDate, end: statementEndDate })) {
-            return sum + tx.amount;
-          }
+        // For both single charges and installments, tx.date is the date it's posted/due.
+        // We sum it if it falls within the statement's billing period.
+        if (isWithinInterval(txDateParsed, { start: statementStartDate, end: statementEndDate })) {
+          return sum + tx.amount; // tx.amount is the monthly installment amount or full single charge
         }
         return sum;
       }, 0);
+
+    // Sum all payments made towards this statement (up to its payment due date)
+    const paymentsForStatement = (card.transactions || [])
+      .filter(tx => tx.type === "payment")
+      .reduce((sum, tx) => {
+        const txDateParsed = parseISO(tx.date);
+        // Payments are considered for this statement if made between its start and its payment due date
+        if (isWithinInterval(txDateParsed, { start: statementStartDate, end: statementPaymentDueDate })) {
+          return sum + tx.amount;
+        }
+        return sum;
+      }, 0);
+
+    const calculatedPendingPaymentDebt = statementCharges - paymentsForStatement;
 
     return {
       currentCycleDebt: calculatedCurrentCycleDebt,
