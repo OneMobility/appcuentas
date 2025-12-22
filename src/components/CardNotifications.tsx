@@ -50,8 +50,8 @@ const CardNotifications: React.FC = () => {
 
   // Display toast notifications for upcoming card dates and credit limit (Web only)
   useEffect(() => {
-    // Solo mostrar toasts si no es una plataforma móvil nativa
-    if (!isMobilePlatform && cards.length > 0) {
+    // Solo mostrar toasts si no es una plataforma móvil nativa y si no se han mostrado ya en esta sesión
+    if (!isMobilePlatform && cards.length > 0 && !sessionStorage.getItem('cardNotificationsShown')) {
       const today = new Date();
       today.setHours(0, 0, 0, 0); // Normalizar today al inicio del día
       const twoDaysFromNow = addDays(today, 2);
@@ -98,12 +98,13 @@ const CardNotifications: React.FC = () => {
           }
         }
       });
+      sessionStorage.setItem('cardNotificationsShown', 'true'); // Marcar que las notificaciones ya se mostraron
     }
   }, [cards, isMobilePlatform]);
 
   // PWA Install Prompt (Web only)
   useEffect(() => {
-    if (!isMobilePlatform) { // Solo para web
+    if (!isMobilePlatform && !sessionStorage.getItem('pwaPromptShown')) { // Solo para web y si no se ha mostrado ya
       const isPWA = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone;
       if (!isPWA) {
         const handler = (e: Event) => {
@@ -130,6 +131,7 @@ const CardNotifications: React.FC = () => {
             duration: 10000,
             style: { backgroundColor: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))' }
           });
+          sessionStorage.setItem('pwaPromptShown', 'true'); // Marcar que el prompt ya se mostró
         };
 
         window.addEventListener('beforeinstallprompt', handler);

@@ -690,72 +690,7 @@ const CardDetailsPage: React.FC = () => {
     }
   };
 
-  // Calcular la "Deuda del Ciclo Actual" y "Deuda Pendiente de Pago"
-  const { currentCycleDebt, pendingPaymentDebt } = useMemo(() => {
-    if (!card || card.type !== "credit" || card.cut_off_day === undefined || card.days_to_pay_after_cut_off === undefined) {
-      return { currentCycleDebt: 0, pendingPaymentDebt: 0 };
-    }
-
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    // --- Current Cycle Debt Calculation ---
-    const { currentCycleStartDate, currentCycleEndDate } = getCurrentActiveBillingCycle(card.cut_off_day, today);
-    let calculatedCurrentCycleDebt = (card.transactions || [])
-      .filter(tx => tx.type === "charge")
-      .reduce((sum, tx) => {
-        const txDateParsed = parseISO(tx.date);
-        if (isWithinInterval(txDateParsed, { start: currentCycleStartDate, end: currentCycleEndDate })) {
-          return sum + tx.amount;
-        }
-        return sum;
-      }, 0);
-
-    // Subtract payments made within the current active cycle
-    const paymentsInCurrentCycle = (card.transactions || [])
-      .filter(tx => tx.type === "payment")
-      .reduce((sum, tx) => {
-        const txDateParsed = parseISO(tx.date);
-        if (isWithinInterval(txDateParsed, { start: currentCycleStartDate, end: currentCycleEndDate })) {
-          return sum + tx.amount;
-        }
-        return sum;
-      }, 0);
-    
-    calculatedCurrentCycleDebt = Math.max(0, calculatedCurrentCycleDebt - paymentsInCurrentCycle);
-
-    // --- Pending Payment Debt Calculation ---
-    const { statementStartDate, statementEndDate, statementPaymentDueDate } = getRelevantStatementForPayment(card.cut_off_day, card.days_to_pay_after_cut_off, today);
-
-    let calculatedPendingPaymentDebt = (card.transactions || [])
-      .filter(tx => tx.type === "charge")
-      .reduce((sum, tx) => {
-        const txDateParsed = parseISO(tx.date);
-        if (isWithinInterval(txDateParsed, { start: statementStartDate, end: statementEndDate }) || isSameDay(txDateParsed, statementPaymentDueDate)) {
-            return sum + tx.amount;
-        }
-        return sum;
-      }, 0);
-
-    // Subtract payments made specifically for this statement's payment due date
-    const paymentsForDueStatement = (card.transactions || [])
-      .filter(tx => tx.type === "payment")
-      .reduce((sum, tx) => {
-        const txDateParsed = parseISO(tx.date);
-        if (isWithinInterval(txDateParsed, { start: statementStartDate, end: statementPaymentDueDate })) {
-          return sum + tx.amount;
-        }
-        return sum;
-      }, 0);
-
-    calculatedPendingPaymentDebt = Math.max(0, calculatedPendingPaymentDebt - paymentsForDueStatement);
-
-    return {
-      currentCycleDebt: calculatedCurrentCycleDebt,
-      pendingPaymentDebt: calculatedPendingPaymentDebt,
-    };
-  }, [card]);
-
+  // Eliminado el cálculo de deuda del ciclo actual y deuda pendiente de pago
 
   if (isLoading || isLoadingCategories) {
     return <LoadingSpinner />;
@@ -827,12 +762,8 @@ const CardDetailsPage: React.FC = () => {
                 <p className="text-sm opacity-80 mt-1">
                   Crédito Utilizado: ${creditUsed.toFixed(2)}
                 </p>
-                <p className="text-sm opacity-80 mt-1">
-                  Deuda del Ciclo Actual: ${currentCycleDebt.toFixed(2)}
-                </p>
-                <p className="text-sm opacity-80 mt-1">
-                  Deuda Pendiente de Pago: ${pendingPaymentDebt.toFixed(2)}
-                </p>
+                {/* Eliminado: Deuda del Ciclo Actual */}
+                {/* Eliminado: Deuda Pendiente de Pago */}
               </>
             ) : (
               <>

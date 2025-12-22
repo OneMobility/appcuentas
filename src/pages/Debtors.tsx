@@ -17,7 +17,9 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { exportToCsv, exportToPdf } from "@/utils/export";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import { getLocalDateString } from "@/utils/date-helpers"; // Importar la nueva función de utilidad
+import { getLocalDateString } from "@/utils/date-helpers";
+import { useCategoryContext } from "@/context/CategoryContext"; // Importar useCategoryContext
+import DynamicLucideIcon from "@/components/DynamicLucideIcon"; // Importar DynamicLucideIcon
 
 interface DebtorTransaction {
   id: string;
@@ -34,26 +36,41 @@ interface Debtor {
   name: string;
   initial_balance: number;
   current_balance: number;
-  debtor_transactions: DebtorTransaction[]; // Renombrado de 'payments'
+  debtor_transactions: DebtorTransaction[];
   user_id?: string;
+}
+
+interface CardData {
+  id: string;
+  name: string;
+  bank_name: string;
+  last_four_digits: string;
+  type: "credit" | "debit";
+  current_balance: number;
 }
 
 const Debtors = () => {
   const { user } = useSession();
+  const { incomeCategories, isLoadingCategories } = useCategoryContext(); // Usar incomeCategories
   const [debtors, setDebtors] = useState<Debtor[]>([]);
   const [isAddDebtorDialogOpen, setIsAddDebtorDialogOpen] = useState(false);
-  const [isAddTransactionDialogOpen, setIsAddTransactionDialogOpen] = useState(false); // Renombrado
+  const [isAddTransactionDialogOpen, setIsAddTransactionDialogOpen] = useState(false);
   const [isHistoryDialogOpen, setIsHistoryDialogOpen] = useState(false);
-  const [isEditTransactionDialogOpen, setIsEditTransactionDialogOpen] = useState(false); // Renombrado
+  const [isEditTransactionDialogOpen, setIsEditTransactionDialogOpen] = useState(false);
   const [selectedDebtorId, setSelectedDebtorId] = useState<string | null>(null);
   const [historyDebtor, setHistoryDebtor] = useState<Debtor | null>(null);
-  const [editingTransaction, setEditingTransaction] = useState<DebtorTransaction | null>(null); // Renombrado
+  const [editingTransaction, setEditingTransaction] = useState<DebtorTransaction | null>(null);
   const [newDebtor, setNewDebtor] = useState({ name: "", initial_balance: "" });
-  const [newTransaction, setNewTransaction] = useState({ // Nuevo estado para transacciones
+  const [newTransaction, setNewTransaction] = useState({
     type: "payment" as "charge" | "payment",
     amount: "",
     description: "",
+    sourceAccountType: "" as "cash" | "card" | "", // Nuevo: tipo de cuenta de origen
+    sourceAccountId: "" as string | null, // Nuevo: ID de la tarjeta si es 'card'
+    selectedIncomeCategoryId: "" as string | null, // Nuevo: para ingresos
   });
+  const [cashBalance, setCashBalance] = useState(0); // Nuevo: saldo en efectivo
+  const [cards, setCards] = useState<CardData[]>([]); // Nuevo: tarjetas del usuario
 
   // Filter state
   const [searchTerm, setSearchTerm] = useState("");
@@ -66,7 +83,7 @@ const Debtors = () => {
 
     const { data, error } = await supabase
       .from('debtors')
-      .select('*, debtor_transactions(*)') // Seleccionar la nueva tabla
+      .select('*, debtor_transactions(*)')
       .eq('user_id', user.id)
       .order('created_at', { ascending: false });
 
@@ -77,11 +94,43 @@ const Debtors = () => {
     }
   };
 
-  useEffect(() => {
-    if (user) {
-      fetchDebtors();
+  const fetchCashBalanceAndCards = async () => {
+    if (!user) return;
+
+    // Fetch cash balance
+    const { data: cashTxData, error: cashTxError } = await supabase
+      .from('cash_transactions')
+      .select('type, amount')
+      .eq('user_id', user.id);
+
+    if (cashTxError) {
+      showError('Error al cargar saldo en efectivo: ' + cashTxError.message);
+    } else {
+      const currentCashBalance = (cashTxData || []).reduce((sum, tx) => {
+        return tx.type === "ingreso" ? sum + tx.amount : sum - tx.amount;
+      }, 0);
+      setCashBalance(currentCashBalance);
     }
-  }, [user]);
+
+    // Fetch cards
+    const { data: cardsData, error: cardsError } = await supabase
+      .from('cards')
+      .select('id, name, bank_name, last_four_digits, type, current_balance')
+      .eq('user_id', user.id);
+
+    if (cardsError) {
+      showError('Error al cargar tarjetas: ' + cardsError.message);
+    } else {
+      setCards(cardsData || []);
+    }
+  };
+
+  useEffect(() => {
+    if (user && !isLoadingCategories) {
+      fetchDebtors();
+      fetchCashBalanceAndCards();
+    }
+  }, [user, isLoadingCategories]);
 
   const totalDebtorsBalance = debtors.reduce((sum, debtor) => sum + debtor.current_balance, 0);
 
@@ -143,9 +192,9 @@ const Debtors = () => {
     }
   };
 
-  const handleOpenAddTransactionDialog = (debtorId: string) => { // Renombrado
+  const handleOpenAddTransactionDialog = (debtorId: string) => {
     setSelectedDebtorId(debtorId);
-    setNewTransaction({ type: "payment", amount: "", description: "" }); // Resetear formulario
+    setNewTransaction({ type: "payment", amount: "", description: "", sourceAccountType: "", sourceAccountId: null, selectedIncomeCategoryId: null });
     setIsAddTransactionDialogOpen(true);
   };
 
@@ -160,10 +209,22 @@ const Debtors = () => {
   };
 
   const handleTransactionTypeChange = (value: "charge" | "payment") => {
-    setNewTransaction((prev) => ({ ...prev, type: value }));
+    setNewTransaction((prev) => ({ ...prev, type: value, sourceAccountType: "", sourceAccountId: null, selectedIncomeCategoryId: null }));
   };
 
-  const handleSubmitTransaction = async (e: React.FormEvent) => { // Renombrado
+  const handleSourceAccountTypeChange = (value: "cash" | "card") => {
+    setNewTransaction((prev) => ({ ...prev, sourceAccountType: value, sourceAccountId: null }));
+  };
+
+  const handleSourceAccountIdChange = (value: string) => {
+    setNewTransaction((prev) => ({ ...prev, sourceAccountId: value }));
+  };
+
+  const handleIncomeCategorySelectChange = (value: string) => {
+    setNewTransaction((prev) => ({ ...prev, selectedIncomeCategoryId: value }));
+  };
+
+  const handleSubmitTransaction = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user || !selectedDebtorId) {
       showError("Debes iniciar sesión para registrar transacciones.");
@@ -186,76 +247,140 @@ const Debtors = () => {
       return;
     }
 
-    let newBalance = currentDebtor.current_balance;
-    if (newTransaction.type === "charge") {
-      newBalance += amount;
-    } else { // payment
-      if (newBalance < amount) {
-        showError("El abono excede el saldo pendiente.");
-        return;
-      }
-      newBalance -= amount;
-    }
+    let newDebtorBalance = currentDebtor.current_balance;
+    let transactionDate = getLocalDateString(new Date());
 
-    const { data: transactionData, error: transactionError } = await supabase
-      .from('debtor_transactions') // Usar la nueva tabla
-      .insert({
-        user_id: user.id,
-        debtor_id: selectedDebtorId,
-        type: newTransaction.type,
-        amount,
-        description: newTransaction.description,
-        date: getLocalDateString(new Date()), // Usar getLocalDateString
-      })
-      .select();
-
-    if (transactionError) {
-      showError('Error al registrar transacción: ' + transactionError.message);
-      return;
-    }
-
-    const { data: debtorData, error: debtorError } = await supabase
-      .from('debtors')
-      .update({ current_balance: newBalance })
-      .eq('id', selectedDebtorId)
-      .eq('user_id', user.id)
-      .select();
-
-    if (debtorError) {
-      showError('Error al actualizar saldo del deudor: ' + debtorError.message);
-      return;
-    }
-
-    setDebtors((prevDebtors) =>
-      prevDebtors.map((debtor) => {
-        if (debtor.id === selectedDebtorId) {
-          return {
-            ...debtor,
-            current_balance: newBalance,
-            debtor_transactions: [...debtor.debtor_transactions, transactionData[0]],
-          };
+    try {
+      // Update debtor's balance
+      if (newTransaction.type === "charge") {
+        newDebtorBalance += amount;
+      } else { // payment from debtor to us (ingreso)
+        if (newDebtorBalance < amount) {
+          showError("El abono excede el saldo pendiente del deudor.");
+          return;
         }
-        return debtor;
-      })
-    );
-    setNewTransaction({ type: "payment", amount: "", description: "" });
-    setSelectedDebtorId(null);
-    setIsAddTransactionDialogOpen(false);
-    showSuccess("Transacción registrada exitosamente.");
+        newDebtorBalance -= amount;
+
+        // If it's a payment from debtor, record it in our cash/card
+        if (!newTransaction.sourceAccountType) {
+          showError("Por favor, selecciona a qué cuenta va este abono.");
+          return;
+        }
+        if (!newTransaction.selectedIncomeCategoryId) {
+          showError("Por favor, selecciona una categoría de ingreso.");
+          return;
+        }
+
+        if (newTransaction.sourceAccountType === "cash") {
+          const { error: cashTxError } = await supabase
+            .from('cash_transactions')
+            .insert({
+              user_id: user.id,
+              type: "ingreso",
+              amount: amount,
+              description: `Abono de ${currentDebtor.name}: ${newTransaction.description}`,
+              date: transactionDate,
+              income_category_id: newTransaction.selectedIncomeCategoryId,
+            });
+          if (cashTxError) throw cashTxError;
+          setCashBalance(prev => prev + amount); // Update local cash balance
+        } else if (newTransaction.sourceAccountType === "card" && newTransaction.sourceAccountId) {
+          const selectedCard = cards.find(c => c.id === newTransaction.sourceAccountId);
+          if (!selectedCard) {
+            showError("Tarjeta de destino no encontrada.");
+            return;
+          }
+
+          let newCardBalance = selectedCard.current_balance;
+          if (selectedCard.type === "credit") {
+            newCardBalance -= amount; // Payment to credit card reduces debt
+          } else { // Debit card
+            newCardBalance += amount; // Deposit to debit card increases balance
+          }
+
+          const { error: cardUpdateError } = await supabase
+            .from('cards')
+            .update({ current_balance: newCardBalance })
+            .eq('id', newTransaction.sourceAccountId)
+            .eq('user_id', user.id);
+          if (cardUpdateError) throw cardUpdateError;
+
+          const { error: cardTxError } = await supabase
+            .from('card_transactions')
+            .insert({
+              user_id: user.id,
+              card_id: newTransaction.sourceAccountId,
+              type: "payment",
+              amount: amount,
+              description: `Abono de ${currentDebtor.name} a tarjeta ${selectedCard.name}: ${newTransaction.description}`,
+              date: transactionDate,
+              income_category_id: newTransaction.selectedIncomeCategoryId,
+            });
+          if (cardTxError) throw cardTxError;
+          fetchCashBalanceAndCards(); // Re-fetch cards to update balances
+        }
+      }
+
+      // Record transaction in debtor_transactions
+      const { data: debtorTransactionData, error: debtorTransactionError } = await supabase
+        .from('debtor_transactions')
+        .insert({
+          user_id: user.id,
+          debtor_id: selectedDebtorId,
+          type: newTransaction.type,
+          amount,
+          description: newTransaction.description,
+          date: transactionDate,
+        })
+        .select();
+      if (debtorTransactionError) throw debtorTransactionError;
+
+      // Update debtor's current balance in the debtors table
+      const { data: updatedDebtorData, error: debtorUpdateError } = await supabase
+        .from('debtors')
+        .update({ current_balance: newDebtorBalance })
+        .eq('id', selectedDebtorId)
+        .eq('user_id', user.id)
+        .select();
+      if (debtorUpdateError) throw debtorUpdateError;
+
+      setDebtors((prev) =>
+        prev.map((debtor) => {
+          if (debtor.id === selectedDebtorId) {
+            return {
+              ...debtor,
+              current_balance: newDebtorBalance,
+              debtor_transactions: [...debtor.debtor_transactions, debtorTransactionData[0]],
+            };
+          }
+          return debtor;
+        })
+      );
+      setNewTransaction({ type: "payment", amount: "", description: "", sourceAccountType: "", sourceAccountId: null, selectedIncomeCategoryId: null });
+      setSelectedDebtorId(null);
+      setIsAddTransactionDialogOpen(false);
+      showSuccess("Transacción registrada exitosamente.");
+    } catch (error: any) {
+      showError('Error al registrar transacción: ' + error.message);
+      console.error("Debtor transaction error:", error);
+    }
   };
 
-  const handleOpenEditTransactionDialog = (transaction: DebtorTransaction, debtorId: string) => { // Renombrado
+  const handleOpenEditTransactionDialog = (transaction: DebtorTransaction, debtorId: string) => {
     setEditingTransaction(transaction);
     setSelectedDebtorId(debtorId);
     setNewTransaction({
       type: transaction.type,
       amount: transaction.amount.toString(),
       description: transaction.description,
+      sourceAccountType: "", // Not applicable for editing existing debtor transactions directly
+      sourceAccountId: null,
+      selectedIncomeCategoryId: null,
     });
     setIsEditTransactionDialogOpen(true);
   };
 
-  const handleUpdateTransaction = async (e: React.FormEvent) => { // Renombrado
+  const handleUpdateTransaction = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user || !editingTransaction || !selectedDebtorId) {
       showError("No se ha seleccionado una transacción o deudor para actualizar.");
@@ -284,10 +409,10 @@ const Debtors = () => {
 
     let newDebtorBalance = currentDebtor.current_balance;
 
-    // Revertir el impacto de la transacción antigua en el saldo
+    // Revertir el impacto de la transacción antigua en el saldo del deudor
     newDebtorBalance = oldType === "charge" ? newDebtorBalance - oldAmount : newDebtorBalance + oldAmount;
 
-    // Aplicar el impacto de la nueva transacción en el saldo
+    // Aplicar el impacto de la nueva transacción en el saldo del deudor
     if (newType === "charge") {
       newDebtorBalance += newAmount;
     } else { // payment
@@ -298,62 +423,59 @@ const Debtors = () => {
       newDebtorBalance -= newAmount;
     }
 
-    const { data: updatedTransactionData, error: transactionError } = await supabase
-      .from('debtor_transactions') // Usar la nueva tabla
-      .update({
-        type: newType,
-        amount: newAmount,
-        description: newTransaction.description,
-        date: getLocalDateString(new Date()), // Usar getLocalDateString
-      })
-      .eq('id', editingTransaction.id)
-      .eq('user_id', user.id)
-      .select();
+    try {
+      const { data: updatedTransactionData, error: transactionError } = await supabase
+        .from('debtor_transactions')
+        .update({
+          type: newType,
+          amount: newAmount,
+          description: newTransaction.description,
+          date: getLocalDateString(new Date()),
+        })
+        .eq('id', editingTransaction.id)
+        .eq('user_id', user.id)
+        .select();
+      if (transactionError) throw transactionError;
 
-    if (transactionError) {
-      showError('Error al actualizar transacción: ' + transactionError.message);
-      return;
+      const { data: debtorData, error: debtorError } = await supabase
+        .from('debtors')
+        .update({ current_balance: newDebtorBalance })
+        .eq('id', currentDebtor.id)
+        .eq('user_id', user.id)
+        .select();
+      if (debtorError) throw debtorError;
+
+      setDebtors((prevDebtors) =>
+        prevDebtors.map((debtor) => {
+          if (debtor.id === currentDebtor.id) {
+            return {
+              ...debtor,
+              current_balance: newDebtorBalance,
+              debtor_transactions: debtor.debtor_transactions.map(t => t.id === editingTransaction.id ? updatedTransactionData[0] : t),
+            };
+          }
+          return debtor;
+        })
+      );
+
+      setHistoryDebtor((prev) => {
+        if (!prev) return null;
+        return {
+          ...prev,
+          current_balance: newDebtorBalance,
+          debtor_transactions: prev.debtor_transactions.map(t => t.id === editingTransaction.id ? updatedTransactionData[0] : t),
+        };
+      });
+
+      setNewTransaction({ type: "payment", amount: "", description: "", sourceAccountType: "", sourceAccountId: null, selectedIncomeCategoryId: null });
+      setEditingTransaction(null);
+      setSelectedDebtorId(null);
+      setIsEditTransactionDialogOpen(false);
+      showSuccess("Transacción actualizada exitosamente.");
+    } catch (error: any) {
+      showError('Error al actualizar transacción: ' + error.message);
+      console.error("Debtor transaction update error:", error);
     }
-
-    const { data: debtorData, error: debtorError } = await supabase
-      .from('debtors')
-      .update({ current_balance: newDebtorBalance })
-      .eq('id', currentDebtor.id)
-      .eq('user_id', user.id)
-      .select();
-
-    if (debtorError) {
-      showError('Error al actualizar saldo del deudor: ' + debtorError.message);
-      return;
-    }
-
-    setDebtors((prevDebtors) =>
-      prevDebtors.map((debtor) => {
-        if (debtor.id === currentDebtor.id) {
-          return {
-            ...debtor,
-            current_balance: newDebtorBalance,
-            debtor_transactions: debtor.debtor_transactions.map(t => t.id === editingTransaction.id ? updatedTransactionData[0] : t),
-          };
-        }
-        return debtor;
-      })
-    );
-
-    setHistoryDebtor((prev) => {
-      if (!prev) return null;
-      return {
-        ...prev,
-        current_balance: newDebtorBalance,
-        debtor_transactions: prev.debtor_transactions.map(t => t.id === editingTransaction.id ? updatedTransactionData[0] : t),
-      };
-    });
-
-    setNewTransaction({ type: "payment", amount: "", description: "" });
-    setEditingTransaction(null);
-    setSelectedDebtorId(null);
-    setIsEditTransactionDialogOpen(false);
-    showSuccess("Transacción actualizada exitosamente.");
   };
 
   const handleDeleteDebtorTransaction = async (transactionId: string, debtorId: string, transactionAmount: number, transactionType: "charge" | "payment") => {
@@ -372,51 +494,48 @@ const Debtors = () => {
     // Revertir el impacto de la transacción eliminada en el saldo
     newDebtorBalance = transactionType === "charge" ? newDebtorBalance - transactionAmount : newDebtorBalance + transactionAmount;
 
-    const { error: transactionError } = await supabase
-      .from('debtor_transactions')
-      .delete()
-      .eq('id', transactionId)
-      .eq('user_id', user.id);
+    try {
+      const { error: transactionError } = await supabase
+        .from('debtor_transactions')
+        .delete()
+        .eq('id', transactionId)
+        .eq('user_id', user.id);
+      if (transactionError) throw transactionError;
 
-    if (transactionError) {
-      showError('Error al eliminar transacción: ' + transactionError.message);
-      return;
+      const { error: debtorError } = await supabase
+        .from('debtors')
+        .update({ current_balance: newDebtorBalance })
+        .eq('id', debtorId)
+        .eq('user_id', user.id);
+      if (debtorError) throw debtorError;
+
+      setDebtors((prevDebtors) =>
+        prevDebtors.map((debtor) => {
+          if (debtor.id === debtorId) {
+            return {
+              ...debtor,
+              current_balance: newDebtorBalance,
+              debtor_transactions: debtor.debtor_transactions.filter(t => t.id !== transactionId),
+            };
+          }
+          return debtor;
+        })
+      );
+
+      setHistoryDebtor((prev) => {
+        if (!prev || prev.id !== debtorId) return prev;
+        return {
+          ...prev,
+          current_balance: newDebtorBalance,
+          debtor_transactions: prev.debtor_transactions.filter(t => t.id !== transactionId),
+        };
+      });
+
+      showSuccess("Transacción eliminada exitosamente.");
+    } catch (error: any) {
+      showError('Error al eliminar transacción: ' + error.message);
+      console.error("Debtor transaction delete error:", error);
     }
-
-    const { error: debtorError } = await supabase
-      .from('debtors')
-      .update({ current_balance: newDebtorBalance })
-      .eq('id', debtorId)
-      .eq('user_id', user.id);
-
-    if (debtorError) {
-      showError('Error al actualizar saldo del deudor después de eliminar transacción: ' + debtorError.message);
-      return;
-    }
-
-    setDebtors((prevDebtors) =>
-      prevDebtors.map((debtor) => {
-        if (debtor.id === debtorId) {
-          return {
-            ...debtor,
-            current_balance: newDebtorBalance,
-            debtor_transactions: debtor.debtor_transactions.filter(t => t.id !== transactionId),
-          };
-        }
-        return debtor;
-      })
-    );
-
-    setHistoryDebtor((prev) => {
-      if (!prev || prev.id !== debtorId) return prev;
-      return {
-        ...prev,
-        current_balance: newDebtorBalance,
-        debtor_transactions: prev.debtor_transactions.filter(t => t.id !== transactionId),
-      };
-    });
-
-    showSuccess("Transacción eliminada exitosamente.");
   };
 
   const filteredDebtors = debtors.filter((debtor) =>
@@ -558,7 +677,7 @@ const Debtors = () => {
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => handleOpenAddTransactionDialog(debtor.id)} // Renombrado
+                        onClick={() => handleOpenAddTransactionDialog(debtor.id)}
                         className="h-8 gap-1"
                       >
                         <DollarSign className="h-3.5 w-3.5" />
@@ -605,12 +724,12 @@ const Debtors = () => {
               </TableBody>
             </Table>
           </div>
-          <Dialog open={isAddTransactionDialogOpen} onOpenChange={setIsAddTransactionDialogOpen}> {/* Renombrado */}
+          <Dialog open={isAddTransactionDialogOpen} onOpenChange={setIsAddTransactionDialogOpen}>
             <DialogContent className="sm:max-w-[425px]">
               <DialogHeader>
                 <DialogTitle>Registrar Transacción para {debtors.find(d => d.id === selectedDebtorId)?.name}</DialogTitle>
               </DialogHeader>
-              <form onSubmit={handleSubmitTransaction} className="grid gap-4 py-4"> {/* Renombrado */}
+              <form onSubmit={handleSubmitTransaction} className="grid gap-4 py-4">
                 <div className="grid grid-cols-4 items-center gap-4">
                   <Label htmlFor="transactionType" className="text-right">
                     Tipo
@@ -620,8 +739,8 @@ const Debtors = () => {
                       <SelectValue placeholder="Selecciona tipo" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="charge">Cargo</SelectItem>
-                      <SelectItem value="payment">Abono</SelectItem>
+                      <SelectItem value="charge">Cargo (Deudor nos debe más)</SelectItem>
+                      <SelectItem value="payment">Abono (Deudor nos paga)</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -653,6 +772,67 @@ const Debtors = () => {
                     required
                   />
                 </div>
+                {newTransaction.type === "payment" && (
+                  <>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="sourceAccountType" className="text-right">
+                        Abonar a
+                      </Label>
+                      <Select value={newTransaction.sourceAccountType} onValueChange={handleSourceAccountTypeChange}>
+                        <SelectTrigger id="sourceAccountType" className="col-span-3">
+                          <SelectValue placeholder="Selecciona cuenta de destino" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="cash">Efectivo (Saldo: ${cashBalance.toFixed(2)})</SelectItem>
+                          {cards.filter(c => c.type === "debit" || c.type === "credit").map(card => (
+                            <SelectItem key={card.id} value={card.id}>
+                              Tarjeta {card.name} ({card.bank_name} ****{card.last_four_digits}) (Saldo: ${card.current_balance.toFixed(2)})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    {newTransaction.sourceAccountType === "card" && (
+                      <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="sourceAccountId" className="text-right">
+                          Tarjeta
+                        </Label>
+                        <Select value={newTransaction.sourceAccountId || ""} onValueChange={handleSourceAccountIdChange}>
+                          <SelectTrigger id="sourceAccountId" className="col-span-3">
+                            <SelectValue placeholder="Selecciona tarjeta" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {cards.filter(c => c.type === "debit" || c.type === "credit").map(card => (
+                              <SelectItem key={card.id} value={card.id}>
+                                Tarjeta {card.name} ({card.bank_name} ****{card.last_four_digits}) (Saldo: ${card.current_balance.toFixed(2)})
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="incomeCategory" className="text-right">
+                        Categoría de Ingreso
+                      </Label>
+                      <Select value={newTransaction.selectedIncomeCategoryId || ""} onValueChange={handleIncomeCategorySelectChange}>
+                        <SelectTrigger id="incomeCategory" className="col-span-3">
+                          <SelectValue placeholder="Selecciona categoría de ingreso" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {incomeCategories.map((cat) => (
+                            <SelectItem key={cat.id} value={cat.id}>
+                              <div className="flex items-center gap-2">
+                                <DynamicLucideIcon iconName={cat.icon || "Tag"} className="h-4 w-4" />
+                                {cat.name}
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </>
+                )}
                 <DialogFooter>
                   <Button type="submit">Registrar Transacción</Button>
                 </DialogFooter>
