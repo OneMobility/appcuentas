@@ -7,8 +7,6 @@ import { CreditCard, DollarSign, History, Trash2, Edit } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { useNavigate } from "react-router-dom";
-// import { getRelevantStatementForPayment, getCurrentActiveBillingCycle } from "@/utils/date-helpers"; // Eliminado
-// import { parseISO, isWithinInterval, isSameDay, isBefore } from "date-fns"; // Eliminado
 
 interface CardTransaction {
   id: string;
@@ -16,9 +14,6 @@ interface CardTransaction {
   amount: number;
   description: string;
   date: string;
-  installments_total_amount?: number; // Monto total del cargo original si es a meses
-  installments_count?: number; // Número total de meses si es a meses
-  installment_number?: number; // Número de cuota actual (1, 2, 3...)
   income_category_id?: string | null;
   expense_category_id?: string | null;
 }
@@ -53,8 +48,6 @@ const CardDisplay: React.FC<CardDisplayProps> = ({ card, onAddTransaction, onDel
   const creditUsed = isCredit ? card.current_balance : 0; // Crédito utilizado es la deuda total
   const navigate = useNavigate();
 
-  // Eliminado el cálculo de deuda del ciclo actual y deuda pendiente de pago
-
   const handleViewDetails = () => {
     navigate(`/cards/${card.id}`);
   };
@@ -83,8 +76,6 @@ const CardDisplay: React.FC<CardDisplayProps> = ({ card, onAddTransaction, onDel
               <p className="text-sm opacity-80 mt-1">
                 Crédito Utilizado: ${creditUsed.toFixed(2)}
               </p>
-              {/* Eliminado: Deuda del Ciclo Actual */}
-              {/* Eliminado: Deuda Pendiente de Pago */}
             </>
           ) : (
             <>

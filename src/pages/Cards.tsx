@@ -21,7 +21,7 @@ import ColorPicker from "@/components/ColorPicker";
 import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/context/SessionContext";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { getUpcomingPaymentDueDate, getUpcomingCutOffDate, getBillingCycleDates, getInstallmentFirstPaymentDueDate } from "@/utils/date-helpers";
+import { getUpcomingPaymentDueDate, getUpcomingCutOffDate, getBillingCycleDates } from "@/utils/date-helpers";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { exportToCsv, exportToPdf } from "@/utils/export";
 import CardTransferDialog from "@/components/CardTransferDialog";
@@ -38,9 +38,6 @@ interface CardTransaction {
   created_at: string; // Add created_at
   card_id?: string;
   user_id?: string;
-  installments_total_amount?: number;
-  installments_count?: number;
-  installment_number?: number;
   income_category_id?: string | null;
   expense_category_id?: string | null;
 }
@@ -89,7 +86,6 @@ const Cards = () => {
     amount: "",
     description: "",
     date: undefined as Date | undefined,
-    installments_count: undefined as number | undefined,
     selectedCategoryId: "",
     selectedCategoryType: "" as "income" | "expense" | "",
   });
@@ -259,7 +255,7 @@ const Cards = () => {
 
   const handleOpenAddTransactionDialog = (cardId: string) => {
     setSelectedCardId(cardId);
-    setNewTransaction({ type: "charge", amount: "", description: "", date: new Date(), installments_count: undefined, selectedCategoryId: "", selectedCategoryType: "" });
+    setNewTransaction({ type: "charge", amount: "", description: "", date: new Date(), selectedCategoryId: "", selectedCategoryType: "" });
     setIsAddTransactionDialogOpen(true);
   };
 
@@ -269,15 +265,11 @@ const Cards = () => {
   };
 
   const handleTransactionTypeChange = (value: "charge" | "payment") => {
-    setNewTransaction((prev) => ({ ...prev, type: value, installments_count: undefined, selectedCategoryId: "", selectedCategoryType: "" }));
+    setNewTransaction((prev) => ({ ...prev, type: value, selectedCategoryId: "", selectedCategoryType: "" }));
   };
 
   const handleTransactionDateChange = (date: Date | undefined) => {
     setNewTransaction((prev) => ({ ...prev, date: date }));
-  };
-
-  const handleInstallmentsChange = (value: string) => {
-    setNewTransaction((prev) => ({ ...prev, installments_count: parseInt(value) || undefined }));
   };
 
   const handleCategorySelectChange = (value: string) => {
@@ -335,89 +327,49 @@ const Cards = () => {
     }
 
     let newCardBalance = currentCard.current_balance;
-    const transactionsToInsert: Omit<CardTransaction, 'id' | 'created_at'>[] = []; // Exclude created_at
+    const transactionsToInsert: Omit<CardTransaction, 'id' | 'created_at'>[] = [];
 
-    if (currentCard.type === "credit" && newTransaction.type === "charge" && newTransaction.installments_count && newTransaction.installments_count > 1) {
-      const amountPerInstallment = totalAmount / newTransaction.installments_count;
-      
-      newCardBalance += totalAmount;
-
-      if (currentCard.credit_limit !== undefined && newCardBalance > currentCard.credit_limit) {
-        toast.info(`Tu tarjeta de crédito ha excedido su límite. Saldo actual: $${newCardBalance.toFixed(2)}`, {
-          style: { backgroundColor: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))' },
-          duration: 10000
-        });
+    if (currentCard.type === "debit") {
+      if (newTransaction.type === "charge") {
+        if (newCardBalance < totalAmount) {
+          showError("Saldo insuficiente en la tarjeta de débito.");
+          return;
+        }
+        newCardBalance -= totalAmount;
+      } else {
+        newCardBalance += totalAmount;
       }
-
-      const firstPaymentDueDate = getInstallmentFirstPaymentDueDate(
-        newTransaction.date,
-        currentCard.cut_off_day!,
-        currentCard.days_to_pay_after_cut_off!
-      );
-
-      for (let i = 0; i < newTransaction.installments_count; i++) {
-        const installmentDate = addMonths(firstPaymentDueDate, i);
-        transactionsToInsert.push({
-          user_id: user.id,
-          card_id: selectedCardId,
-          type: "charge",
-          amount: amountPerInstallment,
-          description: `${newTransaction.description} (Cuota ${i + 1}/${newTransaction.installments_count})`,
-          date: format(installmentDate, "yyyy-MM-dd"),
-          installments_total_amount: totalAmount,
-          installments_count: newTransaction.installments_count,
-          installment_number: i + 1,
-          expense_category_id: expenseCategoryIdToInsert,
-        });
-      }
-    } else {
-      if (currentCard.type === "debit") {
-        if (newTransaction.type === "charge") {
-          if (newCardBalance < totalAmount) {
-            showError("Saldo insuficiente en la tarjeta de débito.");
-            return;
-          }
-          newCardBalance -= totalAmount;
-        } else {
-          newCardBalance += totalAmount;
+    } else { // Credit card
+      if (newTransaction.type === "charge") {
+        newCardBalance += totalAmount; // Charges increase debt
+        if (currentCard.credit_limit !== undefined && newCardBalance > currentCard.credit_limit) {
+          toast.info(`Tu tarjeta de crédito ha excedido su límite. Saldo actual: $${newCardBalance.toFixed(2)}`, {
+            style: { backgroundColor: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))' },
+            duration: 10000
+          });
         }
       } else {
-        if (newTransaction.type === "charge") {
-          newCardBalance += totalAmount;
-          if (currentCard.credit_limit !== undefined && newCardBalance > currentCard.credit_limit) {
-            toast.info(`Tu tarjeta de crédito ha excedido su límite. Saldo actual: $${newCardBalance.toFixed(2)}`, {
-              style: { backgroundColor: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))' },
-              duration: 10000
-            });
-          }
-        } else {
-          if (newCardBalance < totalAmount) {
-            showError("El pago excede la deuda pendiente.");
-            return;
-          }
-          newCardBalance -= totalAmount;
-          if (newCardBalance < 0) {
-            toast.info(`Has sobrepagado tu tarjeta ${currentCard.name}. Tu saldo actual es de $${newCardBalance.toFixed(2)} (a tu favor).`, {
-              style: { backgroundColor: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))' },
-              duration: 10000
-            });
-          }
+        // Payments decrease debt
+        newCardBalance -= totalAmount;
+        if (newCardBalance < 0) {
+          toast.info(`Has sobrepagado tu tarjeta ${currentCard.name}. Tu saldo actual es de $${newCardBalance.toFixed(2)} (a tu favor).`, {
+            style: { backgroundColor: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))' },
+            duration: 10000
+          });
         }
       }
-      transactionsToInsert.push({
-        user_id: user.id,
-        card_id: selectedCardId,
-        type: newTransaction.type,
-        amount: totalAmount,
-        description: newTransaction.description,
-        date: format(newTransaction.date, "yyyy-MM-dd"),
-        installments_total_amount: undefined,
-        installments_count: undefined,
-        installment_number: undefined,
-        income_category_id: incomeCategoryIdToInsert,
-        expense_category_id: expenseCategoryIdToInsert,
-      });
     }
+    
+    transactionsToInsert.push({
+      user_id: user.id,
+      card_id: selectedCardId,
+      type: newTransaction.type,
+      amount: totalAmount,
+      description: newTransaction.description,
+      date: format(newTransaction.date, "yyyy-MM-dd"),
+      income_category_id: incomeCategoryIdToInsert,
+      expense_category_id: expenseCategoryIdToInsert,
+    });
 
     try {
       const { data: insertedTransactions, error: transactionError } = await supabase
@@ -448,7 +400,7 @@ const Cards = () => {
           return card;
         })
       );
-      setNewTransaction({ type: "charge", amount: "", description: "", date: undefined, installments_count: undefined, selectedCategoryId: "", selectedCategoryType: "" });
+      setNewTransaction({ type: "charge", amount: "", description: "", date: undefined, selectedCategoryId: "", selectedCategoryType: "" });
       setSelectedCardId(null);
       setIsAddTransactionDialogOpen(false);
       showSuccess("Transacción(es) registrada(s) exitosamente.");
@@ -888,28 +840,6 @@ const Cards = () => {
                     required
                   />
                 </div>
-                {newTransaction.type === "charge" && currentCardForDialog?.type === "credit" && (
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="installments_count" className="text-right">
-                      Meses
-                    </Label>
-                    <Select
-                      value={newTransaction.installments_count?.toString() || ""}
-                      onValueChange={handleInstallmentsChange}
-                    >
-                      <SelectTrigger className="col-span-3">
-                        <SelectValue placeholder="Pago único" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="1">Pago único</SelectItem>
-                        <SelectItem value="3">3 meses</SelectItem>
-                        <SelectItem value="6">6 meses</SelectItem>
-                        <SelectItem value="9">9 meses</SelectItem>
-                        <SelectItem value="12">12 meses</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
                 <div className="grid grid-cols-4 items-center gap-4">
                   <Label htmlFor="transactionDescription" className="text-right">
                     Descripción

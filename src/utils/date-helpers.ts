@@ -147,37 +147,3 @@ export const getUpcomingCutOffDate = (cutOffDay: number, referenceDate: Date = n
   }
   return upcomingCutOff;
 };
-
-/**
- * Calcula la fecha de la primera cuota para una transacción a meses,
- * basándose en la lógica de que si la compra es antes o en la fecha de corte,
- * la primera cuota se difiere al siguiente ciclo de pago.
- *
- * @param transactionDate La fecha en que se realizó la transacción.
- * @param cutOffDay El día del mes en que la tarjeta tiene su fecha de corte.
- * @param daysToPayAfterCutOff El número de días después de la fecha de corte para la fecha límite de pago.
- * @returns La fecha de la primera cuota.
- */
-export const getInstallmentFirstPaymentDueDate = (transactionDate: Date, cutOffDay: number, daysToPayAfterCutOff: number): Date => {
-  const txDate = new Date(transactionDate);
-  txDate.setHours(0, 0, 0, 0);
-
-  // Determinar la fecha de corte del mes de la transacción
-  let transactionMonthCutOff = setDate(new Date(txDate.getFullYear(), txDate.getMonth()), cutOffDay);
-  transactionMonthCutOff.setHours(0, 0, 0, 0);
-
-  let cycleEndDateForTransaction: Date;
-
-  // Si la transacción se hizo en o antes del día de corte, el ciclo cierra ese mes.
-  // Si se hizo después del día de corte, el ciclo cierra el mes siguiente.
-  if (isBefore(txDate, transactionMonthCutOff) || isSameDay(txDate, transactionMonthCutOff)) {
-    cycleEndDateForTransaction = transactionMonthCutOff;
-  } else {
-    cycleEndDateForTransaction = addMonths(transactionMonthCutOff, 1);
-  }
-
-  const firstPaymentDueDate = addDays(cycleEndDateForTransaction, daysToPayAfterCutOff);
-  firstPaymentDueDate.setHours(0, 0, 0, 0);
-
-  return firstPaymentDueDate;
-};
