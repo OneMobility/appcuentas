@@ -34,14 +34,15 @@ import DynamicLucideIcon from "@/components/DynamicLucideIcon";
 interface CardTransaction {
   id: string;
   type: "charge" | "payment";
-  amount: number; // Monto por cuota si es a meses, o monto total si es pago único
+  amount: number;
   description: string;
   date: string;
+  created_at: string; // Add created_at
   card_id?: string;
   user_id?: string;
-  installments_total_amount?: number; // Monto total del cargo original si es a meses
-  installments_count?: number; // Número total de meses si es a meses
-  installment_number?: number; // Número de cuota actual (1, 2, 3...)
+  installments_total_amount?: number;
+  installments_count?: number;
+  installment_number?: number;
   income_category_id?: string | null;
   expense_category_id?: string | null;
 }
@@ -54,7 +55,7 @@ interface CardData {
   expiration_date: string;
   type: "credit" | "debit";
   initial_balance: number;
-  current_balance: number; // Deuda total para crédito, saldo para débito
+  current_balance: number;
   credit_limit?: number;
   cut_off_day?: number;
   days_to_pay_after_cut_off?: number;
@@ -75,12 +76,12 @@ const CardDetailsPage: React.FC = () => {
   const [editingTransaction, setEditingTransaction] = useState<CardTransaction | null>(null);
   const [newTransaction, setNewTransaction] = useState({
     type: "charge" as "charge" | "payment",
-    amount: "", // Este será el monto TOTAL para cargos a meses
+    amount: "",
     description: "",
     date: undefined as Date | undefined,
     installments_count: undefined as number | undefined,
-    selectedCategoryId: "", // Single field for selected category ID
-    selectedCategoryType: "" as "income" | "expense" | "", // To track which type of category is selected
+    selectedCategoryId: "",
+    selectedCategoryType: "" as "income" | "expense" | "",
   });
 
   // Filter states
@@ -88,7 +89,7 @@ const CardDetailsPage: React.FC = () => {
   const [filterType, setFilterType] = useState<"all" | "charge" | "payment">("all");
   const [filterCategory, setFilterCategory] = useState<string>("all");
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
-  const [isOverdue, setIsOverdue] = useState(false); // New state for overdue notification
+  const [isOverdue, setIsOverdue] = useState(false);
 
   useEffect(() => {
     const fetchCardDetails = async () => {
@@ -128,41 +129,34 @@ const CardDetailsPage: React.FC = () => {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
 
-      // Get the billing cycle whose payment is currently relevant (due or upcoming)
       const { statementStartDate, statementEndDate, statementPaymentDueDate } = getRelevantStatementForPayment(
         card.cut_off_day,
         card.days_to_pay_after_cut_off,
         today
       );
 
-      // Calculate the statement balance for this relevant cycle
       const statementCharges = (card.transactions || [])
         .filter(tx => tx.type === "charge")
         .filter(tx => {
           const txDateParsed = parseISO(tx.date);
           if (tx.installments_count && tx.installments_count > 1) {
-            // For installments, check if the installment's due date matches the statement's payment due date
             return isSameDay(txDateParsed, statementPaymentDueDate);
           } else {
-            // For single charges, check if the transaction date is within the statement's billing period
             return isWithinInterval(txDateParsed, { start: statementStartDate, end: statementEndDate });
           }
         })
-        .reduce((sum, tx) => sum + tx.amount, 0); // Sum only tx.amount (monthly installment or single charge amount)
+        .reduce((sum, tx) => sum + tx.amount, 0);
 
-      // Subtract payments made specifically for this cycle's statement
       const paymentsForDueCycle = (card.transactions || [])
         .filter(tx => tx.type === "payment")
         .filter(tx => {
           const txDate = parseISO(tx.date);
-          // Payments are considered for the statement if made up to the payment due date
           return isWithinInterval(txDate, { start: statementStartDate, end: statementPaymentDueDate });
         })
         .reduce((sum, tx) => sum + tx.amount, 0);
 
       const netStatementBalance = statementCharges - paymentsForDueCycle;
 
-      // If today is strictly after the payment due date AND there's still a positive net statement balance
       if (isAfter(today, statementPaymentDueDate) && netStatementBalance > 0) {
         setIsOverdue(true);
       } else {
@@ -171,7 +165,7 @@ const CardDetailsPage: React.FC = () => {
     } else {
       setIsOverdue(false);
     }
-  }, [card]); // Recalculate when card data changes
+  }, [card]);
 
   const handleTransactionInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -210,7 +204,7 @@ const CardDetailsPage: React.FC = () => {
       return;
     }
 
-    const totalAmount = parseFloat(newTransaction.amount); // Monto total ingresado por el usuario
+    const totalAmount = parseFloat(newTransaction.amount);
     if (isNaN(totalAmount) || totalAmount <= 0) {
       showError("El monto de la transacción debe ser un número positivo.");
       return;
@@ -235,16 +229,13 @@ const CardDetailsPage: React.FC = () => {
     }
 
     let newCardBalance = card.current_balance;
-    const transactionsToInsert: Omit<CardTransaction, 'id'>[] = [];
+    const transactionsToInsert: Omit<CardTransaction, 'id' | 'created_at'>[] = []; // Exclude created_at
 
     if (card.type === "credit" && newTransaction.type === "charge" && newTransaction.installments_count && newTransaction.installments_count > 1) {
-      // Logic for installment charges on credit cards
       const amountPerInstallment = totalAmount / newTransaction.installments_count;
       
-      // Update card balance with the total amount immediately
       newCardBalance += totalAmount;
 
-      // Check if credit limit is exceeded
       if (card.credit_limit !== undefined && newCardBalance > card.credit_limit) {
         toast.info(`Tu tarjeta de crédito ha excedido su límite. Saldo actual: $${newCardBalance.toFixed(2)}`, {
           style: { backgroundColor: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))' },
@@ -252,7 +243,6 @@ const CardDetailsPage: React.FC = () => {
         });
       }
 
-      // Determine the first installment's due date using the new helper function
       const firstPaymentDueDate = getInstallmentFirstPaymentDueDate(
         newTransaction.date,
         card.cut_off_day!,
@@ -275,7 +265,6 @@ const CardDetailsPage: React.FC = () => {
         });
       }
     } else {
-      // Logic for single charges or payments
       if (card.type === "debit") {
         if (newTransaction.type === "charge") {
           if (newCardBalance < totalAmount) {
@@ -283,10 +272,10 @@ const CardDetailsPage: React.FC = () => {
             return;
           }
           newCardBalance -= totalAmount;
-        } else { // payment to debit card
+        } else {
           newCardBalance += totalAmount;
         }
-      } else { // Credit card (single charge or payment)
+      } else {
         if (newTransaction.type === "charge") {
           newCardBalance += totalAmount;
           if (card.credit_limit !== undefined && newCardBalance > card.credit_limit) {
@@ -295,7 +284,7 @@ const CardDetailsPage: React.FC = () => {
               duration: 10000
             });
           }
-        } else { // Payment to credit card
+        } else {
           if (newCardBalance < totalAmount) {
             showError("El pago excede la deuda pendiente.");
             return;
@@ -341,7 +330,6 @@ const CardDetailsPage: React.FC = () => {
 
       if (cardError) throw cardError;
 
-      // Re-fetch all transactions for the card to ensure consistency
       const { data: updatedTransactions, error: fetchTxError } = await supabase
         .from('card_transactions')
         .select('*')
@@ -373,8 +361,8 @@ const CardDetailsPage: React.FC = () => {
 
     setNewTransaction({
       type: transaction.type,
-      amount: (transaction.installments_total_amount || transaction.amount).toString(), // Mostrar monto total para edición
-      description: transaction.description.replace(/\s\(Cuota\s\d+\/\d+\)/, ''), // Limpiar descripción de cuota
+      amount: (transaction.installments_total_amount || transaction.amount).toString(),
+      description: transaction.description.replace(/\s\(Cuota\s\d+\/\d+\)/, ''),
       date: new Date(transaction.date),
       installments_count: transaction.installments_count,
       selectedCategoryId: categoryId,
@@ -420,21 +408,18 @@ const CardDetailsPage: React.FC = () => {
 
     let newCardBalance = card.current_balance;
 
-    // Revertir el impacto de la transacción antigua en el saldo
     const oldEffectiveAmount = oldTransaction.installments_total_amount || oldTransaction.amount;
     newCardBalance = oldTransaction.type === "charge" ? newCardBalance - oldEffectiveAmount : newCardBalance + oldEffectiveAmount;
 
-    // Eliminar todas las cuotas antiguas si la transacción editada era a meses
     if (oldTransaction.installments_count && oldTransaction.installments_count > 1) {
       const { error: deleteOldInstallmentsError } = await supabase
         .from('card_transactions')
         .delete()
         .eq('installments_total_amount', oldTransaction.installments_total_amount)
         .eq('card_id', card.id)
-        .eq('user_id', user.id); // Corrected user.id
+        .eq('user_id', user.id);
       if (deleteOldInstallmentsError) throw deleteOldInstallmentsError;
     } else {
-      // Si era una transacción única, simplemente eliminarla
       const { error: deleteOldTransactionError } = await supabase
         .from('card_transactions')
         .delete()
@@ -443,13 +428,11 @@ const CardDetailsPage: React.FC = () => {
       if (deleteOldTransactionError) throw deleteOldTransactionError;
     }
 
-    const transactionsToInsert: Omit<CardTransaction, 'id'>[] = [];
+    const transactionsToInsert: Omit<CardTransaction, 'id' | 'created_at'>[] = []; // Exclude created_at
 
     if (card.type === "credit" && newType === "charge" && newInstallmentsCount && newInstallmentsCount > 1) {
-      // Logic for new installment charges on credit cards
       const amountPerInstallment = newTotalAmount / newInstallmentsCount;
       
-      // Apply new total amount to card balance
       newCardBalance += newTotalAmount;
 
       if (card.credit_limit !== undefined && newCardBalance > card.credit_limit) {
@@ -459,7 +442,6 @@ const CardDetailsPage: React.FC = () => {
         });
       }
 
-      // Determine the first installment's due date using the new helper function
       const firstPaymentDueDate = getInstallmentFirstPaymentDueDate(
         newTransaction.date,
         card.cut_off_day!,
@@ -482,7 +464,6 @@ const CardDetailsPage: React.FC = () => {
         });
       }
     } else {
-      // Logic for new single charges or payments
       if (card.type === "debit") {
         if (newType === "charge") {
           if (newCardBalance < newTotalAmount) {
@@ -490,10 +471,10 @@ const CardDetailsPage: React.FC = () => {
             return;
           }
           newCardBalance -= newTotalAmount;
-        } else { // payment to debit card
+        } else {
           newCardBalance += newTotalAmount;
         }
-      } else { // Credit card (single charge or payment)
+      } else {
         if (newType === "charge") {
           newCardBalance += newTotalAmount;
           if (card.credit_limit !== undefined && newCardBalance > card.credit_limit) {
@@ -502,7 +483,7 @@ const CardDetailsPage: React.FC = () => {
               duration: 10000
             });
           }
-        } else { // Payment to credit card
+        } else {
           if (newCardBalance < newTotalAmount) {
             showError("El pago excede la deuda pendiente.");
             return;
@@ -548,7 +529,6 @@ const CardDetailsPage: React.FC = () => {
 
       if (cardError) throw cardError;
 
-      // Re-fetch all transactions for the card to ensure consistency
       const { data: updatedTransactions, error: fetchTxError } = await supabase
         .from('card_transactions')
         .select('*')
@@ -584,12 +564,10 @@ const CardDetailsPage: React.FC = () => {
     let newCardBalance = card.current_balance;
     const effectiveAmount = transaction.installments_total_amount || transaction.amount;
 
-    // Revertir el impacto de la transacción eliminada en el saldo
     newCardBalance = transaction.type === "charge" ? newCardBalance - effectiveAmount : newCardBalance + effectiveAmount;
 
     try {
       if (transaction.installments_count && transaction.installments_count > 1) {
-        // Si es una cuota, eliminar todas las cuotas de la misma compra
         const { error: deleteInstallmentsError } = await supabase
           .from('card_transactions')
           .delete()
@@ -598,7 +576,6 @@ const CardDetailsPage: React.FC = () => {
           .eq('user_id', user.id);
         if (deleteInstallmentsError) throw deleteInstallmentsError;
       } else {
-        // Si es una transacción única, eliminar solo esa
         const { error: deleteTransactionError } = await supabase
           .from('card_transactions')
           .delete()
@@ -614,7 +591,6 @@ const CardDetailsPage: React.FC = () => {
         .eq('user_id', user.id);
       if (cardError) throw cardError;
 
-      // Re-fetch all transactions for the card to ensure consistency
       const { data: updatedTransactions, error: fetchTxError } = await supabase
         .from('card_transactions')
         .select('*')
@@ -638,9 +614,15 @@ const CardDetailsPage: React.FC = () => {
     }
   };
 
-  const filteredTransactions = useMemo(() => {
+  const sortedAndFilteredTransactions = useMemo(() => {
     if (!card) return [];
-    return (card.transactions || []).filter((tx) => {
+
+    const sortedTransactions = (card.transactions || []).sort((a, b) => {
+      // Sort by created_at in descending order
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    });
+
+    return sortedTransactions.filter((tx) => {
       const matchesSearch = tx.description.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesType = filterType === "all" || tx.type === filterType;
       
@@ -653,8 +635,37 @@ const CardDetailsPage: React.FC = () => {
       const matchesDate = !dateRange?.from || (txDate >= dateRange.from && (!dateRange.to || txDate <= dateRange.to));
 
       return matchesSearch && matchesType && matchesCategory && matchesDate;
-    }).sort((a, b) => parseISO(b.date).getTime() - parseISO(a.date).getTime());
+    });
   }, [card, searchTerm, filterType, filterCategory, dateRange, getCategoryById]);
+
+  const transactionsWithRunningBalance = useMemo(() => {
+    if (!card) return [];
+
+    const initialBalance = card.initial_balance; // Use initial_balance from card
+    let currentRunningBalance = initialBalance;
+
+    // Sort transactions by date and then by created_at for consistent balance calculation
+    const chronologicalTransactions = [...(card.transactions || [])].sort((a, b) => {
+      const dateA = parseISO(a.date).getTime();
+      const dateB = parseISO(b.date).getTime();
+      if (dateA !== dateB) return dateA - dateB;
+      return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+    });
+
+    const transactionsWithBalance = chronologicalTransactions.map(tx => {
+      if (card.type === "credit") {
+        // For credit cards, charges increase debt, payments decrease debt
+        currentRunningBalance = tx.type === "charge" ? currentRunningBalance + tx.amount : currentRunningBalance - tx.amount;
+      } else {
+        // For debit cards, charges decrease balance, payments increase balance
+        currentRunningBalance = tx.type === "charge" ? currentRunningBalance - tx.amount : currentRunningBalance + tx.amount;
+      }
+      return { ...tx, running_balance: currentRunningBalance };
+    });
+
+    // Reverse to show most recent first in the UI
+    return transactionsWithBalance.reverse();
+  }, [card]);
 
   const handleExportCardTransactions = (formatType: 'csv' | 'pdf') => {
     if (!card) {
@@ -662,7 +673,7 @@ const CardDetailsPage: React.FC = () => {
       return;
     }
 
-    const dataToExport = filteredTransactions.map(tx => {
+    const dataToExport = transactionsWithRunningBalance.map(tx => {
       const category = getCategoryById(tx.income_category_id || tx.expense_category_id);
       return {
         Fecha: format(parseISO(tx.date), "dd/MM/yyyy", { locale: es }),
@@ -673,12 +684,13 @@ const CardDetailsPage: React.FC = () => {
         Cuotas: tx.installments_count && tx.installment_number && tx.installments_count > 1
           ? `${tx.installment_number}/${tx.installments_count}`
           : "Pago único",
+        Saldo: tx.running_balance?.toFixed(2) || "N/A", // Add running balance
       };
     });
 
     const filename = `estado_cuenta_${card.name.replace(/\s/g, '_')}_${format(new Date(), "yyyyMMdd_HHmmss")}`;
     const title = `Estado de Cuenta: ${card.name} (${card.bank_name})`;
-    const headers = ["Fecha", "Tipo", "Categoría", "Descripción", "Monto", "Cuotas"];
+    const headers = ["Fecha", "Tipo", "Categoría", "Descripción", "Monto", "Cuotas", "Saldo"]; // Add Saldo header
     const pdfData = dataToExport.map(row => Object.values(row));
 
     if (formatType === 'csv') {
@@ -689,8 +701,6 @@ const CardDetailsPage: React.FC = () => {
       showSuccess("Estado de cuenta exportado a PDF.");
     }
   };
-
-  // Eliminado el cálculo de deuda del ciclo actual y deuda pendiente de pago
 
   if (isLoading || isLoadingCategories) {
     return <LoadingSpinner />;
@@ -719,7 +729,6 @@ const CardDetailsPage: React.FC = () => {
         <h1 className="text-3xl font-bold">Detalles de la Tarjeta: {card.name}</h1>
       </div>
 
-      {/* Overdue Payment Notification */}
       {isOverdue && (
         <Card className="border-l-4 border-red-600 bg-red-50 text-red-800">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -736,7 +745,6 @@ const CardDetailsPage: React.FC = () => {
         </Card>
       )}
 
-      {/* Tarjetas de notificación */}
       {isCredit && (
         <div className="grid gap-4 md:grid-cols-2">
           <PaymentDueDateCard card={card} />
@@ -762,8 +770,6 @@ const CardDetailsPage: React.FC = () => {
                 <p className="text-sm opacity-80 mt-1">
                   Crédito Utilizado: ${creditUsed.toFixed(2)}
                 </p>
-                {/* Eliminado: Deuda del Ciclo Actual */}
-                {/* Eliminado: Deuda Pendiente de Pago */}
               </>
             ) : (
               <>
@@ -845,7 +851,6 @@ const CardDetailsPage: React.FC = () => {
                       </SelectContent>
                     </Select>
                   </div>
-                  {/* Conditionally render category selector based on transaction type and card type */}
                   {(newTransaction.type === "charge" || (newTransaction.type === "payment" && card.type === "debit")) && (
                     <div className="grid grid-cols-4 items-center gap-4">
                       <Label htmlFor="category_id" className="text-right">
@@ -1007,7 +1012,6 @@ const CardDetailsPage: React.FC = () => {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todas las Categorías</SelectItem>
-                {/* Show all categories for filtering */}
                 {[...incomeCategories, ...expenseCategories].map((cat) => (
                   <SelectItem key={cat.id} value={cat.id}>
                     <div className="flex items-center gap-2">
@@ -1057,21 +1061,35 @@ const CardDetailsPage: React.FC = () => {
             </Popover>
           </div>
           <div className="overflow-x-auto">
-            {filteredTransactions.length > 0 ? (
+            {transactionsWithRunningBalance.length > 0 ? (
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-12"></TableHead> {/* Nueva columna para el icono, más ancha */}
+                    <TableHead className="w-12"></TableHead>
                     <TableHead>Fecha</TableHead>
                     <TableHead>Tipo</TableHead>
                     <TableHead>Categoría</TableHead>
                     <TableHead>Descripción</TableHead>
                     <TableHead className="text-right">Monto</TableHead>
+                    <TableHead className="text-right">Saldo</TableHead> {/* New Balance column */}
                     <TableHead className="text-right">Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredTransactions.map((transaction) => {
+                  {transactionsWithRunningBalance.filter((tx) => {
+                    const matchesSearch = tx.description.toLowerCase().includes(searchTerm.toLowerCase());
+                    const matchesType = filterType === "all" || tx.type === filterType;
+                    
+                    const categoryId = tx.income_category_id || tx.expense_category_id;
+                    const category = getCategoryById(categoryId);
+                    const categoryName = category?.name || "";
+                    const matchesCategory = filterCategory === "all" || categoryId === filterCategory || categoryName.toLowerCase().includes(filterCategory.toLowerCase());
+                    
+                    const txDate = parseISO(tx.date);
+                    const matchesDate = !dateRange?.from || (txDate >= dateRange.from && (!dateRange.to || txDate <= dateRange.to));
+
+                    return matchesSearch && matchesType && matchesCategory && matchesDate;
+                  }).map((transaction) => {
                     const isPaymentToCreditCard = card.type === "credit" && transaction.type === "payment";
                     const category = getCategoryById(transaction.income_category_id || transaction.expense_category_id);
 
@@ -1080,13 +1098,13 @@ const CardDetailsPage: React.FC = () => {
                     if (card.type === "credit") {
                       if (transaction.type === "payment") {
                         deleteDescription = `Esta acción no se puede deshacer. Esto eliminará permanentemente el pago de $${transaction.amount.toFixed(2)}: "${transaction.description}" y aumentará la deuda de tu tarjeta de crédito.`;
-                      } else { // charge on credit card
+                      } else {
                         deleteDescription = `Esta acción no se puede deshacer. Esto eliminará permanentemente el cargo de $${transaction.amount.toFixed(2)}: "${transaction.description}" y reducirá la deuda de tu tarjeta de crédito.`;
                       }
-                    } else { // debit card
+                    } else {
                       if (transaction.type === "payment") {
                         deleteDescription = `Esta acción no se puede deshacer. Esto eliminará permanentemente el ingreso de $${transaction.amount.toFixed(2)}: "${transaction.description}" y reducirá el saldo de tu tarjeta de débito.`;
-                      } else { // charge on debit card
+                      } else {
                         deleteDescription = `Esta acción no se puede deshacer. Esto eliminará permanentemente el egreso de $${transaction.amount.toFixed(2)}: "${transaction.description}" y aumentará el saldo de tu tarjeta de débito.`;
                       }
                     }
@@ -1096,7 +1114,7 @@ const CardDetailsPage: React.FC = () => {
                         key={transaction.id}
                         className={cn(isPaymentToCreditCard && "bg-pink-50 text-pink-800")}
                       >
-                        <TableCell className="w-12 flex items-center justify-center"> {/* Celda para el icono */}
+                        <TableCell className="w-12 flex items-center justify-center">
                           {isPaymentToCreditCard && (
                             <img
                               src="https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Love%20Cochinito%20Card.png"
@@ -1104,7 +1122,7 @@ const CardDetailsPage: React.FC = () => {
                               className="h-20 w-20"
                               onError={(e) => {
                                 console.error("Error al cargar la imagen del cochinito:", e.currentTarget.src);
-                                e.currentTarget.style.display = 'none'; // Ocultar la imagen si falla
+                                e.currentTarget.style.display = 'none';
                               }}
                             />
                           )}
@@ -1126,6 +1144,7 @@ const CardDetailsPage: React.FC = () => {
                         </TableCell>
                         <TableCell>{transaction.description}</TableCell>
                         <TableCell className="text-right">${transaction.amount.toFixed(2)}</TableCell>
+                        <TableCell className="text-right">${transaction.running_balance?.toFixed(2) || "N/A"}</TableCell> {/* Display running balance */}
                         <TableCell className="text-right flex gap-2 justify-end">
                           <Button
                             variant="outline"
@@ -1197,7 +1216,6 @@ const CardDetailsPage: React.FC = () => {
                     </SelectContent>
                   </Select>
                 </div>
-                {/* Conditionally render category selector for edit dialog */}
                 {(newTransaction.type === "charge" || (newTransaction.type === "payment" && card.type === "debit")) && (
                   <div className="grid grid-cols-4 items-center gap-4">
                     <Label htmlFor="editCategory" className="text-right">

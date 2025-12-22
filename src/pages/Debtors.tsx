@@ -18,15 +18,16 @@ import { exportToCsv, exportToPdf } from "@/utils/export";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { getLocalDateString } from "@/utils/date-helpers";
-import { useCategoryContext } from "@/context/CategoryContext"; // Importar useCategoryContext
-import DynamicLucideIcon from "@/components/DynamicLucideIcon"; // Importar DynamicLucideIcon
+import { useCategoryContext } from "@/context/CategoryContext";
+import DynamicLucideIcon from "@/components/DynamicLucideIcon";
 
 interface DebtorTransaction {
   id: string;
-  type: "charge" | "payment"; // 'charge' para cargo, 'payment' para abono
+  type: "charge" | "payment";
   amount: number;
   description: string;
   date: string;
+  created_at: string; // Add created_at
   debtor_id?: string;
   user_id?: string;
 }
@@ -51,7 +52,7 @@ interface CardData {
 
 const Debtors = () => {
   const { user } = useSession();
-  const { incomeCategories, isLoadingCategories } = useCategoryContext(); // Usar incomeCategories
+  const { incomeCategories, isLoadingCategories } = useCategoryContext();
   const [debtors, setDebtors] = useState<Debtor[]>([]);
   const [isAddDebtorDialogOpen, setIsAddDebtorDialogOpen] = useState(false);
   const [isAddTransactionDialogOpen, setIsAddTransactionDialogOpen] = useState(false);
@@ -65,12 +66,12 @@ const Debtors = () => {
     type: "payment" as "charge" | "payment",
     amount: "",
     description: "",
-    sourceAccountType: "" as "cash" | "card" | "", // Nuevo: tipo de cuenta de origen
-    sourceAccountId: "" as string | null, // Nuevo: ID de la tarjeta si es 'card'
-    selectedIncomeCategoryId: "" as string | null, // Nuevo: para ingresos
+    sourceAccountType: "" as "cash" | "card" | "",
+    sourceAccountId: "" as string | null,
+    selectedIncomeCategoryId: "" as string | null,
   });
-  const [cashBalance, setCashBalance] = useState(0); // Nuevo: saldo en efectivo
-  const [cards, setCards] = useState<CardData[]>([]); // Nuevo: tarjetas del usuario
+  const [cashBalance, setCashBalance] = useState(0);
+  const [cards, setCards] = useState<CardData[]>([]);
 
   // Filter state
   const [searchTerm, setSearchTerm] = useState("");
@@ -283,7 +284,7 @@ const Debtors = () => {
               income_category_id: newTransaction.selectedIncomeCategoryId,
             });
           if (cashTxError) throw cashTxError;
-          setCashBalance(prev => prev + amount); // Update local cash balance
+          setCashBalance(prev => prev + amount);
         } else if (newTransaction.sourceAccountType === "card" && newTransaction.sourceAccountId) {
           const selectedCard = cards.find(c => c.id === newTransaction.sourceAccountId);
           if (!selectedCard) {
@@ -293,9 +294,9 @@ const Debtors = () => {
 
           let newCardBalance = selectedCard.current_balance;
           if (selectedCard.type === "credit") {
-            newCardBalance -= amount; // Payment to credit card reduces debt
-          } else { // Debit card
-            newCardBalance += amount; // Deposit to debit card increases balance
+            newCardBalance -= amount;
+          } else {
+            newCardBalance += amount;
           }
 
           const { error: cardUpdateError } = await supabase
@@ -317,7 +318,7 @@ const Debtors = () => {
               income_category_id: newTransaction.selectedIncomeCategoryId,
             });
           if (cardTxError) throw cardTxError;
-          fetchCashBalanceAndCards(); // Re-fetch cards to update balances
+          fetchCashBalanceAndCards();
         }
       }
 
@@ -344,22 +345,35 @@ const Debtors = () => {
         .select();
       if (debtorUpdateError) throw debtorUpdateError;
 
-      setDebtors((prev) =>
-        prev.map((debtor) => {
-          if (debtor.id === selectedDebtorId) {
-            return {
-              ...debtor,
-              current_balance: newDebtorBalance,
-              debtor_transactions: [...debtor.debtor_transactions, debtorTransactionData[0]],
-            };
-          }
-          return debtor;
-        })
-      );
+      // Check if debtor balance is zero or less and delete if so
+      if (newDebtorBalance <= 0) {
+        const { error: deleteDebtorError } = await supabase
+          .from('debtors')
+          .delete()
+          .eq('id', selectedDebtorId)
+          .eq('user_id', user.id);
+        if (deleteDebtorError) throw deleteDebtorError;
+        setDebtors((prev) => prev.filter((d) => d.id !== selectedDebtorId));
+        showSuccess(`Deudor ${currentDebtor.name} saldado y eliminado exitosamente.`);
+      } else {
+        setDebtors((prev) =>
+          prev.map((debtor) => {
+            if (debtor.id === selectedDebtorId) {
+              return {
+                ...debtor,
+                current_balance: newDebtorBalance,
+                debtor_transactions: [...debtor.debtor_transactions, debtorTransactionData[0]],
+              };
+            }
+            return debtor;
+          })
+        );
+        showSuccess("Transacción registrada exitosamente.");
+      }
+      
       setNewTransaction({ type: "payment", amount: "", description: "", sourceAccountType: "", sourceAccountId: null, selectedIncomeCategoryId: null });
       setSelectedDebtorId(null);
       setIsAddTransactionDialogOpen(false);
-      showSuccess("Transacción registrada exitosamente.");
     } catch (error: any) {
       showError('Error al registrar transacción: ' + error.message);
       console.error("Debtor transaction error:", error);
@@ -373,7 +387,7 @@ const Debtors = () => {
       type: transaction.type,
       amount: transaction.amount.toString(),
       description: transaction.description,
-      sourceAccountType: "", // Not applicable for editing existing debtor transactions directly
+      sourceAccountType: "",
       sourceAccountId: null,
       selectedIncomeCategoryId: null,
     });
@@ -445,33 +459,47 @@ const Debtors = () => {
         .select();
       if (debtorError) throw debtorError;
 
-      setDebtors((prevDebtors) =>
-        prevDebtors.map((debtor) => {
-          if (debtor.id === currentDebtor.id) {
-            return {
-              ...debtor,
-              current_balance: newDebtorBalance,
-              debtor_transactions: debtor.debtor_transactions.map(t => t.id === editingTransaction.id ? updatedTransactionData[0] : t),
-            };
-          }
-          return debtor;
-        })
-      );
+      // Check if debtor balance is zero or less and delete if so
+      if (newDebtorBalance <= 0) {
+        const { error: deleteDebtorError } = await supabase
+          .from('debtors')
+          .delete()
+          .eq('id', selectedDebtorId)
+          .eq('user_id', user.id);
+        if (deleteDebtorError) throw deleteDebtorError;
+        setDebtors((prev) => prev.filter((d) => d.id !== selectedDebtorId));
+        showSuccess(`Deudor ${currentDebtor.name} saldado y eliminado exitosamente.`);
+        setIsEditTransactionDialogOpen(false);
+        setHistoryDebtor(null); // Close history dialog if open for this debtor
+      } else {
+        setDebtors((prevDebtors) =>
+          prevDebtors.map((debtor) => {
+            if (debtor.id === currentDebtor.id) {
+              return {
+                ...debtor,
+                current_balance: newDebtorBalance,
+                debtor_transactions: debtor.debtor_transactions.map(t => t.id === editingTransaction.id ? updatedTransactionData[0] : t),
+              };
+            }
+            return debtor;
+          })
+        );
 
-      setHistoryDebtor((prev) => {
-        if (!prev) return null;
-        return {
-          ...prev,
-          current_balance: newDebtorBalance,
-          debtor_transactions: prev.debtor_transactions.map(t => t.id === editingTransaction.id ? updatedTransactionData[0] : t),
-        };
-      });
+        setHistoryDebtor((prev) => {
+          if (!prev) return null;
+          return {
+            ...prev,
+            current_balance: newDebtorBalance,
+            debtor_transactions: prev.debtor_transactions.map(t => t.id === editingTransaction.id ? updatedTransactionData[0] : t),
+          };
+        });
+        showSuccess("Transacción actualizada exitosamente.");
+        setIsEditTransactionDialogOpen(false);
+      }
 
       setNewTransaction({ type: "payment", amount: "", description: "", sourceAccountType: "", sourceAccountId: null, selectedIncomeCategoryId: null });
       setEditingTransaction(null);
       setSelectedDebtorId(null);
-      setIsEditTransactionDialogOpen(false);
-      showSuccess("Transacción actualizada exitosamente.");
     } catch (error: any) {
       showError('Error al actualizar transacción: ' + error.message);
       console.error("Debtor transaction update error:", error);
@@ -509,29 +537,41 @@ const Debtors = () => {
         .eq('user_id', user.id);
       if (debtorError) throw debtorError;
 
-      setDebtors((prevDebtors) =>
-        prevDebtors.map((debtor) => {
-          if (debtor.id === debtorId) {
-            return {
-              ...debtor,
-              current_balance: newDebtorBalance,
-              debtor_transactions: debtor.debtor_transactions.filter(t => t.id !== transactionId),
-            };
-          }
-          return debtor;
-        })
-      );
+      // Check if debtor balance is zero or less and delete if so
+      if (newDebtorBalance <= 0) {
+        const { error: deleteDebtorError } = await supabase
+          .from('debtors')
+          .delete()
+          .eq('id', debtorId)
+          .eq('user_id', user.id);
+        if (deleteDebtorError) throw deleteDebtorError;
+        setDebtors((prev) => prev.filter((d) => d.id !== debtorId));
+        showSuccess(`Deudor ${currentDebtor.name} saldado y eliminado exitosamente.`);
+        setIsHistoryDialogOpen(false); // Close history dialog if open for this debtor
+      } else {
+        setDebtors((prevDebtors) =>
+          prevDebtors.map((debtor) => {
+            if (debtor.id === debtorId) {
+              return {
+                ...debtor,
+                current_balance: newDebtorBalance,
+                debtor_transactions: debtor.debtor_transactions.filter(t => t.id !== transactionId),
+              };
+            }
+            return debtor;
+          })
+        );
 
-      setHistoryDebtor((prev) => {
-        if (!prev || prev.id !== debtorId) return prev;
-        return {
-          ...prev,
-          current_balance: newDebtorBalance,
-          debtor_transactions: prev.debtor_transactions.filter(t => t.id !== transactionId),
-        };
-      });
-
-      showSuccess("Transacción eliminada exitosamente.");
+        setHistoryDebtor((prev) => {
+          if (!prev || prev.id !== debtorId) return prev;
+          return {
+            ...prev,
+            current_balance: newDebtorBalance,
+            debtor_transactions: prev.debtor_transactions.filter(t => t.id !== transactionId),
+          };
+        });
+        showSuccess("Transacción eliminada exitosamente.");
+      }
     } catch (error: any) {
       showError('Error al eliminar transacción: ' + error.message);
       console.error("Debtor transaction delete error:", error);
@@ -858,7 +898,9 @@ const Debtors = () => {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {historyDebtor.debtor_transactions.map((transaction, index) => (
+                      {historyDebtor.debtor_transactions
+                        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()) // Sort by created_at
+                        .map((transaction, index) => (
                         <TableRow key={transaction.id || index}>
                           <TableCell>{format(new Date(transaction.date), "dd/MM/yyyy", { locale: es })}</TableCell>
                           <TableCell className={transaction.type === "charge" ? "text-red-600" : "text-green-600"}>

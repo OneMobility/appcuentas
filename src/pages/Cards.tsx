@@ -10,10 +10,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { PlusCircle, DollarSign, History, Trash2, Edit, CalendarIcon, ArrowRightLeft, FileText, FileDown, PiggyBank, Wallet, Banknote } from "lucide-react"; // Importar PiggyBank, Wallet, Banknote
+import { PlusCircle, DollarSign, History, Trash2, Edit, CalendarIcon, ArrowRightLeft, FileText, FileDown, PiggyBank, Wallet, Banknote } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { cn } from "@/lib/utils";
-import { format, addMonths, parseISO } from "date-fns"; // Importar parseISO
+import { format, addMonths, parseISO } from "date-fns";
 import { es } from "date-fns/locale";
 import { DateRange } from "react-day-picker";
 import CardDisplay from "@/components/CardDisplay";
@@ -21,27 +21,28 @@ import ColorPicker from "@/components/ColorPicker";
 import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/context/SessionContext";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { getUpcomingPaymentDueDate, getUpcomingCutOffDate, getBillingCycleDates, getInstallmentFirstPaymentDueDate } from "@/utils/date-helpers"; // Importar las nuevas funciones
+import { getUpcomingPaymentDueDate, getUpcomingCutOffDate, getBillingCycleDates, getInstallmentFirstPaymentDueDate } from "@/utils/date-helpers";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { exportToCsv, exportToPdf } from "@/utils/export";
-import CardTransferDialog from "@/components/CardTransferDialog"; // Importar el nuevo componente
-import { useCategoryContext } from "@/context/CategoryContext"; // Importar useCategoryContext
-import { toast } from "sonner"; // Importar toast de sonner
-import DynamicLucideIcon from "@/components/DynamicLucideIcon"; // Importar DynamicLucideIcon
+import CardTransferDialog from "@/components/CardTransferDialog";
+import { useCategoryContext } from "@/context/CategoryContext";
+import { toast } from "sonner";
+import DynamicLucideIcon from "@/components/DynamicLucideIcon";
 
 interface CardTransaction {
   id: string;
-  type: "charge" | "payment"; // Monto mensual si es a meses, o monto total si es pago único
+  type: "charge" | "payment";
   amount: number;
   description: string;
   date: string;
+  created_at: string; // Add created_at
   card_id?: string;
   user_id?: string;
-  installments_total_amount?: number; // Monto total del cargo original si es a meses
-  installments_count?: number; // Número total de meses si es a meses
-  installment_number?: number; // Número de cuota actual (1, 2, 3...)
-  income_category_id?: string | null; // New
-  expense_category_id?: string | null; // New
+  installments_total_amount?: number;
+  installments_count?: number;
+  installment_number?: number;
+  income_category_id?: string | null;
+  expense_category_id?: string | null;
 }
 
 interface CardData {
@@ -52,10 +53,10 @@ interface CardData {
   expiration_date: string;
   type: "credit" | "debit";
   initial_balance: number;
-  current_balance: number; // Deuda total para crédito, saldo para débito
+  current_balance: number;
   credit_limit?: number;
   cut_off_day?: number;
-  days_to_pay_after_cut_off?: number; // Nuevo campo
+  days_to_pay_after_cut_off?: number;
   color: string;
   transactions: CardTransaction[];
   user_id?: string;
@@ -63,12 +64,12 @@ interface CardData {
 
 const Cards = () => {
   const { user } = useSession();
-  const { incomeCategories, expenseCategories, getCategoryById, isLoadingCategories } = useCategoryContext(); // Usar el contexto de categorías
+  const { incomeCategories, expenseCategories, getCategoryById, isLoadingCategories } = useCategoryContext();
   const [cards, setCards] = useState<CardData[]>([]);
   const [isAddCardDialogOpen, setIsAddCardDialogOpen] = useState(false);
   const [isEditCardDialogOpen, setIsEditCardDialogOpen] = useState(false);
   const [isAddTransactionDialogOpen, setIsAddTransactionDialogOpen] = useState(false);
-  const [isTransferDialogOpen, setIsTransferDialogOpen] = useState(false); // Nuevo estado para el diálogo de transferencia
+  const [isTransferDialogOpen, setIsTransferDialogOpen] = useState(false);
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [editingCard, setEditingCard] = useState<CardData | null>(null);
   const [newCard, setNewCard] = useState({
@@ -80,23 +81,23 @@ const Cards = () => {
     initial_balance: "",
     credit_limit: "",
     cut_off_day: undefined as number | undefined,
-    days_to_pay_after_cut_off: undefined as number | undefined, // Nuevo campo
+    days_to_pay_after_cut_off: undefined as number | undefined,
     color: "#3B82F6",
   });
   const [newTransaction, setNewTransaction] = useState({
     type: "charge" as "charge" | "payment",
-    amount: "", // Este será el monto TOTAL para cargos a meses
+    amount: "",
     description: "",
     date: undefined as Date | undefined,
-    installments_count: undefined as number | undefined, // Nuevo campo para meses
-    selectedCategoryId: "", // Single field for selected category ID
-    selectedCategoryType: "" as "income" | "expense" | "", // To track which type of category is selected
+    installments_count: undefined as number | undefined,
+    selectedCategoryId: "",
+    selectedCategoryType: "" as "income" | "expense" | "",
   });
 
   const [searchTerm, setSearchTerm] = useState("");
 
   const fetchCards = async () => {
-    if (!user || isLoadingCategories) { // Esperar a que carguen las categorías
+    if (!user || isLoadingCategories) {
       setCards([]);
       return;
     }
@@ -108,13 +109,12 @@ const Cards = () => {
       .order('created_at', { ascending: false });
 
     if (error) {
-      console.error("Error fetching cards:", error); // Log the error
+      console.error("Error fetching cards:", error);
       showError('Error al cargar tarjetas: ' + error.message);
     } else {
-      // Asegurar que transactions sea siempre un array
       const formattedCards = (data || []).map(card => ({
         ...card,
-        transactions: card.card_transactions || [] // Usar card_transactions de Supabase, por defecto array vacío
+        transactions: card.card_transactions || []
       }));
       setCards(formattedCards);
     }
@@ -124,9 +124,8 @@ const Cards = () => {
     if (user) {
       fetchCards();
     }
-  }, [user, isLoadingCategories]); // Añadir isLoadingCategories a las dependencias
+  }, [user, isLoadingCategories]);
 
-  // Nuevos cálculos para las tarjetas de resumen
   const totalCreditAvailable = useMemo(() => {
     return cards
       .filter(c => c.type === "credit" && c.credit_limit !== undefined)
@@ -152,10 +151,10 @@ const Cards = () => {
   };
 
   const handleNewCardTypeChange = (value: "credit" | "debit") => {
-    setNewCard((prev) => ({ ...prev, type: value, credit_limit: "", cut_off_day: undefined, days_to_pay_after_cut_off: undefined })); // Resetear días de pago
+    setNewCard((prev) => ({ ...prev, type: value, credit_limit: "", cut_off_day: undefined, days_to_pay_after_cut_off: undefined }));
   };
 
-  const handleNewCardDayChange = (field: "cut_off_day", date: Date | undefined) => { // Solo para cut_off_day
+  const handleNewCardDayChange = (field: "cut_off_day", date: Date | undefined) => {
     setNewCard((prev) => ({ ...prev, [field]: date ? date.getDate() : undefined }));
   };
 
@@ -223,7 +222,7 @@ const Cards = () => {
         current_balance: initialBalance,
         credit_limit: newCard.type === "credit" ? creditLimit : undefined,
         cut_off_day: newCard.type === "credit" ? cutOffDay : undefined,
-        days_to_pay_after_cut_off: newCard.type === "credit" ? daysToPayAfterCutOff : undefined, // Guardar nuevo campo
+        days_to_pay_after_cut_off: newCard.type === "credit" ? daysToPayAfterCutOff : undefined,
         color: newCard.color,
       })
       .select();
@@ -260,7 +259,7 @@ const Cards = () => {
 
   const handleOpenAddTransactionDialog = (cardId: string) => {
     setSelectedCardId(cardId);
-    setNewTransaction({ type: "charge", amount: "", description: "", date: new Date(), installments_count: undefined, selectedCategoryId: "", selectedCategoryType: "" }); // Default to current date
+    setNewTransaction({ type: "charge", amount: "", description: "", date: new Date(), installments_count: undefined, selectedCategoryId: "", selectedCategoryType: "" });
     setIsAddTransactionDialogOpen(true);
   };
 
@@ -305,7 +304,7 @@ const Cards = () => {
       return;
     }
 
-    const totalAmount = parseFloat(newTransaction.amount); // Monto total ingresado por el usuario
+    const totalAmount = parseFloat(newTransaction.amount);
     if (isNaN(totalAmount) || totalAmount <= 0) {
       showError("El monto de la transacción debe ser un número positivo.");
       return;
@@ -336,16 +335,13 @@ const Cards = () => {
     }
 
     let newCardBalance = currentCard.current_balance;
-    const transactionsToInsert: Omit<CardTransaction, 'id'>[] = [];
+    const transactionsToInsert: Omit<CardTransaction, 'id' | 'created_at'>[] = []; // Exclude created_at
 
     if (currentCard.type === "credit" && newTransaction.type === "charge" && newTransaction.installments_count && newTransaction.installments_count > 1) {
-      // Logic for installment charges on credit cards
       const amountPerInstallment = totalAmount / newTransaction.installments_count;
       
-      // Update card balance with the total amount immediately
       newCardBalance += totalAmount;
 
-      // Check if credit limit is exceeded
       if (currentCard.credit_limit !== undefined && newCardBalance > currentCard.credit_limit) {
         toast.info(`Tu tarjeta de crédito ha excedido su límite. Saldo actual: $${newCardBalance.toFixed(2)}`, {
           style: { backgroundColor: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))' },
@@ -353,7 +349,6 @@ const Cards = () => {
         });
       }
 
-      // Determine the first installment's due date using the new helper function
       const firstPaymentDueDate = getInstallmentFirstPaymentDueDate(
         newTransaction.date,
         currentCard.cut_off_day!,
@@ -372,11 +367,10 @@ const Cards = () => {
           installments_total_amount: totalAmount,
           installments_count: newTransaction.installments_count,
           installment_number: i + 1,
-          expense_category_id: expenseCategoryIdToInsert, // Use new column
+          expense_category_id: expenseCategoryIdToInsert,
         });
       }
     } else {
-      // Logic for single charges or payments
       if (currentCard.type === "debit") {
         if (newTransaction.type === "charge") {
           if (newCardBalance < totalAmount) {
@@ -384,10 +378,10 @@ const Cards = () => {
             return;
           }
           newCardBalance -= totalAmount;
-        } else { // payment to debit card
+        } else {
           newCardBalance += totalAmount;
         }
-      } else { // Credit card (single charge or payment)
+      } else {
         if (newTransaction.type === "charge") {
           newCardBalance += totalAmount;
           if (currentCard.credit_limit !== undefined && newCardBalance > currentCard.credit_limit) {
@@ -396,7 +390,7 @@ const Cards = () => {
               duration: 10000
             });
           }
-        } else { // Payment to credit card
+        } else {
           if (newCardBalance < totalAmount) {
             showError("El pago excede la deuda pendiente.");
             return;
@@ -420,8 +414,8 @@ const Cards = () => {
         installments_total_amount: undefined,
         installments_count: undefined,
         installment_number: undefined,
-        income_category_id: incomeCategoryIdToInsert, // Use new column
-        expense_category_id: expenseCategoryIdToInsert, // Use new column
+        income_category_id: incomeCategoryIdToInsert,
+        expense_category_id: expenseCategoryIdToInsert,
       });
     }
 
@@ -458,41 +452,6 @@ const Cards = () => {
       setSelectedCardId(null);
       setIsAddTransactionDialogOpen(false);
       showSuccess("Transacción(es) registrada(s) exitosamente.");
-
-      // Check for active no-spend challenge if this is a charge
-      if (newTransaction.type === "charge" && expenseCategoryIdToInsert) {
-        const { data: activeChallenge, error: challengeError } = await supabase
-          .from('challenges')
-          .select('*')
-          .eq('user_id', user.id)
-          .eq('status', 'active')
-          .single();
-
-        if (challengeError && challengeError.code !== 'PGRST116') {
-          console.error("Error fetching active challenge:", challengeError.message);
-        } else if (activeChallenge && activeChallenge.challenge_template_id.startsWith("no-spend")) {
-          const endDate = new Date(activeChallenge.end_date);
-          endDate.setHours(23, 59, 59, 999);
-          const today = new Date();
-          today.setHours(0, 0, 0, 0);
-
-          if (today >= new Date(activeChallenge.start_date) && today <= endDate) {
-            if (activeChallenge.forbidden_category_ids.includes(expenseCategoryIdToInsert)) {
-              const { error: updateChallengeError } = await supabase
-                .from('challenges')
-                .update({ status: 'failed' })
-                .eq('id', activeChallenge.id)
-                .eq('user_id', user.id);
-
-              if (updateChallengeError) {
-                showError('Error al actualizar el reto de cero gastos: ' + updateChallengeError.message);
-              } else {
-                showError(`¡Reto '${activeChallenge.name}' fallido! Registraste un gasto en una categoría prohibida.`);
-              }
-            }
-          }
-        }
-      }
     } catch (error: any) {
       showError('Error al registrar transacción: ' + error.message);
       console.error("Supabase transaction error:", error);
@@ -507,10 +466,10 @@ const Cards = () => {
       last_four_digits: card.last_four_digits,
       expiration_date: card.expiration_date,
       type: card.type,
-      initial_balance: card.initial_balance.toString(), // Usar initial_balance para edición
+      initial_balance: card.initial_balance.toString(),
       credit_limit: card.credit_limit?.toString() || "",
       cut_off_day: card.cut_off_day,
-      days_to_pay_after_cut_off: card.days_to_pay_after_cut_off, // Cargar nuevo campo
+      days_to_pay_after_cut_off: card.days_to_pay_after_cut_off,
       color: card.color,
     });
     setIsEditCardDialogOpen(true);
@@ -572,10 +531,10 @@ const Cards = () => {
         expiration_date: newCard.expiration_date,
         type: newCard.type,
         initial_balance: initialBalance,
-        current_balance: parseFloat(newCard.initial_balance), // Al editar, el current_balance se resetea al initial_balance
+        current_balance: parseFloat(newCard.initial_balance),
         credit_limit: newCard.type === "credit" ? creditLimit : null,
         cut_off_day: newCard.type === "credit" ? cutOffDay : null,
-        days_to_pay_after_cut_off: newCard.type === "credit" ? daysToPayAfterCutOff : null, // Actualizar nuevo campo
+        days_to_pay_after_cut_off: newCard.type === "credit" ? daysToPayAfterCutOff : null,
         color: newCard.color,
       })
       .eq('id', editingCard.id)
@@ -586,7 +545,7 @@ const Cards = () => {
       showError('Error al actualizar tarjeta: ' + error.message);
     } else {
       setCards((prev) =>
-        prev.map((card) => (card.id === editingCard.id ? { ...data[0], transactions: card.transactions || [] } : card)) // Asegurar que transactions sea un array
+        prev.map((card) => (card.id === editingCard.id ? { ...data[0], transactions: card.transactions || [] } : card))
       );
       setEditingCard(null);
       setNewCard({ name: "", bank_name: "", last_four_digits: "", expiration_date: "", type: "debit", initial_balance: "", credit_limit: "", cut_off_day: undefined, days_to_pay_after_cut_off: undefined, color: "#3B82F6" });
@@ -601,14 +560,12 @@ const Cards = () => {
     card.last_four_digits.includes(searchTerm)
   );
 
-  // Obtener la tarjeta actual para el diálogo de transacción, si selectedCardId está definido
   const currentCardForDialog = selectedCardId ? cards.find(c => c.id === selectedCardId) : null;
 
   return (
     <div className="flex flex-col gap-6 p-4">
       <h1 className="text-3xl font-bold">Tus Tarjetas</h1>
 
-      {/* Nuevas tarjetas de resumen */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         <Card className="border-l-4 border-purple-500 bg-purple-50 text-purple-800">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -860,7 +817,7 @@ const Cards = () => {
             isOpen={isTransferDialogOpen}
             onClose={() => setIsTransferDialogOpen(false)}
             cards={cards}
-            onTransferSuccess={fetchCards} // Refresh cards after successful transfer
+            onTransferSuccess={fetchCards}
           />
 
           <Dialog open={isAddTransactionDialogOpen} onOpenChange={setIsAddTransactionDialogOpen}>
@@ -883,7 +840,6 @@ const Cards = () => {
                     </SelectContent>
                   </Select>
                 </div>
-                {/* Conditionally render category selector based on transaction type and card type */}
                 {(newTransaction.type === "charge" || (newTransaction.type === "payment" && currentCardForDialog?.type === "debit")) && (
                   <div className="grid grid-cols-4 items-center gap-4">
                     <Label htmlFor="category_id" className="text-right">

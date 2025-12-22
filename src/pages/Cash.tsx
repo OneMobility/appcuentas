@@ -13,15 +13,15 @@ import { Calendar } from "@/components/ui/calendar";
 import { PlusCircle, CalendarIcon, Edit, FileText, FileDown, Trash2 } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { cn } from "@/lib/utils";
-import { format, parseISO } from "date-fns"; // Importar parseISO
+import { format, parseISO } from "date-fns";
 import { es } from "date-fns/locale";
 import { DateRange } from "react-day-picker";
 import { useCategoryContext } from "@/context/CategoryContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/context/SessionContext";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { exportToCsv, exportToPdf } from "@/utils/export";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import DynamicLucideIcon from "@/components/DynamicLucideIcon";
 import { getLocalDateString } from "@/utils/date-helpers";
 
@@ -31,6 +31,7 @@ interface Transaction {
   amount: number;
   description: string;
   date: string;
+  created_at: string; // Add created_at
   income_category_id?: string | null;
   expense_category_id?: string | null;
   user_id?: string;
@@ -48,7 +49,7 @@ const Cash = () => {
     type: "ingreso" as "ingreso" | "egreso",
     amount: "",
     description: "",
-    date: new Date() as Date | undefined, // Añadido campo de fecha
+    date: new Date() as Date | undefined,
     selectedCategoryId: "",
     selectedCategoryType: "" as "income" | "expense" | "",
   });
@@ -70,7 +71,7 @@ const Cash = () => {
       .from('cash_transactions')
       .select('*')
       .eq('user_id', user.id)
-      .order('date', { ascending: false });
+      .order('created_at', { ascending: false }); // Order by created_at
 
     if (error) {
       showError('Error al cargar transacciones: ' + error.message);
@@ -95,7 +96,7 @@ const Cash = () => {
     setNewTransaction((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleDateChange = (date: Date | undefined) => { // Nuevo manejador para la fecha
+  const handleDateChange = (date: Date | undefined) => {
     setNewTransaction((prev) => ({ ...prev, date: date }));
   };
 
@@ -132,7 +133,7 @@ const Cash = () => {
       showError("Por favor, selecciona una categoría.");
       return;
     }
-    if (!newTransaction.date) { // Validar que la fecha esté seleccionada
+    if (!newTransaction.date) {
       showError("Por favor, selecciona una fecha para la transacción.");
       return;
     }
@@ -158,7 +159,7 @@ const Cash = () => {
         description: newTransaction.description,
         income_category_id: incomeCategoryIdToInsert,
         expense_category_id: expenseCategoryIdToInsert,
-        date: getLocalDateString(newTransaction.date), // Usar la fecha seleccionada
+        date: getLocalDateString(newTransaction.date),
       })
       .select();
 
@@ -185,7 +186,7 @@ const Cash = () => {
       type: transaction.type,
       amount: transaction.amount.toString(),
       description: transaction.description,
-      date: parseISO(transaction.date), // Usar parseISO para cargar la fecha
+      date: parseISO(transaction.date),
       selectedCategoryId: categoryId,
       selectedCategoryType: categoryType as "income" | "expense" | "",
     });
@@ -212,7 +213,7 @@ const Cash = () => {
       showError("Por favor, selecciona una categoría.");
       return;
     }
-    if (!newTransaction.date) { // Validar que la fecha esté seleccionada
+    if (!newTransaction.date) {
       showError("Por favor, selecciona una fecha para la transacción.");
       return;
     }
@@ -239,7 +240,7 @@ const Cash = () => {
         description: newTransaction.description,
         income_category_id: incomeCategoryIdToUpdate,
         expense_category_id: expenseCategoryIdToUpdate,
-        date: getLocalDateString(newTransaction.date), // Usar la fecha seleccionada
+        date: getLocalDateString(newTransaction.date),
       })
       .eq('id', editingTransaction.id)
       .eq('user_id', user.id)
@@ -299,7 +300,7 @@ const Cash = () => {
     const categoryName = category?.name || "";
     const matchesCategory = filterCategory === "all" || categoryId === filterCategory || categoryName.toLowerCase().includes(filterCategory.toLowerCase());
     
-    const txDate = parseISO(tx.date); // Usar parseISO aquí
+    const txDate = parseISO(tx.date);
     const matchesDate = !dateRange?.from || (txDate >= dateRange.from && (!dateRange.to || txDate <= dateRange.to));
 
     return matchesSearch && matchesType && matchesCategory && matchesDate;
@@ -312,7 +313,7 @@ const Cash = () => {
     const dataToExport = filteredTransactions.map(tx => {
       const category = getCategoryById(tx.income_category_id || tx.expense_category_id);
       return {
-        Fecha: format(parseISO(tx.date), "dd/MM/yyyy", { locale: es }), // Usar parseISO aquí
+        Fecha: format(parseISO(tx.date), "dd/MM/yyyy", { locale: es }),
         Tipo: tx.type === "ingreso" ? "Ingreso" : "Egreso",
         Categoria: category?.name || "Desconocida",
         Descripcion: tx.description,
@@ -427,7 +428,7 @@ const Cash = () => {
                       required
                     />
                   </div>
-                  <div className="grid grid-cols-4 items-center gap-4"> {/* Nuevo campo de fecha */}
+                  <div className="grid grid-cols-4 items-center gap-4">
                     <Label htmlFor="transactionDate" className="text-right">
                       Fecha
                     </Label>
@@ -570,7 +571,7 @@ const Cash = () => {
                   const category = getCategoryById(tx.income_category_id || tx.expense_category_id);
                   return (
                     <TableRow key={tx.id}>
-                      <TableCell>{format(parseISO(tx.date), "dd/MM/yyyy", { locale: es })}</TableCell> {/* Usar parseISO aquí */}
+                      <TableCell>{format(parseISO(tx.date), "dd/MM/yyyy", { locale: es })}</TableCell>
                       <TableCell className={tx.type === "ingreso" ? "text-green-600" : "text-red-600"}>
                         {tx.type === "ingreso" ? "Ingreso" : "Egreso"}
                       </TableCell>
@@ -695,7 +696,7 @@ const Cash = () => {
                     required
                   />
                 </div>
-                <div className="grid grid-cols-4 items-center gap-4"> {/* Campo de fecha en edición */}
+                <div className="grid grid-cols-4 items-center gap-4">
                   <Label htmlFor="editTransactionDate" className="text-right">
                     Fecha
                   </Label>

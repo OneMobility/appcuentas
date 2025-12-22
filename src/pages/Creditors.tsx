@@ -18,15 +18,16 @@ import { exportToCsv, exportToPdf } from "@/utils/export";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { getLocalDateString } from "@/utils/date-helpers";
-import { useCategoryContext } from "@/context/CategoryContext"; // Importar useCategoryContext
-import DynamicLucideIcon from "@/components/DynamicLucideIcon"; // Importar DynamicLucideIcon
+import { useCategoryContext } from "@/context/CategoryContext";
+import DynamicLucideIcon from "@/components/DynamicLucideIcon";
 
 interface CreditorTransaction {
   id: string;
-  type: "charge" | "payment"; // 'charge' para cargo (nosotros le debemos más), 'payment' para abono (nosotros le pagamos)
+  type: "charge" | "payment";
   amount: number;
   description: string;
   date: string;
+  created_at: string; // Add created_at
   creditor_id?: string;
   user_id?: string;
 }
@@ -51,7 +52,7 @@ interface CardData {
 
 const Creditors = () => {
   const { user } = useSession();
-  const { expenseCategories, isLoadingCategories } = useCategoryContext(); // Usar expenseCategories
+  const { expenseCategories, isLoadingCategories } = useCategoryContext();
   const [creditors, setCreditors] = useState<Creditor[]>([]);
   const [isAddCreditorDialogOpen, setIsAddCreditorDialogOpen] = useState(false);
   const [isAddTransactionDialogOpen, setIsAddTransactionDialogOpen] = useState(false);
@@ -62,15 +63,15 @@ const Creditors = () => {
   const [editingTransaction, setEditingTransaction] = useState<CreditorTransaction | null>(null);
   const [newCreditor, setNewCreditor] = useState({ name: "", initial_balance: "" });
   const [newTransaction, setNewTransaction] = useState({
-    type: "payment" as "charge" | "payment", // Default to payment (we pay them)
+    type: "payment" as "charge" | "payment",
     amount: "",
     description: "",
-    sourceAccountType: "" as "cash" | "card" | "", // Nuevo: tipo de cuenta de origen
-    sourceAccountId: "" as string | null, // Nuevo: ID de la tarjeta si es 'card'
-    selectedExpenseCategoryId: "" as string | null, // Nuevo: para egresos
+    sourceAccountType: "" as "cash" | "card" | "",
+    sourceAccountId: "" as string | null,
+    selectedExpenseCategoryId: "" as string | null,
   });
-  const [cashBalance, setCashBalance] = useState(0); // Nuevo: saldo en efectivo
-  const [cards, setCards] = useState<CardData[]>([]); // Nuevo: tarjetas del usuario
+  const [cashBalance, setCashBalance] = useState(0);
+  const [cards, setCards] = useState<CardData[]>([]);
 
   // Filter state
   const [searchTerm, setSearchTerm] = useState("");
@@ -252,7 +253,7 @@ const Creditors = () => {
 
     try {
       // Update creditor's balance
-      if (newTransaction.type === "charge") { // We owe them more
+      if (newTransaction.type === "charge") {
         newCreditorBalance += amount;
       } else { // payment from us to creditor (egreso)
         if (newCreditorBalance < amount) {
@@ -287,7 +288,7 @@ const Creditors = () => {
               expense_category_id: newTransaction.selectedExpenseCategoryId,
             });
           if (cashTxError) throw cashTxError;
-          setCashBalance(prev => prev - amount); // Update local cash balance
+          setCashBalance(prev => prev - amount);
         } else if (newTransaction.sourceAccountType === "card" && newTransaction.sourceAccountId) {
           const selectedCard = cards.find(c => c.id === newTransaction.sourceAccountId);
           if (!selectedCard) {
@@ -317,14 +318,14 @@ const Creditors = () => {
             .insert({
               user_id: user.id,
               card_id: newTransaction.sourceAccountId,
-              type: "charge", // It's a charge from our debit card
+              type: "charge",
               amount: amount,
               description: `Pago a ${currentCreditor.name} desde tarjeta ${selectedCard.name}: ${newTransaction.description}`,
               date: transactionDate,
               expense_category_id: newTransaction.selectedExpenseCategoryId,
             });
           if (cardTxError) throw cardTxError;
-          fetchCashBalanceAndCards(); // Re-fetch cards to update balances
+          fetchCashBalanceAndCards();
         }
       }
 
@@ -351,22 +352,35 @@ const Creditors = () => {
         .select();
       if (creditorUpdateError) throw creditorUpdateError;
 
-      setCreditors((prev) =>
-        prev.map((creditor) => {
-          if (creditor.id === selectedCreditorId) {
-            return {
-              ...creditor,
-              current_balance: newCreditorBalance,
-              creditor_transactions: [...creditor.creditor_transactions, creditorTransactionData[0]],
-            };
-          }
-          return creditor;
-        })
-      );
+      // Check if creditor balance is zero or less and delete if so
+      if (newCreditorBalance <= 0) {
+        const { error: deleteCreditorError } = await supabase
+          .from('creditors')
+          .delete()
+          .eq('id', selectedCreditorId)
+          .eq('user_id', user.id);
+        if (deleteCreditorError) throw deleteCreditorError;
+        setCreditors((prev) => prev.filter((c) => c.id !== selectedCreditorId));
+        showSuccess(`Acreedor ${currentCreditor.name} saldado y eliminado exitosamente.`);
+      } else {
+        setCreditors((prev) =>
+          prev.map((creditor) => {
+            if (creditor.id === selectedCreditorId) {
+              return {
+                ...creditor,
+                current_balance: newCreditorBalance,
+                creditor_transactions: [...creditor.creditor_transactions, creditorTransactionData[0]],
+              };
+            }
+            return creditor;
+          })
+        );
+        showSuccess("Transacción registrada exitosamente.");
+      }
+      
       setNewTransaction({ type: "payment", amount: "", description: "", sourceAccountType: "", sourceAccountId: null, selectedExpenseCategoryId: null });
       setSelectedCreditorId(null);
       setIsAddTransactionDialogOpen(false);
-      showSuccess("Transacción registrada exitosamente.");
     } catch (error: any) {
       showError('Error al registrar transacción: ' + error.message);
       console.error("Creditor transaction error:", error);
@@ -380,7 +394,7 @@ const Creditors = () => {
       type: transaction.type,
       amount: transaction.amount.toString(),
       description: transaction.description,
-      sourceAccountType: "", // Not applicable for editing existing creditor transactions directly
+      sourceAccountType: "",
       sourceAccountId: null,
       selectedExpenseCategoryId: null,
     });
@@ -452,33 +466,47 @@ const Creditors = () => {
         .select();
       if (creditorError) throw creditorError;
 
-      setCreditors((prevCreditors) =>
-        prevCreditors.map((creditor) => {
-          if (creditor.id === currentCreditor.id) {
-            return {
-              ...creditor,
-              current_balance: newCreditorBalance,
-              creditor_transactions: creditor.creditor_transactions.map(t => t.id === editingTransaction.id ? updatedTransactionData[0] : t),
-            };
-          }
-          return creditor;
-        })
-      );
+      // Check if creditor balance is zero or less and delete if so
+      if (newCreditorBalance <= 0) {
+        const { error: deleteCreditorError } = await supabase
+          .from('creditors')
+          .delete()
+          .eq('id', selectedCreditorId)
+          .eq('user_id', user.id);
+        if (deleteCreditorError) throw deleteCreditorError;
+        setCreditors((prev) => prev.filter((c) => c.id !== selectedCreditorId));
+        showSuccess(`Acreedor ${currentCreditor.name} saldado y eliminado exitosamente.`);
+        setIsEditTransactionDialogOpen(false);
+        setHistoryCreditor(null);
+      } else {
+        setCreditors((prevCreditors) =>
+          prevCreditors.map((creditor) => {
+            if (creditor.id === currentCreditor.id) {
+              return {
+                ...creditor,
+                current_balance: newCreditorBalance,
+                creditor_transactions: creditor.creditor_transactions.map(t => t.id === editingTransaction.id ? updatedTransactionData[0] : t),
+              };
+            }
+            return creditor;
+          })
+        );
 
-      setHistoryCreditor((prev) => {
-        if (!prev) return null;
-        return {
-          ...prev,
-          current_balance: newCreditorBalance,
-          creditor_transactions: prev.creditor_transactions.map(t => t.id === editingTransaction.id ? updatedTransactionData[0] : t),
-        };
-      });
+        setHistoryCreditor((prev) => {
+          if (!prev) return null;
+          return {
+            ...prev,
+            current_balance: newCreditorBalance,
+            creditor_transactions: prev.creditor_transactions.map(t => t.id === editingTransaction.id ? updatedTransactionData[0] : t),
+          };
+        });
+        showSuccess("Transacción actualizada exitosamente.");
+        setIsEditTransactionDialogOpen(false);
+      }
 
       setNewTransaction({ type: "payment", amount: "", description: "", sourceAccountType: "", sourceAccountId: null, selectedExpenseCategoryId: null });
       setEditingTransaction(null);
       setSelectedCreditorId(null);
-      setIsEditTransactionDialogOpen(false);
-      showSuccess("Transacción actualizada exitosamente.");
     } catch (error: any) {
       showError('Error al actualizar transacción: ' + error.message);
       console.error("Creditor transaction update error:", error);
@@ -516,29 +544,41 @@ const Creditors = () => {
         .eq('user_id', user.id);
       if (creditorError) throw creditorError;
 
-      setCreditors((prevCreditors) =>
-        prevCreditors.map((creditor) => {
-          if (creditor.id === creditorId) {
-            return {
-              ...creditor,
-              current_balance: newCreditorBalance,
-              creditor_transactions: creditor.creditor_transactions.filter(t => t.id !== transactionId),
-            };
-          }
-          return creditor;
-        })
-      );
+      // Check if creditor balance is zero or less and delete if so
+      if (newCreditorBalance <= 0) {
+        const { error: deleteCreditorError } = await supabase
+          .from('creditors')
+          .delete()
+          .eq('id', creditorId)
+          .eq('user_id', user.id);
+        if (deleteCreditorError) throw deleteCreditorError;
+        setCreditors((prev) => prev.filter((c) => c.id !== creditorId));
+        showSuccess(`Acreedor ${currentCreditor.name} saldado y eliminado exitosamente.`);
+        setIsHistoryDialogOpen(false);
+      } else {
+        setCreditors((prevCreditors) =>
+          prevCreditors.map((creditor) => {
+            if (creditor.id === creditorId) {
+              return {
+                ...creditor,
+                current_balance: newCreditorBalance,
+                creditor_transactions: creditor.creditor_transactions.filter(t => t.id !== transactionId),
+              };
+            }
+            return creditor;
+          })
+        );
 
-      setHistoryCreditor((prev) => {
-        if (!prev || prev.id !== creditorId) return prev;
-        return {
-          ...prev,
-          current_balance: newCreditorBalance,
-          creditor_transactions: prev.creditor_transactions.filter(t => t.id !== transactionId),
-        };
-      });
-
-      showSuccess("Transacción eliminada exitosamente.");
+        setHistoryCreditor((prev) => {
+          if (!prev || prev.id !== creditorId) return prev;
+          return {
+            ...prev,
+            current_balance: newCreditorBalance,
+            creditor_transactions: prev.creditor_transactions.filter(t => t.id !== transactionId),
+          };
+        });
+        showSuccess("Transacción eliminada exitosamente.");
+      }
     } catch (error: any) {
       showError('Error al eliminar transacción: ' + error.message);
       console.error("Creditor transaction delete error:", error);
@@ -791,7 +831,7 @@ const Creditors = () => {
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="cash">Efectivo (Saldo: ${cashBalance.toFixed(2)})</SelectItem>
-                          {cards.filter(c => c.type === "debit").map(card => ( // Solo tarjetas de débito
+                          {cards.filter(c => c.type === "debit").map(card => (
                             <SelectItem key={card.id} value={card.id}>
                               Tarjeta {card.name} ({card.bank_name} ****{card.last_four_digits}) (Saldo: ${card.current_balance.toFixed(2)})
                             </SelectItem>
@@ -809,7 +849,7 @@ const Creditors = () => {
                             <SelectValue placeholder="Selecciona tarjeta" />
                           </SelectTrigger>
                           <SelectContent>
-                            {cards.filter(c => c.type === "debit").map(card => ( // Solo tarjetas de débito
+                            {cards.filter(c => c.type === "debit").map(card => (
                               <SelectItem key={card.id} value={card.id}>
                                 Tarjeta {card.name} ({card.bank_name} ****{card.last_four_digits}) (Saldo: ${card.current_balance.toFixed(2)})
                               </SelectItem>
@@ -865,7 +905,9 @@ const Creditors = () => {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {historyCreditor.creditor_transactions.map((transaction, index) => (
+                      {historyCreditor.creditor_transactions
+                        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()) // Sort by created_at
+                        .map((transaction, index) => (
                         <TableRow key={transaction.id || index}>
                           <TableCell>{format(new Date(transaction.date), "dd/MM/yyyy", { locale: es })}</TableCell>
                           <TableCell className={transaction.type === "charge" ? "text-red-600" : "text-green-600"}>
