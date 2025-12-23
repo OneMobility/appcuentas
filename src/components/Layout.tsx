@@ -125,7 +125,7 @@ const Layout: React.FC<LayoutProps> = () => { // Props actualizadas
   const isMobile = useIsMobile();
   const location = useLocation();
 
-  const currentPageName = navItems.find(item => item.path === location.pathname)?.name || "Oinkash";
+  let currentPageName = navItems.find(item => item.path === location.pathname)?.name || "Oinkash";
   // Ajustar currentPageName para rutas anidadas si es necesario
   if (location.pathname.startsWith("/savings") && currentPageName === "Ahorrando") {
     if (location.pathname === "/savings/challenges") {
