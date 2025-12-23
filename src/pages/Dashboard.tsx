@@ -17,9 +17,7 @@ import { getUpcomingPaymentDueDate } from "@/utils/date-helpers";
 import { Button } from "@/components/ui/button";
 import GroupedPaymentDueDatesCard from "@/components/GroupedPaymentDueDatesCard";
 import { cn } from "@/lib/utils";
-// import CreditCardsChart from "@/components/CreditCardsChart"; // Eliminado
-// import IncomeExpensePieChart from "@/components/IncomeExpensePieChart"; // Eliminado
-// import CreditExpensePieChart from "@/components/CreditExpensePieChart"; // Eliminado
+import CreditCardsChart from "@/components/CreditCardsChart"; // Re-incluido
 
 // Tasas de cambio de ejemplo (MXN como base)
 const exchangeRates: { [key: string]: number } = {
@@ -236,13 +234,12 @@ const Dashboard = () => {
   const totalIncomePieChartData = useMemo(() => {
     const dataMap = new Map<string, { id: string; name: string; value: number; color: string; icon: string }>();
 
-    // Always initialize "Sin Categoría" first
+    // Initialize with all known income categories
+    incomeCategories.forEach(cat => dataMap.set(cat.id, { id: cat.id, name: cat.name, value: 0, color: cat.color, icon: cat.icon || "Tag" }));
+    // Ensure "Sin Categoría" is always present
     dataMap.set(UNCATEGORIZED_ID, { id: UNCATEGORIZED_ID, name: UNCATEGORIZED_NAME, value: 0, color: UNCATEGORIZED_COLOR, icon: UNCATEGORIZED_ICON });
 
-    // Then add all known income categories
-    incomeCategories.forEach(cat => dataMap.set(cat.id, { id: cat.id, name: cat.name, value: 0, color: cat.color, icon: cat.icon || "Tag" }));
-
-    const processIncomeTransaction = (tx: CashTransaction | CardTransaction) => {
+    const aggregateIncome = (tx: CashTransaction | CardTransaction) => {
       const categoryId = tx.income_category_id;
       if (categoryId) {
         const category = incomeCategories.find(cat => cat.id === categoryId);
@@ -262,14 +259,16 @@ const Dashboard = () => {
     };
 
     // Aggregate cash income
-    cashTransactions.filter(tx => tx.type === "ingreso").forEach(processIncomeTransaction);
+    cashTransactions.filter(tx => tx.type === "ingreso").forEach(aggregateIncome);
 
     // Aggregate debit card income (payments to debit cards)
     cards.filter(card => card.type === "debit").forEach(card => {
-      (card.transactions || []).filter(tx => tx.type === "payment").forEach(processIncomeTransaction);
+      (card.transactions || []).filter(tx => tx.type === "payment").forEach(aggregateIncome);
     });
 
-    return Array.from(dataMap.values()).filter(entry => entry.value > 0);
+    const result = Array.from(dataMap.values()).filter(entry => entry.value > 0);
+    console.log("Dyad Debug: Total Income Pie Chart Data:", result);
+    return result;
   }, [cashTransactions, cards, incomeCategories]);
 
   // Data for Expense Pie Chart (Cash + Debit Card Expenses)
@@ -731,7 +730,14 @@ const Dashboard = () => {
         </CardContent>
       </Card>
 
-      {/* Eliminados los gráficos de pastel y de barras */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Gráfico de Créditos</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <CreditCardsChart cards={cards} />
+        </CardContent>
+      </Card>
     </div>
   );
 };
