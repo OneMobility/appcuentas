@@ -308,7 +308,9 @@ const Dashboard = () => {
   }, [cashTransactions]);
 
   const cardSummaryData = useMemo(() => {
-    return cards.map(card => {
+    return cards
+      .filter(card => card.type === "credit") // Filter for credit cards only
+      .map(card => {
       const isCredit = card.type === "credit";
       const creditAvailable = isCredit && card.credit_limit !== undefined ? card.credit_limit - card.current_balance : 0;
       const upcomingPaymentDueDate = isCredit && card.cut_off_day !== undefined && card.days_to_pay_after_cut_off !== undefined
