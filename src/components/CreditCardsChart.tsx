@@ -12,6 +12,7 @@ import {
   ResponsiveContainer,
   LabelList,
   Cell,
+  Customized,
 } from "recharts";
 import { CardData } from "@/pages/Dashboard";
 
@@ -19,37 +20,92 @@ interface CreditCardsChartProps {
   cards: CardData[];
 }
 
-// Etiqueta personalizada para el límite de crédito total
-const CustomCreditLimitLabel = (props: any) => {
-  const { x, y, width, value } = props;
-  if (value === 0) return null; // No mostrar etiqueta si el límite es 0
+// Componente personalizado para las etiquetas de montos
+const CustomLabelsComponent = (props: any) => {
+  const { data, width, height, x, y, yAxis } = props;
+
+  if (!yAxis || !yAxis.scale) return null;
+
+  const scale = yAxis.scale;
+
   return (
-    <text x={x + width / 2} y={y - 5} fill="#666" textAnchor="middle" dominantBaseline="central" fontSize={12}>
-      Límite: ${value.toFixed(2)}
-    </text>
+    <g>
+      {data.map((entry: any, index: number) => {
+        const barX = x + (index * (width / data.length)) + (width / data.length / 2); // Approximate center of the bar
+        const barWidth = width / data.length; // Approximate width of each bar
+
+        // Calculate Y position for totalCreditLimit
+        const creditLimitY = scale(entry.totalCreditLimit);
+        // Calculate Y position for totalCurrentBalance
+        const currentBalanceY = scale(entry.totalCurrentBalance);
+
+        return (
+          <g key={`label-${index}`}>
+            {/* Label for Total Credit Limit */}
+            {entry.totalCreditLimit > 0 && (
+              <text
+                x={entry.x + entry.width / 2} // Use bar's x and width for precise centering
+                y={creditLimitY - 5} // Slightly above the credit limit line
+                fill="#666"
+                textAnchor="middle"
+                dominantBaseline="central"
+                fontSize={12}
+              >
+                ${entry.totalCreditLimit.toFixed(2)}
+              </text>
+            )}
+            {/* Label for Total Current Balance (Debt) */}
+            {entry.totalCurrentBalance > 0 && (
+              <text
+                x={entry.x + entry.width / 2} // Use bar's x and width for precise centering
+                y={currentBalanceY - 5} // Slightly above the current balance line
+                fill="#333"
+                textAnchor="middle"
+                dominantBaseline="central"
+                fontSize={12}
+                fontWeight="bold"
+              >
+                ${entry.totalCurrentBalance.toFixed(2)}
+              </text>
+            )}
+          </g>
+        );
+      })}
+    </g>
   );
 };
 
-// Etiqueta personalizada para la deuda total
-const CustomDebtLabel = (props: any) => {
-  const { x, y, width, value } = props;
-  if (value === 0) return null; // No mostrar etiqueta de deuda si no hay deuda
-  return (
-    <text x={x + width / 2} y={y - 5} fill="#333" textAnchor="middle" dominantBaseline="central" fontSize={12} fontWeight="bold">
-      Deuda: ${value.toFixed(2)}
-    </text>
-  );
-};
 
 const CreditCardsChart: React.FC<CreditCardsChartProps> = ({ cards }) => {
   const chartData = cards
     .filter((card) => card.type === "credit" && card.credit_limit !== undefined)
-    .map((card) => ({
-      name: card.name,
-      color: card.color,
-      creditLimit: card.credit_limit!,
-      currentBalance: card.current_balance,
-    }));
+    .map((card) => {
+      const creditLimit = card.credit_limit!;
+      const currentBalance = card.current_balance;
+
+      let availableWithinLimit = 0;
+      let debtWithinLimit = 0;
+      let debtOverLimit = 0;
+
+      if (currentBalance <= creditLimit) {
+        debtWithinLimit = currentBalance;
+        availableWithinLimit = creditLimit - currentBalance;
+      } else { // currentBalance > creditLimit
+        debtWithinLimit = creditLimit; // The part of debt that fills the limit
+        debtOverLimit = currentBalance - creditLimit; // The part that goes over
+      }
+
+      return {
+        name: card.name,
+        lastFourDigits: `****${card.last_four_digits}`, // For X-axis label
+        color: card.color,
+        availableWithinLimit: availableWithinLimit,
+        debtWithinLimit: debtWithinLimit,
+        debtOverLimit: debtOverLimit,
+        totalCreditLimit: creditLimit,
+        totalCurrentBalance: currentBalance,
+      };
+    });
 
   return (
     <ResponsiveContainer width="100%" height={300}>
@@ -61,27 +117,38 @@ const CreditCardsChart: React.FC<CreditCardsChartProps> = ({ cards }) => {
           left: 20,
           bottom: 5,
         }}
+        barCategoryGap="10%" // Adjust as needed
+        barGap={0} // Ensure bars within a category are not separated
       >
         <CartesianGrid strokeDasharray="3 3" />
-        <XAxis dataKey="name" />
+        <XAxis dataKey="lastFourDigits" />
         <YAxis />
         <Tooltip formatter={(value: number, name: string) => {
-            if (name === "Límite de Crédito") return [`Límite de Crédito: $${value.toFixed(2)}`];
-            if (name === "Deuda Actual") return [`Deuda Actual: $${value.toFixed(2)}`];
+            if (name === "Crédito Disponible") return [`Crédito Disponible: $${value.toFixed(2)}`];
+            if (name === "Deuda Dentro del Límite") return [`Deuda Dentro del Límite: $${value.toFixed(2)}`];
+            if (name === "Deuda Excedida") return [`Deuda Excedida: $${value.toFixed(2)}`];
             return value;
         }} />
         <Legend />
-        {/* Barra base que representa el límite de crédito */}
-        <Bar dataKey="creditLimit" name="Límite de Crédito">
+        {/* Segmento de crédito disponible (color de la tarjeta) */}
+        <Bar dataKey="availableWithinLimit" stackId="a" name="Crédito Disponible">
           {chartData.map((entry, index) => (
-            <Cell key={`cell-limit-${index}`} fill={entry.color} />
+            <Cell key={`cell-available-${index}`} fill={entry.color} />
           ))}
-          <LabelList dataKey="creditLimit" content={CustomCreditLimitLabel} />
         </Bar>
-        {/* Barra superpuesta que representa el saldo actual (deuda) */}
-        <Bar dataKey="currentBalance" name="Deuda Actual" fill="#FF6B6B"> {/* Opacidad eliminada */}
-          <LabelList dataKey="currentBalance" content={CustomDebtLabel} />
+        {/* Segmento de deuda dentro del límite (rojo) */}
+        <Bar dataKey="debtWithinLimit" stackId="a" name="Deuda Dentro del Límite" fill="#FF6B6B">
+          {chartData.map((entry, index) => (
+            <Cell key={`cell-debt-within-${index}`} fill="#FF6B6B" />
+          ))}
         </Bar>
+        {/* Segmento de deuda excedida (rojo) */}
+        <Bar dataKey="debtOverLimit" stackId="a" name="Deuda Excedida" fill="#FF6B6B">
+          {chartData.map((entry, index) => (
+            <Cell key={`cell-debt-over-${index}`} fill="#FF6B6B" />
+          ))}
+        </Bar>
+        <Customized component={CustomLabelsComponent} />
       </BarChart>
     </ResponsiveContainer>
   );
