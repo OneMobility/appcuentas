@@ -17,7 +17,7 @@ import Login from "./pages/Login";
 import { CategoryProvider } from "./context/CategoryContext";
 import { SessionProvider, useSession } from "./context/SessionContext";
 import CardNotifications from "./components/CardNotifications";
-// import Challenges from "./pages/Challenges"; // Nuevo import - ELIMINADO
+import React from "react"; // Eliminar useState
 
 const queryClient = new QueryClient();
 
@@ -70,7 +70,7 @@ const App = () => {
                   <Route path="/cards" element={<Cards />} />
                   <Route path="/cards/:cardId" element={<CardDetailsPage />} />
                   <Route path="/categories" element={<Categories />} />
-                  <Route path="/savings" element={<Savings />} /> {/* Savings ahora contendrá los retos */}
+                  <Route path="/savings" element={<Savings />} />
                 </Route>
                 {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                 <Route path="*" element={<NotFound />} />

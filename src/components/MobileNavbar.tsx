@@ -11,8 +11,7 @@ import {
   CreditCard,
   Tag,
   LogOut,
-  Wallet, // Icono para Ahorrando
-  // Trophy, // Nuevo icono para Retos - ELIMINADO
+  Wallet, // Nuevo icono para ahorros
 } from "lucide-react";
 import { useSession } from "@/context/SessionContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -45,15 +44,10 @@ const navItems = [
     icon: CreditCard,
   },
   {
-    name: "Ahorrando", // Título actualizado
+    name: "Tus Metas", // Título actualizado
     path: "/savings",
     icon: Wallet, // Icono para ahorros
   },
-  // {
-  //   name: "Retos", // Nuevo item - ELIMINADO
-  //   path: "/savings/challenges", // Ruta para retos - ELIMINADO
-  //   icon: Trophy, // Icono para retos - ELIMINADO
-  // },
   {
     name: "Categorías",
     path: "/categories",
@@ -73,9 +67,7 @@ const MobileNavbar = () => {
     <nav className="fixed bottom-0 left-0 right-0 z-40 bg-card border-t shadow-lg md:hidden">
       <div className="flex h-16 items-center justify-start overflow-x-auto flex-nowrap px-2">
         {navItems.map((item) => {
-          const isActive = item.path === "/savings"
-            ? location.pathname.startsWith(item.path)
-            : location.pathname === item.path;
+          const isActive = location.pathname === item.path;
           const Icon = item.icon;
           return (
             <Link

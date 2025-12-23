@@ -16,8 +16,7 @@ import {
   CreditCard,
   Tag,
   LogOut,
-  Wallet, // Icono para Ahorrando
-  // Trophy, // Nuevo icono para Retos - ELIMINADO
+  Wallet, // Nuevo icono para ahorros
 } from "lucide-react";
 import MobileNavbar from "./MobileNavbar";
 import { useSession } from "@/context/SessionContext";
@@ -50,15 +49,10 @@ const navItems = [
     icon: CreditCard,
   },
   {
-    name: "Ahorrando", // Título actualizado
+    name: "Tus Metas", // Título actualizado
     path: "/savings",
     icon: Wallet, // Icono para ahorros
   },
-  // {
-  //   name: "Retos", // Nuevo item - ELIMINADO
-  //   path: "/savings/challenges", // Ruta para retos - ELIMINADO
-  //   icon: Trophy, // Icono para retos - ELIMINADO
-  // },
   {
     name: "Categorías",
     path: "/categories",
@@ -82,25 +76,20 @@ const Sidebar = ({ onClose }: { onClose?: () => void }) => {
         <h2 className="text-2xl font-bold">Oinkash</h2>
       </Link>
       <div className="flex-1">
-        {navItems.map((item) => {
-          const isActive = item.path === "/savings"
-            ? location.pathname.startsWith(item.path)
-            : location.pathname === item.path;
-          return (
-            <Link
-              key={item.name}
-              to={item.path}
-              className={cn(
-                "flex items-center gap-3 rounded-lg px-3 py-2 text-sidebar-foreground transition-all hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                isActive && "bg-sidebar-accent text-sidebar-accent-foreground font-semibold",
-              )}
-              onClick={onClose}
-            >
-              <item.icon className="h-5 w-5" />
-              {item.name}
-            </Link>
-          );
-        })}
+        {navItems.map((item) => (
+          <Link
+            key={item.name}
+            to={item.path}
+            className={cn(
+              "flex items-center gap-3 rounded-lg px-3 py-2 text-sidebar-foreground transition-all hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+              location.pathname === item.path && "bg-sidebar-accent text-sidebar-accent-foreground font-semibold",
+            )}
+            onClick={onClose}
+          >
+            <item.icon className="h-5 w-5" />
+            {item.name}
+          </Link>
+        ))}
       </div>
       {user && (
         <Button
@@ -125,13 +114,7 @@ const Layout: React.FC<LayoutProps> = () => { // Props actualizadas
   const isMobile = useIsMobile();
   const location = useLocation();
 
-  let currentPageName = navItems.find(item => item.path === location.pathname)?.name || "Oinkash";
-  // Ajustar currentPageName para rutas anidadas si es necesario
-  // La lógica de subrutas para /savings/challenges ya no es necesaria aquí
-  if (location.pathname === "/savings") {
-    currentPageName = "Ahorrando";
-  }
-
+  const currentPageName = navItems.find(item => item.path === location.pathname)?.name || "Oinkash";
 
   return (
     <div className="flex min-h-screen w-full flex-col bg-muted/40">

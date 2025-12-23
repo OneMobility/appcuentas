@@ -1,18 +1,18 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect } from "react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { PlusCircle, DollarSign, Trash2, Edit, CalendarIcon, FileText, FileDown, PiggyBank, ArrowUpCircle, ArrowDownCircle, Trophy, CheckCircle, XCircle, Clock } from "lucide-react";
+import { PlusCircle, DollarSign, Trash2, Edit, CalendarIcon, FileText, FileDown, PiggyBank, ArrowUpCircle, ArrowDownCircle } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { cn } from "@/lib/utils";
-import { format, isAfter, isSameDay, parseISO, differenceInDays, isBefore } from "date-fns";
+import { format, isAfter, isSameDay, parseISO } from "date-fns"; // Importar isAfter y isSameDay
 import { es } from "date-fns/locale";
 import ColorPicker from "@/components/ColorPicker";
 import { supabase } from "@/integrations/supabase/client";
@@ -23,11 +23,9 @@ import { exportToCsv, exportToPdf } from "@/utils/export";
 import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import FeedbackOverlay from "@/components/FeedbackOverlay";
-import RandomSavingTipCard from "@/components/RandomSavingTipCard";
-import FixedSavingTipCard from "@/components/FixedSavingTipCard";
-import RandomChallengeBanner from "@/components/RandomChallengeBanner"; // Importar el banner de retos
-import { getLocalDateString } from "@/utils/date-helpers";
-// import { Outlet, useLocation } from "react-router-dom"; // Outlet y useLocation ya no son necesarios aquí
+import RandomSavingTipCard from "@/components/RandomSavingTipCard"; // Importar el nuevo componente
+import FixedSavingTipCard from "@/components/FixedSavingTipCard"; // Importar el nuevo componente
+import { getLocalDateString } from "@/utils/date-helpers"; // Importar la nueva función de utilidad
 
 interface Saving {
   id: string;
@@ -35,51 +33,21 @@ interface Saving {
   current_balance: number;
   target_amount?: number;
   target_date?: string; // Fecha objetivo
-  completion_date?: string; // Fecha de cumplimiento
+  completion_date?: string; // Nueva: Fecha de cumplimiento
   color: string;
   user_id?: string;
-}
-
-interface Challenge {
-  id: string;
-  name: string;
-  description?: string;
-  challenge_template_id: string; // ID del template de reto (ej. 'no-spend-week', 'save-x-amount')
-  status: "active" | "completed" | "failed" | "regular";
-  start_date: string;
-  end_date: string;
-  target_amount?: number; // Para retos de ahorro
-  forbidden_category_ids?: string[]; // Para retos de no gasto
-  user_id?: string;
-  created_at: string;
-  savings?: { // Vinculación a una cuenta de ahorro
-    id: string;
-    name: string;
-    current_balance: number;
-    target_amount?: number;
-    target_date?: string;
-    completion_date?: string;
+  challenge_id?: string; // Añadir challenge_id
+  challenges?: { // Añadir detalles del reto vinculado
+    status: "active" | "completed" | "failed" | "regular";
+    end_date: string;
   } | null;
 }
 
-interface SavingAccountForChallenge {
-  id: string;
-  name: string;
-  current_balance: number;
-  target_amount?: number;
-  target_date?: string;
-  completion_date?: string;
-}
-
-const challengeTemplates = [
-  { id: "save-x-amount", name: "Ahorrar una cantidad específica", description: "Establece una meta de ahorro y una fecha límite." },
-  { id: "no-spend-week", name: "Semana sin gastos", description: "Evita gastos en categorías específicas por una semana." },
-  // Puedes añadir más templates aquí
-];
+// Eliminado interface SavingsOutletContext
 
 const Savings: React.FC = () => {
   const { user } = useSession();
-  // const location = useLocation(); // Ya no es necesario
+  // const { setChallengeRefreshKey } = useOutletContext<SavingsOutletContext>(); // Eliminado
   const [savings, setSavings] = useState<Saving[]>([]);
   const [isAddSavingDialogOpen, setIsAddSavingDialogOpen] = useState(false);
   const [isEditSavingDialogOpen, setIsEditSavingDialogOpen] = useState(false);
@@ -106,66 +74,31 @@ const Savings: React.FC = () => {
     textColor: string;
   } | null>(null);
 
-  const [searchTermSavings, setSearchTermSavings] = useState(""); // Search term for savings
-  
-  // --- Challenge-related states and functions ---
-  const [challenges, setChallenges] = useState<Challenge[]>([]);
-  const [savingAccountsForChallenges, setSavingAccountsForChallenges] = useState<SavingAccountForChallenge[]>([]);
-  const [isAddChallengeDialogOpen, setIsAddChallengeDialogOpen] = useState(false);
-  const [isEditChallengeDialogOpen, setIsEditChallengeDialogOpen] = useState(false);
-  const [editingChallenge, setEditingChallenge] = useState<Challenge | null>(null);
-  const [newChallenge, setNewChallenge] = useState({
-    name: "",
-    description: "",
-    challenge_template_id: "",
-    start_date: new Date() as Date | undefined,
-    end_date: undefined as Date | undefined,
-    target_amount: "",
-    selectedSavingAccountId: "" as string | null,
-  });
-  const [searchTermChallenges, setSearchTermChallenges] = useState(""); // Search term for challenges
-  // --- End Challenge-related states and functions ---
 
+  const [searchTerm, setSearchTerm] = useState("");
 
-  const fetchSavingsAndChallenges = async () => {
+  const fetchSavings = async () => {
     if (!user) {
       setSavings([]);
-      setChallenges([]);
-      setSavingAccountsForChallenges([]);
       return;
     }
 
-    // Fetch savings accounts
-    const { data: savingsData, error: savingsError } = await supabase
+    const { data, error } = await supabase
       .from('savings')
-      .select('*')
+      .select('*, challenge_id, challenges(status, end_date)') // Seleccionar challenge_id y detalles del reto
       .eq('user_id', user.id)
       .order('created_at', { ascending: false });
 
-    if (savingsError) {
-      showError('Error al cargar ahorros: ' + savingsError.message);
+    if (error) {
+      showError('Error al cargar ahorros: ' + error.message);
     } else {
-      setSavings(savingsData || []);
-      setSavingAccountsForChallenges(savingsData || []); // También para los retos
-    }
-
-    // Fetch challenges
-    const { data: challengesData, error: challengesError } = await supabase
-      .from('challenges')
-      .select('*, savings(id, name, current_balance, target_amount, target_date, completion_date)')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false });
-
-    if (challengesError) {
-      showError('Error al cargar retos: ' + challengesError.message);
-    } else {
-      setChallenges(challengesData || []);
+      setSavings(data || []);
     }
   };
 
   useEffect(() => {
     if (user) {
-      fetchSavingsAndChallenges();
+      fetchSavings();
     }
   }, [user]);
 
@@ -345,6 +278,10 @@ const Savings: React.FC = () => {
           });
         }
       }
+      // Trigger refresh for challenges page if this saving is linked to a challenge
+      // if (updatedSaving.challenge_id) { // Eliminado
+      //   setChallengeRefreshKey(prev => prev + 1); // Eliminado
+      // }
     }
   };
 
@@ -431,6 +368,53 @@ const Savings: React.FC = () => {
       setIsTransactionDialogOpen(false);
       showSuccess("Transacción registrada exitosamente.");
 
+      // Lógica para actualizar el estado del reto si está vinculado
+      // if (updatedSaving.challenge_id && updatedSaving.target_amount) { // Eliminado
+      //   let challengeStatus: "completed" | "regular" | "failed" | "active" = "active"; // Eliminado
+      //   const progress = (updatedSaving.current_balance / updatedSaving.target_amount) * 100; // Eliminado
+
+      //   if (progress >= 100) { // Eliminado
+      //     challengeStatus = "completed"; // Eliminado
+      //   } else { // Eliminado
+      //     challengeStatus = "active"; // Keep active until end date for full evaluation // Eliminado
+      //   } // Eliminado
+
+      //   // Fetch current challenge status to avoid unnecessary updates // Eliminado
+      //   const { data: currentChallenge, error: fetchChallengeError } = await supabase // Eliminado
+      //     .from('challenges') // Eliminado
+      //     .select('status, end_date') // Eliminado
+      //     .eq('id', updatedSaving.challenge_id) // Eliminado
+      //     .single(); // Eliminado
+
+      //   if (fetchChallengeError && fetchChallengeError.code !== 'PGRST116') { // Eliminado
+      //     console.error("Error fetching linked challenge:", fetchChallengeError.message); // Eliminado
+      //   } else if (currentChallenge) { // Eliminado
+      //     let updateChallengeEndDate = currentChallenge.end_date; // Eliminado
+      //     // If challenge is completed and saving has a completion date, use that date // Eliminado
+      //     if (challengeStatus === "completed" && updatedSaving.completion_date) { // Usar completion_date // Eliminado
+      //       updateChallengeEndDate = updatedSaving.completion_date; // Eliminado
+      //     } // Eliminado
+
+      //     // Only update if the new status is 'completed' or if the current status is 'active' // Eliminado
+      //     if (challengeStatus === "completed" || currentChallenge.status === "active") { // Eliminado
+      //       const { error: updateChallengeError } = await supabase // Eliminado
+      //         .from('challenges') // Eliminado
+      //         .update({ status: challengeStatus, end_date: updateChallengeEndDate }) // Eliminado
+      //         .eq('id', updatedSaving.challenge_id) // Eliminado
+      //         .eq('user_id', user.id); // Eliminado
+
+      //       if (updateChallengeError) { // Eliminado
+      //         showError('Error al actualizar el estado del reto vinculado: ' + updateChallengeError.message); // Eliminado
+      //       } else { // Eliminado
+      //         if (challengeStatus === "completed") { // Eliminado
+      //           showSuccess("¡Reto de ahorro completado!"); // Eliminado
+      //         } // Eliminado
+      //         setChallengeRefreshKey(prev => prev + 1); // Force refresh in Challenges.tsx // Eliminado
+      //       } // Eliminado
+      //     } // Eliminado
+      //   } // Eliminado
+      // } // Eliminado
+
       // Show feedback overlay based on transaction type
       if (transactionType === "deposit") {
         setFeedbackOverlay({
@@ -467,10 +451,10 @@ const Savings: React.FC = () => {
   };
 
   const filteredSavings = savings.filter((saving) =>
-    saving.name.toLowerCase().includes(searchTermSavings.toLowerCase())
+    saving.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const handleExportSavings = (formatType: 'csv' | 'pdf') => {
+  const handleExport = (formatType: 'csv' | 'pdf') => {
     const dataToExport = filteredSavings.map(saving => ({
       Nombre: saving.name,
       "Saldo Actual": saving.current_balance.toFixed(2),
@@ -494,306 +478,9 @@ const Savings: React.FC = () => {
     }
   };
 
-  // --- Challenge-related functions (moved from Challenges.tsx) ---
-  const handleNewChallengeChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
-    setNewChallenge((prev) => ({ ...prev, [name]: value }));
-  };
-
-  const handleNewChallengeDateChange = (field: "start_date" | "end_date", date: Date | undefined) => {
-    setNewChallenge((prev) => ({ ...prev, [field]: date }));
-  };
-
-  const handleTemplateSelect = (templateId: string) => {
-    setNewChallenge((prev) => ({ ...prev, challenge_template_id: templateId }));
-  };
-
-  const handleSavingAccountSelect = (savingId: string) => {
-    setNewChallenge((prev) => ({ ...prev, selectedSavingAccountId: savingId }));
-  };
-
-  const handleSubmitNewChallenge = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!user) {
-      showError("Debes iniciar sesión para añadir retos.");
-      return;
-    }
-
-    if (!newChallenge.name.trim()) {
-      showError("El nombre del reto no puede estar vacío.");
-      return;
-    }
-    if (!newChallenge.challenge_template_id) {
-      showError("Por favor, selecciona un tipo de reto.");
-      return;
-    }
-    if (!newChallenge.start_date || !newChallenge.end_date) {
-      showError("Por favor, selecciona una fecha de inicio y fin para el reto.");
-      return;
-    }
-    if (isAfter(newChallenge.start_date, newChallenge.end_date)) {
-      showError("La fecha de inicio no puede ser posterior a la fecha de fin.");
-      return;
-    }
-
-    let targetAmount: number | undefined = undefined;
-    if (newChallenge.target_amount) {
-      targetAmount = parseFloat(newChallenge.target_amount);
-      if (isNaN(targetAmount) || targetAmount <= 0) {
-        showError("El monto objetivo debe ser un número positivo.");
-        return;
-      }
-    }
-
-    let savingAccountIdToLink: string | null = null;
-    if (newChallenge.selectedSavingAccountId) {
-      savingAccountIdToLink = newChallenge.selectedSavingAccountId;
-      // Si se vincula a una cuenta de ahorro, actualizar su target_amount y target_date
-      const selectedSaving = savingAccountsForChallenges.find(s => s.id === savingAccountIdToLink);
-      if (selectedSaving) {
-        const { error: updateSavingError } = await supabase
-          .from('savings')
-          .update({
-            target_amount: targetAmount,
-            target_date: newChallenge.end_date ? getLocalDateString(newChallenge.end_date) : null,
-          })
-          .eq('id', savingAccountIdToLink)
-          .eq('user_id', user.id);
-        if (updateSavingError) {
-          showError('Error al actualizar la cuenta de ahorro vinculada: ' + updateSavingError.message);
-          return;
-        }
-      }
-    }
-
-    const { data, error } = await supabase
-      .from('challenges')
-      .insert({
-        user_id: user.id,
-        name: newChallenge.name.trim(),
-        description: newChallenge.description.trim(),
-        challenge_template_id: newChallenge.challenge_template_id,
-        status: "active",
-        start_date: getLocalDateString(newChallenge.start_date),
-        end_date: getLocalDateString(newChallenge.end_date),
-        target_amount: targetAmount,
-        savings_id: savingAccountIdToLink, // Guardar el ID de la cuenta de ahorro vinculada
-      })
-      .select('*, savings(id, name, current_balance, target_amount, target_date, completion_date)');
-
-    if (error) {
-      showError('Error al registrar reto: ' + error.message);
-    } else {
-      setChallenges((prev) => [...prev, data[0]]);
-      setNewChallenge({
-        name: "",
-        description: "",
-        challenge_template_id: "",
-        start_date: new Date(),
-        end_date: undefined,
-        target_amount: "",
-        selectedSavingAccountId: null,
-      });
-      setIsAddChallengeDialogOpen(false);
-      showSuccess("Reto registrado exitosamente.");
-      fetchSavingsAndChallenges(); // Refrescar datos para asegurar que las cuentas de ahorro vinculadas se actualicen
-    }
-  };
-
-  const handleDeleteChallenge = async (challengeId: string) => {
-    if (!user) {
-      showError("Debes iniciar sesión para eliminar retos.");
-      return;
-    }
-
-    const { error } = await supabase
-      .from('challenges')
-      .delete()
-      .eq('id', challengeId)
-      .eq('user_id', user.id);
-
-    if (error) {
-      showError('Error al eliminar reto: ' + error.message);
-    } else {
-      setChallenges((prev) => prev.filter((challenge) => challenge.id !== challengeId));
-      showSuccess("Reto eliminado exitosamente.");
-    }
-  };
-
-  const handleOpenEditChallengeDialog = (challenge: Challenge) => {
-    setEditingChallenge(challenge);
-    setNewChallenge({
-      name: challenge.name,
-      description: challenge.description || "",
-      challenge_template_id: challenge.challenge_template_id,
-      start_date: parseISO(challenge.start_date),
-      end_date: parseISO(challenge.end_date),
-      target_amount: challenge.target_amount?.toString() || "",
-      selectedSavingAccountId: challenge.savings?.id || null,
-    });
-    setIsEditChallengeDialogOpen(true);
-  };
-
-  const handleUpdateChallenge = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!user || !editingChallenge) {
-      showError("Debes iniciar sesión para actualizar el reto.");
-      return;
-    }
-
-    if (!newChallenge.name.trim()) {
-      showError("El nombre del reto no puede estar vacío.");
-      return;
-    }
-    if (!newChallenge.challenge_template_id) {
-      showError("Por favor, selecciona un tipo de reto.");
-      return;
-    }
-    if (!newChallenge.start_date || !newChallenge.end_date) {
-      showError("Por favor, selecciona una fecha de inicio y fin para el reto.");
-      return;
-    }
-    if (isAfter(newChallenge.start_date, newChallenge.end_date)) {
-      showError("La fecha de inicio no puede ser posterior a la fecha de fin.");
-      return;
-    }
-
-    let targetAmount: number | undefined = undefined;
-    if (newChallenge.target_amount) {
-      targetAmount = parseFloat(newChallenge.target_amount);
-      if (isNaN(targetAmount) || targetAmount <= 0) {
-        showError("El monto objetivo debe ser un número positivo.");
-        return;
-      }
-    }
-
-    let savingAccountIdToLink: string | null = null;
-    if (newChallenge.selectedSavingAccountId) {
-      savingAccountIdToLink = newChallenge.selectedSavingAccountId;
-      // Si se vincula a una cuenta de ahorro, actualizar su target_amount y target_date
-      const selectedSaving = savingAccountsForChallenges.find(s => s.id === savingAccountIdToLink);
-      if (selectedSaving) {
-        const { error: updateSavingError } = await supabase
-          .from('savings')
-          .update({
-            target_amount: targetAmount,
-            target_date: newChallenge.end_date ? getLocalDateString(newChallenge.end_date) : null,
-          })
-          .eq('id', savingAccountIdToLink)
-          .eq('user_id', user.id);
-        if (updateSavingError) {
-          showError('Error al actualizar la cuenta de ahorro vinculada: ' + updateSavingError.message);
-          return;
-        }
-      }
-    }
-
-    const { data, error } = await supabase
-      .from('challenges')
-      .update({
-        name: newChallenge.name.trim(),
-        description: newChallenge.description.trim(),
-        challenge_template_id: newChallenge.challenge_template_id,
-        start_date: getLocalDateString(newChallenge.start_date),
-        end_date: getLocalDateString(newChallenge.end_date),
-        target_amount: targetAmount,
-        savings_id: savingAccountIdToLink,
-      })
-      .eq('id', editingChallenge.id)
-      .eq('user_id', user.id)
-      .select('*, savings(id, name, current_balance, target_amount, target_date, completion_date)');
-
-    if (error) {
-      showError('Error al actualizar reto: ' + error.message);
-    } else {
-      setChallenges((prev) =>
-        prev.map((challenge) => (challenge.id === editingChallenge.id ? data[0] : challenge))
-      );
-      setEditingChallenge(null);
-      setNewChallenge({
-        name: "",
-        description: "",
-        challenge_template_id: "",
-        start_date: new Date(),
-        end_date: undefined,
-        target_amount: "",
-        selectedSavingAccountId: null,
-      });
-      setIsEditChallengeDialogOpen(false);
-      showSuccess("Reto actualizado exitosamente.");
-      fetchSavingsAndChallenges(); // Refrescar datos
-    }
-  };
-
-  const filteredChallenges = challenges.filter((challenge) =>
-    challenge.name.toLowerCase().includes(searchTermChallenges.toLowerCase()) ||
-    challenge.description?.toLowerCase().includes(searchTermChallenges.toLowerCase())
-  );
-
-  const handleExportChallenges = (formatType: 'csv' | 'pdf') => {
-    const dataToExport = filteredChallenges.map(challenge => ({
-      Nombre: challenge.name,
-      Descripción: challenge.description || "N/A",
-      "Tipo de Reto": challengeTemplates.find(t => t.id === challenge.challenge_template_id)?.name || "Desconocido",
-      Estado: challenge.status,
-      "Fecha Inicio": format(parseISO(challenge.start_date), "dd/MM/yyyy", { locale: es }),
-      "Fecha Fin": format(parseISO(challenge.end_date), "dd/MM/yyyy", { locale: es }),
-      "Monto Objetivo": challenge.target_amount?.toFixed(2) || "N/A",
-      "Cuenta de Ahorro Vinculada": challenge.savings?.name || "N/A",
-    }));
-
-    const filename = `retos_${format(new Date(), "yyyyMMdd_HHmmss")}`;
-    const title = "Reporte de Retos de Ahorro";
-    const headers = [
-      "Nombre", "Descripción", "Tipo de Reto", "Estado", "Fecha Inicio",
-      "Fecha Fin", "Monto Objetivo", "Cuenta de Ahorro Vinculada"
-    ];
-    const pdfData = dataToExport.map(row => Object.values(row));
-
-    if (formatType === 'csv') {
-      exportToCsv(`${filename}.csv`, dataToExport);
-      showSuccess("Retos exportados a CSV.");
-    } else {
-      exportToPdf(`${filename}.pdf`, title, headers, pdfData);
-      showSuccess("Retos exportados a PDF.");
-    }
-  };
-
-  const getChallengeStatusDisplay = (challenge: Challenge) => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const endDate = parseISO(challenge.end_date);
-    endDate.setHours(0, 0, 0, 0);
-
-    if (challenge.status === "completed") {
-      return <span className="flex items-center text-green-600"><CheckCircle className="h-4 w-4 mr-1" /> Completado</span>;
-    }
-    if (challenge.status === "failed") {
-      return <span className="flex items-center text-red-600"><XCircle className="h-4 w-4 mr-1" /> Fallido</span>;
-    }
-    if (isAfter(today, endDate)) {
-      return <span className="flex items-center text-red-600"><XCircle className="h-4 w-4 mr-1" /> Finalizado (No completado)</span>;
-    }
-    return <span className="flex items-center text-blue-600"><Clock className="h-4 w-4 mr-1" /> Activo</span>;
-  };
-
-  const getChallengeProgress = (challenge: Challenge) => {
-    if (challenge.challenge_template_id === "save-x-amount" && challenge.target_amount && challenge.savings) {
-      const progress = (challenge.savings.current_balance / challenge.target_amount) * 100;
-      return (
-        <div className="flex items-center gap-2">
-          <Progress value={progress} className="w-[100px]" />
-          <span className="text-sm">{progress.toFixed(0)}%</span>
-        </div>
-      );
-    }
-    return "N/A";
-  };
-  // --- End Challenge-related functions ---
-
   return (
     <div className="flex flex-col gap-6 p-4">
-      <h1 className="text-3xl font-bold">Ahorrando</h1>
+      <h1 className="text-3xl font-bold">Tus Metas</h1>
 
       <div className="grid gap-4 md:grid-cols-2">
         <RandomSavingTipCard />
@@ -921,10 +608,10 @@ const Savings: React.FC = () => {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => handleExportSavings('csv')}>
+                <DropdownMenuItem onClick={() => handleExport('csv')}>
                   <FileText className="mr-2 h-4 w-4" /> Exportar a CSV
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => handleExportSavings('pdf')}>
+                <DropdownMenuItem onClick={() => handleExport('pdf')}>
                   <FileText className="mr-2 h-4 w-4" /> Exportar a PDF
                 </DropdownMenuItem>
               </DropdownMenuContent>
@@ -935,8 +622,8 @@ const Savings: React.FC = () => {
           <div className="mb-4">
             <Input
               placeholder="Buscar cuenta de ahorro por nombre..."
-              value={searchTermSavings}
-              onChange={(e) => setSearchTermSavings(e.target.value)}
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
               className="max-w-sm"
             />
           </div>
@@ -948,7 +635,7 @@ const Savings: React.FC = () => {
                   <TableHead>Saldo Actual</TableHead>
                   <TableHead>Monto Objetivo</TableHead>
                   <TableHead>Fecha Objetivo</TableHead>
-                  <TableHead>Fecha Cumplimiento</TableHead>
+                  <TableHead>Fecha Cumplimiento</TableHead> {/* Nueva columna */}
                   <TableHead>Progreso</TableHead>
                   <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
@@ -957,6 +644,12 @@ const Savings: React.FC = () => {
                 {filteredSavings.map((saving) => {
                   const progress = saving.target_amount ? (saving.current_balance / saving.target_amount) * 100 : 0;
                   
+                  // Determinar si la cuenta de ahorro está vinculada a un reto activo y en curso
+                  const isLinkedToActiveChallenge = saving.challenge_id && 
+                                                   saving.challenges && 
+                                                   saving.challenges.status === "active" &&
+                                                   (isAfter(new Date(saving.challenges.end_date), new Date()) || isSameDay(new Date(saving.challenges.end_date), new Date()));
+
                   return (
                     <TableRow key={saving.id}>
                       <TableCell className="font-medium">
@@ -968,7 +661,7 @@ const Savings: React.FC = () => {
                       <TableCell>${saving.current_balance.toFixed(2)}</TableCell>
                       <TableCell>${saving.target_amount?.toFixed(2) || "N/A"}</TableCell>
                       <TableCell>{saving.target_date ? format(parseISO(saving.target_date), "dd/MM/yyyy", { locale: es }) : "N/A"}</TableCell>
-                      <TableCell>{saving.completion_date ? format(parseISO(saving.completion_date), "dd/MM/yyyy", { locale: es }) : "N/A"}</TableCell>
+                      <TableCell>{saving.completion_date ? format(parseISO(saving.completion_date), "dd/MM/yyyy", { locale: es }) : "N/A"}</TableCell> {/* Mostrar nueva columna */}
                       <TableCell>
                         {saving.target_amount ? (
                           <div className="flex items-center gap-2">
@@ -983,6 +676,7 @@ const Savings: React.FC = () => {
                           size="sm"
                           onClick={() => handleOpenTransactionDialog(saving.id)}
                           className="h-8 gap-1"
+                          // La transacción siempre está permitida
                         >
                           <DollarSign className="h-3.5 w-3.5" />
                           Transacción
@@ -992,6 +686,7 @@ const Savings: React.FC = () => {
                           size="sm"
                           onClick={() => handleOpenEditSavingDialog(saving)}
                           className="h-8 w-8 p-0"
+                          disabled={isLinkedToActiveChallenge} // Deshabilitar si está vinculado a un reto activo
                         >
                           <Edit className="h-3.5 w-3.5" />
                           <span className="sr-only">Editar</span>
@@ -1002,6 +697,7 @@ const Savings: React.FC = () => {
                               variant="destructive"
                               size="sm"
                               className="h-8 w-8 p-0"
+                              disabled={isLinkedToActiveChallenge} // Deshabilitar si está vinculado a un reto activo
                             >
                               <Trash2 className="h-3.5 w-3.5" />
                             </Button>
@@ -1012,11 +708,12 @@ const Savings: React.FC = () => {
                               <AlertDialogDescription>
                                 Esta acción no se puede deshacer. Esto eliminará permanentemente la cuenta de ahorro 
                                 **{saving.name}** y todos sus registros.
+                                {isLinkedToActiveChallenge && <p className="mt-2 text-red-500">Esta cuenta de ahorro está vinculada a un reto activo. No puedes eliminarla mientras el reto esté en curso.</p>}
                               </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>
                               <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                              <AlertDialogAction onClick={() => handleDeleteSaving(saving.id)}>
+                              <AlertDialogAction onClick={() => handleDeleteSaving(saving.id)} disabled={isLinkedToActiveChallenge}>
                                 Eliminar
                               </AlertDialogAction>
                             </AlertDialogFooter>
@@ -1047,6 +744,7 @@ const Savings: React.FC = () => {
                     onChange={handleNewSavingChange}
                     className="col-span-3"
                     required
+                    disabled={!!editingSaving?.challenge_id} // Deshabilitar si está vinculado a un reto
                   />
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
@@ -1061,6 +759,7 @@ const Savings: React.FC = () => {
                     value={newSaving.target_amount}
                     onChange={handleNewSavingChange}
                     className="col-span-3"
+                    disabled={!!editingSaving?.challenge_id} // Deshabilitar si está vinculado a un reto
                   />
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
@@ -1075,6 +774,7 @@ const Savings: React.FC = () => {
                           "col-span-3 justify-start text-left font-normal",
                           !newSaving.target_date && "text-muted-foreground"
                         )}
+                        disabled={!!editingSaving?.challenge_id} // Deshabilitar si está vinculado a un reto
                       >
                         <CalendarIcon className="mr-2 h-4 w-4" />
                         {newSaving.target_date ? format(newSaving.target_date, "dd/MM/yyyy", { locale: es }) : <span>Selecciona una fecha</span>}
@@ -1100,7 +800,7 @@ const Savings: React.FC = () => {
                   </div>
                 </div>
                 <DialogFooter>
-                  <Button type="submit">Actualizar Ahorro</Button>
+                  <Button type="submit" disabled={!!editingSaving?.challenge_id}>Actualizar Ahorro</Button>
                 </DialogFooter>
               </form>
             </DialogContent>
@@ -1158,416 +858,6 @@ const Savings: React.FC = () => {
           onClose={handleFeedbackClose}
         />
       )}
-
-      {/* --- Challenges Section (moved from Challenges.tsx) --- */}
-      <h1 className="text-3xl font-bold mt-8">Retos de Ahorro</h1>
-
-      <RandomChallengeBanner />
-
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>Mis Retos</CardTitle>
-          <div className="flex gap-2">
-            <Dialog open={isAddChallengeDialogOpen} onOpenChange={setIsAddChallengeDialogOpen}>
-              <DialogTrigger asChild>
-                <Button size="sm" className="h-8 gap-1">
-                  <PlusCircle className="h-3.5 w-3.5" />
-                  <span className="sr-only sm:not-sr-only sm:whitespace-nowrap">
-                    Añadir Reto
-                  </span>
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-[425px]">
-                <DialogHeader>
-                  <DialogTitle>Añadir Nuevo Reto</DialogTitle>
-                </DialogHeader>
-                <form onSubmit={handleSubmitNewChallenge} className="grid gap-4 py-4">
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="name" className="text-right">
-                      Nombre
-                    </Label>
-                    <Input
-                      id="name"
-                      name="name"
-                      value={newChallenge.name}
-                      onChange={handleNewChallengeChange}
-                      className="col-span-3"
-                      required
-                    />
-                  </div>
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="description" className="text-right">
-                      Descripción (Opcional)
-                    </Label>
-                    <Input
-                      id="description"
-                      name="description"
-                      value={newChallenge.description}
-                      onChange={handleNewChallengeChange}
-                      className="col-span-3"
-                    />
-                  </div>
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="challenge_template_id" className="text-right">
-                      Tipo de Reto
-                    </Label>
-                    <Select value={newChallenge.challenge_template_id} onValueChange={handleTemplateSelect}>
-                      <SelectTrigger id="challenge_template_id" className="col-span-3">
-                        <SelectValue placeholder="Selecciona un tipo de reto" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {challengeTemplates.map((template) => (
-                          <SelectItem key={template.id} value={template.id}>
-                            {template.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  {newChallenge.challenge_template_id === "save-x-amount" && (
-                    <>
-                      <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="target_amount" className="text-right">
-                          Monto Objetivo
-                        </Label>
-                        <Input
-                          id="target_amount"
-                          name="target_amount"
-                          type="number"
-                          step="0.01"
-                          value={newChallenge.target_amount}
-                          onChange={handleNewChallengeChange}
-                          className="col-span-3"
-                          required
-                        />
-                      </div>
-                      <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="saving_account" className="text-right">
-                          Vincular a Cuenta de Ahorro
-                        </Label>
-                        <Select value={newChallenge.selectedSavingAccountId || ""} onValueChange={handleSavingAccountSelect}>
-                          <SelectTrigger id="saving_account" className="col-span-3">
-                            <SelectValue placeholder="Selecciona una cuenta de ahorro" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {savingAccountsForChallenges.map((account) => (
-                              <SelectItem key={account.id} value={account.id}>
-                                {account.name} (${account.current_balance.toFixed(2)})
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </>
-                  )}
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="start_date" className="text-right">
-                      Fecha Inicio
-                    </Label>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant={"outline"}
-                          className={cn(
-                            "col-span-3 justify-start text-left font-normal",
-                            !newChallenge.start_date && "text-muted-foreground"
-                          )}
-                        >
-                          <CalendarIcon className="mr-2 h-4 w-4" />
-                          {newChallenge.start_date ? format(newChallenge.start_date, "dd/MM/yyyy", { locale: es }) : <span>Selecciona una fecha</span>}
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0">
-                        <Calendar
-                          mode="single"
-                          selected={newChallenge.start_date}
-                          onSelect={(date) => handleNewChallengeDateChange("start_date", date)}
-                          initialFocus
-                          locale={es}
-                        />
-                      </PopoverContent>
-                    </Popover>
-                  </div>
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="end_date" className="text-right">
-                      Fecha Fin
-                    </Label>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant={"outline"}
-                          className={cn(
-                            "col-span-3 justify-start text-left font-normal",
-                            !newChallenge.end_date && "text-muted-foreground"
-                          )}
-                        >
-                          <CalendarIcon className="mr-2 h-4 w-4" />
-                          {newChallenge.end_date ? format(newChallenge.end_date, "dd/MM/yyyy", { locale: es }) : <span>Selecciona una fecha</span>}
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0">
-                        <Calendar
-                          mode="single"
-                          selected={newChallenge.end_date}
-                          onSelect={(date) => handleNewChallengeDateChange("end_date", date)}
-                          initialFocus
-                          locale={es}
-                        />
-                      </PopoverContent>
-                    </Popover>
-                  </div>
-                  <DialogFooter>
-                    <Button type="submit">Guardar Reto</Button>
-                  </DialogFooter>
-                </form>
-              </DialogContent>
-            </Dialog>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="h-8 gap-1">
-                  <FileDown className="h-3.5 w-3.5" />
-                  <span className="sr-only sm:not-sr-only sm:whitespace-nowrap">
-                    Exportar
-                  </span>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => handleExportChallenges('csv')}>
-                  <FileText className="mr-2 h-4 w-4" /> Exportar a CSV
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => handleExportChallenges('pdf')}>
-                  <FileText className="mr-2 h-4 w-4" /> Exportar a PDF
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="mb-4">
-            <Input
-              placeholder="Buscar reto por nombre o descripción..."
-              value={searchTermChallenges}
-              onChange={(e) => setSearchTermChallenges(e.target.value)}
-              className="max-w-sm"
-            />
-          </div>
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Nombre</TableHead>
-                  <TableHead>Tipo</TableHead>
-                  <TableHead>Estado</TableHead>
-                  <TableHead>Progreso</TableHead>
-                  <TableHead>Fechas</TableHead>
-                  <TableHead>Cuenta Vinculada</TableHead>
-                  <TableHead className="text-right">Acciones</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredChallenges.map((challenge) => (
-                  <TableRow key={challenge.id}>
-                    <TableCell className="font-medium">{challenge.name}</TableCell>
-                    <TableCell>{challengeTemplates.find(t => t.id === challenge.challenge_template_id)?.name || "Desconocido"}</TableCell>
-                    <TableCell>{getChallengeStatusDisplay(challenge)}</TableCell>
-                    <TableCell>{getChallengeProgress(challenge)}</TableCell>
-                    <TableCell>
-                      {format(parseISO(challenge.start_date), "dd/MM/yyyy", { locale: es })} -{" "}
-                      {format(parseISO(challenge.end_date), "dd/MM/yyyy", { locale: es })}
-                    </TableCell>
-                    <TableCell>{challenge.savings?.name || "N/A"}</TableCell>
-                    <TableCell className="text-right flex gap-2 justify-end">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleOpenEditChallengeDialog(challenge)}
-                        className="h-8 w-8 p-0"
-                      >
-                        <Edit className="h-3.5 w-3.5" />
-                        <span className="sr-only">Editar</span>
-                      </Button>
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button
-                            variant="destructive"
-                            size="sm"
-                            className="h-8 w-8 p-0"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>¿Estás absolutamente seguro?</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              Esta acción no se puede deshacer. Esto eliminará permanentemente el reto 
-                              **{challenge.name}** y sus registros.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                            <AlertDialogAction onClick={() => handleDeleteChallenge(challenge.id)}>
-                              Eliminar
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-
-          <Dialog open={isEditChallengeDialogOpen} onOpenChange={setIsEditChallengeDialogOpen}>
-            <DialogContent className="sm:max-w-[425px]">
-              <DialogHeader>
-                <DialogTitle>Editar Reto: {editingChallenge?.name}</DialogTitle>
-              </DialogHeader>
-              <form onSubmit={handleUpdateChallenge} className="grid gap-4 py-4">
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="editName" className="text-right">
-                    Nombre
-                  </Label>
-                  <Input
-                    id="editName"
-                    name="name"
-                    value={newChallenge.name}
-                    onChange={handleNewChallengeChange}
-                    className="col-span-3"
-                    required
-                  />
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="editDescription" className="text-right">
-                    Descripción (Opcional)
-                  </Label>
-                  <Input
-                    id="editDescription"
-                    name="description"
-                    value={newChallenge.description}
-                    onChange={handleNewChallengeChange}
-                    className="col-span-3"
-                  />
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="editChallenge_template_id" className="text-right">
-                    Tipo de Reto
-                  </Label>
-                  <Select value={newChallenge.challenge_template_id} onValueChange={handleTemplateSelect}>
-                    <SelectTrigger id="editChallenge_template_id" className="col-span-3">
-                      <SelectValue placeholder="Selecciona un tipo de reto" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {challengeTemplates.map((template) => (
-                        <SelectItem key={template.id} value={template.id}>
-                          {template.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                {newChallenge.challenge_template_id === "save-x-amount" && (
-                  <>
-                    <div className="grid grid-cols-4 items-center gap-4">
-                      <Label htmlFor="editTarget_amount" className="text-right">
-                        Monto Objetivo
-                      </Label>
-                      <Input
-                        id="editTarget_amount"
-                        name="target_amount"
-                        type="number"
-                        step="0.01"
-                        value={newChallenge.target_amount}
-                        onChange={handleNewChallengeChange}
-                        className="col-span-3"
-                        required
-                      />
-                    </div>
-                    <div className="grid grid-cols-4 items-center gap-4">
-                      <Label htmlFor="editSaving_account" className="text-right">
-                        Vincular a Cuenta de Ahorro
-                      </Label>
-                      <Select value={newChallenge.selectedSavingAccountId || ""} onValueChange={handleSavingAccountSelect}>
-                        <SelectTrigger id="editSaving_account" className="col-span-3">
-                          <SelectValue placeholder="Selecciona una cuenta de ahorro" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {savingAccountsForChallenges.map((account) => (
-                            <SelectItem key={account.id} value={account.id}>
-                              {account.name} (${account.current_balance.toFixed(2)})
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </>
-                )}
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="editStart_date" className="text-right">
-                    Fecha Inicio
-                  </Label>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant={"outline"}
-                        className={cn(
-                          "col-span-3 justify-start text-left font-normal",
-                          !newChallenge.start_date && "text-muted-foreground"
-                        )}
-                      >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {newChallenge.start_date ? format(newChallenge.start_date, "dd/MM/yyyy", { locale: es }) : <span>Selecciona una fecha</span>}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0">
-                      <Calendar
-                        mode="single"
-                        selected={newChallenge.start_date}
-                        onSelect={(date) => handleNewChallengeDateChange("start_date", date)}
-                        initialFocus
-                        locale={es}
-                      />
-                    </PopoverContent>
-                  </Popover>
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="editEnd_date" className="text-right">
-                    Fecha Fin
-                  </Label>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant={"outline"}
-                        className={cn(
-                          "col-span-3 justify-start text-left font-normal",
-                          !newChallenge.end_date && "text-muted-foreground"
-                        )}
-                      >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {newChallenge.end_date ? format(newChallenge.end_date, "dd/MM/yyyy", { locale: es }) : <span>Selecciona una fecha</span>}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0">
-                      <Calendar
-                        mode="single"
-                        selected={newChallenge.end_date}
-                        onSelect={(date) => handleNewChallengeDateChange("end_date", date)}
-                        initialFocus
-                        locale={es}
-                      />
-                    </PopoverContent>
-                  </Popover>
-                </div>
-                <DialogFooter>
-                  <Button type="submit">Actualizar Reto</Button>
-                </DialogFooter>
-              </form>
-            </DialogContent>
-          </Dialog>
-        </CardContent>
-      </Card>
-      {/* --- End Challenges Section --- */}
     </div>
   );
 };
