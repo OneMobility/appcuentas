@@ -22,7 +22,7 @@ interface CreditCardsChartProps {
 
 // Componente personalizado para las etiquetas de montos
 const CustomLabelsComponent = (props: any) => {
-  const { data, width, height, x, y, yAxis } = props;
+  const { data, width, x, yAxis } = props;
 
   if (!yAxis || !yAxis.scale) return null;
 
@@ -31,9 +31,6 @@ const CustomLabelsComponent = (props: any) => {
   return (
     <g>
       {data.map((entry: any, index: number) => {
-        const barX = x + (index * (width / data.length)) + (width / data.length / 2); // Approximate center of the bar
-        const barWidth = width / data.length; // Approximate width of each bar
-
         // Calculate Y position for totalCreditLimit
         const creditLimitY = scale(entry.totalCreditLimit);
         // Calculate Y position for totalCurrentBalance
@@ -96,8 +93,7 @@ const CreditCardsChart: React.FC<CreditCardsChartProps> = ({ cards }) => {
       }
 
       return {
-        name: card.name,
-        lastFourDigits: `****${card.last_four_digits}`, // For X-axis label
+        name: card.name, // Use card name for X-axis label
         color: card.color,
         availableWithinLimit: availableWithinLimit,
         debtWithinLimit: debtWithinLimit,
@@ -121,7 +117,7 @@ const CreditCardsChart: React.FC<CreditCardsChartProps> = ({ cards }) => {
         barGap={0} // Ensure bars within a category are not separated
       >
         <CartesianGrid strokeDasharray="3 3" />
-        <XAxis dataKey="lastFourDigits" />
+        <XAxis dataKey="name" /> {/* Usar el nombre de la tarjeta */}
         <YAxis />
         <Tooltip formatter={(value: number, name: string) => {
             if (name === "Crédito Disponible") return [`Crédito Disponible: $${value.toFixed(2)}`];
