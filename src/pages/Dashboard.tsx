@@ -17,9 +17,9 @@ import { getUpcomingPaymentDueDate } from "@/utils/date-helpers";
 import { Button } from "@/components/ui/button";
 import GroupedPaymentDueDatesCard from "@/components/GroupedPaymentDueDatesCard";
 import { cn } from "@/lib/utils";
-import CreditCardsChart from "@/components/CreditCardsChart";
-import IncomeExpensePieChart from "@/components/IncomeExpensePieChart";
-import CreditExpensePieChart from "@/components/CreditExpensePieChart";
+// import CreditCardsChart from "@/components/CreditCardsChart"; // Eliminado
+// import IncomeExpensePieChart from "@/components/IncomeExpensePieChart"; // Eliminado
+// import CreditExpensePieChart from "@/components/CreditExpensePieChart"; // Eliminado
 
 // Tasas de cambio de ejemplo (MXN como base)
 const exchangeRates: { [key: string]: number } = {
@@ -236,50 +236,66 @@ const Dashboard = () => {
   const totalIncomePieChartData = useMemo(() => {
     const dataMap = new Map<string, { id: string; name: string; value: number; color: string; icon: string }>();
 
-    // Initialize with all known income categories
-    incomeCategories.forEach(cat => dataMap.set(cat.id, { id: cat.id, name: cat.name, value: 0, color: cat.color, icon: cat.icon || "Tag" }));
-    // Ensure "Sin Categoría" is always present
+    // Always initialize "Sin Categoría" first
     dataMap.set(UNCATEGORIZED_ID, { id: UNCATEGORIZED_ID, name: UNCATEGORIZED_NAME, value: 0, color: UNCATEGORIZED_COLOR, icon: UNCATEGORIZED_ICON });
 
-    const aggregateIncome = (tx: CashTransaction | CardTransaction) => {
+    // Then add all known income categories
+    incomeCategories.forEach(cat => dataMap.set(cat.id, { id: cat.id, name: cat.name, value: 0, color: cat.color, icon: cat.icon || "Tag" }));
+
+    const processIncomeTransaction = (tx: CashTransaction | CardTransaction) => {
       const categoryId = tx.income_category_id;
-      if (categoryId && dataMap.has(categoryId)) {
-        const current = dataMap.get(categoryId)!;
-        dataMap.set(categoryId, { ...current, value: current.value + tx.amount });
+      if (categoryId) {
+        const category = incomeCategories.find(cat => cat.id === categoryId);
+        if (category) {
+          const current = dataMap.get(category.id)!;
+          dataMap.set(category.id, { ...current, value: current.value + tx.amount });
+        } else {
+          // Category ID exists but category object not found in incomeCategories
+          const current = dataMap.get(UNCATEGORIZED_ID)!;
+          dataMap.set(UNCATEGORIZED_ID, { ...current, value: current.value + tx.amount });
+        }
       } else {
+        // No category ID assigned
         const current = dataMap.get(UNCATEGORIZED_ID)!;
         dataMap.set(UNCATEGORIZED_ID, { ...current, value: current.value + tx.amount });
       }
     };
 
     // Aggregate cash income
-    cashTransactions.filter(tx => tx.type === "ingreso").forEach(aggregateIncome);
+    cashTransactions.filter(tx => tx.type === "ingreso").forEach(processIncomeTransaction);
 
     // Aggregate debit card income (payments to debit cards)
     cards.filter(card => card.type === "debit").forEach(card => {
-      (card.transactions || []).filter(tx => tx.type === "payment").forEach(aggregateIncome);
+      (card.transactions || []).filter(tx => tx.type === "payment").forEach(processIncomeTransaction);
     });
 
-    const result = Array.from(dataMap.values()).filter(entry => entry.value > 0);
-    console.log("Dyad Debug: Total Income Pie Chart Data:", result);
-    return result;
+    return Array.from(dataMap.values()).filter(entry => entry.value > 0);
   }, [cashTransactions, cards, incomeCategories]);
 
   // Data for Expense Pie Chart (Cash + Debit Card Expenses)
   const totalExpensePieChartData = useMemo(() => {
     const dataMap = new Map<string, { id: string; name: string; value: number; color: string; icon: string }>();
 
-    // Initialize with all known expense categories
-    expenseCategories.forEach(cat => dataMap.set(cat.id, { id: cat.id, name: cat.name, value: 0, color: cat.color, icon: cat.icon || "Tag" }));
-    // Ensure "Sin Categoría" is always present
+    // Always initialize "Sin Categoría" first
     dataMap.set(UNCATEGORIZED_ID, { id: UNCATEGORIZED_ID, name: UNCATEGORIZED_NAME, value: 0, color: UNCATEGORIZED_COLOR, icon: UNCATEGORIZED_ICON });
+
+    // Then add all known expense categories
+    expenseCategories.forEach(cat => dataMap.set(cat.id, { id: cat.id, name: cat.name, value: 0, color: cat.color, icon: cat.icon || "Tag" }));
 
     const aggregateExpense = (tx: CashTransaction | CardTransaction) => {
       const categoryId = tx.expense_category_id;
-      if (categoryId && dataMap.has(categoryId)) {
-        const current = dataMap.get(categoryId)!;
-        dataMap.set(categoryId, { ...current, value: current.value + tx.amount });
+      if (categoryId) {
+        const category = expenseCategories.find(cat => cat.id === categoryId);
+        if (category) {
+          const current = dataMap.get(category.id)!;
+          dataMap.set(category.id, { ...current, value: current.value + tx.amount });
+        } else {
+          // Category ID exists but category object not found in expenseCategories
+          const current = dataMap.get(UNCATEGORIZED_ID)!;
+          dataMap.set(UNCATEGORIZED_ID, { ...current, value: current.value + tx.amount });
+        }
       } else {
+        // No category ID assigned
         const current = dataMap.get(UNCATEGORIZED_ID)!;
         dataMap.set(UNCATEGORIZED_ID, { ...current, value: current.value + tx.amount });
       }
@@ -293,9 +309,7 @@ const Dashboard = () => {
       (card.transactions || []).filter(tx => tx.type === "charge").forEach(aggregateExpense);
     });
 
-    const result = Array.from(dataMap.values()).filter(entry => entry.value > 0);
-    console.log("Dyad Debug: Total Expense Pie Chart Data:", result);
-    return result;
+    return Array.from(dataMap.values()).filter(entry => entry.value > 0);
   }, [cashTransactions, cards, expenseCategories]);
 
   // Data for Credit Card Expenses Pie Chart
@@ -323,9 +337,7 @@ const Dashboard = () => {
       (card.transactions || []).filter(tx => tx.type === "charge").forEach(aggregateCreditExpense);
     });
 
-    const result = Array.from(dataMap.values()).filter(entry => entry.value > 0);
-    console.log("Dyad Debug: Credit Card Expense Pie Chart Data:", result);
-    return result;
+    return Array.from(dataMap.values()).filter(entry => entry.value > 0);
   }, [cards, expenseCategories]);
 
 
@@ -719,32 +731,7 @@ const Dashboard = () => {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Gráfico de Créditos</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <CreditCardsChart cards={cards} />
-        </CardContent>
-      </Card>
-
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        <Card>
-          <CardContent className="p-6">
-            <IncomeExpensePieChart title="Ingresos Totales (Efectivo + Débito)" data={totalIncomePieChartData} />
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-6">
-            <IncomeExpensePieChart title="Egresos Totales (Efectivo + Débito)" data={totalExpensePieChartData} />
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-6">
-            <CreditExpensePieChart title="Egresos de Tarjetas de Crédito" data={creditCardExpensePieChartData} />
-          </CardContent>
-        </Card>
-      </div>
+      {/* Eliminados los gráficos de pastel y de barras */}
     </div>
   );
 };
