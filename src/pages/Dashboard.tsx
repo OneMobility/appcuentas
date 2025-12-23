@@ -18,8 +18,8 @@ import { Button } from "@/components/ui/button";
 import GroupedPaymentDueDatesCard from "@/components/GroupedPaymentDueDatesCard";
 import { cn } from "@/lib/utils";
 import CreditCardsChart from "@/components/CreditCardsChart";
-import IncomeExpensePieChart from "@/components/IncomeExpensePieChart"; // Nuevo import
-import CreditExpensePieChart from "@/components/CreditExpensePieChart"; // Nuevo import
+import IncomeExpensePieChart from "@/components/IncomeExpensePieChart";
+import CreditExpensePieChart from "@/components/CreditExpensePieChart";
 
 // Tasas de cambio de ejemplo (MXN como base)
 const exchangeRates: { [key: string]: number } = {
@@ -427,9 +427,14 @@ const Dashboard = () => {
   const totalIncomePieChartData = useMemo(() => {
     const dataMap = new Map<string, { id: string; name: string; value: number; color: string; icon: string }>();
 
+    const findIncomeCategory = (categoryId: string | null | undefined) => {
+      if (!categoryId) return undefined;
+      return incomeCategories.find(cat => cat.id === categoryId);
+    };
+
     // Aggregate cash income
     cashTransactions.filter(tx => tx.type === "ingreso" && tx.income_category_id).forEach(tx => {
-      const category = getCategoryById(tx.income_category_id);
+      const category = findIncomeCategory(tx.income_category_id);
       if (category) {
         const current = dataMap.get(category.id) || { id: category.id, name: category.name, value: 0, color: category.color, icon: category.icon || "Tag" };
         dataMap.set(category.id, { ...current, value: current.value + tx.amount });
@@ -439,7 +444,7 @@ const Dashboard = () => {
     // Aggregate debit card income (payments to debit cards)
     cards.filter(card => card.type === "debit").forEach(card => {
       (card.transactions || []).filter(tx => tx.type === "payment" && tx.income_category_id).forEach(tx => {
-        const category = getCategoryById(tx.income_category_id);
+        const category = findIncomeCategory(tx.income_category_id);
         if (category) {
           const current = dataMap.get(category.id) || { id: category.id, name: category.name, value: 0, color: category.color, icon: category.icon || "Tag" };
           dataMap.set(category.id, { ...current, value: current.value + tx.amount });
@@ -448,15 +453,20 @@ const Dashboard = () => {
     });
 
     return Array.from(dataMap.values()).filter(entry => entry.value > 0);
-  }, [cashTransactions, cards, getCategoryById]);
+  }, [cashTransactions, cards, incomeCategories]);
 
   // Data for Expense Pie Chart (Cash + Debit Card Expenses)
   const totalExpensePieChartData = useMemo(() => {
     const dataMap = new Map<string, { id: string; name: string; value: number; color: string; icon: string }>();
 
+    const findExpenseCategory = (categoryId: string | null | undefined) => {
+      if (!categoryId) return undefined;
+      return expenseCategories.find(cat => cat.id === categoryId);
+    };
+
     // Aggregate cash expenses
     cashTransactions.filter(tx => tx.type === "egreso" && tx.expense_category_id).forEach(tx => {
-      const category = getCategoryById(tx.expense_category_id);
+      const category = findExpenseCategory(tx.expense_category_id);
       if (category) {
         const current = dataMap.get(category.id) || { id: category.id, name: category.name, value: 0, color: category.color, icon: category.icon || "Tag" };
         dataMap.set(category.id, { ...current, value: current.value + tx.amount });
@@ -466,7 +476,7 @@ const Dashboard = () => {
     // Aggregate debit card expenses (charges on debit cards)
     cards.filter(card => card.type === "debit").forEach(card => {
       (card.transactions || []).filter(tx => tx.type === "charge" && tx.expense_category_id).forEach(tx => {
-        const category = getCategoryById(tx.expense_category_id);
+        const category = findExpenseCategory(tx.expense_category_id);
         if (category) {
           const current = dataMap.get(category.id) || { id: category.id, name: category.name, value: 0, color: category.color, icon: category.icon || "Tag" };
           dataMap.set(category.id, { ...current, value: current.value + tx.amount });
@@ -475,16 +485,21 @@ const Dashboard = () => {
     });
 
     return Array.from(dataMap.values()).filter(entry => entry.value > 0);
-  }, [cashTransactions, cards, getCategoryById]);
+  }, [cashTransactions, cards, expenseCategories]);
 
   // Data for Credit Card Expenses Pie Chart
   const creditCardExpensePieChartData = useMemo(() => {
     const dataMap = new Map<string, { id: string; name: string; value: number; color: string; icon: string }>();
 
+    const findExpenseCategory = (categoryId: string | null | undefined) => {
+      if (!categoryId) return undefined;
+      return expenseCategories.find(cat => cat.id === categoryId);
+    };
+
     // Aggregate credit card expenses (charges on credit cards)
     cards.filter(card => card.type === "credit").forEach(card => {
       (card.transactions || []).filter(tx => tx.type === "charge" && tx.expense_category_id).forEach(tx => {
-        const category = getCategoryById(tx.expense_category_id);
+        const category = findExpenseCategory(tx.expense_category_id);
         if (category) {
           const current = dataMap.get(category.id) || { id: category.id, name: category.name, value: 0, color: category.color, icon: category.icon || "Tag" };
           dataMap.set(category.id, { ...current, value: current.value + tx.amount });
@@ -493,7 +508,7 @@ const Dashboard = () => {
     });
 
     return Array.from(dataMap.values()).filter(entry => entry.value > 0);
-  }, [cards, getCategoryById]);
+  }, [cards, expenseCategories]);
 
 
   return (
