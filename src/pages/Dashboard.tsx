@@ -105,7 +105,6 @@ const Dashboard = () => {
   const [debtors, setDebtors] = useState<DebtorData[]>([]);
   const [creditors, setCreditors] = useState<CreditorData[]>([]);
   const [refreshKey, setRefreshKey] = useState(0); // Nuevo estado para forzar el refresco
-  // const [cardSpendingFilter, setCardSpendingFilter] = useState<"all" | "credit" | "debit">("all"); // Eliminado
 
   const fetchDashboardData = async () => {
     if (!user) {
@@ -242,6 +241,7 @@ const Dashboard = () => {
     const dataMap = new Map<string, { name: string; value: number; color: string }>();
     expenseCategories.forEach(cat => dataMap.set(cat.id, { name: cat.name, value: 0, color: cat.color }));
 
+    // Add cash expenses
     cashTransactions.filter(tx => tx.type === "egreso").forEach(tx => {
       const categoryId = tx.expense_category_id;
       if (categoryId) {
@@ -251,14 +251,8 @@ const Dashboard = () => {
         }
       }
     });
-    return Array.from(dataMap.values()).filter(entry => entry.value > 0);
-  }, [cashTransactions, expenseCategories]);
 
-  // NEW: Card Expense Category Data
-  const cardExpenseCategoryData = useMemo(() => {
-    const dataMap = new Map<string, { name: string; value: number; color: string }>();
-    expenseCategories.forEach(cat => dataMap.set(cat.id, { name: cat.name, value: 0, color: cat.color }));
-
+    // Add card expenses
     cards.forEach(card => {
       (card.transactions || []).forEach(tx => {
         if (tx.type === "charge" && tx.expense_category_id) {
@@ -270,8 +264,9 @@ const Dashboard = () => {
         }
       });
     });
+
     return Array.from(dataMap.values()).filter(entry => entry.value > 0);
-  }, [cards, expenseCategories]);
+  }, [cashTransactions, cards, expenseCategories]);
 
 
   const monthlySummaryData = useMemo(() => {
@@ -297,58 +292,6 @@ const Dashboard = () => {
       .sort(([keyA], [keyB]) => keyA.localeCompare(keyB))
       .map(([, value]) => value);
   }, [cashTransactions]);
-
-  // Filtered cards based on cardSpendingFilter (removed, now it's all cards)
-  const filteredCardsForSpendingChart = cards;
-
-  // NEW: monthlyCardCategorySpendingData (by expense category)
-  const monthlyCardCategorySpendingData = useMemo(() => {
-    const dataMap = new Map<string, { [key: string]: any }>(); // Key: YYYY-MM -> { name: 'Month', category1: amount, category2: amount }
-
-    filteredCardsForSpendingChart.forEach(card => { // Use filteredCardsForSpendingChart
-      (card.transactions || []).forEach(tx => {
-        if (tx.type === "charge" && tx.expense_category_id) {
-          const monthKey = format(parseISO(tx.date), "yyyy-MM");
-          const monthName = format(parseISO(tx.date), "MMM", { locale: es });
-          const category = getCategoryById(tx.expense_category_id);
-          const categoryName = category?.name || "Sin Categoría";
-
-          if (!dataMap.has(monthKey)) {
-            dataMap.set(monthKey, { name: monthName });
-          }
-          const currentMonthData = dataMap.get(monthKey)!;
-          currentMonthData[categoryName] = (currentMonthData[categoryName] || 0) + tx.amount;
-          dataMap.set(monthKey, currentMonthData);
-        }
-      });
-    });
-
-    return Array.from(dataMap.entries())
-      .sort(([keyA], [keyB]) => keyA.localeCompare(keyB))
-      .map(([, value]) => value);
-  }, [filteredCardsForSpendingChart, getCategoryById]);
-
-  const uniqueCardExpenseCategories = useMemo(() => {
-    const categoryNames = new Set<string>();
-    filteredCardsForSpendingChart.forEach(card => { // Use filteredCardsForSpendingChart
-      (card.transactions || []).forEach(tx => {
-        if (tx.type === "charge" && tx.expense_category_id) {
-          const category = getCategoryById(tx.expense_category_id);
-          if (category) {
-            categoryNames.add(category.name);
-          }
-        }
-      });
-    });
-    return Array.from(categoryNames);
-  }, [filteredCardsForSpendingChart, getCategoryById]);
-
-
-  const uniqueCardNames = useMemo(() => {
-    const names = new Set<string>();
-    cards.forEach(card => names.add(card.name));
-    return Array.from(names);
-  }, [cards]);
 
   const cardSummaryData = useMemo(() => {
     return cards.map(card => {
@@ -795,113 +738,75 @@ const Dashboard = () => {
         </CardContent>
       </Card>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Ingresos por Categoría (Efectivo)</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="h-[300px]">
-              {incomeCategoryData.length > 0 ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={incomeCategoryData}
-                      cx="50%"
-                      cy="50%"
-                      labelLine={false}
-                      outerRadius={80}
-                      dataKey="value"
-                      label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                    >
-                      {incomeCategoryData.map((entry, index) => (
-                        <Cell key={`cell-income-${index}`} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <Tooltip />
-                    <Legend />
-                  </PieChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="flex items-center justify-center h-full text-muted-foreground">
-                  No hay datos de ingresos por categoría en efectivo para mostrar.
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle>Ingresos por Categoría (Efectivo)</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="h-[300px]">
+            {incomeCategoryData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={incomeCategoryData}
+                    cx="50%"
+                    cy="50%"
+                    labelLine={false}
+                    outerRadius={80}
+                    dataKey="value"
+                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                  >
+                    {incomeCategoryData.map((entry, index) => (
+                      <Cell key={`cell-income-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                  <Legend />
+                </PieChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex items-center justify-center h-full text-muted-foreground">
+                No hay datos de ingresos por categoría en efectivo para mostrar.
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Egresos por Categoría (Efectivo)</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="h-[300px]">
-              {expenseCategoryData.length > 0 ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={expenseCategoryData}
-                      cx="50%"
-                      cy="50%"
-                      labelLine={false}
-                      outerRadius={80}
-                      dataKey="value"
-                      label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                    >
-                      {expenseCategoryData.map((entry, index) => (
-                        <Cell key={`cell-expense-${index}`} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <Tooltip />
-                    <Legend />
-                  </PieChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="flex items-center justify-center h-full text-muted-foreground">
-                  No hay datos de egresos por categoría en efectivo para mostrar.
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* NEW: Card Expenses by Category Chart */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Egresos por Categoría (Tarjetas)</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="h-[300px]">
-              {cardExpenseCategoryData.length > 0 ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={cardExpenseCategoryData}
-                      cx="50%"
-                      cy="50%"
-                      labelLine={false}
-                      outerRadius={80}
-                      dataKey="value"
-                      label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                    >
-                      {cardExpenseCategoryData.map((entry, index) => (
-                        <Cell key={`cell-card-expense-${index}`} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <Tooltip />
-                    <Legend />
-                  </PieChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="flex items-center justify-center h-full text-muted-foreground">
-                  No hay datos de egresos por categoría de tarjetas para mostrar.
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>Egresos por Categoría (Total)</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="h-[300px]">
+            {expenseCategoryData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={expenseCategoryData}
+                    cx="50%"
+                    cy="50%"
+                    labelLine={false}
+                    outerRadius={80}
+                    dataKey="value"
+                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                  >
+                    {expenseCategoryData.map((entry, index) => (
+                      <Cell key={`cell-expense-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                  <Legend />
+                </PieChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex items-center justify-center h-full text-muted-foreground">
+                No hay datos de egresos por categoría para mostrar.
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 };
