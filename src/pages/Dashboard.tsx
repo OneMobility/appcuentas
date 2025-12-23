@@ -12,7 +12,7 @@ import { useSession } from "@/context/SessionContext";
 import { showError, showSuccess } from "@/utils/toast";
 import { format, isBefore, isSameDay, addDays, parseISO } from "date-fns";
 import { es } from "date-fns/locale";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from "@/components/ui/table";
 import { getUpcomingPaymentDueDate } from "@/utils/date-helpers";
 import { Button } from "@/components/ui/button";
 import GroupedPaymentDueDatesCard from "@/components/GroupedPaymentDueDatesCard";
@@ -407,6 +407,20 @@ const Dashboard = () => {
 
   const userFirstName = user?.user_metadata?.first_name || user?.email?.split('@')[0] || 'Usuario';
 
+  // Calculate totals for the footer row
+  const totalCreditLimit = useMemo(() => {
+    return cardSummaryData.reduce((sum, card) => sum + (card.credit_limit || 0), 0);
+  }, [cardSummaryData]);
+
+  const totalCreditDebtSummary = useMemo(() => {
+    return cardSummaryData.reduce((sum, card) => sum + card.current_balance, 0);
+  }, [cardSummaryData]);
+
+  const totalCreditAvailableSummary = useMemo(() => {
+    return cardSummaryData.reduce((sum, card) => sum + card.creditAvailable, 0);
+  }, [cardSummaryData]);
+
+
   return (
     <div className="flex flex-col gap-6 p-4">
       <div className="flex items-center justify-between">
@@ -644,6 +658,17 @@ const Dashboard = () => {
                   </TableRow>
                 ))}
               </TableBody>
+              <TableFooter>
+                <TableRow>
+                  <TableCell className="text-right font-bold">Totales</TableCell>
+                  <TableCell className="font-bold">${totalCreditLimit.toFixed(2)}</TableCell>
+                  <TableCell className="font-bold">${totalCreditDebtSummary.toFixed(2)}</TableCell>
+                  <TableCell className={cn("font-bold", totalCreditAvailableSummary < 0 && "text-red-600")}>
+                    ${totalCreditAvailableSummary.toFixed(2)}
+                  </TableCell>
+                  <TableCell></TableCell> {/* Empty cell for "Próx. Pago" */}
+                </TableRow>
+              </TableFooter>
             </Table>
           </div>
         </CardContent>
