@@ -12,7 +12,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { PlusCircle, DollarSign, Trash2, Edit, CalendarIcon, FileText, FileDown, PiggyBank, ArrowUpCircle, ArrowDownCircle } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { cn } from "@/lib/utils";
-import { format, isAfter, isSameDay, parseISO } from "date-fns"; // Importar isAfter y isSameDay
+import { format, isAfter, isSameDay, parseISO } from "date-fns";
 import { es } from "date-fns/locale";
 import ColorPicker from "@/components/ColorPicker";
 import { supabase } from "@/integrations/supabase/client";
@@ -23,9 +23,10 @@ import { exportToCsv, exportToPdf } from "@/utils/export";
 import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import FeedbackOverlay from "@/components/FeedbackOverlay";
-import RandomSavingTipCard from "@/components/RandomSavingTipCard"; // Importar el nuevo componente
-import FixedSavingTipCard from "@/components/FixedSavingTipCard"; // Importar el nuevo componente
-import { getLocalDateString } from "@/utils/date-helpers"; // Importar la nueva función de utilidad
+import RandomSavingTipCard from "@/components/RandomSavingTipCard";
+import FixedSavingTipCard from "@/components/FixedSavingTipCard";
+import { getLocalDateString } from "@/utils/date-helpers";
+import { Outlet, useLocation } from "react-router-dom"; // Importar Outlet y useLocation
 
 interface Saving {
   id: string;
@@ -33,21 +34,14 @@ interface Saving {
   current_balance: number;
   target_amount?: number;
   target_date?: string; // Fecha objetivo
-  completion_date?: string; // Nueva: Fecha de cumplimiento
+  completion_date?: string; // Fecha de cumplimiento
   color: string;
   user_id?: string;
-  challenge_id?: string; // Añadir challenge_id
-  challenges?: { // Añadir detalles del reto vinculado
-    status: "active" | "completed" | "failed" | "regular";
-    end_date: string;
-  } | null;
 }
-
-// Eliminado interface SavingsOutletContext
 
 const Savings: React.FC = () => {
   const { user } = useSession();
-  // const { setChallengeRefreshKey } = useOutletContext<SavingsOutletContext>(); // Eliminado
+  const location = useLocation(); // Para saber si estamos en la ruta principal de savings
   const [savings, setSavings] = useState<Saving[]>([]);
   const [isAddSavingDialogOpen, setIsAddSavingDialogOpen] = useState(false);
   const [isEditSavingDialogOpen, setIsEditSavingDialogOpen] = useState(false);
@@ -85,7 +79,7 @@ const Savings: React.FC = () => {
 
     const { data, error } = await supabase
       .from('savings')
-      .select('*, challenge_id, challenges(status, end_date)') // Seleccionar challenge_id y detalles del reto
+      .select('*')
       .eq('user_id', user.id)
       .order('created_at', { ascending: false });
 
@@ -97,10 +91,10 @@ const Savings: React.FC = () => {
   };
 
   useEffect(() => {
-    if (user) {
+    if (user && location.pathname === "/savings") { // Solo cargar si estamos en la ruta principal de savings
       fetchSavings();
     }
-  }, [user]);
+  }, [user, location.pathname]);
 
   const totalSavingsBalance = savings.reduce((sum, saving) => sum + saving.current_balance, 0);
 
@@ -278,10 +272,6 @@ const Savings: React.FC = () => {
           });
         }
       }
-      // Trigger refresh for challenges page if this saving is linked to a challenge
-      // if (updatedSaving.challenge_id) { // Eliminado
-      //   setChallengeRefreshKey(prev => prev + 1); // Eliminado
-      // }
     }
   };
 
@@ -368,53 +358,6 @@ const Savings: React.FC = () => {
       setIsTransactionDialogOpen(false);
       showSuccess("Transacción registrada exitosamente.");
 
-      // Lógica para actualizar el estado del reto si está vinculado
-      // if (updatedSaving.challenge_id && updatedSaving.target_amount) { // Eliminado
-      //   let challengeStatus: "completed" | "regular" | "failed" | "active" = "active"; // Eliminado
-      //   const progress = (updatedSaving.current_balance / updatedSaving.target_amount) * 100; // Eliminado
-
-      //   if (progress >= 100) { // Eliminado
-      //     challengeStatus = "completed"; // Eliminado
-      //   } else { // Eliminado
-      //     challengeStatus = "active"; // Keep active until end date for full evaluation // Eliminado
-      //   } // Eliminado
-
-      //   // Fetch current challenge status to avoid unnecessary updates // Eliminado
-      //   const { data: currentChallenge, error: fetchChallengeError } = await supabase // Eliminado
-      //     .from('challenges') // Eliminado
-      //     .select('status, end_date') // Eliminado
-      //     .eq('id', updatedSaving.challenge_id) // Eliminado
-      //     .single(); // Eliminado
-
-      //   if (fetchChallengeError && fetchChallengeError.code !== 'PGRST116') { // Eliminado
-      //     console.error("Error fetching linked challenge:", fetchChallengeError.message); // Eliminado
-      //   } else if (currentChallenge) { // Eliminado
-      //     let updateChallengeEndDate = currentChallenge.end_date; // Eliminado
-      //     // If challenge is completed and saving has a completion date, use that date // Eliminado
-      //     if (challengeStatus === "completed" && updatedSaving.completion_date) { // Usar completion_date // Eliminado
-      //       updateChallengeEndDate = updatedSaving.completion_date; // Eliminado
-      //     } // Eliminado
-
-      //     // Only update if the new status is 'completed' or if the current status is 'active' // Eliminado
-      //     if (challengeStatus === "completed" || currentChallenge.status === "active") { // Eliminado
-      //       const { error: updateChallengeError } = await supabase // Eliminado
-      //         .from('challenges') // Eliminado
-      //         .update({ status: challengeStatus, end_date: updateChallengeEndDate }) // Eliminado
-      //         .eq('id', updatedSaving.challenge_id) // Eliminado
-      //         .eq('user_id', user.id); // Eliminado
-
-      //       if (updateChallengeError) { // Eliminado
-      //         showError('Error al actualizar el estado del reto vinculado: ' + updateChallengeError.message); // Eliminado
-      //       } else { // Eliminado
-      //         if (challengeStatus === "completed") { // Eliminado
-      //           showSuccess("¡Reto de ahorro completado!"); // Eliminado
-      //         } // Eliminado
-      //         setChallengeRefreshKey(prev => prev + 1); // Force refresh in Challenges.tsx // Eliminado
-      //       } // Eliminado
-      //     } // Eliminado
-      //   } // Eliminado
-      // } // Eliminado
-
       // Show feedback overlay based on transaction type
       if (transactionType === "deposit") {
         setFeedbackOverlay({
@@ -478,9 +421,14 @@ const Savings: React.FC = () => {
     }
   };
 
+  // Si la ruta actual es /savings/challenges, renderizar el Outlet
+  if (location.pathname === "/savings/challenges") {
+    return <Outlet />;
+  }
+
   return (
     <div className="flex flex-col gap-6 p-4">
-      <h1 className="text-3xl font-bold">Tus Metas</h1>
+      <h1 className="text-3xl font-bold">Ahorrando</h1>
 
       <div className="grid gap-4 md:grid-cols-2">
         <RandomSavingTipCard />
@@ -635,7 +583,7 @@ const Savings: React.FC = () => {
                   <TableHead>Saldo Actual</TableHead>
                   <TableHead>Monto Objetivo</TableHead>
                   <TableHead>Fecha Objetivo</TableHead>
-                  <TableHead>Fecha Cumplimiento</TableHead> {/* Nueva columna */}
+                  <TableHead>Fecha Cumplimiento</TableHead>
                   <TableHead>Progreso</TableHead>
                   <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
@@ -644,12 +592,6 @@ const Savings: React.FC = () => {
                 {filteredSavings.map((saving) => {
                   const progress = saving.target_amount ? (saving.current_balance / saving.target_amount) * 100 : 0;
                   
-                  // Determinar si la cuenta de ahorro está vinculada a un reto activo y en curso
-                  const isLinkedToActiveChallenge = saving.challenge_id && 
-                                                   saving.challenges && 
-                                                   saving.challenges.status === "active" &&
-                                                   (isAfter(new Date(saving.challenges.end_date), new Date()) || isSameDay(new Date(saving.challenges.end_date), new Date()));
-
                   return (
                     <TableRow key={saving.id}>
                       <TableCell className="font-medium">
@@ -661,7 +603,7 @@ const Savings: React.FC = () => {
                       <TableCell>${saving.current_balance.toFixed(2)}</TableCell>
                       <TableCell>${saving.target_amount?.toFixed(2) || "N/A"}</TableCell>
                       <TableCell>{saving.target_date ? format(parseISO(saving.target_date), "dd/MM/yyyy", { locale: es }) : "N/A"}</TableCell>
-                      <TableCell>{saving.completion_date ? format(parseISO(saving.completion_date), "dd/MM/yyyy", { locale: es }) : "N/A"}</TableCell> {/* Mostrar nueva columna */}
+                      <TableCell>{saving.completion_date ? format(parseISO(saving.completion_date), "dd/MM/yyyy", { locale: es }) : "N/A"}</TableCell>
                       <TableCell>
                         {saving.target_amount ? (
                           <div className="flex items-center gap-2">
@@ -676,7 +618,6 @@ const Savings: React.FC = () => {
                           size="sm"
                           onClick={() => handleOpenTransactionDialog(saving.id)}
                           className="h-8 gap-1"
-                          // La transacción siempre está permitida
                         >
                           <DollarSign className="h-3.5 w-3.5" />
                           Transacción
@@ -686,7 +627,6 @@ const Savings: React.FC = () => {
                           size="sm"
                           onClick={() => handleOpenEditSavingDialog(saving)}
                           className="h-8 w-8 p-0"
-                          disabled={isLinkedToActiveChallenge} // Deshabilitar si está vinculado a un reto activo
                         >
                           <Edit className="h-3.5 w-3.5" />
                           <span className="sr-only">Editar</span>
@@ -697,7 +637,6 @@ const Savings: React.FC = () => {
                               variant="destructive"
                               size="sm"
                               className="h-8 w-8 p-0"
-                              disabled={isLinkedToActiveChallenge} // Deshabilitar si está vinculado a un reto activo
                             >
                               <Trash2 className="h-3.5 w-3.5" />
                             </Button>
@@ -708,12 +647,11 @@ const Savings: React.FC = () => {
                               <AlertDialogDescription>
                                 Esta acción no se puede deshacer. Esto eliminará permanentemente la cuenta de ahorro 
                                 **{saving.name}** y todos sus registros.
-                                {isLinkedToActiveChallenge && <p className="mt-2 text-red-500">Esta cuenta de ahorro está vinculada a un reto activo. No puedes eliminarla mientras el reto esté en curso.</p>}
                               </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>
                               <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                              <AlertDialogAction onClick={() => handleDeleteSaving(saving.id)} disabled={isLinkedToActiveChallenge}>
+                              <AlertDialogAction onClick={() => handleDeleteSaving(saving.id)}>
                                 Eliminar
                               </AlertDialogAction>
                             </AlertDialogFooter>
@@ -744,7 +682,6 @@ const Savings: React.FC = () => {
                     onChange={handleNewSavingChange}
                     className="col-span-3"
                     required
-                    disabled={!!editingSaving?.challenge_id} // Deshabilitar si está vinculado a un reto
                   />
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
@@ -759,7 +696,6 @@ const Savings: React.FC = () => {
                     value={newSaving.target_amount}
                     onChange={handleNewSavingChange}
                     className="col-span-3"
-                    disabled={!!editingSaving?.challenge_id} // Deshabilitar si está vinculado a un reto
                   />
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
@@ -774,7 +710,6 @@ const Savings: React.FC = () => {
                           "col-span-3 justify-start text-left font-normal",
                           !newSaving.target_date && "text-muted-foreground"
                         )}
-                        disabled={!!editingSaving?.challenge_id} // Deshabilitar si está vinculado a un reto
                       >
                         <CalendarIcon className="mr-2 h-4 w-4" />
                         {newSaving.target_date ? format(newSaving.target_date, "dd/MM/yyyy", { locale: es }) : <span>Selecciona una fecha</span>}
@@ -800,7 +735,7 @@ const Savings: React.FC = () => {
                   </div>
                 </div>
                 <DialogFooter>
-                  <Button type="submit" disabled={!!editingSaving?.challenge_id}>Actualizar Ahorro</Button>
+                  <Button type="submit">Actualizar Ahorro</Button>
                 </DialogFooter>
               </form>
             </DialogContent>
@@ -858,6 +793,7 @@ const Savings: React.FC = () => {
           onClose={handleFeedbackClose}
         />
       )}
+      <Outlet /> {/* Renderiza las rutas hijas aquí */}
     </div>
   );
 };
