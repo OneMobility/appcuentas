@@ -17,6 +17,7 @@ import { getUpcomingPaymentDueDate } from "@/utils/date-helpers";
 import { Button } from "@/components/ui/button";
 import GroupedPaymentDueDatesCard from "@/components/GroupedPaymentDueDatesCard";
 import { cn } from "@/lib/utils";
+import CreditCardsChart from "@/components/CreditCardsChart"; // Nuevo import
 
 // Tasas de cambio de ejemplo (MXN como base)
 const exchangeRates: { [key: string]: number } = {
@@ -671,6 +672,15 @@ const Dashboard = () => {
               </TableFooter>
             </Table>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Gráfico de Créditos</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <CreditCardsChart cards={cards} />
         </CardContent>
       </Card>
     </div>
