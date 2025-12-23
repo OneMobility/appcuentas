@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useCategoryContext } from "@/context/CategoryContext";
 import { supabase } from "@/integrations/supabase/client";
-import { useSession } from "@/context/SessionContext";
+import { useSession } => "@/context/SessionContext";
 import { showError, showSuccess } from "@/utils/toast";
 import { format, isBefore, isSameDay, addDays, parseISO } from "date-fns";
 import { es } from "date-fns/locale";
@@ -225,6 +225,7 @@ const Dashboard = () => {
     const dataMap = new Map<string, { name: string; value: number; color: string }>();
     incomeCategories.forEach(cat => dataMap.set(cat.id, { name: cat.name, value: 0, color: cat.color }));
 
+    // Add cash income
     cashTransactions.filter(tx => tx.type === "ingreso").forEach(tx => {
       const categoryId = tx.income_category_id;
       if (categoryId) {
@@ -234,8 +235,22 @@ const Dashboard = () => {
         }
       }
     });
+
+    // Add debit card income (payments to debit cards)
+    cards.filter(card => card.type === "debit").forEach(card => {
+      (card.transactions || []).forEach(tx => {
+        if (tx.type === "payment" && tx.income_category_id) {
+          const categoryId = tx.income_category_id;
+          const current = dataMap.get(categoryId);
+          if (current) {
+            dataMap.set(categoryId, { ...current, value: current.value + tx.amount });
+          }
+        }
+      });
+    });
+
     return Array.from(dataMap.values()).filter(entry => entry.value > 0);
-  }, [cashTransactions, incomeCategories]);
+  }, [cashTransactions, cards, incomeCategories]);
 
   const expenseCategoryData = useMemo(() => {
     const dataMap = new Map<string, { name: string; value: number; color: string }>();
@@ -252,7 +267,7 @@ const Dashboard = () => {
       }
     });
 
-    // Add card expenses
+    // Add card expenses (charges on both debit and credit cards)
     cards.forEach(card => {
       (card.transactions || []).forEach(tx => {
         if (tx.type === "charge" && tx.expense_category_id) {
@@ -740,7 +755,7 @@ const Dashboard = () => {
 
       <Card>
         <CardHeader>
-          <CardTitle>Ingresos por Categoría (Efectivo)</CardTitle>
+          <CardTitle>Ingresos por Categoría (Total)</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="h-[300px]">
@@ -766,7 +781,7 @@ const Dashboard = () => {
               </ResponsiveContainer>
             ) : (
               <div className="flex items-center justify-center h-full text-muted-foreground">
-                No hay datos de ingresos por categoría en efectivo para mostrar.
+                No hay datos de ingresos por categoría para mostrar.
               </div>
             )}
           </div>
