@@ -79,7 +79,7 @@ const CreditCardsChart: React.FC<CreditCardsChartProps> = ({ cards }) => {
           <LabelList dataKey="creditLimit" content={CustomCreditLimitLabel} />
         </Bar>
         {/* Barra superpuesta que representa el saldo actual (deuda) */}
-        <Bar dataKey="currentBalance" name="Deuda Actual" fill="#FF6B6B" opacity={0.7}>
+        <Bar dataKey="currentBalance" name="Deuda Actual" fill="#FF6B6B"> {/* Opacidad eliminada */}
           <LabelList dataKey="currentBalance" content={CustomDebtLabel} />
         </Bar>
       </BarChart>
