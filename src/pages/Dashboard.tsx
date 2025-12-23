@@ -608,7 +608,7 @@ const Dashboard = () => {
 
       <Card>
         <CardHeader>
-          <CardTitle>Resumen Detallado de Tarjetas</CardTitle>
+          <CardTitle>Resumen de Créditos</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
@@ -616,12 +616,10 @@ const Dashboard = () => {
               <TableHeader>
                 <TableRow>
                   <TableHead>Tarjeta</TableHead>
-                  <TableHead>Tipo</TableHead>
-                  <TableHead>Límite / Saldo Inicial</TableHead>
-                  <TableHead>Deuda Actual / Saldo Disponible</TableHead>
+                  <TableHead>Límite</TableHead>
+                  <TableHead>Deuda</TableHead>
                   <TableHead>Crédito Disponible</TableHead>
-                  <TableHead>Total Gastado (Histórico)</TableHead>
-                  <TableHead>Próx. Pago (Crédito)</TableHead>
+                  <TableHead>Próx. Pago</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -633,15 +631,13 @@ const Dashboard = () => {
                         <span>{card.name}</span>
                       </div>
                     </TableCell>
-                    <TableCell>{card.isCredit ? "Crédito" : "Débito"}</TableCell>
-                    <TableCell>${(card.isCredit ? card.credit_limit : card.initial_balance)?.toFixed(2) || "N/A"}</TableCell>
+                    <TableCell>${card.credit_limit?.toFixed(2) || "N/A"}</TableCell>
                     <TableCell>${card.current_balance.toFixed(2)}</TableCell>
-                    <TableCell className={card.isCredit && card.creditAvailable < 0 ? "text-red-600" : ""}>
-                      {card.isCredit ? `$${card.creditAvailable.toFixed(2)}` : "N/A"}
+                    <TableCell className={card.creditAvailable < 0 ? "text-red-600" : ""}>
+                      ${card.creditAvailable.toFixed(2)}
                     </TableCell>
-                    <TableCell>${card.totalSpent.toFixed(2)}</TableCell>
                     <TableCell>
-                      {card.isCredit && card.upcomingPaymentDueDate
+                      {card.upcomingPaymentDueDate
                         ? format(card.upcomingPaymentDueDate, "dd/MM/yyyy", { locale: es })
                         : "N/A"}
                     </TableCell>
