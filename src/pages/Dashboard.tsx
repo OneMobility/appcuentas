@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useCategoryContext } from "@/context/CategoryContext";
 import { supabase } from "@/integrations/supabase/client";
-import { useSession } => "@/context/SessionContext";
+import { useSession } from "@/context/SessionContext";
 import { showError, showSuccess } from "@/utils/toast";
 import { format, isBefore, isSameDay, addDays, parseISO } from "date-fns";
 import { es } from "date-fns/locale";
