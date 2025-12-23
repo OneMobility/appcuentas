@@ -12,7 +12,7 @@ import {
   Tag,
   LogOut,
   Wallet, // Icono para Ahorrando
-  Trophy, // Nuevo icono para Retos
+  // Trophy, // Nuevo icono para Retos - ELIMINADO
 } from "lucide-react";
 import { useSession } from "@/context/SessionContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -49,11 +49,11 @@ const navItems = [
     path: "/savings",
     icon: Wallet, // Icono para ahorros
   },
-  {
-    name: "Retos", // Nuevo item
-    path: "/savings/challenges", // Ruta para retos
-    icon: Trophy, // Icono para retos
-  },
+  // {
+  //   name: "Retos", // Nuevo item - ELIMINADO
+  //   path: "/savings/challenges", // Ruta para retos - ELIMINADO
+  //   icon: Trophy, // Icono para retos - ELIMINADO
+  // },
   {
     name: "Categorías",
     path: "/categories",

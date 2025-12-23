@@ -17,7 +17,7 @@ import {
   Tag,
   LogOut,
   Wallet, // Icono para Ahorrando
-  Trophy, // Nuevo icono para Retos
+  // Trophy, // Nuevo icono para Retos - ELIMINADO
 } from "lucide-react";
 import MobileNavbar from "./MobileNavbar";
 import { useSession } from "@/context/SessionContext";
@@ -54,11 +54,11 @@ const navItems = [
     path: "/savings",
     icon: Wallet, // Icono para ahorros
   },
-  {
-    name: "Retos", // Nuevo item
-    path: "/savings/challenges", // Ruta para retos
-    icon: Trophy, // Icono para retos
-  },
+  // {
+  //   name: "Retos", // Nuevo item - ELIMINADO
+  //   path: "/savings/challenges", // Ruta para retos - ELIMINADO
+  //   icon: Trophy, // Icono para retos - ELIMINADO
+  // },
   {
     name: "Categorías",
     path: "/categories",
@@ -127,12 +127,9 @@ const Layout: React.FC<LayoutProps> = () => { // Props actualizadas
 
   let currentPageName = navItems.find(item => item.path === location.pathname)?.name || "Oinkash";
   // Ajustar currentPageName para rutas anidadas si es necesario
-  if (location.pathname.startsWith("/savings") && currentPageName === "Ahorrando") {
-    if (location.pathname === "/savings/challenges") {
-      currentPageName = "Retos";
-    } else if (location.pathname === "/savings") {
-      currentPageName = "Ahorrando";
-    }
+  // La lógica de subrutas para /savings/challenges ya no es necesaria aquí
+  if (location.pathname === "/savings") {
+    currentPageName = "Ahorrando";
   }
 
 
