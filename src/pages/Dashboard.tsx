@@ -17,7 +17,9 @@ import { getUpcomingPaymentDueDate } from "@/utils/date-helpers";
 import { Button } from "@/components/ui/button";
 import GroupedPaymentDueDatesCard from "@/components/GroupedPaymentDueDatesCard";
 import { cn } from "@/lib/utils";
-import CreditCardsChart from "@/components/CreditCardsChart"; // Nuevo import
+import CreditCardsChart from "@/components/CreditCardsChart";
+import IncomeExpensePieChart from "@/components/IncomeExpensePieChart"; // Nuevo import
+import CreditExpensePieChart from "@/components/CreditExpensePieChart"; // Nuevo import
 
 // Tasas de cambio de ejemplo (MXN como base)
 const exchangeRates: { [key: string]: number } = {
@@ -421,6 +423,78 @@ const Dashboard = () => {
     return cardSummaryData.reduce((sum, card) => sum + card.creditAvailable, 0);
   }, [cardSummaryData]);
 
+  // Data for Income Pie Chart (Cash + Debit Card Income)
+  const totalIncomePieChartData = useMemo(() => {
+    const dataMap = new Map<string, { id: string; name: string; value: number; color: string; icon: string }>();
+
+    // Aggregate cash income
+    cashTransactions.filter(tx => tx.type === "ingreso" && tx.income_category_id).forEach(tx => {
+      const category = getCategoryById(tx.income_category_id);
+      if (category) {
+        const current = dataMap.get(category.id) || { id: category.id, name: category.name, value: 0, color: category.color, icon: category.icon || "Tag" };
+        dataMap.set(category.id, { ...current, value: current.value + tx.amount });
+      }
+    });
+
+    // Aggregate debit card income (payments to debit cards)
+    cards.filter(card => card.type === "debit").forEach(card => {
+      (card.transactions || []).filter(tx => tx.type === "payment" && tx.income_category_id).forEach(tx => {
+        const category = getCategoryById(tx.income_category_id);
+        if (category) {
+          const current = dataMap.get(category.id) || { id: category.id, name: category.name, value: 0, color: category.color, icon: category.icon || "Tag" };
+          dataMap.set(category.id, { ...current, value: current.value + tx.amount });
+        }
+      });
+    });
+
+    return Array.from(dataMap.values()).filter(entry => entry.value > 0);
+  }, [cashTransactions, cards, getCategoryById]);
+
+  // Data for Expense Pie Chart (Cash + Debit Card Expenses)
+  const totalExpensePieChartData = useMemo(() => {
+    const dataMap = new Map<string, { id: string; name: string; value: number; color: string; icon: string }>();
+
+    // Aggregate cash expenses
+    cashTransactions.filter(tx => tx.type === "egreso" && tx.expense_category_id).forEach(tx => {
+      const category = getCategoryById(tx.expense_category_id);
+      if (category) {
+        const current = dataMap.get(category.id) || { id: category.id, name: category.name, value: 0, color: category.color, icon: category.icon || "Tag" };
+        dataMap.set(category.id, { ...current, value: current.value + tx.amount });
+      }
+    });
+
+    // Aggregate debit card expenses (charges on debit cards)
+    cards.filter(card => card.type === "debit").forEach(card => {
+      (card.transactions || []).filter(tx => tx.type === "charge" && tx.expense_category_id).forEach(tx => {
+        const category = getCategoryById(tx.expense_category_id);
+        if (category) {
+          const current = dataMap.get(category.id) || { id: category.id, name: category.name, value: 0, color: category.color, icon: category.icon || "Tag" };
+          dataMap.set(category.id, { ...current, value: current.value + tx.amount });
+        }
+      });
+    });
+
+    return Array.from(dataMap.values()).filter(entry => entry.value > 0);
+  }, [cashTransactions, cards, getCategoryById]);
+
+  // Data for Credit Card Expenses Pie Chart
+  const creditCardExpensePieChartData = useMemo(() => {
+    const dataMap = new Map<string, { id: string; name: string; value: number; color: string; icon: string }>();
+
+    // Aggregate credit card expenses (charges on credit cards)
+    cards.filter(card => card.type === "credit").forEach(card => {
+      (card.transactions || []).filter(tx => tx.type === "charge" && tx.expense_category_id).forEach(tx => {
+        const category = getCategoryById(tx.expense_category_id);
+        if (category) {
+          const current = dataMap.get(category.id) || { id: category.id, name: category.name, value: 0, color: category.color, icon: category.icon || "Tag" };
+          dataMap.set(category.id, { ...current, value: current.value + tx.amount });
+        }
+      });
+    });
+
+    return Array.from(dataMap.values()).filter(entry => entry.value > 0);
+  }, [cards, getCategoryById]);
+
 
   return (
     <div className="flex flex-col gap-6 p-4">
@@ -683,6 +757,24 @@ const Dashboard = () => {
           <CreditCardsChart cards={cards} />
         </CardContent>
       </Card>
+
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        <Card>
+          <CardContent className="p-6">
+            <IncomeExpensePieChart title="Ingresos Totales (Efectivo + Débito)" data={totalIncomePieChartData} />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-6">
+            <IncomeExpensePieChart title="Egresos Totales (Efectivo + Débito)" data={totalExpensePieChartData} />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-6">
+            <CreditExpensePieChart title="Egresos de Tarjetas de Crédito" data={creditCardExpensePieChartData} />
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 };
