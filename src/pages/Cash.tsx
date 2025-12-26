@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { PlusCircle, CalendarIcon, Edit, FileText, FileDown, Trash2 } from "lucide-react";
+import { PlusCircle, CalendarIcon, Edit, FileText, FileDown, Trash2, ArrowRightLeft } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { cn } from "@/lib/utils";
 import { format, parseISO } from "date-fns";
@@ -24,6 +24,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { exportToCsv, exportToPdf } from "@/utils/export";
 import DynamicLucideIcon from "@/components/DynamicLucideIcon";
 import { getLocalDateString } from "@/utils/date-helpers";
+import CardTransferDialog from "@/components/CardTransferDialog"; // Importar CardTransferDialog
 
 interface Transaction {
   id: string;
@@ -37,13 +38,25 @@ interface Transaction {
   user_id?: string;
 }
 
+interface CardData {
+  id: string;
+  name: string;
+  bank_name: string;
+  last_four_digits: string;
+  type: "credit" | "debit";
+  current_balance: number;
+  credit_limit?: number;
+}
+
 const Cash = () => {
   const { user } = useSession();
   const { incomeCategories, expenseCategories, getCategoryById, isLoadingCategories } = useCategoryContext();
   const [balance, setBalance] = useState(0);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [cards, setCards] = useState<CardData[]>([]); // Estado para almacenar las tarjetas
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isTransferDialogOpen, setIsTransferDialogOpen] = useState(false); // Nuevo estado para el diálogo de transferencia
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [newTransaction, setNewTransaction] = useState({
     type: "ingreso" as "ingreso" | "egreso",
@@ -85,11 +98,34 @@ const Cash = () => {
     }
   };
 
+  const fetchCards = async () => {
+    if (!user) {
+      setCards([]);
+      return;
+    }
+    const { data, error } = await supabase
+      .from('cards')
+      .select('id, name, bank_name, last_four_digits, type, current_balance, credit_limit')
+      .eq('user_id', user.id);
+
+    if (error) {
+      showError('Error al cargar tarjetas: ' + error.message);
+    } else {
+      setCards(data || []);
+    }
+  };
+
   useEffect(() => {
     if (user && !isLoadingCategories) {
       fetchTransactions();
+      fetchCards(); // Fetch cards when component mounts or user changes
     }
   }, [user, isLoadingCategories]);
+
+  const handleTransferSuccess = () => {
+    fetchTransactions(); // Re-fetch cash transactions
+    fetchCards(); // Re-fetch cards
+  };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -462,6 +498,12 @@ const Cash = () => {
                 </form>
               </DialogContent>
             </Dialog>
+            <Button size="sm" className="h-8 gap-1" onClick={() => setIsTransferDialogOpen(true)}>
+              <ArrowRightLeft className="h-3.5 w-3.5" />
+              <span className="sr-only sm:not-sr-only sm:whitespace-nowrap">
+                Transferir
+              </span>
+            </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="sm" className="h-8 gap-1">
@@ -730,6 +772,13 @@ const Cash = () => {
               </form>
             </DialogContent>
           </Dialog>
+          <CardTransferDialog
+            isOpen={isTransferDialogOpen}
+            onClose={() => setIsTransferDialogOpen(false)}
+            cards={cards}
+            cashBalance={balance}
+            onTransferSuccess={handleTransferSuccess}
+          />
         </CardContent>
       </Card>
     </div>
