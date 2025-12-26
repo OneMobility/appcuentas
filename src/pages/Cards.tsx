@@ -31,15 +31,15 @@ import DynamicLucideIcon from "@/components/DynamicLucideIcon";
 
 interface CardTransaction {
   id: string;
-  type: "charge" | "payment";
+  type: "charge" | "payment"; // Monto mensual si es a meses, o monto total si es pago único
   amount: number;
   description: string;
   date: string;
   created_at: string; // Add created_at
   card_id?: string;
   user_id?: string;
-  income_category_id?: string | null;
-  expense_category_id?: string | null;
+  income_category_id?: string | null; // New
+  expense_category_id?: string | null; // New
 }
 
 interface CardData {
@@ -50,7 +50,7 @@ interface CardData {
   expiration_date: string;
   type: "credit" | "debit";
   initial_balance: number;
-  current_balance: number;
+  current_balance: number; // Deuda total para crédito, saldo para débito
   credit_limit?: number;
   cut_off_day?: number;
   days_to_pay_after_cut_off?: number;
@@ -63,6 +63,7 @@ const Cards = () => {
   const { user } = useSession();
   const { incomeCategories, expenseCategories, getCategoryById, isLoadingCategories } = useCategoryContext();
   const [cards, setCards] = useState<CardData[]>([]);
+  const [cashBalance, setCashBalance] = useState(0); // Nuevo estado para el saldo en efectivo
   const [isAddCardDialogOpen, setIsAddCardDialogOpen] = useState(false);
   const [isEditCardDialogOpen, setIsEditCardDialogOpen] = useState(false);
   const [isAddTransactionDialogOpen, setIsAddTransactionDialogOpen] = useState(false);
@@ -116,11 +117,37 @@ const Cards = () => {
     }
   };
 
+  const fetchCashBalance = async () => {
+    if (!user) {
+      setCashBalance(0);
+      return;
+    }
+    const { data: cashTxData, error: cashTxError } = await supabase
+      .from('cash_transactions')
+      .select('type, amount')
+      .eq('user_id', user.id);
+
+    if (cashTxError) {
+      showError('Error al cargar saldo en efectivo: ' + cashTxError.message);
+    } else {
+      const currentCashBalance = (cashTxData || []).reduce((sum, tx) => {
+        return tx.type === "ingreso" ? sum + tx.amount : sum - tx.amount;
+      }, 0);
+      setCashBalance(currentCashBalance);
+    }
+  };
+
   useEffect(() => {
     if (user) {
       fetchCards();
+      fetchCashBalance(); // Fetch cash balance on component mount
     }
   }, [user, isLoadingCategories]);
+
+  const handleTransferSuccess = () => {
+    fetchCards(); // Re-fetch cards after transfer
+    fetchCashBalance(); // Re-fetch cash balance after transfer
+  };
 
   const totalCreditAvailable = useMemo(() => {
     return cards
@@ -306,12 +333,6 @@ const Cards = () => {
       return;
     }
 
-    const currentCard = cards.find(c => c.id === selectedCardId);
-    if (!currentCard) {
-      showError("Tarjeta no encontrada o eliminada.");
-      return;
-    }
-
     let incomeCategoryIdToInsert: string | null = null;
     let expenseCategoryIdToInsert: string | null = null;
 
@@ -321,8 +342,14 @@ const Cards = () => {
       } else if (newTransaction.selectedCategoryType === "expense") {
         expenseCategoryIdToInsert = newTransaction.selectedCategoryId;
       }
-    } else if (newTransaction.type === "charge" || (newTransaction.type === "payment" && currentCard.type === "debit")) {
+    } else if (newTransaction.type === "charge" || (newTransaction.type === "payment" && currentCardForDialog?.type === "debit")) {
       showError("Por favor, selecciona una categoría.");
+      return;
+    }
+
+    const currentCard = cards.find(c => c.id === selectedCardId);
+    if (!currentCard) {
+      showError("Tarjeta no encontrada o eliminada.");
       return;
     }
 
@@ -769,7 +796,8 @@ const Cards = () => {
             isOpen={isTransferDialogOpen}
             onClose={() => setIsTransferDialogOpen(false)}
             cards={cards}
-            onTransferSuccess={fetchCards}
+            cashBalance={cashBalance} // Pasar el saldo de efectivo
+            onTransferSuccess={handleTransferSuccess} // Pasar la función de éxito
           />
 
           <Dialog open={isAddTransactionDialogOpen} onOpenChange={setIsAddTransactionDialogOpen}>
