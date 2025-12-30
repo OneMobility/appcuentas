@@ -342,7 +342,7 @@ const Cash = () => {
       .from('cash_transactions')
       .delete()
       .eq('id', transactionId)
-      .eq('user.id', user.id);
+      .eq('user_id', user.id); // Corrected from 'user.id' to 'user_id'
 
     if (error) {
       showError('Error al eliminar transacción: ' + error.message);
