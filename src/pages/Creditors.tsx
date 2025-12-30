@@ -20,6 +20,7 @@ import { es } from "date-fns/locale";
 import { getLocalDateString } from "@/utils/date-helpers";
 import { useCategoryContext } from "@/context/CategoryContext";
 import DynamicLucideIcon from "@/components/DynamicLucideIcon";
+import { evaluateExpression } from "@/utils/math-helpers"; // Importar la nueva función
 
 interface CreditorTransaction {
   id: string;
@@ -137,7 +138,20 @@ const Creditors = () => {
 
   const handleNewCreditorChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    setNewCreditor((prev) => ({ ...prev, [name]: value }));
+
+    if ((name === "initial_balance") && value.startsWith('=')) {
+      const expression = value.substring(1);
+      const result = evaluateExpression(expression);
+      if (result !== null) {
+        setNewCreditor((prev) => ({ ...prev, [name]: result.toFixed(2) }));
+        showSuccess(`Resultado: ${result.toFixed(2)}`);
+      } else {
+        showError("Expresión matemática inválida.");
+        setNewCreditor((prev) => ({ ...prev, [name]: value }));
+      }
+    } else {
+      setNewCreditor((prev) => ({ ...prev, [name]: value }));
+    }
   };
 
   const handleSubmitNewCreditor = async (e: React.FormEvent) => {
@@ -206,7 +220,20 @@ const Creditors = () => {
 
   const handleTransactionInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    setNewTransaction((prev) => ({ ...prev, [name]: value }));
+
+    if (name === "amount" && value.startsWith('=')) {
+      const expression = value.substring(1);
+      const result = evaluateExpression(expression);
+      if (result !== null) {
+        setNewTransaction((prev) => ({ ...prev, amount: result.toFixed(2) }));
+        showSuccess(`Resultado: ${result.toFixed(2)}`);
+      } else {
+        showError("Expresión matemática inválida.");
+        setNewTransaction((prev) => ({ ...prev, amount: value }));
+      }
+    } else {
+      setNewTransaction((prev) => ({ ...prev, [name]: value }));
+    }
   };
 
   const handleTransactionTypeChange = (value: "charge" | "payment") => {
@@ -661,12 +688,13 @@ const Creditors = () => {
                     <Input
                       id="initial_balance"
                       name="initial_balance"
-                      type="number"
+                      type="text" // Cambiado a text para permitir '='
                       step="0.01"
                       value={newCreditor.initial_balance}
                       onChange={handleNewCreditorChange}
                       className="col-span-3"
                       required
+                      placeholder="Ej. 100 o =50+20*2"
                     />
                   </div>
                   <DialogFooter>
@@ -798,12 +826,13 @@ const Creditors = () => {
                   <Input
                     id="transactionAmount"
                     name="amount"
-                    type="number"
+                    type="text" // Cambiado a text para permitir '='
                     step="0.01"
                     value={newTransaction.amount}
                     onChange={handleTransactionInputChange}
                     className="col-span-3"
                     required
+                    placeholder="Ej. 100 o =50+20*2"
                   />
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
@@ -995,12 +1024,13 @@ const Creditors = () => {
                   <Input
                     id="editTransactionAmount"
                     name="amount"
-                    type="number"
+                    type="text" // Cambiado a text para permitir '='
                     step="0.01"
                     value={newTransaction.amount}
                     onChange={handleTransactionInputChange}
                     className="col-span-3"
                     required
+                    placeholder="Ej. 100 o =50+20*2"
                   />
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">

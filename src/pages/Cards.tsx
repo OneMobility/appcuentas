@@ -28,6 +28,7 @@ import CardTransferDialog from "@/components/CardTransferDialog";
 import { useCategoryContext } from "@/context/CategoryContext";
 import { toast } from "sonner";
 import DynamicLucideIcon from "@/components/DynamicLucideIcon";
+import { evaluateExpression } from "@/utils/math-helpers"; // Importar la nueva función
 
 interface CardTransaction {
   id: string;
@@ -171,7 +172,20 @@ const Cards = () => {
 
   const handleNewCardChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    setNewCard((prev) => ({ ...prev, [name]: value }));
+
+    if ((name === "initial_balance" || name === "credit_limit") && value.startsWith('=')) {
+      const expression = value.substring(1);
+      const result = evaluateExpression(expression);
+      if (result !== null) {
+        setNewCard((prev) => ({ ...prev, [name]: result.toFixed(2) }));
+        showSuccess(`Resultado: ${result.toFixed(2)}`);
+      } else {
+        showError("Expresión matemática inválida.");
+        setNewCard((prev) => ({ ...prev, [name]: value }));
+      }
+    } else {
+      setNewCard((prev) => ({ ...prev, [name]: value }));
+    }
   };
 
   const handleNewCardTypeChange = (value: "credit" | "debit") => {
@@ -297,7 +311,20 @@ const Cards = () => {
 
   const handleTransactionInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    setNewTransaction((prev) => ({ ...prev, [name]: value }));
+
+    if (name === "amount" && value.startsWith('=')) {
+      const expression = value.substring(1);
+      const result = evaluateExpression(expression);
+      if (result !== null) {
+        setNewTransaction((prev) => ({ ...prev, amount: result.toFixed(2) }));
+        showSuccess(`Resultado: ${result.toFixed(2)}`);
+      } else {
+        showError("Expresión matemática inválida.");
+        setNewTransaction((prev) => ({ ...prev, amount: value }));
+      }
+    } else {
+      setNewTransaction((prev) => ({ ...prev, [name]: value }));
+    }
   };
 
   const handleTransactionTypeChange = (value: "charge" | "payment") => {
@@ -698,12 +725,12 @@ const Cards = () => {
                     <Input
                       id="initial_balance"
                       name="initial_balance"
-                      type="number"
-                      step="0.01"
+                      type="text" // Cambiado a text para permitir '='
                       value={newCard.initial_balance}
                       onChange={handleNewCardChange}
                       className="col-span-3"
                       required
+                      placeholder="Ej. 100 o =50+20*2"
                     />
                   </div>
                   <div className="grid grid-cols-4 items-center gap-4">
@@ -723,12 +750,12 @@ const Cards = () => {
                         <Input
                           id="credit_limit"
                           name="credit_limit"
-                          type="number"
-                          step="0.01"
+                          type="text" // Cambiado a text para permitir '='
                           value={newCard.credit_limit}
                           onChange={handleNewCardChange}
                           className="col-span-3"
                           required
+                          placeholder="Ej. 1000 o =500*2"
                         />
                       </div>
                       <div className="grid grid-cols-4 items-center gap-4">
@@ -911,12 +938,12 @@ const Cards = () => {
                   <Input
                     id="transactionAmount"
                     name="amount"
-                    type="number"
-                    step="0.01"
+                    type="text" // Cambiado a text para permitir '='
                     value={newTransaction.amount}
                     onChange={handleTransactionInputChange}
                     className="col-span-3"
                     required
+                    placeholder="Ej. 100 o =50+20*2"
                   />
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
@@ -1051,12 +1078,12 @@ const Cards = () => {
                   <Input
                     id="editCardInitialBalance"
                     name="initial_balance"
-                    type="number"
-                    step="0.01"
+                    type="text" // Cambiado a text para permitir '='
                     value={newCard.initial_balance}
                     onChange={handleNewCardChange}
                     className="col-span-3"
                     required
+                    placeholder="Ej. 100 o =50+20*2"
                   />
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
@@ -1076,12 +1103,12 @@ const Cards = () => {
                       <Input
                         id="editCreditLimit"
                         name="credit_limit"
-                        type="number"
-                        step="0.01"
+                        type="text" // Cambiado a text para permitir '='
                         value={newCard.credit_limit}
                         onChange={handleNewCardChange}
                         className="col-span-3"
                         required
+                        placeholder="Ej. 1000 o =500*2"
                       />
                     </div>
                     <div className="grid grid-cols-4 items-center gap-4">

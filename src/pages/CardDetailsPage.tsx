@@ -30,6 +30,7 @@ import CutOffDateCard from "@/components/CutOffDateCard";
 import { useCategoryContext } from "@/context/CategoryContext";
 import { toast } from "sonner";
 import DynamicLucideIcon from "@/components/DynamicLucideIcon";
+import { evaluateExpression } from "@/utils/math-helpers"; // Importar la nueva función
 
 interface CardTransaction {
   id: string;
@@ -52,7 +53,7 @@ interface CardData {
   expiration_date: string;
   type: "credit" | "debit";
   initial_balance: number;
-  current_balance: number;
+  current_balance: number; // Deuda total para crédito, saldo para débito
   credit_limit?: number;
   cut_off_day?: number;
   days_to_pay_after_cut_off?: number;
@@ -161,7 +162,20 @@ const CardDetailsPage: React.FC = () => {
 
   const handleTransactionInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    setNewTransaction((prev) => ({ ...prev, [name]: value }));
+
+    if (name === "amount" && value.startsWith('=')) {
+      const expression = value.substring(1);
+      const result = evaluateExpression(expression);
+      if (result !== null) {
+        setNewTransaction((prev) => ({ ...prev, amount: result.toFixed(2) }));
+        showSuccess(`Resultado: ${result.toFixed(2)}`);
+      } else {
+        showError("Expresión matemática inválida.");
+        setNewTransaction((prev) => ({ ...prev, amount: value }));
+      }
+    } else {
+      setNewTransaction((prev) => ({ ...prev, [name]: value }));
+    }
   };
 
   const handleTransactionTypeChange = (value: "charge" | "payment") => {
@@ -776,12 +790,12 @@ const CardDetailsPage: React.FC = () => {
                   <Input
                     id="transactionAmount"
                     name="amount"
-                    type="number"
-                    step="0.01"
+                    type="text" // Cambiado a text para permitir '='
                     value={newTransaction.amount}
                     onChange={handleTransactionInputChange}
                     className="col-span-3"
                     required
+                    placeholder="Ej. 100 o =50+20*2"
                   />
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
@@ -1099,12 +1113,12 @@ const CardDetailsPage: React.FC = () => {
                   <Input
                     id="editTransactionAmount"
                     name="amount"
-                    type="number"
-                    step="0.01"
+                    type="text" // Cambiado a text para permitir '='
                     value={newTransaction.amount}
                     onChange={handleTransactionInputChange}
                     className="col-span-3"
                     required
+                    placeholder="Ej. 100 o =50+20*2"
                   />
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">

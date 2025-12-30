@@ -24,7 +24,8 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { exportToCsv, exportToPdf } from "@/utils/export";
 import DynamicLucideIcon from "@/components/DynamicLucideIcon";
 import { getLocalDateString } from "@/utils/date-helpers";
-import CardTransferDialog from "@/components/CardTransferDialog"; // Importar CardTransferDialog
+import CardTransferDialog from "@/components/CardTransferDialog";
+import { evaluateExpression } from "@/utils/math-helpers"; // Importar la nueva función
 
 interface Transaction {
   id: string;
@@ -129,7 +130,20 @@ const Cash = () => {
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    setNewTransaction((prev) => ({ ...prev, [name]: value }));
+
+    if (name === "amount" && value.startsWith('=')) {
+      const expression = value.substring(1); // Get string after '='
+      const result = evaluateExpression(expression);
+      if (result !== null) {
+        setNewTransaction((prev) => ({ ...prev, amount: result.toFixed(2) }));
+        showSuccess(`Resultado: ${result.toFixed(2)}`);
+      } else {
+        showError("Expresión matemática inválida.");
+        setNewTransaction((prev) => ({ ...prev, amount: value })); // Keep invalid input
+      }
+    } else {
+      setNewTransaction((prev) => ({ ...prev, [name]: value }));
+    }
   };
 
   const handleDateChange = (date: Date | undefined) => {
@@ -314,7 +328,7 @@ const Cash = () => {
       .from('cash_transactions')
       .delete()
       .eq('id', transactionId)
-      .eq('user_id', user.id);
+      .eq('user.id', user.id);
 
     if (error) {
       showError('Error al eliminar transacción: ' + error.message);
@@ -443,12 +457,12 @@ const Cash = () => {
                     <Input
                       id="amount"
                       name="amount"
-                      type="number"
-                      step="0.01"
+                      type="text" // Cambiado a text para permitir '='
                       value={newTransaction.amount}
                       onChange={handleInputChange}
                       className="col-span-3"
                       required
+                      placeholder="Ej. 100 o =50+20*2"
                     />
                   </div>
                   <div className="grid grid-cols-4 items-center gap-4">
@@ -717,12 +731,12 @@ const Cash = () => {
                   <Input
                     id="editAmount"
                     name="amount"
-                    type="number"
-                    step="0.01"
+                    type="text" // Cambiado a text para permitir '='
                     value={newTransaction.amount}
                     onChange={handleInputChange}
                     className="col-span-3"
                     required
+                    placeholder="Ej. 100 o =50+20*2"
                   />
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
