@@ -172,20 +172,7 @@ const Cards = () => {
 
   const handleNewCardChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-
-    if ((name === "initial_balance" || name === "credit_limit") && value.startsWith('=')) {
-      const expression = value.substring(1);
-      const result = evaluateExpression(expression);
-      if (result !== null) {
-        setNewCard((prev) => ({ ...prev, [name]: result.toFixed(2) }));
-        showSuccess(`Resultado: ${result.toFixed(2)}`);
-      } else {
-        showError("Expresión matemática inválida.");
-        setNewCard((prev) => ({ ...prev, [name]: value }));
-      }
-    } else {
-      setNewCard((prev) => ({ ...prev, [name]: value }));
-    }
+    setNewCard((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleNewCardTypeChange = (value: "credit" | "debit") => {
@@ -207,7 +194,20 @@ const Cards = () => {
       return;
     }
 
-    const initialBalance = parseFloat(newCard.initial_balance);
+    let initialBalance: number;
+    if (newCard.initial_balance.startsWith('=')) {
+      const expression = newCard.initial_balance.substring(1);
+      const result = evaluateExpression(expression);
+      if (result !== null) {
+        initialBalance = parseFloat(result.toFixed(2));
+      } else {
+        showError("Expresión matemática inválida para el saldo inicial.");
+        return;
+      }
+    } else {
+      initialBalance = parseFloat(newCard.initial_balance);
+    }
+
     if (isNaN(initialBalance) || initialBalance < 0) {
       showError("El saldo inicial debe ser un número positivo o cero.");
       return;
@@ -230,7 +230,19 @@ const Cards = () => {
     let daysToPayAfterCutOff: number | undefined = undefined;
 
     if (newCard.type === "credit") {
-      creditLimit = parseFloat(newCard.credit_limit);
+      if (newCard.credit_limit.startsWith('=')) {
+        const expression = newCard.credit_limit.substring(1);
+        const result = evaluateExpression(expression);
+        if (result !== null) {
+          creditLimit = parseFloat(result.toFixed(2));
+        } else {
+          showError("Expresión matemática inválida para el límite de crédito.");
+          return;
+        }
+      } else {
+        creditLimit = parseFloat(newCard.credit_limit);
+      }
+
       if (isNaN(creditLimit) || creditLimit <= 0) {
         showError("El límite de crédito debe ser un número positivo.");
         return;
@@ -311,20 +323,7 @@ const Cards = () => {
 
   const handleTransactionInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-
-    if (name === "amount" && value.startsWith('=')) {
-      const expression = value.substring(1);
-      const result = evaluateExpression(expression);
-      if (result !== null) {
-        setNewTransaction((prev) => ({ ...prev, amount: result.toFixed(2) }));
-        showSuccess(`Resultado: ${result.toFixed(2)}`);
-      } else {
-        showError("Expresión matemática inválida.");
-        setNewTransaction((prev) => ({ ...prev, amount: value }));
-      }
-    } else {
-      setNewTransaction((prev) => ({ ...prev, [name]: value }));
-    }
+    setNewTransaction((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleTransactionTypeChange = (value: "charge" | "payment") => {
@@ -366,7 +365,20 @@ const Cards = () => {
       return;
     }
 
-    const totalAmount = parseFloat(newTransaction.amount);
+    let totalAmount: number;
+    if (newTransaction.amount.startsWith('=')) {
+      const expression = newTransaction.amount.substring(1);
+      const result = evaluateExpression(expression);
+      if (result !== null) {
+        totalAmount = parseFloat(result.toFixed(2));
+      } else {
+        showError("Expresión matemática inválida para el monto.");
+        return;
+      }
+    } else {
+      totalAmount = parseFloat(newTransaction.amount);
+    }
+
     if (isNaN(totalAmount) || totalAmount <= 0) {
       showError("El monto de la transacción debe ser un número positivo.");
       return;
@@ -505,7 +517,20 @@ const Cards = () => {
       return;
     }
 
-    const initialBalance = parseFloat(newCard.initial_balance);
+    let initialBalance: number;
+    if (newCard.initial_balance.startsWith('=')) {
+      const expression = newCard.initial_balance.substring(1);
+      const result = evaluateExpression(expression);
+      if (result !== null) {
+        initialBalance = parseFloat(result.toFixed(2));
+      } else {
+        showError("Expresión matemática inválida para el saldo inicial.");
+        return;
+      }
+    } else {
+      initialBalance = parseFloat(newCard.initial_balance);
+    }
+
     if (isNaN(initialBalance) || initialBalance < 0) {
       showError("El saldo inicial debe ser un número positivo o cero.");
       return;
@@ -528,7 +553,19 @@ const Cards = () => {
     let daysToPayAfterCutOff: number | undefined = undefined;
 
     if (newCard.type === "credit") {
-      creditLimit = parseFloat(newCard.credit_limit);
+      if (newCard.credit_limit.startsWith('=')) {
+        const expression = newCard.credit_limit.substring(1);
+        const result = evaluateExpression(expression);
+        if (result !== null) {
+          creditLimit = parseFloat(result.toFixed(2));
+        } else {
+          showError("Expresión matemática inválida para el límite de crédito.");
+          return;
+        }
+      } else {
+        creditLimit = parseFloat(newCard.credit_limit);
+      }
+
       if (isNaN(creditLimit) || creditLimit <= 0) {
         showError("El límite de crédito debe ser un número positivo.");
         return;

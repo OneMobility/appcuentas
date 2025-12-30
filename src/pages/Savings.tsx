@@ -107,20 +107,7 @@ const Savings: React.FC = () => {
 
   const handleNewSavingChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-
-    if ((name === "initial_balance" || name === "target_amount") && value.startsWith('=')) {
-      const expression = value.substring(1);
-      const result = evaluateExpression(expression);
-      if (result !== null) {
-        setNewSaving((prev) => ({ ...prev, [name]: result.toFixed(2) }));
-        showSuccess(`Resultado: ${result.toFixed(2)}`);
-      } else {
-        showError("Expresión matemática inválida.");
-        setNewSaving((prev) => ({ ...prev, [name]: value }));
-      }
-    } else {
-      setNewSaving((prev) => ({ ...prev, [name]: value }));
-    }
+    setNewSaving((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleNewSavingDateChange = (date: Date | undefined) => {
@@ -138,7 +125,20 @@ const Savings: React.FC = () => {
       return;
     }
 
-    const initialBalance = parseFloat(newSaving.initial_balance);
+    let initialBalance: number;
+    if (newSaving.initial_balance.startsWith('=')) {
+      const expression = newSaving.initial_balance.substring(1);
+      const result = evaluateExpression(expression);
+      if (result !== null) {
+        initialBalance = parseFloat(result.toFixed(2));
+      } else {
+        showError("Expresión matemática inválida para el saldo inicial.");
+        return;
+      }
+    } else {
+      initialBalance = parseFloat(newSaving.initial_balance);
+    }
+
     if (isNaN(initialBalance) || initialBalance < 0) {
       showError("El saldo inicial debe ser un número positivo o cero.");
       return;
@@ -150,7 +150,19 @@ const Savings: React.FC = () => {
 
     let targetAmount: number | undefined = undefined;
     if (newSaving.target_amount) {
-      targetAmount = parseFloat(newSaving.target_amount);
+      if (newSaving.target_amount.startsWith('=')) {
+        const expression = newSaving.target_amount.substring(1);
+        const result = evaluateExpression(expression);
+        if (result !== null) {
+          targetAmount = parseFloat(result.toFixed(2));
+        } else {
+          showError("Expresión matemática inválida para el monto objetivo.");
+          return;
+        }
+      } else {
+        targetAmount = parseFloat(newSaving.target_amount);
+      }
+
       if (isNaN(targetAmount) || targetAmount <= 0) {
         showError("El monto objetivo debe ser un número positivo.");
         return;
@@ -233,7 +245,19 @@ const Savings: React.FC = () => {
 
     let targetAmount: number | undefined = undefined;
     if (newSaving.target_amount) {
-      targetAmount = parseFloat(newSaving.target_amount);
+      if (newSaving.target_amount.startsWith('=')) {
+        const expression = newSaving.target_amount.substring(1);
+        const result = evaluateExpression(expression);
+        if (result !== null) {
+          targetAmount = parseFloat(result.toFixed(2));
+        } else {
+          showError("Expresión matemática inválida para el monto objetivo.");
+          return;
+        }
+      } else {
+        targetAmount = parseFloat(newSaving.target_amount);
+      }
+
       if (isNaN(targetAmount) || targetAmount <= 0) {
         showError("El monto objetivo debe ser un número positivo.");
         return;
@@ -307,20 +331,7 @@ const Savings: React.FC = () => {
 
   const handleTransactionInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-
-    if (name === "amount" && value.startsWith('=')) {
-      const expression = value.substring(1);
-      const result = evaluateExpression(expression);
-      if (result !== null) {
-        setNewTransaction((prev) => ({ ...prev, amount: result.toFixed(2) }));
-        showSuccess(`Resultado: ${result.toFixed(2)}`);
-      } else {
-        showError("Expresión matemática inválida.");
-        setNewTransaction((prev) => ({ ...prev, amount: value }));
-      }
-    } else {
-      setNewTransaction((prev) => ({ ...prev, [name]: value }));
-    }
+    setNewTransaction((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleTransactionTypeChange = (value: "deposit" | "withdrawal") => {
@@ -334,7 +345,20 @@ const Savings: React.FC = () => {
       return;
     }
 
-    const amount = parseFloat(newTransaction.amount);
+    let amount: number;
+    if (newTransaction.amount.startsWith('=')) {
+      const expression = newTransaction.amount.substring(1);
+      const result = evaluateExpression(expression);
+      if (result !== null) {
+        amount = parseFloat(result.toFixed(2));
+      } else {
+        showError("Expresión matemática inválida para el monto.");
+        return;
+      }
+    } else {
+      amount = parseFloat(newTransaction.amount);
+    }
+
     if (isNaN(amount) || amount <= 0) {
       showError("El monto de la transacción debe ser un número positivo.");
       return;

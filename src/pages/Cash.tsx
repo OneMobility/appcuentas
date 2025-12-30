@@ -130,20 +130,7 @@ const Cash = () => {
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-
-    if (name === "amount" && value.startsWith('=')) {
-      const expression = value.substring(1); // Get string after '='
-      const result = evaluateExpression(expression);
-      if (result !== null) {
-        setNewTransaction((prev) => ({ ...prev, amount: result.toFixed(2) }));
-        showSuccess(`Resultado: ${result.toFixed(2)}`);
-      } else {
-        showError("Expresión matemática inválida.");
-        setNewTransaction((prev) => ({ ...prev, amount: value })); // Keep invalid input
-      }
-    } else {
-      setNewTransaction((prev) => ({ ...prev, [name]: value }));
-    }
+    setNewTransaction((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleDateChange = (date: Date | undefined) => {
@@ -174,7 +161,20 @@ const Cash = () => {
       return;
     }
 
-    const amount = parseFloat(newTransaction.amount);
+    let amount: number;
+    if (newTransaction.amount.startsWith('=')) {
+      const expression = newTransaction.amount.substring(1);
+      const result = evaluateExpression(expression);
+      if (result !== null) {
+        amount = parseFloat(result.toFixed(2));
+      } else {
+        showError("Expresión matemática inválida para el monto.");
+        return;
+      }
+    } else {
+      amount = parseFloat(newTransaction.amount);
+    }
+
     if (isNaN(amount) || amount <= 0) {
       showError("El monto debe ser un número positivo.");
       return;
@@ -252,7 +252,21 @@ const Cash = () => {
 
     const oldAmount = editingTransaction.amount;
     const oldType = editingTransaction.type;
-    const newAmount = parseFloat(newTransaction.amount);
+    
+    let newAmount: number;
+    if (newTransaction.amount.startsWith('=')) {
+      const expression = newTransaction.amount.substring(1);
+      const result = evaluateExpression(expression);
+      if (result !== null) {
+        newAmount = parseFloat(result.toFixed(2));
+      } else {
+        showError("Expresión matemática inválida para el monto.");
+        return;
+      }
+    } else {
+      newAmount = parseFloat(newTransaction.amount);
+    }
+
     const newType = newTransaction.type;
 
     if (isNaN(newAmount) || newAmount <= 0) {
@@ -571,43 +585,6 @@ const Cash = () => {
                   </SelectItem>
                 ))}
               </SelectContent>
-            </Select>
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  id="date"
-                  variant={"outline"}
-                  className={cn(
-                    "w-[300px] justify-start text-left font-normal",
-                    !dateRange && "text-muted-foreground"
-                  )}
-                >
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {dateRange?.from ? (
-                    dateRange.to ? (
-                      <>
-                        {format(dateRange.from, "dd/MM/yyyy", { locale: es })} -{" "}
-                        {format(dateRange.to, "dd/MM/yyyy", { locale: es })}
-                      </>
-                    ) : (
-                      format(dateRange.from, "dd/MM/yyyy", { locale: es })
-                    )
-                  ) : (
-                    <span>Filtrar por fecha</span>
-                  )}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0">
-                <Calendar
-                  initialFocus
-                  mode="range"
-                  defaultMonth={dateRange?.from}
-                  selected={dateRange}
-                  onSelect={setDateRange}
-                  numberOfMonths={2}
-                  locale={es}
-                />
-              </PopoverContent>
             </Popover>
           </div>
           <div className="overflow-x-auto">

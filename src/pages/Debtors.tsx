@@ -138,20 +138,7 @@ const Debtors = () => {
 
   const handleNewDebtorChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-
-    if ((name === "initial_balance") && value.startsWith('=')) {
-      const expression = value.substring(1);
-      const result = evaluateExpression(expression);
-      if (result !== null) {
-        setNewDebtor((prev) => ({ ...prev, [name]: result.toFixed(2) }));
-        showSuccess(`Resultado: ${result.toFixed(2)}`);
-      } else {
-        showError("Expresión matemática inválida.");
-        setNewDebtor((prev) => ({ ...prev, [name]: value }));
-      }
-    } else {
-      setNewDebtor((prev) => ({ ...prev, [name]: value }));
-    }
+    setNewDebtor((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleSubmitNewDebtor = async (e: React.FormEvent) => {
@@ -161,7 +148,20 @@ const Debtors = () => {
       return;
     }
 
-    const initialBalance = parseFloat(newDebtor.initial_balance);
+    let initialBalance: number;
+    if (newDebtor.initial_balance.startsWith('=')) {
+      const expression = newDebtor.initial_balance.substring(1);
+      const result = evaluateExpression(expression);
+      if (result !== null) {
+        initialBalance = parseFloat(result.toFixed(2));
+      } else {
+        showError("Expresión matemática inválida para el saldo inicial.");
+        return;
+      }
+    } else {
+      initialBalance = parseFloat(newDebtor.initial_balance);
+    }
+
     if (isNaN(initialBalance) || initialBalance <= 0) {
       showError("El saldo inicial debe ser un número positivo.");
       return;
@@ -220,20 +220,7 @@ const Debtors = () => {
 
   const handleTransactionInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-
-    if (name === "amount" && value.startsWith('=')) {
-      const expression = value.substring(1);
-      const result = evaluateExpression(expression);
-      if (result !== null) {
-        setNewTransaction((prev) => ({ ...prev, amount: result.toFixed(2) }));
-        showSuccess(`Resultado: ${result.toFixed(2)}`);
-      } else {
-        showError("Expresión matemática inválida.");
-        setNewTransaction((prev) => ({ ...prev, amount: value }));
-      }
-    } else {
-      setNewTransaction((prev) => ({ ...prev, [name]: value }));
-    }
+    setNewTransaction((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleTransactionTypeChange = (value: "charge" | "payment") => {
@@ -259,7 +246,20 @@ const Debtors = () => {
       return;
     }
 
-    const amount = parseFloat(newTransaction.amount);
+    let amount: number;
+    if (newTransaction.amount.startsWith('=')) {
+      const expression = newTransaction.amount.substring(1);
+      const result = evaluateExpression(expression);
+      if (result !== null) {
+        amount = parseFloat(result.toFixed(2));
+      } else {
+        showError("Expresión matemática inválida para el monto.");
+        return;
+      }
+    } else {
+      amount = parseFloat(newTransaction.amount);
+    }
+
     if (isNaN(amount) || amount <= 0) {
       showError("El monto debe ser un número positivo.");
       return;
@@ -430,7 +430,21 @@ const Debtors = () => {
 
     const oldAmount = editingTransaction.amount;
     const oldType = editingTransaction.type;
-    const newAmount = parseFloat(newTransaction.amount);
+    
+    let newAmount: number;
+    if (newTransaction.amount.startsWith('=')) {
+      const expression = newTransaction.amount.substring(1);
+      const result = evaluateExpression(expression);
+      if (result !== null) {
+        newAmount = parseFloat(result.toFixed(2));
+      } else {
+        showError("Expresión matemática inválida para el monto.");
+        return;
+      }
+    } else {
+      newAmount = parseFloat(newTransaction.amount);
+    }
+
     const newType = newTransaction.type;
 
     if (isNaN(newAmount) || newAmount <= 0) {

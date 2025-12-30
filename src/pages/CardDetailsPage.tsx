@@ -162,20 +162,7 @@ const CardDetailsPage: React.FC = () => {
 
   const handleTransactionInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-
-    if (name === "amount" && value.startsWith('=')) {
-      const expression = value.substring(1);
-      const result = evaluateExpression(expression);
-      if (result !== null) {
-        setNewTransaction((prev) => ({ ...prev, amount: result.toFixed(2) }));
-        showSuccess(`Resultado: ${result.toFixed(2)}`);
-      } else {
-        showError("Expresión matemática inválida.");
-        setNewTransaction((prev) => ({ ...prev, amount: value }));
-      }
-    } else {
-      setNewTransaction((prev) => ({ ...prev, [name]: value }));
-    }
+    setNewTransaction((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleTransactionTypeChange = (value: "charge" | "payment") => {
@@ -206,7 +193,20 @@ const CardDetailsPage: React.FC = () => {
       return;
     }
 
-    const totalAmount = parseFloat(newTransaction.amount);
+    let totalAmount: number;
+    if (newTransaction.amount.startsWith('=')) {
+      const expression = newTransaction.amount.substring(1);
+      const result = evaluateExpression(expression);
+      if (result !== null) {
+        totalAmount = parseFloat(result.toFixed(2));
+      } else {
+        showError("Expresión matemática inválida para el monto.");
+        return;
+      }
+    } else {
+      totalAmount = parseFloat(newTransaction.amount);
+    }
+
     if (isNaN(totalAmount) || totalAmount <= 0) {
       showError("El monto de la transacción debe ser un número positivo.");
       return;
@@ -340,7 +340,21 @@ const CardDetailsPage: React.FC = () => {
     }
 
     const oldTransaction = editingTransaction;
-    const newTotalAmount = parseFloat(newTransaction.amount);
+    
+    let newTotalAmount: number;
+    if (newTransaction.amount.startsWith('=')) {
+      const expression = newTransaction.amount.substring(1);
+      const result = evaluateExpression(expression);
+      if (result !== null) {
+        newTotalAmount = parseFloat(result.toFixed(2));
+      } else {
+        showError("Expresión matemática inválida para el monto.");
+        return;
+      }
+    } else {
+      newTotalAmount = parseFloat(newTransaction.amount);
+    }
+
     const newType = newTransaction.type;
 
     if (isNaN(newTotalAmount) || newTotalAmount <= 0) {
