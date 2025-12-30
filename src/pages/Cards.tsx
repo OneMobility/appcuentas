@@ -68,7 +68,7 @@ const Cards = () => {
   const [isEditCardDialogOpen, setIsEditCardDialogOpen] = useState(false);
   const [isAddTransactionDialogOpen, setIsAddTransactionDialogOpen] = useState(false);
   const [isTransferDialogOpen, setIsTransferDialogOpen] = useState(false);
-  const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
+  const [selectedCardId, setSelectedCardId] = useState<string | null>(null); // null para transacción global, id para transacción específica
   const [editingCard, setEditingCard] = useState<CardData | null>(null);
   const [newCard, setNewCard] = useState({
     name: "",
@@ -89,6 +89,7 @@ const Cards = () => {
     date: undefined as Date | undefined,
     selectedCategoryId: "",
     selectedCategoryType: "" as "income" | "expense" | "",
+    selectedCardForGlobalTransaction: "" as string, // Nuevo campo para seleccionar tarjeta en transacción global
   });
 
   const [searchTerm, setSearchTerm] = useState("");
@@ -280,9 +281,17 @@ const Cards = () => {
     }
   };
 
-  const handleOpenAddTransactionDialog = (cardId: string) => {
-    setSelectedCardId(cardId);
-    setNewTransaction({ type: "charge", amount: "", description: "", date: new Date(), selectedCategoryId: "", selectedCategoryType: "" });
+  const handleOpenAddTransactionDialog = (cardId: string | null) => {
+    setSelectedCardId(cardId); // Set to null for global, or cardId for specific
+    setNewTransaction({ 
+      type: "charge", 
+      amount: "", 
+      description: "", 
+      date: new Date(), 
+      selectedCategoryId: "", 
+      selectedCategoryType: "",
+      selectedCardForGlobalTransaction: cardId || "", // Pre-select if cardId is provided, otherwise empty
+    });
     setIsAddTransactionDialogOpen(true);
   };
 
@@ -312,13 +321,20 @@ const Cards = () => {
     }
   };
 
+  const handleSelectedCardForGlobalTransactionChange = (value: string) => {
+    setNewTransaction((prev) => ({ ...prev, selectedCardForGlobalTransaction: value }));
+  };
+
   const handleSubmitTransaction = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) {
       showError("Debes iniciar sesión para registrar transacciones.");
       return;
     }
-    if (!selectedCardId) {
+
+    const targetCardId = selectedCardId || newTransaction.selectedCardForGlobalTransaction;
+
+    if (!targetCardId) {
       showError("No se ha seleccionado una tarjeta para la transacción.");
       return;
     }
@@ -336,27 +352,28 @@ const Cards = () => {
     let incomeCategoryIdToInsert: string | null = null;
     let expenseCategoryIdToInsert: string | null = null;
 
+    const currentCardForTransaction = cards.find(c => c.id === targetCardId);
+
     if (newTransaction.selectedCategoryId) {
       if (newTransaction.selectedCategoryType === "income") {
         incomeCategoryIdToInsert = newTransaction.selectedCategoryId;
       } else if (newTransaction.selectedCategoryType === "expense") {
         expenseCategoryIdToInsert = newTransaction.selectedCategoryId;
       }
-    } else if (newTransaction.type === "charge" || (newTransaction.type === "payment" && currentCardForDialog?.type === "debit")) {
+    } else if (newTransaction.type === "charge" || (newTransaction.type === "payment" && currentCardForTransaction?.type === "debit")) {
       showError("Por favor, selecciona una categoría.");
       return;
     }
 
-    const currentCard = cards.find(c => c.id === selectedCardId);
-    if (!currentCard) {
+    if (!currentCardForTransaction) {
       showError("Tarjeta no encontrada o eliminada.");
       return;
     }
 
-    let newCardBalance = currentCard.current_balance;
+    let newCardBalance = currentCardForTransaction.current_balance;
     const transactionsToInsert: Omit<CardTransaction, 'id' | 'created_at'>[] = [];
 
-    if (currentCard.type === "debit") {
+    if (currentCardForTransaction.type === "debit") {
       if (newTransaction.type === "charge") {
         if (newCardBalance < totalAmount) {
           showError("Saldo insuficiente en la tarjeta de débito.");
@@ -369,7 +386,7 @@ const Cards = () => {
     } else { // Credit card
       if (newTransaction.type === "charge") {
         newCardBalance += totalAmount; // Charges increase debt
-        if (currentCard.credit_limit !== undefined && newCardBalance > currentCard.credit_limit) {
+        if (currentCardForTransaction.credit_limit !== undefined && newCardBalance > currentCardForTransaction.credit_limit) {
           toast.info(`Tu tarjeta de crédito ha excedido su límite. Saldo actual: $${newCardBalance.toFixed(2)}`, {
             style: { backgroundColor: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))' },
             duration: 10000
@@ -379,7 +396,7 @@ const Cards = () => {
         // Payments decrease debt
         newCardBalance -= totalAmount;
         if (newCardBalance < 0) {
-          toast.info(`Has sobrepagado tu tarjeta ${currentCard.name}. Tu saldo actual es de $${newCardBalance.toFixed(2)} (a tu favor).`, {
+          toast.info(`Has sobrepagado tu tarjeta ${currentCardForTransaction.name}. Tu saldo actual es de $${newCardBalance.toFixed(2)} (a tu favor).`, {
             style: { backgroundColor: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))' },
             duration: 10000
           });
@@ -389,7 +406,7 @@ const Cards = () => {
     
     transactionsToInsert.push({
       user_id: user.id,
-      card_id: selectedCardId,
+      card_id: targetCardId,
       type: newTransaction.type,
       amount: totalAmount,
       description: newTransaction.description,
@@ -409,7 +426,7 @@ const Cards = () => {
       const { data: cardData, error: cardError } = await supabase
         .from('cards')
         .update({ current_balance: newCardBalance })
-        .eq('id', selectedCardId)
+        .eq('id', targetCardId)
         .eq('user_id', user.id)
         .select();
 
@@ -417,7 +434,7 @@ const Cards = () => {
 
       setCards((prevCards) =>
         prevCards.map((card) => {
-          if (card.id === selectedCardId) {
+          if (card.id === targetCardId) {
             return {
               ...card,
               current_balance: newCardBalance,
@@ -427,7 +444,7 @@ const Cards = () => {
           return card;
         })
       );
-      setNewTransaction({ type: "charge", amount: "", description: "", date: undefined, selectedCategoryId: "", selectedCategoryType: "" });
+      setNewTransaction({ type: "charge", amount: "", description: "", date: undefined, selectedCategoryId: "", selectedCategoryType: "", selectedCardForGlobalTransaction: "" });
       setSelectedCardId(null);
       setIsAddTransactionDialogOpen(false);
       showSuccess("Transacción(es) registrada(s) exitosamente.");
@@ -539,7 +556,12 @@ const Cards = () => {
     card.last_four_digits.includes(searchTerm)
   );
 
-  const currentCardForDialog = selectedCardId ? cards.find(c => c.id === selectedCardId) : null;
+  // Determine which card's context to use for the transaction dialog
+  const currentCardForDialog = selectedCardId 
+    ? cards.find(c => c.id === selectedCardId) 
+    : (newTransaction.selectedCardForGlobalTransaction 
+        ? cards.find(c => c.id === newTransaction.selectedCardForGlobalTransaction) 
+        : null);
 
   return (
     <div className="flex flex-col gap-6 p-4">
@@ -763,6 +785,12 @@ const Cards = () => {
                 </form>
               </DialogContent>
             </Dialog>
+            <Button size="sm" className="h-8 gap-1" onClick={() => handleOpenAddTransactionDialog(null)}> {/* Nuevo botón para transacción global */}
+              <DollarSign className="h-3.5 w-3.5" />
+              <span className="sr-only sm:not-sr-only sm:whitespace-nowrap">
+                Nueva Transacción
+              </span>
+            </Button>
             <Button size="sm" className="h-8 gap-1" onClick={() => setIsTransferDialogOpen(true)}>
               <ArrowRightLeft className="h-3.5 w-3.5" />
               <span className="sr-only sm:not-sr-only sm:whitespace-nowrap">
@@ -785,7 +813,7 @@ const Cards = () => {
               <CardDisplay
                 key={card.id}
                 card={card}
-                onAddTransaction={handleOpenAddTransactionDialog}
+                onAddTransaction={() => handleOpenAddTransactionDialog(card.id)} // Pasa el ID de la tarjeta
                 onDeleteCard={handleDeleteCard}
                 onEditCard={handleOpenEditCardDialog}
               />
@@ -803,9 +831,32 @@ const Cards = () => {
           <Dialog open={isAddTransactionDialogOpen} onOpenChange={setIsAddTransactionDialogOpen}>
             <DialogContent className="sm:max-w-[425px]">
               <DialogHeader>
-                <DialogTitle>Registrar Transacción para {currentCardForDialog?.name}</DialogTitle>
+                <DialogTitle>Registrar Transacción para {currentCardForDialog?.name || "Tarjeta Seleccionada"}</DialogTitle>
               </DialogHeader>
               <form onSubmit={handleSubmitTransaction} className="grid gap-4 py-4">
+                {!selectedCardId && ( // Mostrar selector de tarjeta solo si no se abrió desde una tarjeta específica
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="selectCard" className="text-right">
+                      Tarjeta
+                    </Label>
+                    <Select 
+                      value={newTransaction.selectedCardForGlobalTransaction} 
+                      onValueChange={handleSelectedCardForGlobalTransactionChange}
+                      required
+                    >
+                      <SelectTrigger id="selectCard" className="col-span-3">
+                        <SelectValue placeholder="Selecciona una tarjeta" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {cards.map((card) => (
+                          <SelectItem key={card.id} value={card.id}>
+                            {card.name} ({card.bank_name} ****{card.last_four_digits})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
                 <div className="grid grid-cols-4 items-center gap-4">
                   <Label htmlFor="transactionType" className="text-right">
                     Tipo
