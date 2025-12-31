@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { DollarSign, History, Trash2, Edit, CalendarIcon, ArrowLeft, FileText, FileDown, Heart, AlertTriangle } from "lucide-react";
+import { DollarSign, History, Trash2, Edit, CalendarIcon, ArrowLeft, FileText, FileDown, Heart, AlertTriangle, Scale } from "lucide-react"; // Added Scale icon
 import { showSuccess, showError } from "@/utils/toast";
 import { cn } from "@/lib/utils";
 import { format, parseISO, isWithinInterval, isBefore, isAfter, isSameDay } from "date-fns";
@@ -31,6 +31,7 @@ import { useCategoryContext } from "@/context/CategoryContext";
 import { toast } from "sonner";
 import DynamicLucideIcon from "@/components/DynamicLucideIcon";
 import { evaluateExpression } from "@/utils/math-helpers"; // Importar la nueva función
+import CardReconciliationDialog from "@/components/CardReconciliationDialog"; // Import the new component
 
 interface CardTransaction {
   id: string;
@@ -71,6 +72,7 @@ const CardDetailsPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isAddTransactionDialogOpen, setIsAddTransactionDialogOpen] = useState(false);
   const [isEditTransactionDialogOpen, setIsEditTransactionDialogOpen] = useState(false);
+  const [isReconciliationDialogOpen, setIsReconciliationDialogOpen] = useState(false); // New state for reconciliation dialog
   const [editingTransaction, setEditingTransaction] = useState<CardTransaction | null>(null);
   const [newTransaction, setNewTransaction] = useState({
     type: "charge" as "charge" | "payment",
@@ -88,35 +90,35 @@ const CardDetailsPage: React.FC = () => {
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
   const [isOverdue, setIsOverdue] = useState(false);
 
-  useEffect(() => {
-    const fetchCardDetails = async () => {
-      if (!user || !cardId || isLoadingCategories) {
-        setIsLoading(false);
-        return;
-      }
-
-      setIsLoading(true);
-      const { data, error } = await supabase
-        .from('cards')
-        .select('*, card_transactions(*)')
-        .eq('id', cardId)
-        .eq('user_id', user.id)
-        .single();
-
-      if (error) {
-        console.error("Error fetching card details:", error);
-        showError('Error al cargar detalles de la tarjeta: ' + error.message);
-        navigate('/cards');
-      } else {
-        const formattedCard = {
-          ...(data as CardData),
-          transactions: (data as any).card_transactions || []
-        };
-        setCard(formattedCard);
-      }
+  const fetchCardDetails = async () => {
+    if (!user || !cardId || isLoadingCategories) {
       setIsLoading(false);
-    };
+      return;
+    }
 
+    setIsLoading(true);
+    const { data, error } = await supabase
+      .from('cards')
+      .select('*, card_transactions(*)')
+      .eq('id', cardId)
+      .eq('user_id', user.id)
+      .single();
+
+    if (error) {
+      console.error("Error fetching card details:", error);
+      showError('Error al cargar detalles de la tarjeta: ' + error.message);
+      navigate('/cards');
+    } else {
+      const formattedCard = {
+        ...(data as CardData),
+        transactions: (data as any).card_transactions || []
+      };
+      setCard(formattedCard);
+    }
+    setIsLoading(false);
+  };
+
+  useEffect(() => {
     fetchCardDetails();
   }, [cardId, user, navigate, isLoadingCategories]);
 
@@ -877,6 +879,12 @@ const CardDetailsPage: React.FC = () => {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+            <Button size="sm" className="h-8 gap-1" onClick={() => setIsReconciliationDialogOpen(true)}>
+              <Scale className="h-3.5 w-3.5" />
+              <span className="sr-only sm:not-sr-only sm:whitespace-nowrap">
+                Cuadre
+              </span>
+            </Button>
           </div>
         </CardHeader>
         <CardContent>
@@ -1184,6 +1192,14 @@ const CardDetailsPage: React.FC = () => {
           </Dialog>
         </CardContent>
       </Card>
+      {card && (
+        <CardReconciliationDialog
+          isOpen={isReconciliationDialogOpen}
+          onClose={() => setIsReconciliationDialogOpen(false)}
+          card={card}
+          onReconciliationSuccess={fetchCardDetails} // Refresh data after reconciliation
+        />
+      )}
     </div>
   );
 };

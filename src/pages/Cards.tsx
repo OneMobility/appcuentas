@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { PlusCircle, DollarSign, History, Trash2, Edit, CalendarIcon, ArrowRightLeft, FileText, FileDown, PiggyBank, Wallet, Banknote } from "lucide-react";
+import { PlusCircle, DollarSign, History, Trash2, Edit, CalendarIcon, ArrowRightLeft, FileText, FileDown, PiggyBank, Wallet, Banknote, Scale } from "lucide-react"; // Added Scale icon
 import { showSuccess, showError } from "@/utils/toast";
 import { cn } from "@/lib/utils";
 import { format, addMonths, parseISO } from "date-fns";
@@ -29,6 +29,7 @@ import { useCategoryContext } from "@/context/CategoryContext";
 import { toast } from "sonner";
 import DynamicLucideIcon from "@/components/DynamicLucideIcon";
 import { evaluateExpression } from "@/utils/math-helpers"; // Importar la nueva función
+import CardReconciliationDialog from "@/components/CardReconciliationDialog"; // Import the new component
 
 interface CardTransaction {
   id: string;
@@ -69,6 +70,7 @@ const Cards = () => {
   const [isEditCardDialogOpen, setIsEditCardDialogOpen] = useState(false);
   const [isAddTransactionDialogOpen, setIsAddTransactionDialogOpen] = useState(false);
   const [isTransferDialogOpen, setIsTransferDialogOpen] = useState(false);
+  const [isReconciliationDialogOpen, setIsReconciliationDialogOpen] = useState(false); // New state for reconciliation dialog
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null); // null para transacción global, id para transacción específica
   const [editingCard, setEditingCard] = useState<CardData | null>(null);
   const [newCard, setNewCard] = useState({
