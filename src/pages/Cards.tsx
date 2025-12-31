@@ -25,7 +25,7 @@ import { getUpcomingPaymentDueDate, getUpcomingCutOffDate, getBillingCycleDates 
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { exportToCsv, exportToPdf } from "@/utils/export";
 import CardTransferDialog from "@/components/CardTransferDialog";
-import { useCategoryContext } from "@/context/CategoryContext";
+import { useCategoryContext } => "@/context/CategoryContext";
 import { toast } from "sonner";
 import DynamicLucideIcon from "@/components/DynamicLucideIcon";
 import { evaluateExpression } from "@/utils/math-helpers"; // Importar la nueva función
@@ -42,6 +42,7 @@ interface CardTransaction {
   user_id?: string;
   income_category_id?: string | null; // New
   expense_category_id?: string | null; // New
+  is_adjustment?: boolean; // New field
 }
 
 interface CardData {
@@ -454,6 +455,7 @@ const Cards = () => {
       date: format(newTransaction.date, "yyyy-MM-dd"),
       income_category_id: incomeCategoryIdToInsert,
       expense_category_id: expenseCategoryIdToInsert,
+      is_adjustment: false, // Not an adjustment
     });
 
     try {

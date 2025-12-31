@@ -32,6 +32,7 @@ import { toast } from "sonner";
 import DynamicLucideIcon from "@/components/DynamicLucideIcon";
 import { evaluateExpression } from "@/utils/math-helpers"; // Importar la nueva función
 import CardReconciliationDialog from "@/components/CardReconciliationDialog"; // Import the new component
+import FeedbackOverlay from "@/components/FeedbackOverlay"; // Import FeedbackOverlay
 
 interface CardTransaction {
   id: string;
@@ -44,6 +45,7 @@ interface CardTransaction {
   user_id?: string;
   income_category_id?: string | null;
   expense_category_id?: string | null;
+  is_adjustment?: boolean; // New field
 }
 
 interface CardData {
@@ -82,6 +84,13 @@ const CardDetailsPage: React.FC = () => {
     selectedCategoryId: "",
     selectedCategoryType: "" as "income" | "expense" | "",
   });
+  const [feedbackOverlay, setFeedbackOverlay] = useState<{
+    isVisible: boolean;
+    message: string;
+    imageSrc: string;
+    bgColor: string;
+    textColor: string;
+  } | null>(null);
 
   // Filter states
   const [searchTerm, setSearchTerm] = useState("");
@@ -275,6 +284,7 @@ const CardDetailsPage: React.FC = () => {
       date: format(newTransaction.date, "yyyy-MM-dd"),
       income_category_id: incomeCategoryIdToInsert,
       expense_category_id: expenseCategoryIdToInsert,
+      is_adjustment: false, // Not an adjustment
     });
 
     try {
@@ -437,6 +447,7 @@ const CardDetailsPage: React.FC = () => {
       date: format(newTransaction.date, "yyyy-MM-dd"),
       income_category_id: newIncomeCategoryId,
       expense_category_id: newExpenseCategoryId,
+      is_adjustment: false, // Not an adjustment
     });
 
     try {
@@ -615,6 +626,20 @@ const CardDetailsPage: React.FC = () => {
       exportToPdf(`${filename}.pdf`, title, headers, pdfData);
       showSuccess("Estado de cuenta exportado a PDF.");
     }
+  };
+
+  const handleNoAdjustmentSuccess = () => {
+    setFeedbackOverlay({
+      isVisible: true,
+      message: "¡El saldo de la tarjeta ya está cuadrado!",
+      imageSrc: "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Conchinito%20feliz.png", // Happy piggy bank
+      bgColor: "bg-green-100",
+      textColor: "text-green-800",
+    });
+  };
+
+  const handleFeedbackClose = () => {
+    setFeedbackOverlay(null);
   };
 
   if (isLoading || isLoadingCategories) {
@@ -977,6 +1002,7 @@ const CardDetailsPage: React.FC = () => {
                 <TableBody>
                   {filteredTransactions.map((transaction) => {
                     const isPaymentToCreditCard = card.type === "credit" && transaction.type === "payment";
+                    const isAdjustment = transaction.is_adjustment; // Check for adjustment
                     const category = getCategoryById(transaction.income_category_id || transaction.expense_category_id);
 
                     let deleteDescription = `Esta acción no se puede deshacer. Esto eliminará permanentemente la transacción de ${transaction.type === "charge" ? "cargo" : "pago"} por $${transaction.amount.toFixed(2)}: "${transaction.description}".`;
@@ -998,7 +1024,10 @@ const CardDetailsPage: React.FC = () => {
                     return (
                       <TableRow 
                         key={transaction.id}
-                        className={cn(isPaymentToCreditCard && "bg-pink-50 text-pink-800")}
+                        className={cn(
+                          isPaymentToCreditCard && "bg-pink-50 text-pink-800",
+                          isAdjustment && "bg-yellow-100 text-yellow-800" // Apply yellow background for adjustments
+                        )}
                       >
                         <TableCell className="w-12 flex items-center justify-center">
                           {isPaymentToCreditCard && (
@@ -1016,7 +1045,8 @@ const CardDetailsPage: React.FC = () => {
                         <TableCell>{format(parseISO(transaction.date), "dd/MM/yyyy", { locale: es })}</TableCell>
                         <TableCell className={cn(
                           transaction.type === "charge" ? "text-red-600" : "text-green-600",
-                          isPaymentToCreditCard && "text-pink-800 font-medium"
+                          isPaymentToCreditCard && "text-pink-800 font-medium",
+                          isAdjustment && "text-yellow-800 font-medium" // Apply yellow text for adjustments
                         )}>
                           {transaction.type === "charge" ? "Cargo" : "Pago"}
                         </TableCell>
@@ -1198,6 +1228,16 @@ const CardDetailsPage: React.FC = () => {
           onClose={() => setIsReconciliationDialogOpen(false)}
           card={card}
           onReconciliationSuccess={fetchCardDetails} // Refresh data after reconciliation
+          onNoAdjustmentSuccess={handleNoAdjustmentSuccess} // Pass the new success handler
+        />
+      )}
+      {feedbackOverlay?.isVisible && (
+        <FeedbackOverlay
+          message={feedbackOverlay.message}
+          imageSrc={feedbackOverlay.imageSrc}
+          bgColor={feedbackOverlay.bgColor}
+          textColor={feedbackOverlay.textColor}
+          onClose={handleFeedbackClose}
         />
       )}
     </div>

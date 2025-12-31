@@ -26,6 +26,7 @@ interface CardReconciliationDialogProps {
   onClose: () => void;
   card: CardDataForReconciliation;
   onReconciliationSuccess: () => void;
+  onNoAdjustmentSuccess: () => void; // New prop for success when no adjustment is needed
 }
 
 const CardReconciliationDialog: React.FC<CardReconciliationDialogProps> = ({
@@ -33,6 +34,7 @@ const CardReconciliationDialog: React.FC<CardReconciliationDialogProps> = ({
   onClose,
   card,
   onReconciliationSuccess,
+  onNoAdjustmentSuccess,
 }) => {
   const { user } = useSession();
   const [realBalanceInput, setRealBalanceInput] = useState<string>("");
@@ -87,7 +89,7 @@ const CardReconciliationDialog: React.FC<CardReconciliationDialogProps> = ({
     const difference = realBalance - appBalance;
 
     if (difference === 0) {
-      showSuccess("El saldo ya está cuadrado. No se necesita ajuste.");
+      onNoAdjustmentSuccess(); // Trigger success overlay
       onClose();
       return;
     }
@@ -108,10 +110,11 @@ const CardReconciliationDialog: React.FC<CardReconciliationDialogProps> = ({
           card_id: card.id,
           type: transactionType,
           amount: adjustmentAmount,
-          description: `Ajuste de cuadre: ${difference > 0 ? 'Aumento' : 'Disminución'} de saldo para coincidir con el saldo real.`,
+          description: `Ajuste de Cuadre`, // Simplified description
           date: transactionDate,
           income_category_id: null, // Internal adjustment, no category
           expense_category_id: null, // Internal adjustment, no category
+          is_adjustment: true, // Mark as adjustment
         });
 
       if (transactionError) throw transactionError;
@@ -180,7 +183,7 @@ const CardReconciliationDialog: React.FC<CardReconciliationDialogProps> = ({
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancelar</Button>
-          <Button onClick={handleReconcile} disabled={isSubmitting || calculatedDifference === 0}>
+          <Button onClick={handleReconcile} disabled={isSubmitting}>
             {isSubmitting ? "Ajustando..." : "Cuadrar Saldo"}
           </Button>
         </DialogFooter>
