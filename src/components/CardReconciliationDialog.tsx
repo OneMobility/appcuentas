@@ -18,6 +18,7 @@ interface CardDataForReconciliation {
   name: string;
   current_balance: number;
   type: "credit" | "debit";
+  credit_limit?: number; // Added credit_limit for credit cards
   transactions: any[]; // Added to get transaction count
 }
 
@@ -48,7 +49,10 @@ const CardReconciliationDialog: React.FC<CardReconciliationDialogProps> = ({
     }
   }, [isOpen]);
 
-  const appBalance = card.current_balance;
+  // Calculate appBalance based on card type
+  const appBalance = card.type === "credit" && card.credit_limit !== undefined
+    ? card.credit_limit - card.current_balance // For credit cards, show available credit
+    : card.current_balance; // For debit cards, show current balance
 
   const handleRealBalanceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
@@ -97,9 +101,18 @@ const CardReconciliationDialog: React.FC<CardReconciliationDialogProps> = ({
     setIsSubmitting(true);
     const transactionDate = format(new Date(), "yyyy-MM-dd");
     const adjustmentAmount = Math.abs(difference);
-    // If real > app, app balance needs to increase. This is like a "payment" to the card.
-    // If real < app, app balance needs to decrease. This is like a "charge" on the card.
-    const transactionType = difference > 0 ? "payment" : "charge"; 
+    
+    let transactionType: "charge" | "payment";
+
+    if (card.type === "credit") {
+      // If real available > app available (difference > 0), app's debt is higher than it should be. Need a 'payment' to reduce debt.
+      // If real available < app available (difference < 0), app's debt is lower than it should be. Need a 'charge' to increase debt.
+      transactionType = difference > 0 ? "payment" : "charge";
+    } else { // Debit card
+      // If real balance > app balance (difference > 0), app's balance is lower than it should be. Need a 'payment' (deposit) to increase balance.
+      // If real balance < app balance (difference < 0), app's balance is higher than it should be. Need a 'charge' (withdrawal) to decrease balance.
+      transactionType = difference > 0 ? "payment" : "charge";
+    }
 
     try {
       // Insert adjustment transaction
@@ -120,10 +133,15 @@ const CardReconciliationDialog: React.FC<CardReconciliationDialogProps> = ({
       if (transactionError) throw transactionError;
 
       // Update card's current_balance
-      const newCardBalance = appBalance + difference;
+      // For credit cards, current_balance is debt. If available credit increases, debt decreases.
+      // If available credit decreases, debt increases.
+      const newCurrentBalanceForCard = card.type === "credit"
+        ? card.current_balance - difference // If difference > 0 (available increased), debt decreases. If difference < 0 (available decreased), debt increases.
+        : card.current_balance + difference; // For debit, direct adjustment to current_balance
+
       const { error: cardUpdateError } = await supabase
         .from('cards')
-        .update({ current_balance: newCardBalance })
+        .update({ current_balance: newCurrentBalanceForCard })
         .eq('id', card.id)
         .eq('user_id', user.id);
 
@@ -148,12 +166,14 @@ const CardReconciliationDialog: React.FC<CardReconciliationDialogProps> = ({
         </DialogHeader>
         <div className="grid gap-4 py-4">
           <div className="grid grid-cols-3 items-center gap-4">
-            <Label className="text-right col-span-2">Saldo en la App:</Label>
+            <Label className="text-right col-span-2">
+              {card.type === "credit" ? "Crédito Disponible en App:" : "Saldo en App:"}
+            </Label>
             <span className="font-bold">${appBalance.toFixed(2)}</span>
           </div>
           <div className="grid grid-cols-3 items-center gap-4">
             <Label htmlFor="realBalance" className="text-right col-span-2">
-              Saldo Real de la Tarjeta:
+              {card.type === "credit" ? "Crédito Disponible Real:" : "Saldo Real de la Tarjeta:"}
             </Label>
             <Input
               id="realBalance"
