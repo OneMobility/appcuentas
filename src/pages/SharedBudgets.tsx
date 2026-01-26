@@ -393,32 +393,34 @@ const SharedBudgets = () => {
                 <DialogTitle>Crear Nuevo Presupuesto Compartido</DialogTitle>
               </DialogHeader>
               <form onSubmit={handleSubmitBudget} className="grid gap-4 py-4">
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="name" className="text-right">Nombre</Label>
-                  <Input id="name" name="name" value={newBudget.name} onChange={handleNewBudgetChange} className="col-span-3" required />
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="total_amount" className="text-right">Monto Total del Gasto</Label>
-                  <Input
-                    id="total_amount"
-                    name="total_amount"
-                    type="text"
-                    value={newBudget.total_amount}
-                    onChange={handleNewBudgetChange}
-                    className="col-span-3"
-                    required
-                    placeholder="Ej. 400 o =100*4"
-                  />
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="description" className="text-right">Descripción (Opcional)</Label>
-                  <Input id="description" name="description" value={newBudget.description} onChange={handleNewBudgetChange} className="col-span-3" />
+                {/* Usar flex o grid-cols-2 para mejor control de etiquetas largas */}
+                <div className="flex flex-col gap-2">
+                  <div className="grid grid-cols-1 gap-2">
+                    <Label htmlFor="name">Nombre</Label>
+                    <Input id="name" name="name" value={newBudget.name} onChange={handleNewBudgetChange} required />
+                  </div>
+                  <div className="grid grid-cols-1 gap-2">
+                    <Label htmlFor="total_amount">Monto Total del Gasto</Label>
+                    <Input
+                      id="total_amount"
+                      name="total_amount"
+                      type="text"
+                      value={newBudget.total_amount}
+                      onChange={handleNewBudgetChange}
+                      required
+                      placeholder="Ej. 400 o =100*4"
+                    />
+                  </div>
+                  <div className="grid grid-cols-1 gap-2">
+                    <Label htmlFor="description">Descripción (Opcional)</Label>
+                    <Input id="description" name="description" value={newBudget.description} onChange={handleNewBudgetChange} />
+                  </div>
                 </div>
 
-                <h3 className="text-lg font-semibold mt-4 col-span-4">Participantes (Deudores)</h3>
-                <p className="text-sm text-muted-foreground col-span-4">Selecciona a quién le dividirás el gasto (tú eres un participante más).</p>
+                <h3 className="text-lg font-semibold mt-4">Participantes (Deudores)</h3>
+                <p className="text-sm text-muted-foreground">Selecciona a quién le dividirás el gasto (tú eres un participante más).</p>
 
-                <div className="col-span-4 grid gap-2 max-h-40 overflow-y-auto border p-2 rounded-md"> {/* Scrollable list */}
+                <div className="grid gap-2 max-h-40 overflow-y-auto border p-2 rounded-md"> {/* Scrollable list */}
                   {debtors.length === 0 ? (
                     <p className="text-muted-foreground p-2">
                       No tienes deudores registrados. Por favor, ve a la sección "Los que te deben" para añadir deudores antes de crear un presupuesto compartido.
@@ -442,7 +444,7 @@ const SharedBudgets = () => {
                 </div>
 
                 {newBudget.selectedDebtors.length > 0 && (
-                  <div className="col-span-4 mt-4 p-3 bg-accent rounded-md">
+                  <div className="mt-4 p-3 bg-accent rounded-md">
                     <p className="font-semibold flex items-center gap-2">
                       <Divide className="h-4 w-4" /> División (Total de {calculateShare.totalParticipants} personas)
                     </p>
