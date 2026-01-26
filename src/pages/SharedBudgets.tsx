@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { PlusCircle, Users, DollarSign, CheckCircle, XCircle, Trash2, Edit, Divide, Banknote } from "lucide-react";
+import { PlusCircle, Users, DollarSign, CheckCircle, Trash2, Divide, Banknote, UserPlus } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/context/SessionContext";
@@ -47,21 +47,150 @@ interface SharedBudget {
   creditor_id?: string | null; // Nuevo campo
 }
 
+// --- Componentes de Creación Rápida ---
+
+interface QuickCreateDialogProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onSuccess: (id: string, name: string) => void;
+  type: 'debtor' | 'creditor';
+}
+
+const QuickCreateDialog: React.FC<QuickCreateDialogProps> = ({ isOpen, onClose, onSuccess, type }) => {
+  const { user } = useSession();
+  const [name, setName] = useState("");
+  const [initialBalance, setInitialBalance] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const title = type === 'debtor' ? 'Añadir Nuevo Deudor' : 'Añadir Nuevo Acreedor';
+  const tableName = type === 'debtor' ? 'debtors' : 'creditors';
+
+  const resetForm = () => {
+    setName("");
+    setInitialBalance("");
+    setIsSubmitting(false);
+  };
+
+  useEffect(() => {
+    if (!isOpen) {
+      resetForm();
+    }
+  }, [isOpen]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) {
+      showError("Debes iniciar sesión.");
+      return;
+    }
+
+    let balance: number;
+    if (initialBalance.startsWith('=')) {
+      const result = evaluateExpression(initialBalance.substring(1));
+      if (result === null || isNaN(result) || result < 0) {
+        showError("Expresión matemática inválida para el saldo inicial.");
+        return;
+      }
+      balance = parseFloat(result.toFixed(2));
+    } else {
+      balance = parseFloat(initialBalance);
+      if (isNaN(balance) || balance < 0) {
+        showError("El saldo inicial debe ser un número positivo o cero.");
+        return;
+      }
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      const { data, error } = await supabase
+        .from(tableName)
+        .insert({
+          user_id: user.id,
+          name: name.trim(),
+          initial_balance: balance,
+          current_balance: balance,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      showSuccess(`${title} registrado exitosamente.`);
+      onSuccess(data.id, data.name);
+      onClose();
+    } catch (error: any) {
+      showError(`Error al registrar ${type}: ` + error.message);
+      console.error(`Quick create ${type} error:`, error);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-[400px]">
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="grid gap-4 py-4">
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="name" className="text-right">
+              Nombre
+            </Label>
+            <Input
+              id="name"
+              name="name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="col-span-3"
+              required
+            />
+          </div>
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="initial_balance" className="text-right">
+              Saldo Inicial
+            </Label>
+            <Input
+              id="initial_balance"
+              name="initial_balance"
+              type="text"
+              value={initialBalance}
+              onChange={(e) => setInitialBalance(e.target.value)}
+              className="col-span-3"
+              required
+              placeholder="Ej. 100 o =50+20*2"
+            />
+          </div>
+          <DialogFooter>
+            <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting ? "Guardando..." : "Guardar"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
+// --- Componente Principal SharedBudgets ---
+
 const SharedBudgets = () => {
   const { user } = useSession();
   const [budgets, setBudgets] = useState<SharedBudget[]>([]);
   const [debtors, setDebtors] = useState<Debtor[]>([]);
-  const [creditors, setCreditors] = useState<Creditor[]>([]); // Nuevo estado para acreedores
+  const [creditors, setCreditors] = useState<Creditor[]>([]);
   const [isAddBudgetDialogOpen, setIsAddBudgetDialogOpen] = useState(false);
-  const [isEditBudgetDialogOpen, setIsEditBudgetDialogOpen] = useState(false);
-  const [editingBudget, setEditingBudget] = useState<SharedBudget | null>(null);
+  const [isQuickDebtorDialogOpen, setIsQuickDebtorDialogOpen] = useState(false);
+  const [isQuickCreditorDialogOpen, setIsQuickCreditorDialogOpen] = useState(false);
+  
   const [newBudget, setNewBudget] = useState({
     name: "",
     total_amount: "",
     split_type: "equal",
     description: "",
     selectedDebtors: [] as { debtorId: string; shareAmount: string }[],
-    creditorId: "none" as string, // Inicializar con 'none' en lugar de ''
+    creditorId: "none" as string,
   });
 
   const fetchBudgetsAndDebtors = async () => {
@@ -121,9 +250,8 @@ const SharedBudgets = () => {
       split_type: "equal",
       description: "",
       selectedDebtors: [],
-      creditorId: "none", // Usar 'none'
+      creditorId: "none",
     });
-    setEditingBudget(null);
   };
 
   const handleNewBudgetChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -158,6 +286,26 @@ const SharedBudgets = () => {
     }));
   };
 
+  const handleQuickDebtorSuccess = (id: string, name: string) => {
+    // Re-fetch debtors list
+    fetchBudgetsAndDebtors(); 
+    // Automatically select the newly created debtor
+    setNewBudget(prev => ({
+      ...prev,
+      selectedDebtors: [...prev.selectedDebtors, { debtorId: id, shareAmount: "" }]
+    }));
+  };
+
+  const handleQuickCreditorSuccess = (id: string, name: string) => {
+    // Re-fetch creditors list
+    fetchBudgetsAndDebtors();
+    // Automatically select the newly created creditor
+    setNewBudget(prev => ({
+      ...prev,
+      creditorId: id
+    }));
+  };
+
   const calculateShare = useMemo(() => {
     const totalAmountStr = newBudget.total_amount.startsWith('=') 
       ? evaluateExpression(newBudget.total_amount.substring(1))?.toFixed(2) 
@@ -175,7 +323,6 @@ const SharedBudgets = () => {
       return { myShare: share, debtorShare: share, totalParticipants };
     } 
     
-    // Custom split logic (if implemented later, currently defaults to equal)
     return { myShare: totalAmount / totalParticipants, debtorShare: totalAmount / totalParticipants, totalParticipants };
 
   }, [newBudget.total_amount, newBudget.selectedDebtors.length, newBudget.split_type]);
@@ -251,7 +398,7 @@ const SharedBudgets = () => {
           total_amount: totalAmount,
           split_type: newBudget.split_type,
           description: newBudget.description,
-          creditor_id: creditorIdToUse, // Usar el ID ajustado
+          creditor_id: creditorIdToUse,
         })
         .select()
         .single();
@@ -499,7 +646,18 @@ const SharedBudgets = () => {
                   </div>
                 </div>
 
-                <h3 className="text-lg font-semibold mt-4">Acreedor (Opcional)</h3>
+                <h3 className="text-lg font-semibold mt-4 flex items-center justify-between">
+                  Acreedor (Opcional)
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    size="sm" 
+                    className="h-7 text-xs gap-1"
+                    onClick={() => setIsQuickCreditorDialogOpen(true)}
+                  >
+                    <UserPlus className="h-3 w-3" /> Añadir Rápido
+                  </Button>
+                </h3>
                 <p className="text-sm text-muted-foreground">Si este gasto se cargó a un acreedor (ej. tarjeta de crédito, persona), selecciónalo aquí. El monto total se registrará como deuda a ese acreedor.</p>
                 <div className="grid grid-cols-1 gap-2">
                   <Select value={newBudget.creditorId} onValueChange={handleCreditorChange}>
@@ -518,20 +676,31 @@ const SharedBudgets = () => {
                       ))}
                     </SelectContent>
                   </Select>
-                  {creditors.length === 0 && (
-                    <p className="text-xs text-red-500 mt-1">
-                      No tienes acreedores registrados. Ve a "A quien le debes" para añadir uno.
+                  {creditors.length === 0 && newBudget.creditorId === "none" && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Considera añadir un acreedor si el gasto fue a crédito.
                     </p>
                   )}
                 </div>
 
-                <h3 className="text-lg font-semibold mt-4">Participantes (Deudores)</h3>
+                <h3 className="text-lg font-semibold mt-4 flex items-center justify-between">
+                  Participantes (Deudores)
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    size="sm" 
+                    className="h-7 text-xs gap-1"
+                    onClick={() => setIsQuickDebtorDialogOpen(true)}
+                  >
+                    <UserPlus className="h-3 w-3" /> Añadir Rápido
+                  </Button>
+                </h3>
                 <p className="text-sm text-muted-foreground">Selecciona a quién le dividirás el gasto (tú eres un participante más).</p>
 
                 <div className="grid gap-2 max-h-40 overflow-y-auto border p-2 rounded-md">
                   {debtors.length === 0 ? (
                     <p className="text-muted-foreground p-2">
-                      No tienes deudores registrados. Por favor, ve a la sección "Los que te deben" para añadir deudores antes de crear un presupuesto compartido.
+                      No tienes deudores registrados. Usa el botón "Añadir Rápido" para crear uno.
                     </p>
                   ) : (
                     debtors.map((debtor) => (
@@ -686,6 +855,20 @@ const SharedBudgets = () => {
           </div>
         </CardContent>
       </Card>
+      
+      {/* Diálogos de Creación Rápida */}
+      <QuickCreateDialog
+        isOpen={isQuickDebtorDialogOpen}
+        onClose={() => setIsQuickDebtorDialogOpen(false)}
+        onSuccess={handleQuickDebtorSuccess}
+        type="debtor"
+      />
+      <QuickCreateDialog
+        isOpen={isQuickCreditorDialogOpen}
+        onClose={() => setIsQuickCreditorDialogOpen(false)}
+        onSuccess={handleQuickCreditorSuccess}
+        type="creditor"
+      />
     </div>
   );
 };
