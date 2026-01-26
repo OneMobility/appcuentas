@@ -8,15 +8,22 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { PlusCircle, Users, DollarSign, CheckCircle, XCircle, Trash2, Edit, Divide } from "lucide-react";
+import { PlusCircle, Users, DollarSign, CheckCircle, XCircle, Trash2, Edit, Divide, Banknote } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/context/SessionContext";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 import { evaluateExpression } from "@/utils/math-helpers";
+import { getLocalDateString } from "@/utils/date-helpers";
 
 interface Debtor {
+  id: string;
+  name: string;
+  current_balance: number;
+}
+
+interface Creditor {
   id: string;
   name: string;
   current_balance: number;
@@ -37,12 +44,14 @@ interface SharedBudget {
   split_type: string;
   description: string;
   budget_participants: Participant[];
+  creditor_id?: string | null; // Nuevo campo
 }
 
 const SharedBudgets = () => {
   const { user } = useSession();
   const [budgets, setBudgets] = useState<SharedBudget[]>([]);
   const [debtors, setDebtors] = useState<Debtor[]>([]);
+  const [creditors, setCreditors] = useState<Creditor[]>([]); // Nuevo estado para acreedores
   const [isAddBudgetDialogOpen, setIsAddBudgetDialogOpen] = useState(false);
   const [isEditBudgetDialogOpen, setIsEditBudgetDialogOpen] = useState(false);
   const [editingBudget, setEditingBudget] = useState<SharedBudget | null>(null);
@@ -52,13 +61,14 @@ const SharedBudgets = () => {
     split_type: "equal",
     description: "",
     selectedDebtors: [] as { debtorId: string; shareAmount: string }[],
-    myShare: "" as string,
+    creditorId: "" as string, // Nuevo campo para el acreedor
   });
 
   const fetchBudgetsAndDebtors = async () => {
     if (!user) {
       setBudgets([]);
       setDebtors([]);
+      setCreditors([]);
       return;
     }
 
@@ -73,6 +83,18 @@ const SharedBudgets = () => {
       return;
     }
     setDebtors(debtorsData || []);
+
+    // Fetch Creditors
+    const { data: creditorsData, error: creditorsError } = await supabase
+      .from('creditors')
+      .select('id, name, current_balance')
+      .eq('user_id', user.id);
+
+    if (creditorsError) {
+      showError('Error al cargar acreedores: ' + creditorsError.message);
+      return;
+    }
+    setCreditors(creditorsData || []);
 
     // Fetch Shared Budgets with participants
     const { data: budgetsData, error: budgetsError } = await supabase
@@ -99,7 +121,7 @@ const SharedBudgets = () => {
       split_type: "equal",
       description: "",
       selectedDebtors: [],
-      myShare: "",
+      creditorId: "",
     });
     setEditingBudget(null);
   };
@@ -107,6 +129,10 @@ const SharedBudgets = () => {
   const handleNewBudgetChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setNewBudget((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleCreditorChange = (value: string) => {
+    setNewBudget((prev) => ({ ...prev, creditorId: value }));
   };
 
   const handleDebtorSelection = (debtorId: string, isChecked: boolean) => {
@@ -184,7 +210,37 @@ const SharedBudgets = () => {
     }
 
     try {
-      // 1. Insert Shared Budget
+      // 1. Handle Creditor Charge (if selected)
+      if (newBudget.creditorId) {
+        const creditor = creditors.find(c => c.id === newBudget.creditorId);
+        if (!creditor) throw new Error("Acreedor no encontrado.");
+
+        const newCreditorBalance = creditor.current_balance + totalAmount;
+
+        // Update creditor balance
+        const { error: creditorUpdateError } = await supabase
+          .from('creditors')
+          .update({ current_balance: newCreditorBalance })
+          .eq('id', creditor.id)
+          .eq('user_id', user.id);
+        
+        if (creditorUpdateError) throw creditorUpdateError;
+
+        // Record transaction in creditor_transactions (Charge)
+        const { error: creditorTxError } = await supabase
+          .from('creditor_transactions')
+          .insert({
+            user_id: user.id,
+            creditor_id: creditor.id,
+            type: "charge",
+            amount: totalAmount,
+            description: `Cargo por Presupuesto Compartido: ${newBudget.name}`,
+            date: getLocalDateString(new Date()),
+          });
+        if (creditorTxError) throw creditorTxError;
+      }
+
+      // 2. Insert Shared Budget
       const { data: budgetData, error: budgetError } = await supabase
         .from('shared_budgets')
         .insert({
@@ -193,6 +249,7 @@ const SharedBudgets = () => {
           total_amount: totalAmount,
           split_type: newBudget.split_type,
           description: newBudget.description,
+          creditor_id: newBudget.creditorId || null, // Guardar el ID del acreedor
         })
         .select()
         .single();
@@ -200,7 +257,7 @@ const SharedBudgets = () => {
       if (budgetError) throw budgetError;
       const budgetId = budgetData.id;
 
-      // 2. Prepare participant and debtor updates
+      // 3. Prepare participant and debtor updates
       const participantInserts = newBudget.selectedDebtors.map(d => ({
         budget_id: budgetId,
         debtor_id: d.debtorId,
@@ -209,14 +266,14 @@ const SharedBudgets = () => {
         is_paid: false,
       }));
 
-      // 3. Insert Participants
+      // 4. Insert Participants
       const { error: participantsError } = await supabase
         .from('budget_participants')
         .insert(participantInserts);
 
       if (participantsError) throw participantsError;
 
-      // 4. Update Debtor balances (increase current_balance by their share)
+      // 5. Update Debtor balances (increase current_balance by their share)
       for (const participant of newBudget.selectedDebtors) {
         const debtor = debtors.find(d => d.id === participant.debtorId);
         if (debtor) {
@@ -240,7 +297,7 @@ const SharedBudgets = () => {
               type: "charge",
               amount: shareAmount,
               description: `Cargo por Presupuesto Compartido: ${newBudget.name}`,
-              date: new Date().toISOString().split('T')[0],
+              date: getLocalDateString(new Date()),
             });
           if (txError) throw txError;
         }
@@ -291,7 +348,7 @@ const SharedBudgets = () => {
             type: "payment",
             amount: shareAmount,
             description: `Abono por Presupuesto Compartido: ${budgets.find(b => b.id === budgetId)?.name}`,
-            date: new Date().toISOString().split('T')[0],
+            date: getLocalDateString(new Date()),
           });
         if (txError) throw txError;
       }
@@ -308,9 +365,6 @@ const SharedBudgets = () => {
     if (!user) return;
 
     try {
-      // Note: Deleting the budget automatically cascades and deletes participants.
-      // However, we must manually handle the reversal of the debt in the debtors table.
-      
       const budgetToDelete = budgets.find(b => b.id === budgetId);
       if (!budgetToDelete) return;
 
@@ -337,13 +391,40 @@ const SharedBudgets = () => {
                 type: "payment",
                 amount: participant.share_amount,
                 description: `Ajuste: Eliminación de Presupuesto Compartido: ${budgetName}`,
-                date: new Date().toISOString().split('T')[0],
+                date: getLocalDateString(new Date()),
               });
           }
         }
       }
 
-      // 2. Delete the budget (cascades to participants)
+      // 2. Reverse creditor charge if applicable
+      if (budgetToDelete.creditor_id) {
+        const creditor = creditors.find(c => c.id === budgetToDelete.creditor_id);
+        if (creditor) {
+          const newCreditorBalance = creditor.current_balance - budgetToDelete.total_amount;
+
+          // Update creditor balance
+          await supabase
+            .from('creditors')
+            .update({ current_balance: newCreditorBalance })
+            .eq('id', creditor.id)
+            .eq('user_id', user.id);
+
+          // Record reversal transaction (Payment/Abono)
+          await supabase
+            .from('creditor_transactions')
+            .insert({
+              user_id: user.id,
+              creditor_id: creditor.id,
+              type: "payment",
+              amount: budgetToDelete.total_amount,
+              description: `Ajuste: Reversión de Presupuesto Compartido: ${budgetName}`,
+              date: getLocalDateString(new Date()),
+            });
+        }
+      }
+
+      // 3. Delete the budget (cascades to participants)
       const { error } = await supabase
         .from('shared_budgets')
         .delete()
@@ -388,12 +469,11 @@ const SharedBudgets = () => {
                 </span>
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[450px]"> {/* Ajuste de ancho */}
+            <DialogContent className="sm:max-w-[450px]">
               <DialogHeader>
                 <DialogTitle>Crear Nuevo Presupuesto Compartido</DialogTitle>
               </DialogHeader>
               <form onSubmit={handleSubmitBudget} className="grid gap-4 py-4">
-                {/* Usar flex o grid-cols-2 para mejor control de etiquetas largas */}
                 <div className="flex flex-col gap-2">
                   <div className="grid grid-cols-1 gap-2">
                     <Label htmlFor="name">Nombre</Label>
@@ -417,10 +497,36 @@ const SharedBudgets = () => {
                   </div>
                 </div>
 
+                <h3 className="text-lg font-semibold mt-4">Acreedor (Opcional)</h3>
+                <p className="text-sm text-muted-foreground">Si este gasto se cargó a un acreedor (ej. tarjeta de crédito, persona), selecciónalo aquí. El monto total se registrará como deuda a ese acreedor.</p>
+                <div className="grid grid-cols-1 gap-2">
+                  <Select value={newBudget.creditorId} onValueChange={handleCreditorChange}>
+                    <SelectTrigger id="creditorId">
+                      <SelectValue placeholder="Selecciona Acreedor (Opcional)" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">-- Ninguno (Pagado por mí) --</SelectItem>
+                      {creditors.map((creditor) => (
+                        <SelectItem key={creditor.id} value={creditor.id}>
+                          <div className="flex items-center gap-2">
+                            <Banknote className="h-4 w-4" />
+                            {creditor.name} (Deuda: ${creditor.current_balance.toFixed(2)})
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {creditors.length === 0 && (
+                    <p className="text-xs text-red-500 mt-1">
+                      No tienes acreedores registrados. Ve a "A quien le debes" para añadir uno.
+                    </p>
+                  )}
+                </div>
+
                 <h3 className="text-lg font-semibold mt-4">Participantes (Deudores)</h3>
                 <p className="text-sm text-muted-foreground">Selecciona a quién le dividirás el gasto (tú eres un participante más).</p>
 
-                <div className="grid gap-2 max-h-40 overflow-y-auto border p-2 rounded-md"> {/* Scrollable list */}
+                <div className="grid gap-2 max-h-40 overflow-y-auto border p-2 rounded-md">
                   {debtors.length === 0 ? (
                     <p className="text-muted-foreground p-2">
                       No tienes deudores registrados. Por favor, ve a la sección "Los que te deben" para añadir deudores antes de crear un presupuesto compartido.
@@ -469,6 +575,7 @@ const SharedBudgets = () => {
                 <TableRow>
                   <TableHead>Nombre</TableHead>
                   <TableHead>Monto Total</TableHead>
+                  <TableHead>Acreedor</TableHead>
                   <TableHead>Participantes</TableHead>
                   <TableHead>Deuda Pendiente</TableHead>
                   <TableHead className="text-right">Acciones</TableHead>
@@ -479,11 +586,13 @@ const SharedBudgets = () => {
                   const totalParticipants = budget.budget_participants.length + 1;
                   const pendingParticipants = budget.budget_participants.filter(p => !p.is_paid);
                   const totalPendingDebt = pendingParticipants.reduce((sum, p) => sum + p.share_amount, 0);
+                  const creditorName = budget.creditor_id ? creditors.find(c => c.id === budget.creditor_id)?.name : 'Yo';
                   
                   return (
                     <TableRow key={budget.id}>
                       <TableCell className="font-medium">{budget.name}</TableCell>
                       <TableCell>${budget.total_amount.toFixed(2)}</TableCell>
+                      <TableCell>{creditorName}</TableCell>
                       <TableCell>{totalParticipants}</TableCell>
                       <TableCell className={cn(totalPendingDebt > 0 ? "text-red-600 font-semibold" : "text-green-600")}>
                         ${totalPendingDebt.toFixed(2)} ({pendingParticipants.length} pendientes)
@@ -496,7 +605,7 @@ const SharedBudgets = () => {
                               Ver Pagos
                             </Button>
                           </DialogTrigger>
-                          <DialogContent className="sm:max-w-[500px]"> {/* Ajuste de ancho */}
+                          <DialogContent className="sm:max-w-[500px]">
                             <DialogHeader>
                               <DialogTitle>Pagos de {budget.name}</DialogTitle>
                             </DialogHeader>
@@ -555,7 +664,7 @@ const SharedBudgets = () => {
                             <AlertDialogHeader>
                               <AlertDialogTitle>¿Estás absolutamente seguro?</AlertDialogTitle>
                               <AlertDialogDescription>
-                                Esta acción eliminará el presupuesto **{budget.name}** y revertirá las deudas pendientes asociadas en la lista de deudores.
+                                Esta acción eliminará el presupuesto **{budget.name}** y revertirá las deudas pendientes asociadas en la lista de deudores y el cargo al acreedor (si aplica).
                               </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>
