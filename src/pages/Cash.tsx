@@ -28,7 +28,7 @@ import CardTransferDialog from "@/components/CardTransferDialog";
 import { evaluateExpression } from "@/utils/math-helpers";
 import CashReconciliationDialog from "@/components/CashReconciliationDialog";
 import FeedbackOverlay from "@/components/FeedbackOverlay";
-import ImageUpload from "@/components/ImageUpload"; // Importar ImageUpload
+import ImageUpload from "@/components/ImageUpload";
 
 interface Transaction {
   id: string;
