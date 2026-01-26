@@ -38,17 +38,11 @@ interface Saving {
   color: string;
   user_id?: string;
   challenge_id?: string; // Añadir challenge_id
-  challenges?: { // Añadir detalles del reto vinculado
-    status: "active" | "completed" | "failed" | "regular";
-    end_date: string;
-  } | null;
+  // Eliminamos la incrustación de 'challenges' aquí para evitar la ambigüedad
 }
-
-// Eliminado interface SavingsOutletContext
 
 const Savings: React.FC = () => {
   const { user } = useSession();
-  // const { setChallengeRefreshKey } = useOutletContext<SavingsOutletContext>(); // Eliminado
   const [savings, setSavings] = useState<Saving[]>([]);
   const [isAddSavingDialogOpen, setIsAddSavingDialogOpen] = useState(false);
   const [isEditSavingDialogOpen, setIsEditSavingDialogOpen] = useState(false);
@@ -84,9 +78,10 @@ const Savings: React.FC = () => {
       return;
     }
 
+    // Modificación: Solo seleccionar challenge_id para evitar el error de incrustación ambigua.
     const { data, error } = await supabase
       .from('savings')
-      .select('*, challenge_id, challenges(status, end_date)') // Seleccionar challenge_id y detalles del reto
+      .select('*, challenge_id') 
       .eq('user_id', user.id)
       .order('created_at', { ascending: false });
 
@@ -316,10 +311,6 @@ const Savings: React.FC = () => {
           });
         }
       }
-      // Trigger refresh for challenges page if this saving is linked to a challenge
-      // if (updatedSaving.challenge_id) { // Eliminado
-      //   setChallengeRefreshKey(prev => prev + 1); // Eliminado
-      // }
     }
   };
 
@@ -418,53 +409,6 @@ const Savings: React.FC = () => {
       setSelectedSavingId(null);
       setIsTransactionDialogOpen(false);
       showSuccess("Transacción registrada exitosamente.");
-
-      // Lógica para actualizar el estado del reto si está vinculado
-      // if (updatedSaving.challenge_id && updatedSaving.target_amount) { // Eliminado
-      //   let challengeStatus: "completed" | "regular" | "failed" | "active" = "active"; // Eliminado
-      //   const progress = (updatedSaving.current_balance / updatedSaving.target_amount) * 100; // Eliminado
-
-      //   if (progress >= 100) { // Eliminado
-      //     challengeStatus = "completed"; // Eliminado
-      //   } else { // Eliminado
-      //     challengeStatus = "active"; // Keep active until end date for full evaluation // Eliminado
-      //   } // Eliminado
-
-      //   // Fetch current challenge status to avoid unnecessary updates // Eliminado
-      //   const { data: currentChallenge, error: fetchChallengeError } = await supabase // Eliminado
-      //     .from('challenges') // Eliminado
-      //     .select('status, end_date') // Eliminado
-      //     .eq('id', updatedSaving.challenge_id) // Eliminado
-      //     .single(); // Eliminado
-
-      //   if (fetchChallengeError && fetchChallengeError.code !== 'PGRST116') { // Eliminado
-      //     console.error("Error fetching linked challenge:", fetchChallengeError.message); // Eliminado
-      //   } else if (currentChallenge) { // Eliminado
-      //     let updateChallengeEndDate = currentChallenge.end_date; // Eliminado
-      //     // If challenge is completed and saving has a completion date, use that date // Eliminado
-      //     if (challengeStatus === "completed" && updatedSaving.completion_date) { // Usar completion_date // Eliminado
-      //       updateChallengeEndDate = updatedSaving.completion_date; // Eliminado
-      //     } // Eliminado
-
-      //     // Only update if the new status is 'completed' or if the current status is 'active' // Eliminado
-      //     if (challengeStatus === "completed" || currentChallenge.status === "active") { // Eliminado
-      //       const { error: updateChallengeError } = await supabase // Eliminado
-      //         .from('challenges') // Eliminado
-      //         .update({ status: challengeStatus, end_date: updateChallengeEndDate }) // Eliminado
-      //         .eq('id', updatedSaving.challenge_id) // Eliminado
-      //         .eq('user_id', user.id); // Eliminado
-
-      //       if (updateChallengeError) { // Eliminado
-      //         showError('Error al actualizar el estado del reto vinculado: ' + updateChallengeError.message); // Eliminado
-      //       } else { // Eliminado
-      //         if (challengeStatus === "completed") { // Eliminado
-      //           showSuccess("¡Reto de ahorro completado!"); // Eliminado
-      //         } // Eliminado
-      //         setChallengeRefreshKey(prev => prev + 1); // Force refresh in Challenges.tsx // Eliminado
-      //       } // Eliminado
-      //     } // Eliminado
-      //   } // Eliminado
-      // } // Eliminado
 
       // Show feedback overlay based on transaction type
       if (transactionType === "deposit") {
@@ -697,11 +641,9 @@ const Savings: React.FC = () => {
                 {filteredSavings.map((saving) => {
                   const progress = saving.target_amount ? (saving.current_balance / saving.target_amount) * 100 : 0;
                   
-                  // Determinar si la cuenta de ahorro está vinculada a un reto activo y en curso
-                  const isLinkedToActiveChallenge = saving.challenge_id && 
-                                                   saving.challenges && 
-                                                   saving.challenges.status === "active" &&
-                                                   (isAfter(new Date(saving.challenges.end_date), new Date()) || isSameDay(new Date(saving.challenges.end_date), new Date()));
+                  // Dado que eliminamos la incrustación de challenges, no podemos verificar si está vinculado a un reto activo
+                  // Dejaremos la edición/eliminación habilitada por ahora, ya que la lógica de retos no está completamente implementada aquí.
+                  const isLinkedToActiveChallenge = false; 
 
                   return (
                     <TableRow key={saving.id}>

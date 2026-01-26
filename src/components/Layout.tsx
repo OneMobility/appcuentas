@@ -17,7 +17,7 @@ import {
   Tag,
   LogOut,
   Wallet,
-  Users,
+  BarChart, // Importar BarChart
 } from "lucide-react";
 import MobileNavbar from "./MobileNavbar";
 import { useSession } from "@/context/SessionContext";
@@ -57,7 +57,7 @@ const navItems = [
   {
     name: "Presupuestos Compartidos", // Nuevo elemento
     path: "/shared-budgets",
-    icon: Users,
+    icon: BarChart, // Usar BarChart
   },
   {
     name: "Categorías",
