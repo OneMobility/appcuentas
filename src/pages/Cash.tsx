@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { PlusCircle, CalendarIcon, Edit, FileText, FileDown, Trash2, ArrowRightLeft, Scale } from "lucide-react";
+import { PlusCircle, CalendarIcon, Edit, FileText, FileDown, Trash2, ArrowRightLeft, Scale, Image as ImageIcon } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { cn } from "@/lib/utils";
 import { format, parseISO } from "date-fns";
@@ -25,9 +25,10 @@ import { exportToCsv, exportToPdf } from "@/utils/export";
 import DynamicLucideIcon from "@/components/DynamicLucideIcon";
 import { getLocalDateString } from "@/utils/date-helpers";
 import CardTransferDialog from "@/components/CardTransferDialog";
-import { evaluateExpression } from "@/utils/math-helpers"; // Importar la nueva función
-import CashReconciliationDialog from "@/components/CashReconciliationDialog"; // Importar el nuevo componente
-import FeedbackOverlay from "@/components/FeedbackOverlay"; // Importar FeedbackOverlay
+import { evaluateExpression } from "@/utils/math-helpers";
+import CashReconciliationDialog from "@/components/CashReconciliationDialog";
+import FeedbackOverlay from "@/components/FeedbackOverlay";
+import ImageUpload from "@/components/ImageUpload"; // Importar ImageUpload
 
 interface Transaction {
   id: string;
@@ -39,6 +40,7 @@ interface Transaction {
   income_category_id?: string | null;
   expense_category_id?: string | null;
   user_id?: string;
+  image_url?: string | null; // Nuevo campo
 }
 
 interface CardData {
@@ -56,11 +58,11 @@ const Cash = () => {
   const { incomeCategories, expenseCategories, getCategoryById, isLoadingCategories } = useCategoryContext();
   const [balance, setBalance] = useState(0);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [cards, setCards] = useState<CardData[]>([]); // Estado para almacenar las tarjetas
+  const [cards, setCards] = useState<CardData[]>([]);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-  const [isTransferDialogOpen, setIsTransferDialogOpen] = useState(false); // Nuevo estado para el diálogo de transferencia
-  const [isReconciliationDialogOpen, setIsReconciliationDialogOpen] = useState(false); // Nuevo estado para el diálogo de cuadre
+  const [isTransferDialogOpen, setIsTransferDialogOpen] = useState(false);
+  const [isReconciliationDialogOpen, setIsReconciliationDialogOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [newTransaction, setNewTransaction] = useState({
     type: "ingreso" as "ingreso" | "egreso",
@@ -69,6 +71,7 @@ const Cash = () => {
     date: new Date() as Date | undefined,
     selectedCategoryId: "",
     selectedCategoryType: "" as "income" | "expense" | "",
+    imageUrl: null as string | null, // Nuevo estado para la URL de la imagen
   });
   const [feedbackOverlay, setFeedbackOverlay] = useState<{
     isVisible: boolean;
@@ -95,7 +98,7 @@ const Cash = () => {
       .from('cash_transactions')
       .select('*')
       .eq('user_id', user.id)
-      .order('created_at', { ascending: false }); // Order by created_at
+      .order('created_at', { ascending: false });
 
     if (error) {
       showError('Error al cargar transacciones: ' + error.message);
@@ -129,17 +132,17 @@ const Cash = () => {
   useEffect(() => {
     if (user && !isLoadingCategories) {
       fetchTransactions();
-      fetchCards(); // Fetch cards when component mounts or user changes
+      fetchCards();
     }
   }, [user, isLoadingCategories]);
 
   const handleTransferSuccess = () => {
-    fetchTransactions(); // Re-fetch cash transactions
-    fetchCards(); // Re-fetch cards
+    fetchTransactions();
+    fetchCards();
   };
 
   const handleReconciliationSuccess = () => {
-    fetchTransactions(); // Re-fetch cash transactions after reconciliation
+    fetchTransactions();
     setFeedbackOverlay({
       isVisible: true,
       message: "¡Saldo ajustado exitosamente!",
@@ -187,6 +190,14 @@ const Cash = () => {
     } else {
       setNewTransaction((prev) => ({ ...prev, selectedCategoryId: value, selectedCategoryType: "" }));
     }
+  };
+
+  const handleImageUploadSuccess = (url: string) => {
+    setNewTransaction((prev) => ({ ...prev, imageUrl: url }));
+  };
+
+  const handleImageRemove = () => {
+    setNewTransaction((prev) => ({ ...prev, imageUrl: null }));
   };
 
   const handleSubmitTransaction = async (e: React.FormEvent) => {
@@ -245,6 +256,7 @@ const Cash = () => {
         income_category_id: incomeCategoryIdToInsert,
         expense_category_id: expenseCategoryIdToInsert,
         date: getLocalDateString(newTransaction.date),
+        image_url: newTransaction.imageUrl, // Incluir URL de la imagen
       })
       .select();
 
@@ -256,7 +268,7 @@ const Cash = () => {
       setBalance((prev) =>
         newTx.type === "ingreso" ? prev + newTx.amount : prev - newTx.amount
       );
-      setNewTransaction({ type: "ingreso", amount: "", description: "", date: new Date(), selectedCategoryId: "", selectedCategoryType: "" });
+      setNewTransaction({ type: "ingreso", amount: "", description: "", date: new Date(), selectedCategoryId: "", selectedCategoryType: "", imageUrl: null });
       setIsAddDialogOpen(false);
       showSuccess("Transacción registrada exitosamente.");
     }
@@ -274,6 +286,7 @@ const Cash = () => {
       date: parseISO(transaction.date),
       selectedCategoryId: categoryId,
       selectedCategoryType: categoryType as "income" | "expense" | "",
+      imageUrl: transaction.image_url || null, // Cargar URL de la imagen existente
     });
     setIsEditDialogOpen(true);
   };
@@ -340,6 +353,7 @@ const Cash = () => {
         income_category_id: incomeCategoryIdToUpdate,
         expense_category_id: expenseCategoryIdToUpdate,
         date: getLocalDateString(newTransaction.date),
+        image_url: newTransaction.imageUrl, // Actualizar URL de la imagen
       })
       .eq('id', editingTransaction.id)
       .eq('user_id', user.id)
@@ -362,7 +376,7 @@ const Cash = () => {
 
       setIsEditDialogOpen(false);
       setEditingTransaction(null);
-      setNewTransaction({ type: "ingreso", amount: "", description: "", date: new Date(), selectedCategoryId: "", selectedCategoryType: "" });
+      setNewTransaction({ type: "ingreso", amount: "", description: "", date: new Date(), selectedCategoryId: "", selectedCategoryType: "", imageUrl: null });
       showSuccess("Transacción actualizada exitosamente.");
     }
   };
@@ -377,7 +391,7 @@ const Cash = () => {
       .from('cash_transactions')
       .delete()
       .eq('id', transactionId)
-      .eq('user_id', user.id); // Corrected from 'user.id' to 'user_id'
+      .eq('user_id', user.id);
 
     if (error) {
       showError('Error al eliminar transacción: ' + error.message);
@@ -417,12 +431,13 @@ const Cash = () => {
         Categoria: category?.name || "Desconocida",
         Descripcion: tx.description,
         Monto: `${tx.type === "ingreso" ? "+" : "-"}${tx.amount.toFixed(2)}`,
+        "URL Imagen": tx.image_url || "N/A",
       };
     });
 
     const filename = `transacciones_efectivo_${format(new Date(), "yyyyMMdd_HHmmss")}`;
     const title = "Reporte de Transacciones de Efectivo";
-    const headers = ["Fecha", "Tipo", "Categoría", "Descripción", "Monto"];
+    const headers = ["Fecha", "Tipo", "Categoría", "Descripción", "Monto", "URL Imagen"];
     const pdfData = dataToExport.map(row => Object.values(row));
 
     if (formatType === 'csv') {
@@ -555,6 +570,14 @@ const Cash = () => {
                       </PopoverContent>
                     </Popover>
                   </div>
+                  <div className="col-span-4">
+                    <Label className="text-left mb-2 block">Adjuntar Ticket (Opcional)</Label>
+                    <ImageUpload
+                      onUploadSuccess={handleImageUploadSuccess}
+                      onRemove={handleImageRemove}
+                      folder="cash_tickets"
+                    />
+                  </div>
                   <DialogFooter>
                     <Button type="submit">Guardar Transacción</Button>
                   </DialogFooter>
@@ -674,6 +697,7 @@ const Cash = () => {
                   <TableHead>Categoría</TableHead>
                   <TableHead>Descripción</TableHead>
                   <TableHead className="text-right">Monto</TableHead>
+                  <TableHead className="text-right">Ticket</TableHead>
                   <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
@@ -695,6 +719,20 @@ const Cash = () => {
                       <TableCell>{tx.description}</TableCell>
                       <TableCell className="text-right">
                         {tx.type === "ingreso" ? "+" : "-"}${tx.amount.toFixed(2)}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {tx.image_url ? (
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="h-7 w-7 p-0"
+                            onClick={() => window.open(tx.image_url!, '_blank')}
+                          >
+                            <ImageIcon className="h-4 w-4" />
+                          </Button>
+                        ) : (
+                          <span className="text-muted-foreground">-</span>
+                        )}
                       </TableCell>
                       <TableCell className="text-right flex gap-2 justify-end">
                         <Button
@@ -835,6 +873,15 @@ const Cash = () => {
                     </PopoverContent>
                   </Popover>
                 </div>
+                <div className="col-span-4">
+                    <Label className="text-left mb-2 block">Adjuntar Ticket (Opcional)</Label>
+                    <ImageUpload
+                      onUploadSuccess={handleImageUploadSuccess}
+                      initialUrl={editingTransaction?.image_url || null}
+                      onRemove={handleImageRemove}
+                      folder="cash_tickets"
+                    />
+                  </div>
                 <DialogFooter>
                   <Button type="submit">Actualizar Transacción</Button>
                 </DialogFooter>
