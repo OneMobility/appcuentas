@@ -395,6 +395,8 @@ const CardDetailsPage: React.FC = () => {
     let newCardBalance = card.current_balance;
 
     // Revert old transaction's impact on balance
+    // If old was 'charge', it reduced debit balance or increased credit debt. We reverse it.
+    // If old was 'payment', it increased debit balance or reduced credit debt. We reverse it.
     newCardBalance = oldTransaction.type === "charge" ? newCardBalance - oldTransaction.amount : newCardBalance + oldTransaction.amount;
 
     // Delete old transaction
@@ -502,7 +504,10 @@ const CardDetailsPage: React.FC = () => {
     let newCardBalance = card.current_balance;
     const effectiveAmount = transaction.amount;
 
-    newCardBalance = transaction.type === "charge" ? newCardBalance - effectiveAmount : newCardBalance + effectiveAmount;
+    // FIX: Reverse the effect of the original transaction.
+    // If it was a 'charge' (which reduced debit balance or increased credit debt), we ADD it back.
+    // If it was a 'payment' (which increased debit balance or reduced credit debt), we SUBTRACT it back.
+    newCardBalance = transaction.type === "charge" ? newCardBalance + effectiveAmount : newCardBalance - effectiveAmount;
 
     try {
       const { error: deleteTransactionError } = await supabase
