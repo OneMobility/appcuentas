@@ -479,13 +479,11 @@ const Cash = () => {
                 <DialogHeader>
                   <DialogTitle>Registrar Transacción</DialogTitle>
                 </DialogHeader>
-                <form onSubmit={handleSubmitTransaction} className="grid gap-4 py-4">
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="type" className="text-right">
-                      Tipo
-                    </Label>
+                <form onSubmit={handleSubmitTransaction} className="flex flex-col gap-4 py-4">
+                  <div className="flex flex-col space-y-2">
+                    <Label htmlFor="type">Tipo</Label>
                     <Select value={newTransaction.type} onValueChange={handleSelectChange}>
-                      <SelectTrigger className="col-span-3">
+                      <SelectTrigger id="type">
                         <SelectValue placeholder="Selecciona tipo" />
                       </SelectTrigger>
                       <SelectContent>
@@ -494,12 +492,10 @@ const Cash = () => {
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="category_id" className="text-right">
-                      Categoría
-                    </Label>
+                  <div className="flex flex-col space-y-2">
+                    <Label htmlFor="category_id">Categoría</Label>
                     <Select value={newTransaction.selectedCategoryId} onValueChange={handleCategorySelectChange}>
-                      <SelectTrigger className="col-span-3">
+                      <SelectTrigger id="category_id">
                         <SelectValue placeholder="Selecciona categoría" />
                       </SelectTrigger>
                       <SelectContent>
@@ -514,44 +510,36 @@ const Cash = () => {
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="amount" className="text-right">
-                      Monto
-                    </Label>
+                  <div className="flex flex-col space-y-2">
+                    <Label htmlFor="amount">Monto</Label>
                     <Input
                       id="amount"
                       name="amount"
-                      type="text" // Cambiado a text para permitir '='
+                      type="text"
                       value={newTransaction.amount}
                       onChange={handleInputChange}
-                      className="col-span-3"
                       required
                       placeholder="Ej. 100 o =50+20*2"
                     />
                   </div>
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="description" className="text-right">
-                      Descripción
-                    </Label>
+                  <div className="flex flex-col space-y-2">
+                    <Label htmlFor="description">Descripción</Label>
                     <Input
                       id="description"
                       name="description"
                       value={newTransaction.description}
                       onChange={handleInputChange}
-                      className="col-span-3"
                       required
                     />
                   </div>
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="transactionDate" className="text-right">
-                      Fecha
-                    </Label>
+                  <div className="flex flex-col space-y-2">
+                    <Label htmlFor="transactionDate">Fecha</Label>
                     <Popover>
                       <PopoverTrigger asChild>
                         <Button
                           variant={"outline"}
                           className={cn(
-                            "col-span-3 justify-start text-left font-normal",
+                            "justify-start text-left font-normal",
                             !newTransaction.date && "text-muted-foreground"
                           )}
                         >
@@ -570,7 +558,7 @@ const Cash = () => {
                       </PopoverContent>
                     </Popover>
                   </div>
-                  <div className="col-span-4">
+                  <div className="flex flex-col space-y-2">
                     <Label className="text-left mb-2 block">Adjuntar Ticket (Opcional)</Label>
                     <ImageUpload
                       onUploadSuccess={handleImageUploadSuccess}
@@ -782,13 +770,11 @@ const Cash = () => {
               <DialogHeader>
                 <DialogTitle>Editar Transacción</DialogTitle>
               </DialogHeader>
-              <form onSubmit={handleUpdateTransaction} className="grid gap-4 py-4">
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="editType" className="text-right">
-                    Tipo
-                  </Label>
+              <form onSubmit={handleUpdateTransaction} className="flex flex-col gap-4 py-4">
+                <div className="flex flex-col space-y-2">
+                  <Label htmlFor="editType">Tipo</Label>
                   <Select value={newTransaction.type} onValueChange={handleSelectChange}>
-                    <SelectTrigger id="editType" className="col-span-3">
+                    <SelectTrigger id="editType">
                       <SelectValue placeholder="Selecciona tipo" />
                     </SelectTrigger>
                     <SelectContent>
@@ -797,12 +783,10 @@ const Cash = () => {
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="editCategory" className="text-right">
-                    Categoría
-                  </Label>
+                <div className="flex flex-col space-y-2">
+                  <Label htmlFor="editCategory">Categoría</Label>
                   <Select value={newTransaction.selectedCategoryId} onValueChange={handleCategorySelectChange}>
-                    <SelectTrigger id="editCategory" className="col-span-3">
+                    <SelectTrigger id="editCategory">
                       <SelectValue placeholder="Selecciona categoría" />
                     </SelectTrigger>
                     <SelectContent>
@@ -817,44 +801,36 @@ const Cash = () => {
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="editAmount" className="text-right">
-                    Monto
-                  </Label>
+                <div className="flex flex-col space-y-2">
+                  <Label htmlFor="editAmount">Monto</Label>
                   <Input
                     id="editAmount"
                     name="amount"
-                    type="text" // Cambiado a text para permitir '='
+                    type="text"
                     value={newTransaction.amount}
                     onChange={handleInputChange}
-                    className="col-span-3"
                     required
                     placeholder="Ej. 100 o =50+20*2"
                   />
                 </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="editDescription" className="text-right">
-                    Descripción
-                  </Label>
+                <div className="flex flex-col space-y-2">
+                  <Label htmlFor="editDescription">Descripción</Label>
                   <Input
                     id="editDescription"
                     name="description"
                     value={newTransaction.description}
                     onChange={handleInputChange}
-                    className="col-span-3"
                     required
                   />
                 </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="editTransactionDate" className="text-right">
-                    Fecha
-                  </Label>
+                <div className="flex flex-col space-y-2">
+                  <Label htmlFor="editTransactionDate">Fecha</Label>
                   <Popover>
                     <PopoverTrigger asChild>
                       <Button
                         variant={"outline"}
                         className={cn(
-                          "col-span-3 justify-start text-left font-normal",
+                          "justify-start text-left font-normal",
                           !newTransaction.date && "text-muted-foreground"
                         )}
                       >

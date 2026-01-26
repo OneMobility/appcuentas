@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { DollarSign, History, Trash2, Edit, CalendarIcon, ArrowLeft, FileText, FileDown, Heart, AlertTriangle, Scale, ArrowRightLeft } from "lucide-react"; // Added ArrowRightLeft icon
+import { DollarSign, History, Trash2, Edit, CalendarIcon, ArrowLeft, FileText, FileDown, Heart, AlertTriangle, Scale, ArrowRightLeft, Image as ImageIcon } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { cn } from "@/lib/utils";
 import { format, parseISO, isWithinInterval, isBefore, isAfter, isSameDay } from "date-fns";
@@ -30,10 +30,11 @@ import CutOffDateCard from "@/components/CutOffDateCard";
 import { useCategoryContext } from "@/context/CategoryContext";
 import { toast } from "sonner";
 import DynamicLucideIcon from "@/components/DynamicLucideIcon";
-import { evaluateExpression } from "@/utils/math-helpers"; // Importar la nueva función
-import CardReconciliationDialog from "@/components/CardReconciliationDialog"; // Import the new component
-import FeedbackOverlay from "@/components/FeedbackOverlay"; // Import FeedbackOverlay
-import CardTransferDialog from "@/components/CardTransferDialog"; // Import CardTransferDialog
+import { evaluateExpression } from "@/utils/math-helpers";
+import CardReconciliationDialog from "@/components/CardReconciliationDialog";
+import FeedbackOverlay from "@/components/FeedbackOverlay";
+import CardTransferDialog from "@/components/CardTransferDialog";
+import ImageUpload from "@/components/ImageUpload"; // Importar ImageUpload
 
 interface CardTransaction {
   id: string;
@@ -46,7 +47,8 @@ interface CardTransaction {
   user_id?: string;
   income_category_id?: string | null;
   expense_category_id?: string | null;
-  is_adjustment?: boolean; // New field
+  is_adjustment?: boolean;
+  image_url?: string | null; // Nuevo campo
 }
 
 interface CardData {
@@ -72,13 +74,13 @@ const CardDetailsPage: React.FC = () => {
   const { user } = useSession();
   const { incomeCategories, expenseCategories, getCategoryById, isLoadingCategories } = useCategoryContext();
   const [card, setCard] = useState<CardData | null>(null);
-  const [allCards, setAllCards] = useState<CardData[]>([]); // State for all cards (for transfer dialog)
-  const [cashBalance, setCashBalance] = useState(0); // State for cash balance (for transfer dialog)
+  const [allCards, setAllCards] = useState<CardData[]>([]);
+  const [cashBalance, setCashBalance] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [isAddTransactionDialogOpen, setIsAddTransactionDialogOpen] = useState(false);
   const [isEditTransactionDialogOpen, setIsEditTransactionDialogOpen] = useState(false);
   const [isReconciliationDialogOpen, setIsReconciliationDialogOpen] = useState(false);
-  const [isTransferDialogOpen, setIsTransferDialogOpen] = useState(false); // New state for transfer dialog
+  const [isTransferDialogOpen, setIsTransferDialogOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<CardTransaction | null>(null);
   const [newTransaction, setNewTransaction] = useState({
     type: "charge" as "charge" | "payment",
@@ -87,6 +89,7 @@ const CardDetailsPage: React.FC = () => {
     date: undefined as Date | undefined,
     selectedCategoryId: "",
     selectedCategoryType: "" as "income" | "expense" | "",
+    imageUrl: null as string | null, // Nuevo estado para la URL de la imagen
   });
   const [feedbackOverlay, setFeedbackOverlay] = useState<{
     isVisible: boolean;
@@ -237,6 +240,14 @@ const CardDetailsPage: React.FC = () => {
     }
   };
 
+  const handleImageUploadSuccess = (url: string) => {
+    setNewTransaction((prev) => ({ ...prev, imageUrl: url }));
+  };
+
+  const handleImageRemove = () => {
+    setNewTransaction((prev) => ({ ...prev, imageUrl: null }));
+  };
+
   const handleSubmitTransaction = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user || !card) {
@@ -325,6 +336,7 @@ const CardDetailsPage: React.FC = () => {
       income_category_id: incomeCategoryIdToInsert,
       expense_category_id: expenseCategoryIdToInsert,
       is_adjustment: false, // Not an adjustment
+      image_url: newTransaction.imageUrl, // Incluir URL de la imagen
     });
 
     try {
@@ -347,7 +359,7 @@ const CardDetailsPage: React.FC = () => {
       // Re-fetch details and global data to update all views
       handleRefreshData();
 
-      setNewTransaction({ type: "charge", amount: "", description: "", date: undefined, selectedCategoryId: "", selectedCategoryType: "" });
+      setNewTransaction({ type: "charge", amount: "", description: "", date: undefined, selectedCategoryId: "", selectedCategoryType: "", imageUrl: null });
       setIsAddTransactionDialogOpen(false);
       showSuccess("Transacción(es) registrada(s) exitosamente.");
     } catch (error: any) {
@@ -368,6 +380,7 @@ const CardDetailsPage: React.FC = () => {
       date: new Date(transaction.date),
       selectedCategoryId: categoryId,
       selectedCategoryType: categoryType as "income" | "expense" | "",
+      imageUrl: transaction.image_url || null, // Cargar URL de la imagen existente
     });
     setIsEditTransactionDialogOpen(true);
   };
@@ -398,7 +411,7 @@ const CardDetailsPage: React.FC = () => {
     const newType = newTransaction.type;
 
     if (isNaN(newTotalAmount) || newTotalAmount <= 0) {
-      showError("El monto de la transacción debe ser un número positivo.");
+      showError("El monto debe ser un número positivo.");
       return;
     }
     if (!newTransaction.date) {
@@ -476,6 +489,7 @@ const CardDetailsPage: React.FC = () => {
       income_category_id: newIncomeCategoryId,
       expense_category_id: newExpenseCategoryId,
       is_adjustment: false, // Not an adjustment
+      image_url: newTransaction.imageUrl, // Incluir URL de la imagen
     });
 
     try {
@@ -498,7 +512,7 @@ const CardDetailsPage: React.FC = () => {
       // Re-fetch details and global data to update all views
       handleRefreshData();
 
-      setNewTransaction({ type: "charge", amount: "", description: "", date: undefined, selectedCategoryId: "", selectedCategoryType: "" });
+      setNewTransaction({ type: "charge", amount: "", description: "", date: undefined, selectedCategoryId: "", selectedCategoryType: "", imageUrl: null });
       setEditingTransaction(null);
       setIsEditTransactionDialogOpen(false);
       showSuccess("Transacción(es) actualizada(s) exitosamente.");
@@ -614,12 +628,13 @@ const CardDetailsPage: React.FC = () => {
         Descripcion: tx.description,
         Monto: `${tx.type === "charge" ? "-" : "+"}${tx.amount.toFixed(2)}`,
         Saldo: tx.running_balance?.toFixed(2) || "N/A",
+        "URL Imagen": tx.image_url || "N/A", // Incluir URL de la imagen
       };
     });
 
     const filename = `estado_cuenta_${card.name.replace(/\s/g, '_')}_${format(new Date(), "yyyyMMdd_HHmmss")}`;
     const title = `Estado de Cuenta: ${card.name} (${card.bank_name})`;
-    const headers = ["Fecha", "Tipo", "Categoría", "Descripción", "Monto", "Saldo"];
+    const headers = ["Fecha", "Tipo", "Categoría", "Descripción", "Monto", "Saldo", "URL Imagen"];
     const pdfData = dataToExport.map(row => Object.values(row));
 
     if (formatType === 'csv') {
@@ -779,13 +794,11 @@ const CardDetailsPage: React.FC = () => {
                 <DialogHeader>
                   <DialogTitle>Registrar Transacción para {card.name}</DialogTitle>
                 </DialogHeader>
-                <form onSubmit={handleSubmitTransaction} className="grid gap-4 py-4">
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="transactionType" className="text-right">
-                      Tipo
-                    </Label>
+                <form onSubmit={handleSubmitTransaction} className="flex flex-col gap-4 py-4">
+                  <div className="flex flex-col space-y-2">
+                    <Label htmlFor="transactionType">Tipo</Label>
                     <Select value={newTransaction.type} onValueChange={handleTransactionTypeChange}>
-                      <SelectTrigger className="col-span-3">
+                      <SelectTrigger id="transactionType">
                         <SelectValue placeholder="Selecciona tipo" />
                       </SelectTrigger>
                       <SelectContent>
@@ -795,12 +808,10 @@ const CardDetailsPage: React.FC = () => {
                     </Select>
                   </div>
                   {(newTransaction.type === "charge" || (newTransaction.type === "payment" && card.type === "debit")) && (
-                    <div className="grid grid-cols-4 items-center gap-4">
-                      <Label htmlFor="category_id" className="text-right">
-                        Categoría
-                      </Label>
+                    <div className="flex flex-col space-y-2">
+                      <Label htmlFor="category_id">Categoría</Label>
                       <Select value={newTransaction.selectedCategoryId} onValueChange={handleCategorySelectChange}>
-                        <SelectTrigger className="col-span-3">
+                        <SelectTrigger id="category_id">
                           <SelectValue placeholder="Selecciona categoría" />
                         </SelectTrigger>
                         <SelectContent>
@@ -827,68 +838,68 @@ const CardDetailsPage: React.FC = () => {
                       </Select>
                     </div>
                   )}
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="transactionAmount" className="text-right">
-                      Monto
-                    </Label>
-                  <Input
-                    id="transactionAmount"
-                    name="amount"
-                    type="text" // Cambiado a text para permitir '='
-                    value={newTransaction.amount}
-                    onChange={handleTransactionInputChange}
-                    className="col-span-3"
-                    required
-                    placeholder="Ej. 100 o =50+20*2"
-                  />
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="transactionDescription" className="text-right">
-                    Descripción
-                  </Label>
-                  <Input
-                    id="transactionDescription"
-                    name="description"
-                    value={newTransaction.description}
-                    onChange={handleTransactionInputChange}
-                    className="col-span-3"
-                    required
-                  />
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="transactionDate" className="text-right">
-                    Fecha
-                  </Label>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant={"outline"}
-                        className={cn(
-                          "col-span-3 justify-start text-left font-normal",
-                          !newTransaction.date && "text-muted-foreground"
-                        )}
-                      >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {newTransaction.date ? format(newTransaction.date, "dd/MM/yyyy", { locale: es }) : <span>Selecciona una fecha</span>}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0">
-                      <Calendar
-                        mode="single"
-                        selected={newTransaction.date}
-                        onSelect={handleTransactionDateChange}
-                        initialFocus
-                        locale={es}
-                      />
-                    </PopoverContent>
-                  </Popover>
-                </div>
-                <DialogFooter>
-                  <Button type="submit">Registrar Transacción</Button>
-                </DialogFooter>
-              </form>
-            </DialogContent>
-          </Dialog>
+                  <div className="flex flex-col space-y-2">
+                    <Label htmlFor="transactionAmount">Monto</Label>
+                    <Input
+                      id="transactionAmount"
+                      name="amount"
+                      type="text"
+                      value={newTransaction.amount}
+                      onChange={handleTransactionInputChange}
+                      required
+                      placeholder="Ej. 100 o =50+20*2"
+                    />
+                  </div>
+                  <div className="flex flex-col space-y-2">
+                    <Label htmlFor="transactionDescription">Descripción</Label>
+                    <Input
+                      id="transactionDescription"
+                      name="description"
+                      value={newTransaction.description}
+                      onChange={handleTransactionInputChange}
+                      required
+                    />
+                  </div>
+                  <div className="flex flex-col space-y-2">
+                    <Label htmlFor="transactionDate">Fecha</Label>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant={"outline"}
+                          className={cn(
+                            "justify-start text-left font-normal",
+                            !newTransaction.date && "text-muted-foreground"
+                          )}
+                        >
+                          <CalendarIcon className="mr-2 h-4 w-4" />
+                          {newTransaction.date ? format(newTransaction.date, "dd/MM/yyyy", { locale: es }) : <span>Selecciona una fecha</span>}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0">
+                        <Calendar
+                          mode="single"
+                          selected={newTransaction.date}
+                          onSelect={handleTransactionDateChange}
+                          initialFocus
+                          locale={es}
+                        />
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                  <div className="flex flex-col space-y-2">
+                    <Label className="text-left mb-2 block">Adjuntar Ticket (Opcional)</Label>
+                    <ImageUpload
+                      onUploadSuccess={handleImageUploadSuccess}
+                      onRemove={handleImageRemove}
+                      folder="card_tickets" // Usar una carpeta diferente para tarjetas
+                    />
+                  </div>
+                  <DialogFooter>
+                    <Button type="submit">Registrar Transacción</Button>
+                  </DialogFooter>
+                </form>
+              </DialogContent>
+            </Dialog>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="sm" className="h-8 gap-1">
@@ -1005,13 +1016,14 @@ const CardDetailsPage: React.FC = () => {
                     <TableHead>Descripción</TableHead>
                     <TableHead className="text-right">Monto</TableHead>
                     <TableHead className="text-right">Saldo</TableHead>
+                    <TableHead className="text-right">Ticket</TableHead>
                     <TableHead className="text-right">Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredTransactions.map((transaction) => {
                     const isPaymentToCreditCard = card.type === "credit" && transaction.type === "payment";
-                    const isAdjustment = transaction.is_adjustment; // Check for adjustment
+                    const isAdjustment = transaction.is_adjustment;
                     const category = getCategoryById(transaction.income_category_id || transaction.expense_category_id);
 
                     let deleteDescription = `Esta acción no se puede deshacer. Esto eliminará permanentemente la transacción de ${transaction.type === "charge" ? "cargo" : "pago"} por $${transaction.amount.toFixed(2)}: "${transaction.description}".`;
@@ -1035,7 +1047,7 @@ const CardDetailsPage: React.FC = () => {
                         key={transaction.id}
                         className={cn(
                           isPaymentToCreditCard && "bg-pink-50 text-pink-800",
-                          isAdjustment && "bg-yellow-100 text-yellow-800" // Apply yellow background for adjustments
+                          isAdjustment && "bg-yellow-100 text-yellow-800"
                         )}
                       >
                         <TableCell className="w-12 flex items-center justify-center">
@@ -1055,7 +1067,7 @@ const CardDetailsPage: React.FC = () => {
                         <TableCell className={cn(
                           transaction.type === "charge" ? "text-red-600" : "text-green-600",
                           isPaymentToCreditCard && "text-pink-800 font-medium",
-                          isAdjustment && "text-yellow-800 font-medium" // Apply yellow text for adjustments
+                          isAdjustment && "text-yellow-800 font-medium"
                         )}>
                           {transaction.type === "charge" ? "Cargo" : "Pago"}
                         </TableCell>
@@ -1068,6 +1080,20 @@ const CardDetailsPage: React.FC = () => {
                         <TableCell>{transaction.description}</TableCell>
                         <TableCell className="text-right">${transaction.amount.toFixed(2)}</TableCell>
                         <TableCell className="text-right">${transaction.running_balance?.toFixed(2) || "N/A"}</TableCell>
+                        <TableCell className="text-right">
+                          {tx.image_url ? (
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              className="h-7 w-7 p-0"
+                              onClick={() => window.open(tx.image_url!, '_blank')}
+                            >
+                              <ImageIcon className="h-4 w-4" />
+                            </Button>
+                          ) : (
+                            <span className="text-muted-foreground">-</span>
+                          )}
+                        </TableCell>
                         <TableCell className="text-right flex gap-2 justify-end">
                           <Button
                             variant="outline"
@@ -1119,13 +1145,11 @@ const CardDetailsPage: React.FC = () => {
               <DialogHeader>
                 <DialogTitle>Editar Transacción para {card.name}</DialogTitle>
               </DialogHeader>
-              <form onSubmit={handleUpdateTransaction} className="grid gap-4 py-4">
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="editTransactionType" className="text-right">
-                    Tipo
-                  </Label>
+              <form onSubmit={handleUpdateTransaction} className="flex flex-col gap-4 py-4">
+                <div className="flex flex-col space-y-2">
+                  <Label htmlFor="editTransactionType">Tipo</Label>
                   <Select value={newTransaction.type} onValueChange={handleTransactionTypeChange}>
-                    <SelectTrigger id="editTransactionType" className="col-span-3">
+                    <SelectTrigger id="editTransactionType">
                       <SelectValue placeholder="Selecciona tipo" />
                     </SelectTrigger>
                     <SelectContent>
@@ -1135,12 +1159,10 @@ const CardDetailsPage: React.FC = () => {
                   </Select>
                 </div>
                 {(newTransaction.type === "charge" || (newTransaction.type === "payment" && card.type === "debit")) && (
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="editCategory" className="text-right">
-                      Categoría
-                    </Label>
+                  <div className="flex flex-col space-y-2">
+                    <Label htmlFor="editCategory">Categoría</Label>
                     <Select value={newTransaction.selectedCategoryId} onValueChange={handleCategorySelectChange}>
-                      <SelectTrigger id="editCategory" className="col-span-3">
+                      <SelectTrigger id="editCategory">
                         <SelectValue placeholder="Selecciona categoría" />
                       </SelectTrigger>
                       <SelectContent>
@@ -1167,44 +1189,36 @@ const CardDetailsPage: React.FC = () => {
                     </Select>
                   </div>
                 )}
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="editTransactionAmount" className="text-right">
-                    Monto
-                  </Label>
+                <div className="flex flex-col space-y-2">
+                  <Label htmlFor="editTransactionAmount">Monto</Label>
                   <Input
                     id="editTransactionAmount"
                     name="amount"
-                    type="text" // Cambiado a text para permitir '='
+                    type="text"
                     value={newTransaction.amount}
                     onChange={handleTransactionInputChange}
-                    className="col-span-3"
                     required
                     placeholder="Ej. 100 o =50+20*2"
                   />
                 </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="editTransactionDescription" className="text-right">
-                    Descripción
-                  </Label>
+                <div className="flex flex-col space-y-2">
+                  <Label htmlFor="editTransactionDescription">Descripción</Label>
                   <Input
                     id="editTransactionDescription"
                     name="description"
                     value={newTransaction.description}
                     onChange={handleTransactionInputChange}
-                    className="col-span-3"
                     required
                   />
                 </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="editTransactionDate" className="text-right">
-                    Fecha
-                  </Label>
+                <div className="flex flex-col space-y-2">
+                  <Label htmlFor="editTransactionDate">Fecha</Label>
                   <Popover>
                     <PopoverTrigger asChild>
                       <Button
                         variant={"outline"}
                         className={cn(
-                          "col-span-3 justify-start text-left font-normal",
+                          "justify-start text-left font-normal",
                           !newTransaction.date && "text-muted-foreground"
                         )}
                       >
@@ -1223,6 +1237,15 @@ const CardDetailsPage: React.FC = () => {
                     </PopoverContent>
                   </Popover>
                 </div>
+                <div className="flex flex-col space-y-2">
+                  <Label className="text-left mb-2 block">Adjuntar Ticket (Opcional)</Label>
+                  <ImageUpload
+                    onUploadSuccess={handleImageUploadSuccess}
+                    initialUrl={editingTransaction?.image_url || null}
+                    onRemove={handleImageRemove}
+                    folder="card_tickets"
+                  />
+                </div>
                 <DialogFooter>
                   <Button type="submit">Actualizar Transacción</Button>
                 </DialogFooter>
@@ -1236,8 +1259,8 @@ const CardDetailsPage: React.FC = () => {
           isOpen={isReconciliationDialogOpen}
           onClose={() => setIsReconciliationDialogOpen(false)}
           card={card}
-          onReconciliationSuccess={handleRefreshData} // Refresh data after reconciliation
-          onNoAdjustmentSuccess={handleNoAdjustmentSuccess} // Pass the new success handler
+          onReconciliationSuccess={handleRefreshData}
+          onNoAdjustmentSuccess={handleNoAdjustmentSuccess}
         />
       )}
       {allCards.length > 0 && (
@@ -1246,7 +1269,7 @@ const CardDetailsPage: React.FC = () => {
           onClose={() => setIsTransferDialogOpen(false)}
           cards={allCards}
           cashBalance={cashBalance}
-          onTransferSuccess={handleRefreshData} // Refresh data after transfer
+          onTransferSuccess={handleRefreshData}
         />
       )}
       {feedbackOverlay?.isVisible && (
