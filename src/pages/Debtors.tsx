@@ -347,7 +347,8 @@ const Debtors = () => {
               income_category_id: newTransaction.selectedIncomeCategoryId,
             });
           if (cardTxError) throw cardTxError;
-          fetchCashBalanceAndCards(); // Re-fetch to update card list/balances
+          // Llama a fetchCashBalanceAndCards para actualizar el estado local de las tarjetas
+          await fetchCashBalanceAndCards(); 
         }
       }
 
