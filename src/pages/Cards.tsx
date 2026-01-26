@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { PlusCircle, DollarSign, History, Trash2, Edit, CalendarIcon, ArrowRightLeft, FileText, FileDown, PiggyBank, Wallet, Banknote, Scale } from "lucide-react"; // Added Scale icon
+import { PlusCircle, DollarSign, History, Trash2, Edit, CalendarIcon, ArrowRightLeft, FileText, FileDown, PiggyBank, Wallet, Banknote, Scale, Image as ImageIcon } from "lucide-react"; // Added Scale icon
 import { showSuccess, showError } from "@/utils/toast";
 import { cn } from "@/lib/utils";
 import { format, addMonths, parseISO } from "date-fns";
@@ -30,6 +30,7 @@ import { toast } from "sonner";
 import DynamicLucideIcon from "@/components/DynamicLucideIcon";
 import { evaluateExpression } from "@/utils/math-helpers"; // Importar la nueva función
 import CardReconciliationDialog from "@/components/CardReconciliationDialog"; // Import the new component
+import ImageUpload from "@/components/ImageUpload"; // Import ImageUpload
 
 interface CardTransaction {
   id: string;
@@ -43,6 +44,7 @@ interface CardTransaction {
   income_category_id?: string | null; // New
   expense_category_id?: string | null; // New
   is_adjustment?: boolean; // New field
+  image_url?: string | null; // Nuevo campo
 }
 
 interface CardData {
@@ -94,6 +96,7 @@ const Cards = () => {
     selectedCategoryId: "",
     selectedCategoryType: "" as "income" | "expense" | "",
     selectedCardForGlobalTransaction: "" as string, // Nuevo campo para seleccionar tarjeta en transacción global
+    imageUrl: null as string | null, // Nuevo estado para la URL de la imagen
   });
 
   const [searchTerm, setSearchTerm] = useState("");
@@ -320,6 +323,7 @@ const Cards = () => {
       selectedCategoryId: "", 
       selectedCategoryType: "",
       selectedCardForGlobalTransaction: cardId || "", // Pre-select if cardId is provided, otherwise empty
+      imageUrl: null, // Reset image URL
     });
     setIsAddTransactionDialogOpen(true);
   };
@@ -352,6 +356,14 @@ const Cards = () => {
 
   const handleSelectedCardForGlobalTransactionChange = (value: string) => {
     setNewTransaction((prev) => ({ ...prev, selectedCardForGlobalTransaction: value }));
+  };
+
+  const handleImageUploadSuccess = (url: string) => {
+    setNewTransaction((prev) => ({ ...prev, imageUrl: url }));
+  };
+
+  const handleImageRemove = () => {
+    setNewTransaction((prev) => ({ ...prev, imageUrl: null }));
   };
 
   const handleSubmitTransaction = async (e: React.FormEvent) => {
@@ -456,6 +468,7 @@ const Cards = () => {
       income_category_id: incomeCategoryIdToInsert,
       expense_category_id: expenseCategoryIdToInsert,
       is_adjustment: false, // Not an adjustment
+      image_url: newTransaction.imageUrl, // Incluir URL de la imagen
     });
 
     try {
@@ -487,7 +500,7 @@ const Cards = () => {
           return card;
         })
       );
-      setNewTransaction({ type: "charge", amount: "", description: "", date: undefined, selectedCategoryId: "", selectedCategoryType: "", selectedCardForGlobalTransaction: "" });
+      setNewTransaction({ type: "charge", amount: "", description: "", date: undefined, selectedCategoryId: "", selectedCategoryType: "", selectedCardForGlobalTransaction: "", imageUrl: null });
       setSelectedCardId(null);
       setIsAddTransactionDialogOpen(false);
       showSuccess("Transacción(es) registrada(s) exitosamente.");
@@ -902,18 +915,16 @@ const Cards = () => {
               <DialogHeader>
                 <DialogTitle>Registrar Transacción para {currentCardForDialog?.name || "Tarjeta Seleccionada"}</DialogTitle>
               </DialogHeader>
-              <form onSubmit={handleSubmitTransaction} className="grid gap-4 py-4">
+              <form onSubmit={handleSubmitTransaction} className="flex flex-col gap-4 py-4">
                 {!selectedCardId && ( // Mostrar selector de tarjeta solo si no se abrió desde una tarjeta específica
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="selectCard" className="text-right">
-                      Tarjeta
-                    </Label>
+                  <div className="flex flex-col space-y-2">
+                    <Label htmlFor="selectCard">Tarjeta</Label>
                     <Select 
                       value={newTransaction.selectedCardForGlobalTransaction} 
                       onValueChange={handleSelectedCardForGlobalTransactionChange}
                       required
                     >
-                      <SelectTrigger id="selectCard" className="col-span-3">
+                      <SelectTrigger id="selectCard">
                         <SelectValue placeholder="Selecciona una tarjeta" />
                       </SelectTrigger>
                       <SelectContent>
@@ -926,12 +937,10 @@ const Cards = () => {
                     </Select>
                   </div>
                 )}
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="transactionType" className="text-right">
-                    Tipo
-                  </Label>
+                <div className="flex flex-col space-y-2">
+                  <Label htmlFor="transactionType">Tipo</Label>
                   <Select value={newTransaction.type} onValueChange={handleTransactionTypeChange}>
-                    <SelectTrigger className="col-span-3">
+                    <SelectTrigger id="transactionType">
                       <SelectValue placeholder="Selecciona tipo" />
                     </SelectTrigger>
                     <SelectContent>
@@ -941,12 +950,10 @@ const Cards = () => {
                   </Select>
                 </div>
                 {(newTransaction.type === "charge" || (newTransaction.type === "payment" && currentCardForDialog?.type === "debit")) && (
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="category_id" className="text-right">
-                      Categoría
-                    </Label>
+                  <div className="flex flex-col space-y-2">
+                    <Label htmlFor="category_id">Categoría</Label>
                     <Select value={newTransaction.selectedCategoryId} onValueChange={handleCategorySelectChange}>
-                      <SelectTrigger className="col-span-3">
+                      <SelectTrigger id="category_id">
                         <SelectValue placeholder="Selecciona categoría" />
                       </SelectTrigger>
                       <SelectContent>
@@ -973,25 +980,20 @@ const Cards = () => {
                     </Select>
                   </div>
                 )}
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="transactionAmount" className="text-right">
-                    Monto
-                  </Label>
+                <div className="flex flex-col space-y-2">
+                  <Label htmlFor="transactionAmount">Monto</Label>
                   <Input
                     id="transactionAmount"
                     name="amount"
                     type="text" // Cambiado a text para permitir '='
                     value={newTransaction.amount}
                     onChange={handleTransactionInputChange}
-                    className="col-span-3"
                     required
                     placeholder="Ej. 100 o =50+20*2"
                   />
                 </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="transactionDescription" className="text-right">
-                    Descripción
-                  </Label>
+                <div className="flex flex-col space-y-2">
+                  <Label htmlFor="transactionDescription">Descripción</Label>
                   <Input
                     id="transactionDescription"
                     name="description"
@@ -1001,16 +1003,14 @@ const Cards = () => {
                     required
                   />
                 </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="transactionDate" className="text-right">
-                    Fecha
-                  </Label>
+                <div className="flex flex-col space-y-2">
+                  <Label htmlFor="transactionDate">Fecha</Label>
                   <Popover>
                     <PopoverTrigger asChild>
                       <Button
                         variant={"outline"}
                         className={cn(
-                          "col-span-3 justify-start text-left font-normal",
+                          "justify-start text-left font-normal",
                           !newTransaction.date && "text-muted-foreground"
                         )}
                       >
@@ -1028,6 +1028,14 @@ const Cards = () => {
                       />
                     </PopoverContent>
                   </Popover>
+                </div>
+                <div className="flex flex-col space-y-2">
+                  <Label className="text-left mb-2 block">Adjuntar Ticket (Opcional)</Label>
+                  <ImageUpload
+                    onUploadSuccess={handleImageUploadSuccess}
+                    onRemove={handleImageRemove}
+                    folder="card_tickets"
+                  />
                 </div>
                 <DialogFooter>
                   <Button type="submit">Registrar Transacción</Button>
