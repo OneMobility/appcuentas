@@ -388,7 +388,7 @@ const SharedBudgets = () => {
                 </span>
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[425px]">
+            <DialogContent className="sm:max-w-[450px]"> {/* Ajuste de ancho */}
               <DialogHeader>
                 <DialogTitle>Crear Nuevo Presupuesto Compartido</DialogTitle>
               </DialogHeader>
@@ -418,12 +418,14 @@ const SharedBudgets = () => {
                 <h3 className="text-lg font-semibold mt-4 col-span-4">Participantes (Deudores)</h3>
                 <p className="text-sm text-muted-foreground col-span-4">Selecciona a quién le dividirás el gasto (tú eres un participante más).</p>
 
-                <div className="col-span-4 grid gap-2">
+                <div className="col-span-4 grid gap-2 max-h-40 overflow-y-auto border p-2 rounded-md"> {/* Scrollable list */}
                   {debtors.length === 0 ? (
-                    <p className="text-muted-foreground">No tienes deudores registrados. Añade deudores primero.</p>
+                    <p className="text-muted-foreground p-2">
+                      No tienes deudores registrados. Por favor, ve a la sección "Los que te deben" para añadir deudores antes de crear un presupuesto compartido.
+                    </p>
                   ) : (
                     debtors.map((debtor) => (
-                      <div key={debtor.id} className="flex items-center justify-between border p-2 rounded-md">
+                      <div key={debtor.id} className="flex items-center justify-between border-b last:border-b-0 py-1">
                         <Label htmlFor={`debtor-${debtor.id}`} className="flex items-center gap-2 font-normal cursor-pointer">
                           <Input
                             type="checkbox"
@@ -492,11 +494,11 @@ const SharedBudgets = () => {
                               Ver Pagos
                             </Button>
                           </DialogTrigger>
-                          <DialogContent className="sm:max-w-[450px]">
+                          <DialogContent className="sm:max-w-[500px]"> {/* Ajuste de ancho */}
                             <DialogHeader>
                               <DialogTitle>Pagos de {budget.name}</DialogTitle>
                             </DialogHeader>
-                            <div className="py-4">
+                            <div className="py-4 overflow-x-auto">
                               <p className="text-sm mb-4">Monto por persona: ${(budget.total_amount / totalParticipants).toFixed(2)}</p>
                               <Table>
                                 <TableHeader>
