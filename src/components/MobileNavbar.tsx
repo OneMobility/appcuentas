@@ -11,7 +11,8 @@ import {
   CreditCard,
   Tag,
   LogOut,
-  Wallet, // Nuevo icono para ahorros
+  Wallet,
+  Users, // Importar Users
 } from "lucide-react";
 import { useSession } from "@/context/SessionContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -47,6 +48,11 @@ const navItems = [
     name: "Tus Metas", // Título actualizado
     path: "/savings",
     icon: Wallet, // Icono para ahorros
+  },
+  {
+    name: "Presupuestos Compartidos", // Nuevo elemento
+    path: "/shared-budgets",
+    icon: Users,
   },
   {
     name: "Categorías",

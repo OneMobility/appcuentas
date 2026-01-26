@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { DollarSign, History, Trash2, Edit, CalendarIcon, ArrowLeft, FileText, FileDown, Heart, AlertTriangle, Scale } from "lucide-react"; // Added Scale icon
+import { DollarSign, History, Trash2, Edit, CalendarIcon, ArrowLeft, FileText, FileDown, Heart, AlertTriangle, Scale, ArrowRightLeft } from "lucide-react"; // Added ArrowRightLeft icon
 import { showSuccess, showError } from "@/utils/toast";
 import { cn } from "@/lib/utils";
 import { format, parseISO, isWithinInterval, isBefore, isAfter, isSameDay } from "date-fns";
@@ -33,6 +33,7 @@ import DynamicLucideIcon from "@/components/DynamicLucideIcon";
 import { evaluateExpression } from "@/utils/math-helpers"; // Importar la nueva función
 import CardReconciliationDialog from "@/components/CardReconciliationDialog"; // Import the new component
 import FeedbackOverlay from "@/components/FeedbackOverlay"; // Import FeedbackOverlay
+import CardTransferDialog from "@/components/CardTransferDialog"; // Import CardTransferDialog
 
 interface CardTransaction {
   id: string;
@@ -71,10 +72,13 @@ const CardDetailsPage: React.FC = () => {
   const { user } = useSession();
   const { incomeCategories, expenseCategories, getCategoryById, isLoadingCategories } = useCategoryContext();
   const [card, setCard] = useState<CardData | null>(null);
+  const [allCards, setAllCards] = useState<CardData[]>([]); // State for all cards (for transfer dialog)
+  const [cashBalance, setCashBalance] = useState(0); // State for cash balance (for transfer dialog)
   const [isLoading, setIsLoading] = useState(true);
   const [isAddTransactionDialogOpen, setIsAddTransactionDialogOpen] = useState(false);
   const [isEditTransactionDialogOpen, setIsEditTransactionDialogOpen] = useState(false);
-  const [isReconciliationDialogOpen, setIsReconciliationDialogOpen] = useState(false); // New state for reconciliation dialog
+  const [isReconciliationDialogOpen, setIsReconciliationDialogOpen] = useState(false);
+  const [isTransferDialogOpen, setIsTransferDialogOpen] = useState(false); // New state for transfer dialog
   const [editingTransaction, setEditingTransaction] = useState<CardTransaction | null>(null);
   const [newTransaction, setNewTransaction] = useState({
     type: "charge" as "charge" | "payment",
@@ -98,6 +102,37 @@ const CardDetailsPage: React.FC = () => {
   const [filterCategory, setFilterCategory] = useState<string>("all");
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
   const [isOverdue, setIsOverdue] = useState(false);
+
+  const fetchGlobalData = async () => {
+    if (!user || isLoadingCategories) return;
+
+    // Fetch all cards (for transfer dialog)
+    const { data: allCardsData, error: allCardsError } = await supabase
+      .from('cards')
+      .select('id, name, bank_name, last_four_digits, type, current_balance, credit_limit')
+      .eq('user_id', user.id);
+    
+    if (allCardsError) {
+      console.error("Error fetching all cards:", allCardsError);
+    } else {
+      setAllCards(allCardsData || []);
+    }
+
+    // Fetch cash balance
+    const { data: cashTxData, error: cashTxError } = await supabase
+      .from('cash_transactions')
+      .select('type, amount')
+      .eq('user_id', user.id);
+
+    if (cashTxError) {
+      console.error('Error al cargar saldo en efectivo: ' + cashTxError.message);
+    } else {
+      const currentCashBalance = (cashTxData || []).reduce((sum, tx) => {
+        return tx.type === "ingreso" ? sum + tx.amount : sum - tx.amount;
+      }, 0);
+      setCashBalance(currentCashBalance);
+    }
+  };
 
   const fetchCardDetails = async () => {
     if (!user || !cardId || isLoadingCategories) {
@@ -127,8 +162,13 @@ const CardDetailsPage: React.FC = () => {
     setIsLoading(false);
   };
 
-  useEffect(() => {
+  const handleRefreshData = () => {
     fetchCardDetails();
+    fetchGlobalData();
+  };
+
+  useEffect(() => {
+    handleRefreshData();
   }, [cardId, user, navigate, isLoadingCategories]);
 
   // Effect to calculate if payment is overdue
@@ -171,7 +211,7 @@ const CardDetailsPage: React.FC = () => {
     }
   }, [card]);
 
-  const handleTransactionInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  const handleTransactionInputChange = (e: React.ChangeEvent<HTMLInputElement | React.ChangeEvent<HTMLTextAreaElement>>) => {
     const { name, value } = e.target;
     setNewTransaction((prev) => ({ ...prev, [name]: value }));
   };
@@ -304,21 +344,9 @@ const CardDetailsPage: React.FC = () => {
 
       if (cardError) throw cardError;
 
-      const { data: updatedTransactions, error: fetchTxError } = await supabase
-        .from('card_transactions')
-        .select('*')
-        .eq('card_id', card.id)
-        .eq('user_id', user.id);
-      if (fetchTxError) throw fetchTxError;
+      // Re-fetch details and global data to update all views
+      handleRefreshData();
 
-      setCard((prevCard) => {
-        if (!prevCard) return null;
-        return {
-          ...prevCard,
-          current_balance: newCardBalance,
-          transactions: updatedTransactions || [],
-        };
-      });
       setNewTransaction({ type: "charge", amount: "", description: "", date: undefined, selectedCategoryId: "", selectedCategoryType: "" });
       setIsAddTransactionDialogOpen(false);
       showSuccess("Transacción(es) registrada(s) exitosamente.");
@@ -395,8 +423,6 @@ const CardDetailsPage: React.FC = () => {
     let newCardBalance = card.current_balance;
 
     // Revert old transaction's impact on balance
-    // If old was 'charge', it reduced debit balance or increased credit debt. We reverse it.
-    // If old was 'payment', it increased debit balance or reduced credit debt. We reverse it.
     newCardBalance = oldTransaction.type === "charge" ? newCardBalance - oldTransaction.amount : newCardBalance + oldTransaction.amount;
 
     // Delete old transaction
@@ -469,21 +495,8 @@ const CardDetailsPage: React.FC = () => {
 
       if (cardError) throw cardError;
 
-      const { data: updatedTransactions, error: fetchTxError } = await supabase
-        .from('card_transactions')
-        .select('*')
-        .eq('card_id', card.id)
-        .eq('user_id', user.id);
-      if (fetchTxError) throw fetchTxError;
-
-      setCard((prevCard) => {
-        if (!prevCard) return null;
-        return {
-          ...prevCard,
-          current_balance: newCardBalance,
-          transactions: updatedTransactions || [],
-        };
-      });
+      // Re-fetch details and global data to update all views
+      handleRefreshData();
 
       setNewTransaction({ type: "charge", amount: "", description: "", date: undefined, selectedCategoryId: "", selectedCategoryType: "" });
       setEditingTransaction(null);
@@ -504,9 +517,7 @@ const CardDetailsPage: React.FC = () => {
     let newCardBalance = card.current_balance;
     const effectiveAmount = transaction.amount;
 
-    // FIX: Reverse the effect of the original transaction.
-    // If it was a 'charge' (which reduced debit balance or increased credit debt), we ADD it back.
-    // If it was a 'payment' (which increased debit balance or reduced credit debt), we SUBTRACT it back.
+    // Reverse the effect of the original transaction.
     newCardBalance = transaction.type === "charge" ? newCardBalance + effectiveAmount : newCardBalance - effectiveAmount;
 
     try {
@@ -524,21 +535,8 @@ const CardDetailsPage: React.FC = () => {
         .eq('user_id', user.id);
       if (cardError) throw cardError;
 
-      const { data: updatedTransactions, error: fetchTxError } = await supabase
-        .from('card_transactions')
-        .select('*')
-        .eq('card_id', card.id)
-        .eq('user_id', user.id);
-      if (fetchTxError) throw fetchTxError;
-
-      setCard((prevCard) => {
-        if (!prevCard) return null;
-        return {
-          ...prevCard,
-          current_balance: newCardBalance,
-          transactions: updatedTransactions || [],
-        };
-      });
+      // Re-fetch details and global data to update all views
+      handleRefreshData();
 
       showSuccess("Transacción eliminada exitosamente.");
     } catch (error: any) {
@@ -915,6 +913,12 @@ const CardDetailsPage: React.FC = () => {
                 Cuadre
               </span>
             </Button>
+            <Button size="sm" className="h-8 gap-1" onClick={() => setIsTransferDialogOpen(true)}>
+              <ArrowRightLeft className="h-3.5 w-3.5" />
+              <span className="sr-only sm:not-sr-only sm:whitespace-nowrap">
+                Transferir
+              </span>
+            </Button>
           </div>
         </CardHeader>
         <CardContent>
@@ -1232,8 +1236,17 @@ const CardDetailsPage: React.FC = () => {
           isOpen={isReconciliationDialogOpen}
           onClose={() => setIsReconciliationDialogOpen(false)}
           card={card}
-          onReconciliationSuccess={fetchCardDetails} // Refresh data after reconciliation
+          onReconciliationSuccess={handleRefreshData} // Refresh data after reconciliation
           onNoAdjustmentSuccess={handleNoAdjustmentSuccess} // Pass the new success handler
+        />
+      )}
+      {allCards.length > 0 && (
+        <CardTransferDialog
+          isOpen={isTransferDialogOpen}
+          onClose={() => setIsTransferDialogOpen(false)}
+          cards={allCards}
+          cashBalance={cashBalance}
+          onTransferSuccess={handleRefreshData} // Refresh data after transfer
         />
       )}
       {feedbackOverlay?.isVisible && (

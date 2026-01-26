@@ -16,7 +16,8 @@ import {
   CreditCard,
   Tag,
   LogOut,
-  Wallet, // Nuevo icono para ahorros
+  Wallet,
+  Users, // Importar Users para Presupuestos Compartidos
 } from "lucide-react";
 import MobileNavbar from "./MobileNavbar";
 import { useSession } from "@/context/SessionContext";
@@ -52,6 +53,11 @@ const navItems = [
     name: "Tus Metas", // Título actualizado
     path: "/savings",
     icon: Wallet, // Icono para ahorros
+  },
+  {
+    name: "Presupuestos Compartidos", // Nuevo elemento
+    path: "/shared-budgets",
+    icon: Users,
   },
   {
     name: "Categorías",
