@@ -3,7 +3,7 @@
 import React, { useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { CreditCard, DollarSign, History, Trash2, Edit } from "lucide-react";
+import { CreditCard, DollarSign, History, Trash2, Edit, ArrowRightLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { useNavigate } from "react-router-dom";
@@ -40,9 +40,10 @@ interface CardDisplayProps {
   onAddTransaction: (cardId: string) => void;
   onDeleteCard: (cardId: string) => void;
   onEditCard: (card: CardData) => void;
+  onTransfer: () => void; // Nuevo prop para abrir el diálogo de transferencia
 }
 
-const CardDisplay: React.FC<CardDisplayProps> = ({ card, onAddTransaction, onDeleteCard, onEditCard }) => {
+const CardDisplay: React.FC<CardDisplayProps> = ({ card, onAddTransaction, onDeleteCard, onEditCard, onTransfer }) => {
   const isCredit = card.type === "credit";
   const creditAvailable = isCredit && card.credit_limit !== undefined ? card.credit_limit - card.current_balance : 0;
   const creditUsed = isCredit ? card.current_balance : 0; // Crédito utilizado es la deuda total
@@ -116,6 +117,14 @@ const CardDisplay: React.FC<CardDisplayProps> = ({ card, onAddTransaction, onDel
           >
             <History className="h-3.5 w-3.5 mr-1" />
             Ver Detalles
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={onTransfer} // Usar el nuevo prop
+            className="w-10 p-0 bg-white/20 hover:bg-white/30 text-white"
+          >
+            <ArrowRightLeft className="h-3.5 w-3.5" />
           </Button>
           <Button
             variant="secondary"

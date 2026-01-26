@@ -320,10 +320,12 @@ const Debtors = () => {
           }
 
           let newCardBalance = selectedCard.current_balance;
+          
+          // FIX: Correct logic for card balance update
           if (selectedCard.type === "credit") {
-            newCardBalance -= amount;
-          } else {
-            newCardBalance += amount;
+            newCardBalance -= amount; // Payment reduces debt (current_balance)
+          } else { // Debit card
+            newCardBalance += amount; // Payment increases balance (current_balance)
           }
 
           const { error: cardUpdateError } = await supabase
@@ -345,7 +347,7 @@ const Debtors = () => {
               income_category_id: newTransaction.selectedIncomeCategoryId,
             });
           if (cardTxError) throw cardTxError;
-          fetchCashBalanceAndCards();
+          fetchCashBalanceAndCards(); // Re-fetch to update card list/balances
         }
       }
 

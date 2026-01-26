@@ -884,6 +884,7 @@ const Cards = () => {
                 onAddTransaction={() => handleOpenAddTransactionDialog(card.id)} // Pasa el ID de la tarjeta
                 onDeleteCard={handleDeleteCard}
                 onEditCard={handleOpenEditCardDialog}
+                onTransfer={() => setIsTransferDialogOpen(true)} // Abrir diálogo de transferencia
               />
             ))}
           </div>
