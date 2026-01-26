@@ -13,6 +13,7 @@ import {
   LogOut,
   Wallet,
   Users,
+  BarChart, // Importar BarChart
 } from "lucide-react";
 import { useSession } from "@/context/SessionContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -55,6 +56,11 @@ const navItems = [
     icon: Users,
   },
   {
+    name: "Crear Presupuesto", // Nuevo elemento
+    path: "/shared-budgets/create",
+    icon: BarChart,
+  },
+  {
     name: "Categorías",
     path: "/categories",
     icon: Tag,
@@ -71,7 +77,7 @@ const MobileNavbar = () => {
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-40 bg-card border-t shadow-lg md:hidden">
-      <div className="flex h-16 items-center justify-around overflow-x-auto flex-nowrap px-1 py-1"> {/* Cambiado justify-start a justify-around, eliminado space-x-1 */}
+      <div className="flex h-16 items-center justify-around overflow-x-auto flex-nowrap px-1 py-1">
         {navItems.map((item) => {
           const isActive = location.pathname === item.path;
           const Icon = item.icon;
@@ -80,7 +86,7 @@ const MobileNavbar = () => {
               key={item.name}
               to={item.path}
               className={cn(
-                "flex flex-col items-center justify-center gap-0.5 px-1 py-1 text-[10px] font-medium transition-all duration-200 flex-shrink min-w-[60px] max-w-[80px] text-center", // Ajustado flex-shrink y min/max width
+                "flex flex-col items-center justify-center gap-0.5 px-1 py-1 text-[10px] font-medium transition-all duration-200 flex-shrink min-w-[60px] max-w-[80px] text-center",
                 isActive
                   ? "text-primary-foreground bg-primary rounded-md scale-100"
                   : "text-muted-foreground hover:text-foreground hover:bg-muted/50"

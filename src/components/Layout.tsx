@@ -17,7 +17,8 @@ import {
   Tag,
   LogOut,
   Wallet,
-  Users, // Importar Users para Presupuestos Compartidos
+  Users,
+  BarChart, // Importar BarChart
 } from "lucide-react";
 import MobileNavbar from "./MobileNavbar";
 import { useSession } from "@/context/SessionContext";
@@ -58,6 +59,11 @@ const navItems = [
     name: "Presupuestos Compartidos", // Nuevo elemento
     path: "/shared-budgets",
     icon: Users,
+  },
+  {
+    name: "Crear Presupuesto", // Nuevo elemento para el formulario
+    path: "/shared-budgets/create",
+    icon: BarChart,
   },
   {
     name: "Categorías",

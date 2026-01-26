@@ -13,6 +13,7 @@ import CardDetailsPage from "./pages/CardDetailsPage";
 import Categories from "./pages/Categories";
 import Savings from "./pages/Savings";
 import SharedBudgets from "./pages/SharedBudgets"; // Importar SharedBudgets
+import CreateSharedBudget from "./pages/CreateSharedBudget"; // Importar CreateSharedBudget
 import NotFound from "./pages/NotFound";
 import Login from "./pages/Login";
 import { CategoryProvider } from "./context/CategoryContext";
@@ -72,7 +73,8 @@ const App = () => {
                   <Route path="/cards/:cardId" element={<CardDetailsPage />} />
                   <Route path="/categories" element={<Categories />} />
                   <Route path="/savings" element={<Savings />} />
-                  <Route path="/shared-budgets" element={<SharedBudgets />} /> {/* Nueva ruta */}
+                  <Route path="/shared-budgets" element={<SharedBudgets />} />
+                  <Route path="/shared-budgets/create" element={<CreateSharedBudget />} /> {/* Nueva ruta */}
                 </Route>
                 {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                 <Route path="*" element={<NotFound />} />
