@@ -50,7 +50,7 @@ const navItems = [
     icon: Wallet, // Icono para ahorros
   },
   {
-    name: "Presupuestos Compartidos", // Nuevo elemento
+    name: "Presupuestos", // Nombre más corto para móvil
     path: "/shared-budgets",
     icon: Users,
   },
@@ -71,7 +71,7 @@ const MobileNavbar = () => {
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-40 bg-card border-t shadow-lg md:hidden">
-      <div className="flex h-16 items-center justify-start overflow-x-auto flex-nowrap px-2">
+      <div className="flex h-16 items-center justify-start overflow-x-scroll flex-nowrap px-1 py-1 space-x-1"> {/* Usar overflow-x-scroll y reducir padding/margin */}
         {navItems.map((item) => {
           const isActive = location.pathname === item.path;
           const Icon = item.icon;
@@ -80,14 +80,14 @@ const MobileNavbar = () => {
               key={item.name}
               to={item.path}
               className={cn(
-                "flex flex-col items-center justify-center gap-1 px-2 py-1 text-xs font-medium transition-all duration-200 shrink-0",
+                "flex flex-col items-center justify-center gap-0.5 px-1.5 py-1 text-[10px] font-medium transition-all duration-200 shrink-0 w-[80px] text-center", // Reducir tamaño de fuente y padding, fijar ancho
                 isActive
-                  ? "text-pink-800 bg-pink-200 rounded-md scale-110"
+                  ? "text-primary-foreground bg-primary rounded-md scale-100" // Usar colores primarios definidos
                   : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
               )}
             >
               <Icon className="h-5 w-5" />
-              {item.name}
+              <span className="leading-none">{item.name}</span>
             </Link>
           );
         })}
@@ -95,10 +95,10 @@ const MobileNavbar = () => {
           <Button
             variant="ghost"
             onClick={handleLogout}
-            className="flex flex-col items-center justify-center gap-1 px-2 py-1 text-xs font-medium transition-all duration-200 shrink-0 text-muted-foreground hover:text-destructive hover:bg-destructive/20"
+            className="flex flex-col items-center justify-center gap-0.5 px-1.5 py-1 text-[10px] font-medium transition-all duration-200 shrink-0 w-[80px] text-muted-foreground hover:text-destructive hover:bg-destructive/20"
           >
             <LogOut className="h-5 w-5" />
-            Cerrar Sesión
+            <span className="leading-none">Salir</span>
           </Button>
         )}
       </div>
