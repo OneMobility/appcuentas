@@ -112,11 +112,10 @@ const Sidebar = ({ onClose }: { onClose?: () => void }) => {
 };
 
 interface LayoutProps {
-  // challengeRefreshKey: number; // Eliminado
-  // setChallengeRefreshKey: React.Dispatch<React.SetStateAction<number>>; // Eliminado
+  // No props needed
 }
 
-const Layout: React.FC<LayoutProps> = () => { // Props actualizadas
+const Layout: React.FC<LayoutProps> = () => {
   const isMobile = useIsMobile();
   const location = useLocation();
 
@@ -130,8 +129,8 @@ const Layout: React.FC<LayoutProps> = () => { // Props actualizadas
             <img src="https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Logo%20App.png" alt="Oinkash Logo" className="h-8 w-8" />
             <h1 className="text-xl font-semibold">{currentPageName}</h1>
           </header>
-          <main className="flex flex-1 flex-col gap-4 p-4 pb-[80px] lg:gap-6 lg:p-6"> {/* Aumentar pb-20 a pb-[80px] para dejar espacio a la barra de 16px */}
-            <Outlet /> {/* Ya no se pasa context */}
+          <main className="flex flex-1 flex-col gap-4 p-4 pb-[80px] lg:gap-6 lg:p-6">
+            <Outlet />
           </main>
           <MobileNavbar />
         </>
@@ -143,7 +142,7 @@ const Layout: React.FC<LayoutProps> = () => { // Props actualizadas
           <PanelResizeHandle className="w-2 bg-sidebar-border hover:bg-sidebar-ring transition-colors" />
           <Panel defaultSize={85}>
             <main className="flex flex-1 flex-col gap-4 p-4 lg:gap-6 lg:p-6">
-              <Outlet /> {/* Ya no se pasa context */}
+              <Outlet />
             </main>
           </Panel>
         </PanelGroup>
