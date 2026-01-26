@@ -1081,12 +1081,12 @@ const CardDetailsPage: React.FC = () => {
                         <TableCell className="text-right">${transaction.amount.toFixed(2)}</TableCell>
                         <TableCell className="text-right">${transaction.running_balance?.toFixed(2) || "N/A"}</TableCell>
                         <TableCell className="text-right">
-                          {tx.image_url ? (
+                          {transaction.image_url ? (
                             <Button 
                               variant="outline" 
                               size="sm" 
                               className="h-7 w-7 p-0"
-                              onClick={() => window.open(tx.image_url!, '_blank')}
+                              onClick={() => window.open(transaction.image_url!, '_blank')}
                             >
                               <ImageIcon className="h-4 w-4" />
                             </Button>
