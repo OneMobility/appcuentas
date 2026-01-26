@@ -67,8 +67,7 @@ const Debtors = () => {
     type: "payment" as "charge" | "payment",
     amount: "",
     description: "",
-    sourceAccountType: "" as "cash" | "card" | "",
-    sourceAccountId: "" as string | null,
+    destinationAccountId: "" as string, // Refactorizado: ID de destino (cash o cardId)
     selectedIncomeCategoryId: "" as string | null,
   });
   const [cashBalance, setCashBalance] = useState(0);
@@ -209,7 +208,7 @@ const Debtors = () => {
 
   const handleOpenAddTransactionDialog = (debtorId: string) => {
     setSelectedDebtorId(debtorId);
-    setNewTransaction({ type: "payment", amount: "", description: "", sourceAccountType: "", sourceAccountId: null, selectedIncomeCategoryId: null });
+    setNewTransaction({ type: "payment", amount: "", description: "", destinationAccountId: "cash", selectedIncomeCategoryId: null });
     setIsAddTransactionDialogOpen(true);
   };
 
@@ -224,15 +223,11 @@ const Debtors = () => {
   };
 
   const handleTransactionTypeChange = (value: "charge" | "payment") => {
-    setNewTransaction((prev) => ({ ...prev, type: value, sourceAccountType: "", sourceAccountId: null, selectedIncomeCategoryId: null }));
+    setNewTransaction((prev) => ({ ...prev, type: value, destinationAccountId: "cash", selectedIncomeCategoryId: null }));
   };
 
-  const handleSourceAccountTypeChange = (value: "cash" | "card") => {
-    setNewTransaction((prev) => ({ ...prev, sourceAccountType: value, sourceAccountId: null }));
-  };
-
-  const handleSourceAccountIdChange = (value: string) => {
-    setNewTransaction((prev) => ({ ...prev, sourceAccountId: value }));
+  const handleDestinationAccountChange = (value: string) => {
+    setNewTransaction((prev) => ({ ...prev, destinationAccountId: value }));
   };
 
   const handleIncomeCategorySelectChange = (value: string) => {
@@ -290,7 +285,7 @@ const Debtors = () => {
         newDebtorBalance -= amount;
 
         // If it's a payment from debtor, record it in our cash/card
-        if (!newTransaction.sourceAccountType) {
+        if (!newTransaction.destinationAccountId) {
           showError("Por favor, selecciona a qué cuenta va este abono.");
           return;
         }
@@ -299,7 +294,7 @@ const Debtors = () => {
           return;
         }
 
-        if (newTransaction.sourceAccountType === "cash") {
+        if (newTransaction.destinationAccountId === "cash") {
           const { error: cashTxError } = await supabase
             .from('cash_transactions')
             .insert({
@@ -312,8 +307,8 @@ const Debtors = () => {
             });
           if (cashTxError) throw cashTxError;
           setCashBalance(prev => prev + amount);
-        } else if (newTransaction.sourceAccountType === "card" && newTransaction.sourceAccountId) {
-          const selectedCard = cards.find(c => c.id === newTransaction.sourceAccountId);
+        } else { // Destination is a card ID
+          const selectedCard = cards.find(c => c.id === newTransaction.destinationAccountId);
           if (!selectedCard) {
             showError("Tarjeta de destino no encontrada.");
             return;
@@ -331,7 +326,7 @@ const Debtors = () => {
           const { error: cardUpdateError } = await supabase
             .from('cards')
             .update({ current_balance: newCardBalance })
-            .eq('id', newTransaction.sourceAccountId)
+            .eq('id', newTransaction.destinationAccountId)
             .eq('user_id', user.id);
           if (cardUpdateError) throw cardUpdateError;
 
@@ -339,7 +334,7 @@ const Debtors = () => {
             .from('card_transactions')
             .insert({
               user_id: user.id,
-              card_id: newTransaction.sourceAccountId,
+              card_id: newTransaction.destinationAccountId,
               type: "payment",
               amount: amount,
               description: `Abono de ${currentDebtor.name} a tarjeta ${selectedCard.name}: ${newTransaction.description}`,
@@ -347,8 +342,11 @@ const Debtors = () => {
               income_category_id: newTransaction.selectedIncomeCategoryId,
             });
           if (cardTxError) throw cardTxError;
-          // Llama a fetchCashBalanceAndCards para actualizar el estado local de las tarjetas
-          await fetchCashBalanceAndCards(); 
+          
+          // Actualizar el estado local de las tarjetas para reflejar el nuevo saldo
+          setCards(prevCards => prevCards.map(c => 
+            c.id === selectedCard.id ? { ...c, current_balance: newCardBalance } : c
+          ));
         }
       }
 
@@ -401,7 +399,7 @@ const Debtors = () => {
         showSuccess("Transacción registrada exitosamente.");
       }
       
-      setNewTransaction({ type: "payment", amount: "", description: "", sourceAccountType: "", sourceAccountId: null, selectedIncomeCategoryId: null });
+      setNewTransaction({ type: "payment", amount: "", description: "", destinationAccountId: "cash", selectedIncomeCategoryId: null });
       setSelectedDebtorId(null);
       setIsAddTransactionDialogOpen(false);
     } catch (error: any) {
@@ -417,8 +415,7 @@ const Debtors = () => {
       type: transaction.type,
       amount: transaction.amount.toString(),
       description: transaction.description,
-      sourceAccountType: "",
-      sourceAccountId: null,
+      destinationAccountId: "cash", // No podemos inferir la cuenta de destino original fácilmente, se asume efectivo para edición simple.
       selectedIncomeCategoryId: null,
     });
     setIsEditTransactionDialogOpen(true);
@@ -482,6 +479,7 @@ const Debtors = () => {
     }
 
     try {
+      // 1. Actualizar la transacción del deudor
       const { data: updatedTransactionData, error: transactionError } = await supabase
         .from('debtor_transactions')
         .update({
@@ -495,6 +493,7 @@ const Debtors = () => {
         .select();
       if (transactionError) throw transactionError;
 
+      // 2. Actualizar el saldo del deudor
       const { data: debtorData, error: debtorError } = await supabase
         .from('debtors')
         .update({ current_balance: newDebtorBalance })
@@ -503,7 +502,11 @@ const Debtors = () => {
         .select();
       if (debtorError) throw debtorError;
 
-      // Check if debtor balance is zero or less and delete if so
+      // Nota: La edición de transacciones de deudores no revierte automáticamente los movimientos de efectivo/tarjeta asociados.
+      // Para mantener la simplicidad, asumimos que la edición solo corrige errores en el monto/descripción del deudor,
+      // y no intentamos revertir o modificar las transacciones de efectivo/tarjeta asociadas.
+
+      // 3. Check if debtor balance is zero or less and delete if so
       if (newDebtorBalance <= 0) {
         const { error: deleteDebtorError } = await supabase
           .from('debtors')
@@ -541,7 +544,7 @@ const Debtors = () => {
         setIsEditTransactionDialogOpen(false);
       }
 
-      setNewTransaction({ type: "payment", amount: "", description: "", sourceAccountType: "", sourceAccountId: null, selectedIncomeCategoryId: null });
+      setNewTransaction({ type: "payment", amount: "", description: "", destinationAccountId: "cash", selectedIncomeCategoryId: null });
       setEditingTransaction(null);
       setSelectedDebtorId(null);
     } catch (error: any) {
@@ -861,11 +864,11 @@ const Debtors = () => {
                 {newTransaction.type === "payment" && (
                   <>
                     <div className="grid grid-cols-4 items-center gap-4">
-                      <Label htmlFor="sourceAccountType" className="text-right">
+                      <Label htmlFor="destinationAccountId" className="text-right">
                         Abonar a
                       </Label>
-                      <Select value={newTransaction.sourceAccountType} onValueChange={handleSourceAccountTypeChange}>
-                        <SelectTrigger id="sourceAccountType" className="col-span-3">
+                      <Select value={newTransaction.destinationAccountId} onValueChange={handleDestinationAccountChange}>
+                        <SelectTrigger id="destinationAccountId" className="col-span-3">
                           <SelectValue placeholder="Selecciona cuenta de destino" />
                         </SelectTrigger>
                         <SelectContent>
@@ -878,25 +881,6 @@ const Debtors = () => {
                         </SelectContent>
                       </Select>
                     </div>
-                    {newTransaction.sourceAccountType === "card" && (
-                      <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="sourceAccountId" className="text-right">
-                          Tarjeta
-                        </Label>
-                        <Select value={newTransaction.sourceAccountId || ""} onValueChange={handleSourceAccountIdChange}>
-                          <SelectTrigger id="sourceAccountId" className="col-span-3">
-                            <SelectValue placeholder="Selecciona tarjeta" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {cards.filter(c => c.type === "debit" || c.type === "credit").map(card => (
-                              <SelectItem key={card.id} value={card.id}>
-                                Tarjeta {card.name} ({card.bank_name} ****{card.last_four_digits}) (Saldo: ${card.current_balance.toFixed(2)})
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    )}
                     <div className="grid grid-cols-4 items-center gap-4">
                       <Label htmlFor="incomeCategory" className="text-right">
                         Categoría de Ingreso
