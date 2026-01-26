@@ -13,7 +13,6 @@ import {
   LogOut,
   Wallet,
   Users,
-  BarChart, // Importar BarChart
 } from "lucide-react";
 import { useSession } from "@/context/SessionContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -54,11 +53,6 @@ const navItems = [
     name: "Presupuestos",
     path: "/shared-budgets",
     icon: Users,
-  },
-  {
-    name: "Crear Presupuesto", // Nuevo elemento
-    path: "/shared-budgets/create",
-    icon: BarChart,
   },
   {
     name: "Categorías",
