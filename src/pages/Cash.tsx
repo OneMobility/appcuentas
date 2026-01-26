@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { PlusCircle, CalendarIcon, Edit, FileText, FileDown, Trash2, ArrowRightLeft } from "lucide-react";
+import { PlusCircle, CalendarIcon, Edit, FileText, FileDown, Trash2, ArrowRightLeft, Scale } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { cn } from "@/lib/utils";
 import { format, parseISO } from "date-fns";
@@ -26,6 +26,8 @@ import DynamicLucideIcon from "@/components/DynamicLucideIcon";
 import { getLocalDateString } from "@/utils/date-helpers";
 import CardTransferDialog from "@/components/CardTransferDialog";
 import { evaluateExpression } from "@/utils/math-helpers"; // Importar la nueva función
+import CashReconciliationDialog from "@/components/CashReconciliationDialog"; // Importar el nuevo componente
+import FeedbackOverlay from "@/components/FeedbackOverlay"; // Importar FeedbackOverlay
 
 interface Transaction {
   id: string;
@@ -58,6 +60,7 @@ const Cash = () => {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isTransferDialogOpen, setIsTransferDialogOpen] = useState(false); // Nuevo estado para el diálogo de transferencia
+  const [isReconciliationDialogOpen, setIsReconciliationDialogOpen] = useState(false); // Nuevo estado para el diálogo de cuadre
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [newTransaction, setNewTransaction] = useState({
     type: "ingreso" as "ingreso" | "egreso",
@@ -67,6 +70,13 @@ const Cash = () => {
     selectedCategoryId: "",
     selectedCategoryType: "" as "income" | "expense" | "",
   });
+  const [feedbackOverlay, setFeedbackOverlay] = useState<{
+    isVisible: boolean;
+    message: string;
+    imageSrc: string;
+    bgColor: string;
+    textColor: string;
+  } | null>(null);
 
   // Filter states
   const [searchTerm, setSearchTerm] = useState("");
@@ -126,6 +136,31 @@ const Cash = () => {
   const handleTransferSuccess = () => {
     fetchTransactions(); // Re-fetch cash transactions
     fetchCards(); // Re-fetch cards
+  };
+
+  const handleReconciliationSuccess = () => {
+    fetchTransactions(); // Re-fetch cash transactions after reconciliation
+    setFeedbackOverlay({
+      isVisible: true,
+      message: "¡Saldo ajustado exitosamente!",
+      imageSrc: "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Cochinito%20Ahorro.png",
+      bgColor: "bg-green-100",
+      textColor: "text-green-800",
+    });
+  };
+
+  const handleNoAdjustmentSuccess = () => {
+    setFeedbackOverlay({
+      isVisible: true,
+      message: "¡El saldo en efectivo ya está cuadrado!",
+      imageSrc: "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Conchinito%20feliz.png",
+      bgColor: "bg-green-100",
+      textColor: "text-green-800",
+    });
+  };
+
+  const handleFeedbackClose = () => {
+    setFeedbackOverlay(null);
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -532,6 +567,12 @@ const Cash = () => {
                 Transferir
               </span>
             </Button>
+            <Button size="sm" className="h-8 gap-1" onClick={() => setIsReconciliationDialogOpen(true)}>
+              <Scale className="h-3.5 w-3.5" />
+              <span className="sr-only sm:not-sr-only sm:whitespace-nowrap">
+                Cuadre
+              </span>
+            </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="sm" className="h-8 gap-1">
@@ -807,8 +848,25 @@ const Cash = () => {
             cashBalance={balance}
             onTransferSuccess={handleTransferSuccess}
           />
+          <CashReconciliationDialog
+            isOpen={isReconciliationDialogOpen}
+            onClose={() => setIsReconciliationDialogOpen(false)}
+            appBalance={balance}
+            transactionCount={transactions.length}
+            onReconciliationSuccess={handleReconciliationSuccess}
+            onNoAdjustmentSuccess={handleNoAdjustmentSuccess}
+          />
         </CardContent>
       </Card>
+      {feedbackOverlay?.isVisible && (
+        <FeedbackOverlay
+          message={feedbackOverlay.message}
+          imageSrc={feedbackOverlay.imageSrc}
+          bgColor={feedbackOverlay.bgColor}
+          textColor={feedbackOverlay.textColor}
+          onClose={handleFeedbackClose}
+        />
+      )}
     </div>
   );
 };
