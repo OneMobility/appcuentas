@@ -61,7 +61,7 @@ const SharedBudgets = () => {
     split_type: "equal",
     description: "",
     selectedDebtors: [] as { debtorId: string; shareAmount: string }[],
-    creditorId: "" as string, // Nuevo campo para el acreedor
+    creditorId: "none" as string, // Inicializar con 'none' en lugar de ''
   });
 
   const fetchBudgetsAndDebtors = async () => {
@@ -121,7 +121,7 @@ const SharedBudgets = () => {
       split_type: "equal",
       description: "",
       selectedDebtors: [],
-      creditorId: "",
+      creditorId: "none", // Usar 'none'
     });
     setEditingBudget(null);
   };
@@ -209,10 +209,12 @@ const SharedBudgets = () => {
       return;
     }
 
+    const creditorIdToUse = newBudget.creditorId === "none" ? null : newBudget.creditorId;
+
     try {
       // 1. Handle Creditor Charge (if selected)
-      if (newBudget.creditorId) {
-        const creditor = creditors.find(c => c.id === newBudget.creditorId);
+      if (creditorIdToUse) {
+        const creditor = creditors.find(c => c.id === creditorIdToUse);
         if (!creditor) throw new Error("Acreedor no encontrado.");
 
         const newCreditorBalance = creditor.current_balance + totalAmount;
@@ -249,7 +251,7 @@ const SharedBudgets = () => {
           total_amount: totalAmount,
           split_type: newBudget.split_type,
           description: newBudget.description,
-          creditor_id: newBudget.creditorId || null, // Guardar el ID del acreedor
+          creditor_id: creditorIdToUse, // Usar el ID ajustado
         })
         .select()
         .single();
@@ -505,7 +507,7 @@ const SharedBudgets = () => {
                       <SelectValue placeholder="Selecciona Acreedor (Opcional)" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">-- Ninguno (Pagado por mí) --</SelectItem>
+                      <SelectItem value="none">-- Ninguno (Pagado por mí) --</SelectItem>
                       {creditors.map((creditor) => (
                         <SelectItem key={creditor.id} value={creditor.id}>
                           <div className="flex items-center gap-2">
