@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
-import { PlusCircle, Trash2, Eye, Phone } from "lucide-react";
+import { PlusCircle, Trash2, Eye, Phone, Edit } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/context/SessionContext";
@@ -29,6 +29,8 @@ const Debtors = () => {
   const navigate = useNavigate();
   const [debtors, setDebtors] = useState<Debtor[]>([]);
   const [isAddDebtorDialogOpen, setIsAddDebtorDialogOpen] = useState(false);
+  const [isEditDebtorDialogOpen, setIsEditDebtorDialogOpen] = useState(false);
+  const [editingDebtor, setEditingDebtor] = useState<Debtor | null>(null);
   const [newDebtor, setNewDebtor] = useState({ name: "", initial_balance: "", phone: "" });
   const [searchTerm, setSearchTerm] = useState("");
 
@@ -84,6 +86,39 @@ const Debtors = () => {
     }
   };
 
+  const handleOpenEditDialog = (debtor: Debtor) => {
+    setEditingDebtor(debtor);
+    setNewDebtor({
+      name: debtor.name,
+      initial_balance: debtor.initial_balance.toString(),
+      phone: debtor.phone || "",
+    });
+    setIsEditDebtorDialogOpen(true);
+  };
+
+  const handleUpdateDebtor = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user || !editingDebtor) return;
+
+    const { data, error } = await supabase
+      .from('debtors')
+      .update({
+        name: newDebtor.name.trim(),
+        phone: newDebtor.phone.trim() || null,
+      })
+      .eq('id', editingDebtor.id)
+      .select();
+
+    if (error) showError('Error: ' + error.message);
+    else {
+      setDebtors((prev) => prev.map(d => d.id === editingDebtor.id ? data[0] : d));
+      setIsEditDebtorDialogOpen(false);
+      setEditingDebtor(null);
+      setNewDebtor({ name: "", initial_balance: "", phone: "" });
+      showSuccess("Deudor actualizado.");
+    }
+  };
+
   const handleDeleteDebtor = async (id: string) => {
     const { error } = await supabase.from('debtors').delete().eq('id', id);
     if (error) showError('Error: ' + error.message);
@@ -119,6 +154,9 @@ const Debtors = () => {
               <TableCell className="text-right flex gap-2 justify-end">
                 <Button variant="outline" size="sm" onClick={() => navigate(`/debtors/${debtor.id}`)}>
                   <Eye className="h-4 w-4 mr-1" /> Detalles
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => handleOpenEditDialog(debtor)}>
+                  <Edit className="h-4 w-4 mr-1" /> Editar
                 </Button>
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
@@ -202,6 +240,30 @@ const Debtors = () => {
           </Tabs>
         </CardContent>
       </Card>
+
+      {/* Diálogo de Edición */}
+      <Dialog open={isEditDebtorDialogOpen} onOpenChange={setIsEditDebtorDialogOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Editar Deudor</DialogTitle></DialogHeader>
+          <form onSubmit={handleUpdateDebtor} className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label>Nombre</Label>
+              <Input value={newDebtor.name} onChange={e => setNewDebtor({...newDebtor, name: e.target.value})} required />
+            </div>
+            <div className="grid gap-2">
+              <Label className="flex items-center gap-2">
+                <Phone className="h-4 w-4" /> Teléfono (Opcional)
+              </Label>
+              <Input 
+                value={newDebtor.phone} 
+                onChange={e => setNewDebtor({...newDebtor, phone: e.target.value})} 
+                placeholder="Ej. 521234567890" 
+              />
+            </div>
+            <DialogFooter><Button type="submit">Actualizar</Button></DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
