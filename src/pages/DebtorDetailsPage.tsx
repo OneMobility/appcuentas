@@ -24,6 +24,7 @@ import { useCategoryContext } from "@/context/CategoryContext";
 import DynamicLucideIcon from "@/components/DynamicLucideIcon";
 import { evaluateExpression } from "@/utils/math-helpers";
 import { getLocalDateString } from "@/utils/date-helpers";
+import { Badge } from "@/components/ui/badge";
 
 interface DebtorTransaction {
   id: string;
