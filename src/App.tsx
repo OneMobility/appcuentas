@@ -7,9 +7,9 @@ import Layout from "./components/Layout";
 import Dashboard from "./pages/Dashboard";
 import Cash from "./pages/Cash";
 import Debtors from "./pages/Debtors";
-import DebtorDetailsPage from "./pages/DebtorDetailsPage"; // Nueva página
+import DebtorDetailsPage from "./pages/DebtorDetailsPage";
 import Creditors from "./pages/Creditors";
-import CreditorDetailsPage from "./pages/CreditorDetailsPage"; // Nueva página
+import CreditorDetailsPage from "./pages/CreditorDetailsPage";
 import Cards from "./pages/Cards";
 import CardDetailsPage from "./pages/CardDetailsPage";
 import Categories from "./pages/Categories";
@@ -21,6 +21,7 @@ import Login from "./pages/Login";
 import { CategoryProvider } from "./context/CategoryContext";
 import { SessionProvider, useSession } from "./context/SessionContext";
 import CardNotifications from "./components/CardNotifications";
+import PushNotificationManager from "./components/PushNotificationManager"; // Importar
 import React from "react";
 
 const queryClient = new QueryClient();
@@ -56,6 +57,7 @@ const App = () => {
           <SessionProvider>
             <CategoryProvider>
               <CardNotifications />
+              <PushNotificationManager /> {/* Añadir aquí */}
               <Routes>
                 <Route path="/login" element={<Login />} />
                 <Route path="/" element={<Navigate to="/dashboard" replace />} />
