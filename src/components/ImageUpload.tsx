@@ -12,14 +12,14 @@ interface ImageUploadProps {
   onUploadSuccess: (url: string) => void;
   initialUrl?: string | null;
   onRemove: () => void;
-  folder: string; // Folder name in Supabase Storage (e.g., 'cash_tickets')
+  folder: string; // Nombre de la carpeta en el bucket (ej. 'cash_tickets')
 }
 
 const ImageUpload: React.FC<ImageUploadProps> = ({ onUploadSuccess, initialUrl, onRemove, folder }) => {
   const [fileUrl, setFileUrl] = useState<string | null>(initialUrl || null);
   const [isUploading, setIsUploading] = useState(false);
 
-  // Sync initialUrl changes
+  // Sincronizar cambios en initialUrl
   React.useEffect(() => {
     setFileUrl(initialUrl || null);
   }, [initialUrl]);
@@ -29,20 +29,24 @@ const ImageUpload: React.FC<ImageUploadProps> = ({ onUploadSuccess, initialUrl, 
 
     setIsUploading(true);
     const fileExt = file.name.split('.').pop();
-    const fileName = `${Math.random()}.${fileExt}`;
+    // Generar un nombre de archivo único usando timestamp y un string aleatorio
+    const fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 15)}.${fileExt}`;
     const filePath = `${folder}/${fileName}`;
 
     try {
       const { error: uploadError } = await supabase.storage
-        .from('Media') // Assuming 'Media' is your bucket name
+        .from('Media')
         .upload(filePath, file, {
           cacheControl: '3600',
           upsert: false,
         });
 
-      if (uploadError) throw uploadError;
+      if (uploadError) {
+        console.error("Error de subida en Supabase:", uploadError);
+        throw new Error(uploadError.message);
+      }
 
-      // Get public URL
+      // Obtener la URL pública
       const { data: { publicUrl } } = supabase.storage
         .from('Media')
         .getPublicUrl(filePath);
@@ -54,7 +58,7 @@ const ImageUpload: React.FC<ImageUploadProps> = ({ onUploadSuccess, initialUrl, 
       showError('Error al subir imagen: ' + error.message);
       console.error("Supabase upload error:", error);
       setFileUrl(null);
-      onUploadSuccess(''); // Clear URL on failure
+      onUploadSuccess(''); 
     } finally {
       setIsUploading(false);
     }
@@ -78,8 +82,6 @@ const ImageUpload: React.FC<ImageUploadProps> = ({ onUploadSuccess, initialUrl, 
   });
 
   const handleRemove = () => {
-    // Note: We don't delete the file from storage here for simplicity and safety,
-    // but we clear the URL from the form/state.
     setFileUrl(null);
     onRemove();
     showSuccess("Imagen eliminada del registro.");
@@ -96,6 +98,7 @@ const ImageUpload: React.FC<ImageUploadProps> = ({ onUploadSuccess, initialUrl, 
           <Button 
             variant="outline" 
             size="sm" 
+            type="button"
             onClick={() => window.open(fileUrl, '_blank')}
             className="h-7 text-xs"
           >
@@ -104,6 +107,7 @@ const ImageUpload: React.FC<ImageUploadProps> = ({ onUploadSuccess, initialUrl, 
           <Button 
             variant="destructive" 
             size="sm" 
+            type="button"
             onClick={handleRemove}
             className="h-7 w-7 p-0"
           >
