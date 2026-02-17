@@ -248,7 +248,7 @@ const CreateSharedBudget: React.FC = () => {
 
   const calculateShare = useMemo(() => {
     const totalAmountStr = newBudget.total_amount.startsWith('=') 
-      ? evaluateExpression(newBudget.total_amount.substring(1))?.toFixed(2) 
+      ? (evaluateExpression(newBudget.total_amount.substring(1))?.toFixed(2) || "0") 
       : newBudget.total_amount;
     
     const totalAmount = parseFloat(totalAmountStr || "0");

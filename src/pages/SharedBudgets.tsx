@@ -262,7 +262,8 @@ const SharedBudgets = () => {
                   const totalParticipants = budget.budget_participants.length + 1;
                   const pendingParticipants = budget.budget_participants.filter(p => !p.is_paid);
                   const totalPendingDebt = pendingParticipants.reduce((sum, p) => sum + p.share_amount, 0);
-                  const creditorName = budget.creditor_id ? creditors.find(c => c.id === budget.creditor_id)?.name : 'Yo';
+                  const creditor = budget.creditor_id ? creditors.find(c => c.id === budget.creditor_id) : null;
+                  const creditorName = creditor ? creditor.name : (budget.creditor_id ? 'Acreedor eliminado' : 'Yo');
                   
                   return (
                     <TableRow key={budget.id}>
@@ -298,7 +299,7 @@ const SharedBudgets = () => {
                                 <TableBody>
                                   {budget.budget_participants.map(p => (
                                     <TableRow key={p.id}>
-                                      <TableCell>{p.debtors.name}</TableCell>
+                                      <TableCell>{p.debtors?.name || 'Deudor eliminado'}</TableCell>
                                       <TableCell>${p.share_amount.toFixed(2)}</TableCell>
                                       <TableCell className="text-right">
                                         {p.is_paid ? (
