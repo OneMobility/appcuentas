@@ -7,7 +7,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { PlusCircle, Divide, Banknote, UserPlus, ArrowLeft } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { PlusCircle, Divide, Banknote, UserPlus, ArrowLeft, AlertCircle } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/context/SessionContext";
@@ -161,6 +162,7 @@ const CreateSharedBudget: React.FC = () => {
   const [creditors, setCreditors] = useState<Creditor[]>([]);
   const [isQuickDebtorDialogOpen, setIsQuickDebtorDialogOpen] = useState(false);
   const [isQuickCreditorDialogOpen, setIsQuickCreditorDialogOpen] = useState(false);
+  const [skipCreditorCharge, setSkipCreditorCharge] = useState(false); // Nuevo estado
   
   const [newBudget, setNewBudget] = useState({
     name: "",
@@ -299,8 +301,8 @@ const CreateSharedBudget: React.FC = () => {
     const creditorIdToUse = newBudget.creditorId === "none" ? null : newBudget.creditorId;
 
     try {
-      // 1. Handle Creditor Charge (if selected)
-      if (creditorIdToUse) {
+      // 1. Handle Creditor Charge (if selected AND not skipped)
+      if (creditorIdToUse && !skipCreditorCharge) {
         const creditor = creditors.find(c => c.id === creditorIdToUse);
         if (!creditor) throw new Error("Acreedor no encontrado.");
 
@@ -337,7 +339,7 @@ const CreateSharedBudget: React.FC = () => {
           name: newBudget.name,
           total_amount: totalAmount,
           split_type: newBudget.split_type,
-          description: newBudget.description,
+          description: newBudget.description + (skipCreditorCharge ? " (Gasto ya registrado previamente)" : ""),
           creditor_id: creditorIdToUse,
         })
         .select()
@@ -452,28 +454,47 @@ const CreateSharedBudget: React.FC = () => {
                   <UserPlus className="h-3 w-3" /> Añadir Rápido
                 </Button>
               </h3>
-              <p className="text-sm text-muted-foreground mb-3">Si este gasto se cargó a un acreedor (ej. tarjeta de crédito, persona), selecciónalo aquí. El monto total se registrará como deuda a ese acreedor.</p>
-              <Select value={newBudget.creditorId} onValueChange={handleCreditorChange}>
-                <SelectTrigger id="creditorId">
-                  <SelectValue placeholder="Selecciona Acreedor (Opcional)" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">-- Ninguno (Pagado por mí) --</SelectItem>
-                  {creditors.map((creditor) => (
-                    <SelectItem key={creditor.id} value={creditor.id}>
-                      <div className="flex items-center gap-2">
-                        <Banknote className="h-4 w-4" />
-                        {creditor.name} (Deuda: ${creditor.current_balance.toFixed(2)})
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {creditors.length === 0 && newBudget.creditorId === "none" && (
-                <p className="text-xs text-muted-foreground mt-1">
-                  Considera añadir un acreedor si el gasto fue a crédito.
-                </p>
-              )}
+              <p className="text-sm text-muted-foreground mb-3">Si este gasto se cargó a un acreedor (ej. tarjeta de crédito, persona), selecciónalo aquí.</p>
+              
+              <div className="flex flex-col gap-4">
+                <Select value={newBudget.creditorId} onValueChange={handleCreditorChange}>
+                  <SelectTrigger id="creditorId">
+                    <SelectValue placeholder="Selecciona Acreedor (Opcional)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">-- Ninguno (Pagado por mí) --</SelectItem>
+                    {creditors.map((creditor) => (
+                      <SelectItem key={creditor.id} value={creditor.id}>
+                        <div className="flex items-center gap-2">
+                          <Banknote className="h-4 w-4" />
+                          {creditor.name} (Deuda: ${creditor.current_balance.toFixed(2)})
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                {newBudget.creditorId !== "none" && (
+                  <div className="flex items-center space-x-2 bg-white p-3 rounded-md border border-indigo-100">
+                    <Checkbox 
+                      id="skipCreditor" 
+                      checked={skipCreditorCharge} 
+                      onCheckedChange={(v) => setSkipCreditorCharge(!!v)} 
+                    />
+                    <div className="grid gap-1.5 leading-none">
+                      <label
+                        htmlFor="skipCreditor"
+                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex items-center gap-1"
+                      >
+                        Ya registré el gasto inicial <AlertCircle className="h-3 w-3 text-indigo-500" />
+                      </label>
+                      <p className="text-xs text-muted-foreground">
+                        Marca esto si ya registraste el cargo en tu tarjeta manualmente para no duplicar la deuda.
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
             </Card>
 
             <Card className="p-4 border-green-200 bg-green-50">

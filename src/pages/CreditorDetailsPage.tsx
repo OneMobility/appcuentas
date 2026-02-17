@@ -9,7 +9,8 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { DollarSign, Trash2, ArrowLeft, FileDown, History } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { DollarSign, Trash2, ArrowLeft, FileDown, History, AlertCircle } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { cn } from "@/lib/utils";
 import { format, parseISO } from "date-fns";
@@ -61,6 +62,7 @@ const CreditorDetailsPage: React.FC = () => {
   const [cashBalance, setCashBalance] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [isTransactionDialogOpen, setIsTransactionDialogOpen] = useState(false);
+  const [skipLinkedTransaction, setSkipLinkedTransaction] = useState(false);
 
   const [newTransaction, setNewTransaction] = useState({
     type: "payment" as "charge" | "payment",
@@ -147,38 +149,40 @@ const CreditorDetailsPage: React.FC = () => {
         }
         newCreditorBalance -= amount;
 
-        // Registrar egreso
-        if (newTransaction.sourceAccountId === "cash") {
-          if (cashBalance < amount) {
-            showError("Saldo insuficiente en efectivo.");
-            return;
-          }
-          await supabase.from('cash_transactions').insert({
-            user_id: user.id,
-            type: "egreso",
-            amount,
-            description: `Pago a ${creditor.name}: ${newTransaction.description}`,
-            date: transactionDate,
-            expense_category_id: newTransaction.selectedExpenseCategoryId || null,
-          });
-        } else {
-          const card = cards.find(c => c.id === newTransaction.sourceAccountId);
-          if (card) {
-            if (card.type === "debit" && card.current_balance < amount) {
-              showError("Saldo insuficiente en tarjeta.");
+        // Solo registrar egreso si NO se marcó "skipLinkedTransaction"
+        if (!skipLinkedTransaction) {
+          if (newTransaction.sourceAccountId === "cash") {
+            if (cashBalance < amount) {
+              showError("Saldo insuficiente en efectivo.");
               return;
             }
-            const newCardBalance = card.type === "credit" ? card.current_balance + amount : card.current_balance - amount;
-            await supabase.from('cards').update({ current_balance: newCardBalance }).eq('id', card.id);
-            await supabase.from('card_transactions').insert({
+            await supabase.from('cash_transactions').insert({
               user_id: user.id,
-              card_id: card.id,
-              type: "charge",
+              type: "egreso",
               amount,
               description: `Pago a ${creditor.name}: ${newTransaction.description}`,
               date: transactionDate,
               expense_category_id: newTransaction.selectedExpenseCategoryId || null,
             });
+          } else {
+            const card = cards.find(c => c.id === newTransaction.sourceAccountId);
+            if (card) {
+              if (card.type === "debit" && card.current_balance < amount) {
+                showError("Saldo insuficiente en tarjeta.");
+                return;
+              }
+              const newCardBalance = card.type === "credit" ? card.current_balance + amount : card.current_balance - amount;
+              await supabase.from('cards').update({ current_balance: newCardBalance }).eq('id', card.id);
+              await supabase.from('card_transactions').insert({
+                user_id: user.id,
+                card_id: card.id,
+                type: "charge",
+                amount,
+                description: `Pago a ${creditor.name}: ${newTransaction.description}`,
+                date: transactionDate,
+                expense_category_id: newTransaction.selectedExpenseCategoryId || null,
+              });
+            }
           }
         }
       }
@@ -189,12 +193,13 @@ const CreditorDetailsPage: React.FC = () => {
         creditor_id: creditor.id,
         type: newTransaction.type,
         amount,
-        description: newTransaction.description,
+        description: newTransaction.description + (skipLinkedTransaction ? " (Registro manual previo)" : ""),
         date: transactionDate,
       });
 
       showSuccess("Transacción registrada.");
       setIsTransactionDialogOpen(false);
+      setSkipLinkedTransaction(false);
       fetchData();
     } catch (error: any) {
       showError('Error: ' + error.message);
@@ -377,34 +382,57 @@ const CreditorDetailsPage: React.FC = () => {
             </div>
             {newTransaction.type === "payment" && (
               <>
-                <div className="grid gap-2">
-                  <Label>Origen del Dinero</Label>
-                  <Select value={newTransaction.sourceAccountId} onValueChange={(v) => setNewTransaction({...newTransaction, sourceAccountId: v})}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="cash">Efectivo (Saldo: ${cashBalance.toFixed(2)})</SelectItem>
-                      {cards.map(c => (
-                        <SelectItem key={c.id} value={c.id}>{c.name} ({c.bank_name})</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                <div className="flex items-center space-x-2 bg-blue-50 p-3 rounded-md border border-blue-100">
+                  <Checkbox 
+                    id="skip" 
+                    checked={skipLinkedTransaction} 
+                    onCheckedChange={(v) => setSkipLinkedTransaction(!!v)} 
+                  />
+                  <div className="grid gap-1.5 leading-none">
+                    <label
+                      htmlFor="skip"
+                      className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex items-center gap-1"
+                    >
+                      Ya registré este egreso manualmente <AlertCircle className="h-3 w-3 text-blue-500" />
+                    </label>
+                    <p className="text-xs text-muted-foreground">
+                      Marca esto si ya creaste el registro en "Lo que tienes" o "Tarjetas" para evitar duplicados.
+                    </p>
+                  </div>
                 </div>
-                <div className="grid gap-2">
-                  <Label>Categoría de Egreso</Label>
-                  <Select value={newTransaction.selectedExpenseCategoryId} onValueChange={(v) => setNewTransaction({...newTransaction, selectedExpenseCategoryId: v})}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {expenseCategories.map(cat => (
-                        <SelectItem key={cat.id} value={cat.id}>
-                          <div className="flex items-center gap-2">
-                            <DynamicLucideIcon iconName={cat.icon || "Tag"} className="h-4 w-4" />
-                            {cat.name}
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+
+                {!skipLinkedTransaction && (
+                  <>
+                    <div className="grid gap-2">
+                      <Label>Origen del Dinero</Label>
+                      <Select value={newTransaction.sourceAccountId} onValueChange={(v) => setNewTransaction({...newTransaction, sourceAccountId: v})}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="cash">Efectivo (Saldo: ${cashBalance.toFixed(2)})</SelectItem>
+                          {cards.map(c => (
+                            <SelectItem key={c.id} value={c.id}>{c.name} ({c.bank_name})</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="grid gap-2">
+                      <Label>Categoría de Egreso</Label>
+                      <Select value={newTransaction.selectedExpenseCategoryId} onValueChange={(v) => setNewTransaction({...newTransaction, selectedExpenseCategoryId: v})}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {expenseCategories.map(cat => (
+                            <SelectItem key={cat.id} value={cat.id}>
+                              <div className="flex items-center gap-2">
+                                <DynamicLucideIcon iconName={cat.icon || "Tag"} className="h-4 w-4" />
+                                {cat.name}
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </>
+                )}
               </>
             )}
             <DialogFooter>
