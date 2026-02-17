@@ -5,7 +5,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
-import { PlusCircle, Users, CheckCircle, Trash2, Banknote, CheckCircle2, Clock } from "lucide-react";
+import { PlusCircle, Users, CheckCircle, Trash2, Banknote, CheckCircle2, Clock, DollarSign } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/context/SessionContext";
@@ -13,6 +13,12 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { cn } from "@/lib/utils";
 import { useNavigate } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useCategoryContext } from "@/context/CategoryContext";
+import DynamicLucideIcon from "@/components/DynamicLucideIcon";
+import { evaluateExpression } from "@/utils/math-helpers";
 
 interface Debtor {
   id: string;
@@ -26,11 +32,21 @@ interface Creditor {
   current_balance: number;
 }
 
+interface CardData {
+  id: string;
+  name: string;
+  bank_name: string;
+  last_four_digits: string;
+  type: "credit" | "debit";
+  current_balance: number;
+}
+
 interface Participant {
   id: string;
   debtor_id: string;
-  debtors: Debtor; // Relación con la tabla debtors
+  debtors: Debtor;
   share_amount: number;
+  paid_amount: number; // Nueva columna
   is_paid: boolean;
 }
 
@@ -47,34 +63,55 @@ interface SharedBudget {
 const SharedBudgets = () => {
   const { user } = useSession();
   const navigate = useNavigate();
+  const { incomeCategories } = useCategoryContext();
   const [budgets, setBudgets] = useState<SharedBudget[]>([]);
   const [debtors, setDebtors] = useState<Debtor[]>([]);
   const [creditors, setCreditors] = useState<Creditor[]>([]);
+  const [cards, setCards] = useState<CardData[]>([]);
+  const [cashBalance, setCashBalance] = useState(0);
   const [isProcessing, setIsProcessing] = useState(false);
 
-  const fetchBudgetsAndDebtors = async () => {
-    if (!user) {
-      setBudgets([]);
-      setDebtors([]);
-      setCreditors([]);
-      return;
-    }
+  // Estado para el diálogo de abono
+  const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false);
+  const [selectedParticipant, setSelectedParticipant] = useState<{
+    participantId: string;
+    budgetId: string;
+    debtorId: string;
+    debtorName: string;
+    remaining: number;
+    budgetName: string;
+  } | null>(null);
 
-    const { data: debtorsData } = await supabase
-      .from('debtors')
-      .select('id, name, current_balance')
-      .eq('user_id', user.id);
-    setDebtors(debtorsData || []);
+  const [paymentForm, setPaymentForm] = useState({
+    amount: "",
+    destinationId: "cash",
+    categoryId: "",
+  });
 
-    const { data: creditorsData } = await supabase
-      .from('creditors')
-      .select('id, name, current_balance')
-      .eq('user_id', user.id);
-    setCreditors(creditorsData || []);
+  const fetchAllData = async () => {
+    if (!user) return;
 
+    // Fetch Debtors, Creditors, Cards, Cash
+    const [debtorsRes, creditorsRes, cardsRes, cashRes] = await Promise.all([
+      supabase.from('debtors').select('id, name, current_balance').eq('user_id', user.id),
+      supabase.from('creditors').select('id, name, current_balance').eq('user_id', user.id),
+      supabase.from('cards').select('id, name, bank_name, last_four_digits, type, current_balance').eq('user_id', user.id),
+      supabase.from('cash_transactions').select('type, amount').eq('user_id', user.id)
+    ]);
+
+    setDebtors(debtorsRes.data || []);
+    setCreditors(creditorsRes.data || []);
+    setCards(cardsRes.data || []);
+    
+    const currentCash = (cashRes.data || []).reduce((sum, tx) => 
+      tx.type === "ingreso" ? sum + tx.amount : sum - tx.amount, 0
+    );
+    setCashBalance(currentCash);
+
+    // Fetch Budgets
     const { data: budgetsData, error: budgetsError } = await supabase
       .from('shared_budgets')
-      .select('*, budget_participants(id, debtor_id, share_amount, is_paid, debtors(id, name, current_balance))')
+      .select('*, budget_participants(id, debtor_id, share_amount, paid_amount, is_paid, debtors(id, name, current_balance))')
       .eq('user_id', user.id)
       .order('created_at', { ascending: false });
 
@@ -86,53 +123,124 @@ const SharedBudgets = () => {
   };
 
   useEffect(() => {
-    fetchBudgetsAndDebtors();
+    fetchAllData();
   }, [user]);
 
-  const handleMarkPaid = async (participantId: string, budgetId: string, debtorId: string, shareAmount: number, silent = false) => {
-    if (!user) return;
+  const handleOpenPaymentDialog = (p: Participant, budget: SharedBudget) => {
+    const remaining = p.share_amount - (p.paid_amount || 0);
+    setSelectedParticipant({
+      participantId: p.id,
+      budgetId: budget.id,
+      debtorId: p.debtor_id,
+      debtorName: p.debtors?.name || "Deudor",
+      remaining,
+      budgetName: budget.name
+    });
+    setPaymentForm({
+      amount: remaining.toString(),
+      destinationId: "cash",
+      categoryId: incomeCategories[0]?.id || "",
+    });
+    setIsPaymentDialogOpen(true);
+  };
+
+  const handleRecordPayment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user || !selectedParticipant || isProcessing) return;
+
+    let amount: number;
+    if (paymentForm.amount.startsWith('=')) {
+      amount = evaluateExpression(paymentForm.amount.substring(1)) || 0;
+    } else {
+      amount = parseFloat(paymentForm.amount);
+    }
+
+    if (isNaN(amount) || amount <= 0) {
+      showError("Monto inválido.");
+      return;
+    }
+
+    if (amount > selectedParticipant.remaining + 0.01) {
+      showError("El abono no puede ser mayor a la deuda pendiente del presupuesto.");
+      return;
+    }
+
+    setIsProcessing(true);
+    const transactionDate = new Date().toISOString().split('T')[0];
 
     try {
-      const { error: updateError } = await supabase
+      // 1. Actualizar participante (paid_amount e is_paid)
+      const newPaidAmount = (budgets.find(b => b.id === selectedParticipant.budgetId)
+        ?.budget_participants.find(p => p.id === selectedParticipant.participantId)
+        ?.paid_amount || 0) + amount;
+      
+      const isFullyPaid = newPaidAmount >= selectedParticipant.remaining + (newPaidAmount - amount) - 0.01;
+
+      const { error: partError } = await supabase
         .from('budget_participants')
-        .update({ is_paid: true })
-        .eq('id', participantId)
-        .eq('user_id', user.id);
+        .update({ 
+          paid_amount: newPaidAmount,
+          is_paid: isFullyPaid 
+        })
+        .eq('id', selectedParticipant.participantId);
+      if (partError) throw partError;
 
-      if (updateError) throw updateError;
-
-      const debtor = debtors.find(d => d.id === debtorId);
+      // 2. Actualizar saldo del deudor
+      const debtor = debtors.find(d => d.id === selectedParticipant.debtorId);
       if (debtor) {
-        const newDebtorBalance = debtor.current_balance - shareAmount;
-
-        const { error: debtorUpdateError } = await supabase
+        const { error: debtorError } = await supabase
           .from('debtors')
-          .update({ current_balance: newDebtorBalance })
-          .eq('id', debtorId)
-          .eq('user_id', user.id);
-        
-        if (debtorUpdateError) throw debtorUpdateError;
+          .update({ current_balance: debtor.current_balance - amount })
+          .eq('id', debtor.id);
+        if (debtorError) throw debtorError;
 
-        const { error: txError } = await supabase
-          .from('debtor_transactions')
-          .insert({
+        await supabase.from('debtor_transactions').insert({
+          user_id: user.id,
+          debtor_id: debtor.id,
+          type: "payment",
+          amount,
+          description: `Abono por Presupuesto: ${selectedParticipant.budgetName}`,
+          date: transactionDate,
+        });
+      }
+
+      // 3. Registrar ingreso en Efectivo o Tarjeta
+      if (paymentForm.destinationId === "cash") {
+        await supabase.from('cash_transactions').insert({
+          user_id: user.id,
+          type: "ingreso",
+          amount,
+          description: `Abono de ${selectedParticipant.debtorName} (${selectedParticipant.budgetName})`,
+          date: transactionDate,
+          income_category_id: paymentForm.categoryId || null,
+        });
+      } else {
+        const card = cards.find(c => c.id === paymentForm.destinationId);
+        if (card) {
+          const newCardBalance = card.type === "credit" 
+            ? card.current_balance - amount 
+            : card.current_balance + amount;
+
+          await supabase.from('cards').update({ current_balance: newCardBalance }).eq('id', card.id);
+          await supabase.from('card_transactions').insert({
             user_id: user.id,
-            debtor_id: debtorId,
+            card_id: card.id,
             type: "payment",
-            amount: shareAmount,
-            description: `Abono por Presupuesto Compartido: ${budgets.find(b => b.id === budgetId)?.name}`,
-            date: new Date().toISOString().split('T')[0],
+            amount,
+            description: `Abono de ${selectedParticipant.debtorName} (${selectedParticipant.budgetName})`,
+            date: transactionDate,
+            income_category_id: paymentForm.categoryId || null,
           });
-        if (txError) throw txError;
+        }
       }
 
-      if (!silent) {
-        showSuccess("Pago registrado exitosamente.");
-        fetchBudgetsAndDebtors();
-      }
+      showSuccess("Abono registrado correctamente.");
+      setIsPaymentDialogOpen(false);
+      fetchAllData();
     } catch (error: any) {
-      if (!silent) showError('Error al registrar pago: ' + error.message);
-      throw error;
+      showError('Error al registrar abono: ' + error.message);
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -142,15 +250,34 @@ const SharedBudgets = () => {
     const pendingParticipants = budget.budget_participants.filter(p => !p.is_paid);
     if (pendingParticipants.length === 0) return;
 
+    // Para el cierre masivo, usaremos efectivo por defecto y la primera categoría de ingresos
     setIsProcessing(true);
     try {
       for (const p of pendingParticipants) {
-        await handleMarkPaid(p.id, budget.id, p.debtor_id, p.share_amount, true);
+        const remaining = p.share_amount - (p.paid_amount || 0);
+        // Reutilizamos la lógica pero de forma simplificada para el bucle
+        await supabase.from('budget_participants').update({ paid_amount: p.share_amount, is_paid: true }).eq('id', p.id);
+        
+        const debtor = debtors.find(d => d.id === p.debtor_id);
+        if (debtor) {
+          await supabase.from('debtors').update({ current_balance: debtor.current_balance - remaining }).eq('id', debtor.id);
+          await supabase.from('debtor_transactions').insert({
+            user_id: user.id, debtor_id: debtor.id, type: "payment", amount: remaining,
+            description: `Pago total: ${budget.name}`, date: new Date().toISOString().split('T')[0]
+          });
+        }
+
+        await supabase.from('cash_transactions').insert({
+          user_id: user.id, type: "ingreso", amount: remaining,
+          description: `Pago total de ${p.debtors?.name} (${budget.name})`,
+          date: new Date().toISOString().split('T')[0],
+          income_category_id: incomeCategories[0]?.id || null
+        });
       }
-      showSuccess(`Todos los participantes de "${budget.name}" han pagado.`);
-      await fetchBudgetsAndDebtors();
+      showSuccess(`Presupuesto "${budget.name}" liquidado por completo.`);
+      fetchAllData();
     } catch (error: any) {
-      showError('Error al procesar pagos masivos: ' + error.message);
+      showError('Error al procesar pagos: ' + error.message);
     } finally {
       setIsProcessing(false);
     }
@@ -163,66 +290,28 @@ const SharedBudgets = () => {
       const budgetToDelete = budgets.find(b => b.id === budgetId);
       if (!budgetToDelete) return;
 
+      // Revertir deudas pendientes
       for (const participant of budgetToDelete.budget_participants) {
         if (!participant.is_paid) {
+          const remaining = participant.share_amount - (participant.paid_amount || 0);
           const debtor = debtors.find(d => d.id === participant.debtor_id);
           if (debtor) {
-            const newDebtorBalance = debtor.current_balance - participant.share_amount;
-            
-            await supabase
-              .from('debtors')
-              .update({ current_balance: newDebtorBalance })
-              .eq('id', debtor.id)
-              .eq('user_id', user.id);
-            
-            await supabase
-              .from('debtor_transactions')
-              .insert({
-                user_id: user.id,
-                debtor_id: debtor.id,
-                type: "payment",
-                amount: participant.share_amount,
-                description: `Ajuste: Eliminación de Presupuesto Compartido: ${budgetName}`,
-                date: new Date().toISOString().split('T')[0],
-              });
+            await supabase.from('debtors').update({ current_balance: debtor.current_balance - remaining }).eq('id', debtor.id);
           }
         }
       }
 
+      // Revertir cargo al acreedor
       if (budgetToDelete.creditor_id) {
         const creditor = creditors.find(c => c.id === budgetToDelete.creditor_id);
         if (creditor) {
-          const newCreditorBalance = creditor.current_balance - budgetToDelete.total_amount;
-
-          await supabase
-            .from('creditors')
-            .update({ current_balance: newCreditorBalance })
-            .eq('id', creditor.id)
-            .eq('user_id', user.id);
-
-          await supabase
-            .from('creditor_transactions')
-            .insert({
-              user_id: user.id,
-              creditor_id: creditor.id,
-              type: "payment",
-              amount: budgetToDelete.total_amount,
-              description: `Ajuste: Reversión de Presupuesto Compartido: ${budgetName}`,
-              date: new Date().toISOString().split('T')[0],
-            });
+          await supabase.from('creditors').update({ current_balance: creditor.current_balance - budgetToDelete.total_amount }).eq('id', creditor.id);
         }
       }
 
-      const { error } = await supabase
-        .from('shared_budgets')
-        .delete()
-        .eq('id', budgetId)
-        .eq('user_id', user.id);
-
-      if (error) throw error;
-
+      await supabase.from('shared_budgets').delete().eq('id', budgetId);
       showSuccess(`Presupuesto ${budgetName} eliminado.`);
-      fetchBudgetsAndDebtors();
+      fetchAllData();
     } catch (error: any) {
       showError('Error al eliminar presupuesto: ' + error.message);
     }
@@ -269,9 +358,10 @@ const SharedBudgets = () => {
               </TableHeader>
               <TableBody>
                 {budgets.map((budget) => {
-                  const totalParticipants = budget.budget_participants.length + 1;
                   const pendingParticipants = budget.budget_participants.filter(p => !p.is_paid);
-                  const totalPendingDebt = pendingParticipants.reduce((sum, p) => sum + p.share_amount, 0);
+                  const totalPendingDebt = budget.budget_participants.reduce((sum, p) => 
+                    sum + (p.share_amount - (p.paid_amount || 0)), 0
+                  );
                   const creditor = budget.creditor_id ? creditors.find(c => c.id === budget.creditor_id) : null;
                   const creditorName = creditor ? creditor.name : (budget.creditor_id ? 'Acreedor eliminado' : 'Yo');
                   const isFullyPaid = pendingParticipants.length === 0;
@@ -303,7 +393,7 @@ const SharedBudgets = () => {
                               Pagos
                             </Button>
                           </DialogTrigger>
-                          <DialogContent className="sm:max-w-[500px]">
+                          <DialogContent className="sm:max-w-[600px]">
                             <DialogHeader>
                               <DialogTitle className="flex items-center justify-between pr-6">
                                 Pagos de {budget.name}
@@ -315,21 +405,19 @@ const SharedBudgets = () => {
                                     onClick={() => handleMarkAllPaid(budget)}
                                     disabled={isProcessing}
                                   >
-                                    <CheckCircle className="h-3 w-3" /> Marcar todos
+                                    <CheckCircle className="h-3 w-3" /> Liquidar Todo
                                   </Button>
                                 )}
                               </DialogTitle>
                             </DialogHeader>
                             <div className="py-4 overflow-x-auto">
-                              <p className="text-sm mb-4 text-muted-foreground">
-                                Monto por persona: <span className="font-bold text-foreground">${(budget.total_amount / totalParticipants).toFixed(2)}</span>
-                              </p>
                               <Table>
                                 <TableHeader>
                                   <TableRow>
                                     <TableHead>Deudor</TableHead>
-                                    <TableHead>Monto</TableHead>
-                                    <TableHead className="text-right">Estado</TableHead>
+                                    <TableHead>Total</TableHead>
+                                    <TableHead>Pagado</TableHead>
+                                    <TableHead className="text-right">Acción</TableHead>
                                   </TableRow>
                                 </TableHeader>
                                 <TableBody>
@@ -337,6 +425,7 @@ const SharedBudgets = () => {
                                     <TableRow key={p.id}>
                                       <TableCell>{p.debtors?.name || 'Deudor eliminado'}</TableCell>
                                       <TableCell>${p.share_amount.toFixed(2)}</TableCell>
+                                      <TableCell>${(p.paid_amount || 0).toFixed(2)}</TableCell>
                                       <TableCell className="text-right">
                                         {p.is_paid ? (
                                           <span className="text-green-600 flex items-center justify-end gap-1 font-medium">
@@ -347,10 +436,10 @@ const SharedBudgets = () => {
                                             variant="secondary" 
                                             size="sm" 
                                             className="h-7 text-xs"
-                                            onClick={() => handleMarkPaid(p.id, budget.id, p.debtor_id, p.share_amount)}
+                                            onClick={() => handleOpenPaymentDialog(p, budget)}
                                             disabled={isProcessing}
                                           >
-                                            Marcar Pago
+                                            Abonar
                                           </Button>
                                         )}
                                       </TableCell>
@@ -368,11 +457,7 @@ const SharedBudgets = () => {
                         </Dialog>
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
-                            <Button
-                              variant="destructive"
-                              size="sm"
-                              className="h-8 w-8 p-0"
-                            >
+                            <Button variant="destructive" size="sm" className="h-8 w-8 p-0">
                               <Trash2 className="h-3.5 w-3.5" />
                             </Button>
                           </AlertDialogTrigger>
@@ -380,7 +465,7 @@ const SharedBudgets = () => {
                             <AlertDialogHeader>
                               <AlertDialogTitle>¿Eliminar presupuesto?</AlertDialogTitle>
                               <AlertDialogDescription>
-                                Se revertirán las deudas pendientes de los participantes y el cargo al acreedor. Los pagos ya realizados no se revertirán automáticamente.
+                                Se revertirán las deudas pendientes de los participantes y el cargo al acreedor. Los abonos ya realizados se mantendrán en tus cuentas.
                               </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>
@@ -400,6 +485,67 @@ const SharedBudgets = () => {
           </div>
         </CardContent>
       </Card>
+
+      {/* Diálogo para Registrar Abono */}
+      <Dialog open={isPaymentDialogOpen} onOpenChange={setIsPaymentDialogOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Registrar Abono: {selectedParticipant?.debtorName}</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleRecordPayment} className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="payAmount" className="text-right">Monto</Label>
+              <Input
+                id="payAmount"
+                value={paymentForm.amount}
+                onChange={(e) => setPaymentForm({...paymentForm, amount: e.target.value})}
+                className="col-span-3"
+                placeholder="Ej. 50 o =100/2"
+                required
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="dest" className="text-right">Destino</Label>
+              <Select value={paymentForm.destinationId} onValueChange={(v) => setPaymentForm({...paymentForm, destinationId: v})}>
+                <SelectTrigger id="dest" className="col-span-3">
+                  <SelectValue placeholder="Selecciona cuenta" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="cash">Efectivo (Saldo: ${cashBalance.toFixed(2)})</SelectItem>
+                  {cards.filter(c => c.type === "debit").map(card => (
+                    <SelectItem key={card.id} value={card.id}>
+                      {card.name} ({card.bank_name}) - ${card.current_balance.toFixed(2)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="cat" className="text-right">Categoría</Label>
+              <Select value={paymentForm.categoryId} onValueChange={(v) => setPaymentForm({...paymentForm, categoryId: v})}>
+                <SelectTrigger id="cat" className="col-span-3">
+                  <SelectValue placeholder="Selecciona categoría" />
+                </SelectTrigger>
+                <SelectContent>
+                  {incomeCategories.map(cat => (
+                    <SelectItem key={cat.id} value={cat.id}>
+                      <div className="flex items-center gap-2">
+                        <DynamicLucideIcon iconName={cat.icon || "Tag"} className="h-4 w-4" />
+                        {cat.name}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <DialogFooter>
+              <Button type="submit" disabled={isProcessing}>
+                {isProcessing ? "Registrando..." : "Confirmar Abono"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
