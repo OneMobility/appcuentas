@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
-import { PlusCircle, Trash2, Eye } from "lucide-react";
+import { PlusCircle, Trash2, Eye, Phone } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/context/SessionContext";
@@ -21,6 +21,7 @@ interface Debtor {
   name: string;
   initial_balance: number;
   current_balance: number;
+  phone?: string;
 }
 
 const Debtors = () => {
@@ -28,7 +29,7 @@ const Debtors = () => {
   const navigate = useNavigate();
   const [debtors, setDebtors] = useState<Debtor[]>([]);
   const [isAddDebtorDialogOpen, setIsAddDebtorDialogOpen] = useState(false);
-  const [newDebtor, setNewDebtor] = useState({ name: "", initial_balance: "" });
+  const [newDebtor, setNewDebtor] = useState({ name: "", initial_balance: "", phone: "" });
   const [searchTerm, setSearchTerm] = useState("");
 
   const fetchDebtors = async () => {
@@ -70,6 +71,7 @@ const Debtors = () => {
         name: newDebtor.name,
         initial_balance: initialBalance,
         current_balance: initialBalance,
+        phone: newDebtor.phone.trim() || null,
       })
       .select();
 
@@ -77,7 +79,7 @@ const Debtors = () => {
     else {
       setDebtors((prev) => [...prev, data[0]]);
       setIsAddDebtorDialogOpen(false);
-      setNewDebtor({ name: "", initial_balance: "" });
+      setNewDebtor({ name: "", initial_balance: "", phone: "" });
       showSuccess("Deudor registrado.");
     }
   };
@@ -103,6 +105,7 @@ const Debtors = () => {
             <TableHead>Nombre</TableHead>
             <TableHead>Saldo Inicial</TableHead>
             <TableHead>Saldo Actual</TableHead>
+            <TableHead>Teléfono</TableHead>
             <TableHead className="text-right">Acciones</TableHead>
           </TableRow>
         </TableHeader>
@@ -112,6 +115,7 @@ const Debtors = () => {
               <TableCell className="font-medium">{debtor.name}</TableCell>
               <TableCell>${debtor.initial_balance.toFixed(2)}</TableCell>
               <TableCell>${debtor.current_balance.toFixed(2)}</TableCell>
+              <TableCell>{debtor.phone || "-"}</TableCell>
               <TableCell className="text-right flex gap-2 justify-end">
                 <Button variant="outline" size="sm" onClick={() => navigate(`/debtors/${debtor.id}`)}>
                   <Eye className="h-4 w-4 mr-1" /> Detalles
@@ -169,6 +173,17 @@ const Debtors = () => {
                 <div className="grid gap-2">
                   <Label>Saldo Inicial</Label>
                   <Input value={newDebtor.initial_balance} onChange={e => setNewDebtor({...newDebtor, initial_balance: e.target.value})} placeholder="Ej. 100" required />
+                </div>
+                <div className="grid gap-2">
+                  <Label className="flex items-center gap-2">
+                    <Phone className="h-4 w-4" /> Teléfono (Opcional)
+                  </Label>
+                  <Input 
+                    value={newDebtor.phone} 
+                    onChange={e => setNewDebtor({...newDebtor, phone: e.target.value})} 
+                    placeholder="Ej. 521234567890" 
+                  />
+                  <p className="text-[10px] text-muted-foreground">Incluye código de país sin el signo + (ej. 52 para México).</p>
                 </div>
                 <DialogFooter><Button type="submit">Guardar</Button></DialogFooter>
               </form>

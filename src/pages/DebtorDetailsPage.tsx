@@ -7,9 +7,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { DollarSign, Trash2, Edit, ArrowLeft, FileText, FileDown, History } from "lucide-react";
+import { DollarSign, Trash2, Edit, ArrowLeft, FileText, FileDown, History, MessageCircle } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { cn } from "@/lib/utils";
 import { format, parseISO } from "date-fns";
@@ -40,6 +40,7 @@ interface Debtor {
   name: string;
   initial_balance: number;
   current_balance: number;
+  phone?: string;
   debtor_transactions: DebtorTransaction[];
 }
 
@@ -62,8 +63,15 @@ const DebtorDetailsPage: React.FC = () => {
   const [cashBalance, setCashBalance] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [isTransactionDialogOpen, setIsTransactionDialogOpen] = useState(false);
-  const [isEditTransactionDialogOpen, setIsEditTransactionDialogOpen] = useState(false);
-  const [editingTransaction, setEditingTransaction] = useState<DebtorTransaction | null>(null);
+  
+  // Estados para WhatsApp
+  const [isWhatsAppDialogOpen, setIsWhatsAppDialogOpen] = useState(false);
+  const [pendingWhatsApp, setPendingWhatsApp] = useState<{
+    type: string;
+    amount: number;
+    description: string;
+    newBalance: number;
+  } | null>(null);
 
   const [newTransaction, setNewTransaction] = useState({
     type: "payment" as "charge" | "payment",
@@ -78,7 +86,6 @@ const DebtorDetailsPage: React.FC = () => {
 
     setIsLoading(true);
     try {
-      // Fetch Debtor
       const { data: debtorData, error: debtorError } = await supabase
         .from('debtors')
         .select('*, debtor_transactions(*)')
@@ -89,14 +96,12 @@ const DebtorDetailsPage: React.FC = () => {
       if (debtorError) throw debtorError;
       setDebtor(debtorData);
 
-      // Fetch Cards
       const { data: cardsData } = await supabase
         .from('cards')
         .select('id, name, bank_name, last_four_digits, type, current_balance')
         .eq('user_id', user.id);
       setCards(cardsData || []);
 
-      // Fetch Cash
       const { data: cashTxData } = await supabase
         .from('cash_transactions')
         .select('type, amount')
@@ -153,7 +158,6 @@ const DebtorDetailsPage: React.FC = () => {
         }
         newDebtorBalance -= amount;
 
-        // Registrar ingreso
         if (newTransaction.destinationAccountId === "cash") {
           await supabase.from('cash_transactions').insert({
             user_id: user.id,
@@ -181,7 +185,6 @@ const DebtorDetailsPage: React.FC = () => {
         }
       }
 
-      // Actualizar deudor
       await supabase.from('debtors').update({ current_balance: newDebtorBalance }).eq('id', debtor.id);
       await supabase.from('debtor_transactions').insert({
         user_id: user.id,
@@ -194,10 +197,40 @@ const DebtorDetailsPage: React.FC = () => {
 
       showSuccess("Transacción registrada.");
       setIsTransactionDialogOpen(false);
+      
+      // Preparar WhatsApp si hay teléfono
+      if (debtor.phone) {
+        setPendingWhatsApp({
+          type: newTransaction.type === "charge" ? "Cargo" : "Abono",
+          amount,
+          description: newTransaction.description,
+          newBalance: newDebtorBalance
+        });
+        setIsWhatsAppDialogOpen(true);
+      }
+
       fetchData();
     } catch (error: any) {
       showError('Error: ' + error.message);
     }
+  };
+
+  const handleSendWhatsApp = () => {
+    if (!debtor?.phone || !pendingWhatsApp) return;
+
+    const cleanPhone = debtor.phone.replace(/\D/g, '');
+    const message = `💰 *Oinkash - Notificación de Movimiento*\n\n` +
+                    `Hola *${debtor.name}*,\n` +
+                    `Se ha registrado un *${pendingWhatsApp.type}* en tu cuenta.\n\n` +
+                    `*Monto:* $${pendingWhatsApp.amount.toFixed(2)}\n` +
+                    `*Concepto:* ${pendingWhatsApp.description}\n` +
+                    `*Saldo Pendiente:* $${pendingWhatsApp.newBalance.toFixed(2)}\n\n` +
+                    `¡Gracias!`;
+
+    const encodedMessage = encodeURIComponent(message);
+    window.open(`https://wa.me/${cleanPhone}?text=${encodedMessage}`, '_blank');
+    setIsWhatsAppDialogOpen(false);
+    setPendingWhatsApp(null);
   };
 
   const handleDeleteTransaction = async (tx: DebtorTransaction) => {
@@ -411,6 +444,26 @@ const DebtorDetailsPage: React.FC = () => {
               <Button type="submit">Guardar Movimiento</Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Diálogo de Confirmación WhatsApp */}
+      <Dialog open={isWhatsAppDialogOpen} onOpenChange={setIsWhatsAppDialogOpen}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <MessageCircle className="h-5 w-5 text-green-600" /> ¿Enviar comprobante?
+            </DialogTitle>
+            <DialogDescription>
+              Se ha registrado el movimiento. ¿Deseas enviar el detalle a <strong>{debtor.name}</strong> por WhatsApp?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex gap-2 sm:justify-end">
+            <Button variant="outline" onClick={() => setIsWhatsAppDialogOpen(false)}>No, terminar</Button>
+            <Button className="bg-green-600 hover:bg-green-700 text-white" onClick={handleSendWhatsApp}>
+              Sí, enviar WhatsApp
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
