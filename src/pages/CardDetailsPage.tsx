@@ -34,7 +34,7 @@ import { evaluateExpression } from "@/utils/math-helpers";
 import CardReconciliationDialog from "@/components/CardReconciliationDialog";
 import FeedbackOverlay from "@/components/FeedbackOverlay";
 import CardTransferDialog from "@/components/CardTransferDialog";
-import ImageUpload from "@/components/ImageUpload"; // Importar ImageUpload
+import ImageUpload from "@/components/ImageUpload";
 
 interface CardTransaction {
   id: string;
@@ -42,13 +42,13 @@ interface CardTransaction {
   amount: number;
   description: string;
   date: string;
-  created_at: string; // Add created_at
+  created_at: string;
   card_id?: string;
   user_id?: string;
   income_category_id?: string | null;
   expense_category_id?: string | null;
   is_adjustment?: boolean;
-  image_url?: string | null; // Nuevo campo
+  image_url?: string | null;
 }
 
 interface CardData {
@@ -59,7 +59,7 @@ interface CardData {
   expiration_date: string;
   type: "credit" | "debit";
   initial_balance: number;
-  current_balance: number; // Deuda total para crédito, saldo para débito
+  current_balance: number;
   credit_limit?: number;
   cut_off_day?: number;
   days_to_pay_after_cut_off?: number;
@@ -89,7 +89,7 @@ const CardDetailsPage: React.FC = () => {
     date: undefined as Date | undefined,
     selectedCategoryId: "",
     selectedCategoryType: "" as "income" | "expense" | "",
-    imageUrl: null as string | null, // Nuevo estado para la URL de la imagen
+    imageUrl: null as string | null,
   });
   const [feedbackOverlay, setFeedbackOverlay] = useState<{
     isVisible: boolean;
@@ -99,7 +99,6 @@ const CardDetailsPage: React.FC = () => {
     textColor: string;
   } | null>(null);
 
-  // Filter states
   const [searchTerm, setSearchTerm] = useState("");
   const [filterType, setFilterType] = useState<"all" | "charge" | "payment">("all");
   const [filterCategory, setFilterCategory] = useState<string>("all");
@@ -109,7 +108,6 @@ const CardDetailsPage: React.FC = () => {
   const fetchGlobalData = async () => {
     if (!user || isLoadingCategories) return;
 
-    // Fetch all cards (for transfer dialog)
     const { data: allCardsData, error: allCardsError } = await supabase
       .from('cards')
       .select('id, name, bank_name, last_four_digits, type, current_balance, credit_limit')
@@ -121,7 +119,6 @@ const CardDetailsPage: React.FC = () => {
       setAllCards(allCardsData || []);
     }
 
-    // Fetch cash balance
     const { data: cashTxData, error: cashTxError } = await supabase
       .from('cash_transactions')
       .select('type, amount')
@@ -174,7 +171,6 @@ const CardDetailsPage: React.FC = () => {
     handleRefreshData();
   }, [cardId, user, navigate, isLoadingCategories]);
 
-  // Effect to calculate if payment is overdue
   useEffect(() => {
     if (card && card.type === "credit" && card.cut_off_day !== undefined && card.days_to_pay_after_cut_off !== undefined) {
       const today = new Date();
@@ -305,9 +301,9 @@ const CardDetailsPage: React.FC = () => {
       } else {
         newCardBalance += totalAmount;
       }
-    } else { // Credit card
+    } else {
       if (newTransaction.type === "charge") {
-        newCardBalance += totalAmount; // Charges increase debt
+        newCardBalance += totalAmount;
         if (card.credit_limit !== undefined && newCardBalance > card.credit_limit) {
           toast.info(`Tu tarjeta de crédito ha excedido su límite. Saldo actual: $${newCardBalance.toFixed(2)}`, {
             style: { backgroundColor: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))' },
@@ -315,7 +311,6 @@ const CardDetailsPage: React.FC = () => {
           });
         }
       } else {
-        // Payments decrease debt
         newCardBalance -= totalAmount;
         if (newCardBalance < 0) {
           toast.info(`Has sobrepagado tu tarjeta ${card.name}. Tu saldo actual es de $${newCardBalance.toFixed(2)} (a tu favor).`, {
@@ -335,8 +330,8 @@ const CardDetailsPage: React.FC = () => {
       date: format(newTransaction.date, "yyyy-MM-dd"),
       income_category_id: incomeCategoryIdToInsert,
       expense_category_id: expenseCategoryIdToInsert,
-      is_adjustment: false, // Not an adjustment
-      image_url: newTransaction.imageUrl, // Incluir URL de la imagen
+      is_adjustment: false,
+      image_url: newTransaction.imageUrl,
     });
 
     try {
@@ -356,7 +351,6 @@ const CardDetailsPage: React.FC = () => {
 
       if (cardError) throw cardError;
 
-      // Re-fetch details and global data to update all views
       handleRefreshData();
 
       setNewTransaction({ type: "charge", amount: "", description: "", date: undefined, selectedCategoryId: "", selectedCategoryType: "", imageUrl: null });
@@ -380,7 +374,7 @@ const CardDetailsPage: React.FC = () => {
       date: new Date(transaction.date),
       selectedCategoryId: categoryId,
       selectedCategoryType: categoryType as "income" | "expense" | "",
-      imageUrl: transaction.image_url || null, // Cargar URL de la imagen existente
+      imageUrl: transaction.image_url || null,
     });
     setIsEditTransactionDialogOpen(true);
   };
@@ -435,10 +429,12 @@ const CardDetailsPage: React.FC = () => {
 
     let newCardBalance = card.current_balance;
 
-    // Revert old transaction's impact on balance
-    newCardBalance = oldTransaction.type === "charge" ? newCardBalance - oldTransaction.amount : newCardBalance + oldTransaction.amount;
+    if (card.type === "debit") {
+      newCardBalance = oldTransaction.type === "charge" ? newCardBalance + oldTransaction.amount : newCardBalance - oldTransaction.amount;
+    } else {
+      newCardBalance = oldTransaction.type === "charge" ? newCardBalance - oldTransaction.amount : newCardBalance + oldTransaction.amount;
+    }
 
-    // Delete old transaction
     const { error: deleteOldTransactionError } = await supabase
       .from('card_transactions')
       .delete()
@@ -446,7 +442,6 @@ const CardDetailsPage: React.FC = () => {
       .eq('user_id', user.id);
     if (deleteOldTransactionError) throw deleteOldTransactionError;
 
-    // Apply new transaction's impact on balance
     if (card.type === "debit") {
       if (newType === "charge") {
         if (newCardBalance < newTotalAmount) {
@@ -457,9 +452,9 @@ const CardDetailsPage: React.FC = () => {
       } else {
         newCardBalance += newTotalAmount;
       }
-    } else { // Credit card
+    } else {
       if (newType === "charge") {
-        newCardBalance += newTotalAmount; // Charges increase debt
+        newCardBalance += newTotalAmount;
         if (card.credit_limit !== undefined && newCardBalance > card.credit_limit) {
           toast.info(`¡Atención! El saldo actual de tu tarjeta ${card.name} excede su límite de crédito.`, {
             style: { backgroundColor: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))' },
@@ -467,7 +462,6 @@ const CardDetailsPage: React.FC = () => {
           });
         }
       } else {
-        // Payments decrease debt
         newCardBalance -= newTotalAmount;
         if (newCardBalance < 0) {
           toast.info(`Has sobrepagado tu tarjeta ${card.name}. Tu saldo actual es de $${newCardBalance.toFixed(2)} (a tu favor).`, {
@@ -488,8 +482,8 @@ const CardDetailsPage: React.FC = () => {
       date: format(newTransaction.date, "yyyy-MM-dd"),
       income_category_id: newIncomeCategoryId,
       expense_category_id: newExpenseCategoryId,
-      is_adjustment: false, // Not an adjustment
-      image_url: newTransaction.imageUrl, // Incluir URL de la imagen
+      is_adjustment: false,
+      image_url: newTransaction.imageUrl,
     });
 
     try {
@@ -509,7 +503,6 @@ const CardDetailsPage: React.FC = () => {
 
       if (cardError) throw cardError;
 
-      // Re-fetch details and global data to update all views
       handleRefreshData();
 
       setNewTransaction({ type: "charge", amount: "", description: "", date: undefined, selectedCategoryId: "", selectedCategoryType: "", imageUrl: null });
@@ -531,8 +524,11 @@ const CardDetailsPage: React.FC = () => {
     let newCardBalance = card.current_balance;
     const effectiveAmount = transaction.amount;
 
-    // Reverse the effect of the original transaction.
-    newCardBalance = transaction.type === "charge" ? newCardBalance + effectiveAmount : newCardBalance - effectiveAmount;
+    if (card.type === "debit") {
+      newCardBalance = transaction.type === "charge" ? newCardBalance + effectiveAmount : newCardBalance - effectiveAmount;
+    } else {
+      newCardBalance = transaction.type === "charge" ? newCardBalance - effectiveAmount : newCardBalance + effectiveAmount;
+    }
 
     try {
       const { error: deleteTransactionError } = await supabase
@@ -549,7 +545,6 @@ const CardDetailsPage: React.FC = () => {
         .eq('user_id', user.id);
       if (cardError) throw cardError;
 
-      // Re-fetch details and global data to update all views
       handleRefreshData();
 
       showSuccess("Transacción eliminada exitosamente.");
@@ -562,7 +557,6 @@ const CardDetailsPage: React.FC = () => {
   const transactionsWithRunningBalance = useMemo(() => {
     if (!card) return [];
 
-    // Sort transactions by date and then by created_at for consistent balance calculation
     const chronologicalTransactions = [...(card.transactions || [])].sort((a, b) => {
       const dateA = parseISO(a.date).getTime();
       const dateB = parseISO(b.date).getTime();
@@ -573,25 +567,20 @@ const CardDetailsPage: React.FC = () => {
     let currentRunningBalance: number;
 
     if (card.type === "credit") {
-      // For credit cards, running balance is (credit_limit - current_debt)
       currentRunningBalance = card.credit_limit !== undefined ? card.credit_limit : 0;
     } else {
-      // For debit cards, running balance is the actual balance
       currentRunningBalance = card.initial_balance;
     }
 
     const transactionsWithBalance = chronologicalTransactions.map(tx => {
       if (card.type === "credit") {
-        // For credit cards, charges decrease available credit, payments increase available credit
         currentRunningBalance = tx.type === "charge" ? currentRunningBalance - tx.amount : currentRunningBalance + tx.amount;
       } else {
-        // For debit cards, charges decrease balance, payments increase balance
         currentRunningBalance = tx.type === "charge" ? currentRunningBalance - tx.amount : currentRunningBalance + tx.amount;
       }
       return { ...tx, running_balance: currentRunningBalance };
     });
 
-    // Reverse to show most recent first in the UI
     return transactionsWithBalance.reverse();
   }, [card]);
 
@@ -628,7 +617,7 @@ const CardDetailsPage: React.FC = () => {
         Descripcion: tx.description,
         Monto: `${tx.type === "charge" ? "-" : "+"}${tx.amount.toFixed(2)}`,
         Saldo: tx.running_balance?.toFixed(2) || "N/A",
-        "URL Imagen": tx.image_url || "N/A", // Incluir URL de la imagen
+        "URL Imagen": tx.image_url || "N/A",
       };
     });
 
@@ -650,7 +639,7 @@ const CardDetailsPage: React.FC = () => {
     setFeedbackOverlay({
       isVisible: true,
       message: "¡El saldo de la tarjeta ya está cuadrado!",
-      imageSrc: "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Conchinito%20feliz.png", // Happy piggy bank
+      imageSrc: "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Conchinito%20feliz.png",
       bgColor: "bg-green-100",
       textColor: "text-green-800",
     });
@@ -891,7 +880,7 @@ const CardDetailsPage: React.FC = () => {
                     <ImageUpload
                       onUploadSuccess={handleImageUploadSuccess}
                       onRemove={handleImageRemove}
-                      folder="card_tickets" // Usar una carpeta diferente para tarjetas
+                      folder="card_tickets"
                     />
                   </div>
                   <DialogFooter>
