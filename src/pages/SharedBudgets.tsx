@@ -5,13 +5,14 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
-import { PlusCircle, Users, CheckCircle, Trash2, Banknote } from "lucide-react";
+import { PlusCircle, Users, CheckCircle, Trash2, Banknote, CheckCircle2, Clock } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/context/SessionContext";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 import { useNavigate } from "react-router-dom";
+import { Badge } from "@/components/ui/badge";
 
 interface Debtor {
   id: string;
@@ -40,15 +41,16 @@ interface SharedBudget {
   split_type: string;
   description: string;
   budget_participants: Participant[];
-  creditor_id?: string | null; // Nuevo campo
+  creditor_id?: string | null;
 }
 
 const SharedBudgets = () => {
   const { user } = useSession();
   const navigate = useNavigate();
   const [budgets, setBudgets] = useState<SharedBudget[]>([]);
-  const [debtors, setDebtors] = useState<Debtor[]>([]); // Necesario para la lógica de eliminación
-  const [creditors, setCreditors] = useState<Creditor[]>([]); // Necesario para la lógica de eliminación
+  const [debtors, setDebtors] = useState<Debtor[]>([]);
+  const [creditors, setCreditors] = useState<Creditor[]>([]);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   const fetchBudgetsAndDebtors = async () => {
     if (!user) {
@@ -58,21 +60,18 @@ const SharedBudgets = () => {
       return;
     }
 
-    // Fetch Debtors (needed for deletion logic)
     const { data: debtorsData } = await supabase
       .from('debtors')
       .select('id, name, current_balance')
       .eq('user_id', user.id);
     setDebtors(debtorsData || []);
 
-    // Fetch Creditors (needed for deletion logic)
     const { data: creditorsData } = await supabase
       .from('creditors')
       .select('id, name, current_balance')
       .eq('user_id', user.id);
     setCreditors(creditorsData || []);
 
-    // Fetch Shared Budgets with participants
     const { data: budgetsData, error: budgetsError } = await supabase
       .from('shared_budgets')
       .select('*, budget_participants(id, debtor_id, share_amount, is_paid, debtors(id, name, current_balance))')
@@ -90,11 +89,10 @@ const SharedBudgets = () => {
     fetchBudgetsAndDebtors();
   }, [user]);
 
-  const handleMarkPaid = async (participantId: string, budgetId: string, debtorId: string, shareAmount: number) => {
+  const handleMarkPaid = async (participantId: string, budgetId: string, debtorId: string, shareAmount: number, silent = false) => {
     if (!user) return;
 
     try {
-      // 1. Mark participant as paid
       const { error: updateError } = await supabase
         .from('budget_participants')
         .update({ is_paid: true })
@@ -103,7 +101,6 @@ const SharedBudgets = () => {
 
       if (updateError) throw updateError;
 
-      // 2. Update Debtor balance (decrease current_balance by shareAmount)
       const debtor = debtors.find(d => d.id === debtorId);
       if (debtor) {
         const newDebtorBalance = debtor.current_balance - shareAmount;
@@ -116,7 +113,6 @@ const SharedBudgets = () => {
         
         if (debtorUpdateError) throw debtorUpdateError;
 
-        // 3. Record transaction in debtor_transactions (Payment/Abono)
         const { error: txError } = await supabase
           .from('debtor_transactions')
           .insert({
@@ -125,16 +121,38 @@ const SharedBudgets = () => {
             type: "payment",
             amount: shareAmount,
             description: `Abono por Presupuesto Compartido: ${budgets.find(b => b.id === budgetId)?.name}`,
-            date: new Date().toISOString().split('T')[0], // Usar fecha local
+            date: new Date().toISOString().split('T')[0],
           });
         if (txError) throw txError;
       }
 
-      showSuccess("Pago registrado exitosamente. Deuda actualizada.");
-      fetchBudgetsAndDebtors(); // Refresh data
+      if (!silent) {
+        showSuccess("Pago registrado exitosamente.");
+        fetchBudgetsAndDebtors();
+      }
     } catch (error: any) {
-      showError('Error al registrar pago: ' + error.message);
-      console.error("Mark paid error:", error);
+      if (!silent) showError('Error al registrar pago: ' + error.message);
+      throw error;
+    }
+  };
+
+  const handleMarkAllPaid = async (budget: SharedBudget) => {
+    if (!user || isProcessing) return;
+    
+    const pendingParticipants = budget.budget_participants.filter(p => !p.is_paid);
+    if (pendingParticipants.length === 0) return;
+
+    setIsProcessing(true);
+    try {
+      for (const p of pendingParticipants) {
+        await handleMarkPaid(p.id, budget.id, p.debtor_id, p.share_amount, true);
+      }
+      showSuccess(`Todos los participantes de "${budget.name}" han pagado.`);
+      await fetchBudgetsAndDebtors();
+    } catch (error: any) {
+      showError('Error al procesar pagos masivos: ' + error.message);
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -145,21 +163,18 @@ const SharedBudgets = () => {
       const budgetToDelete = budgets.find(b => b.id === budgetId);
       if (!budgetToDelete) return;
 
-      // 1. Reverse debt for unpaid participants
       for (const participant of budgetToDelete.budget_participants) {
         if (!participant.is_paid) {
           const debtor = debtors.find(d => d.id === participant.debtor_id);
           if (debtor) {
             const newDebtorBalance = debtor.current_balance - participant.share_amount;
             
-            // Update debtor balance
             await supabase
               .from('debtors')
               .update({ current_balance: newDebtorBalance })
               .eq('id', debtor.id)
               .eq('user_id', user.id);
             
-            // Record reversal transaction (Payment/Abono)
             await supabase
               .from('debtor_transactions')
               .insert({
@@ -174,20 +189,17 @@ const SharedBudgets = () => {
         }
       }
 
-      // 2. Reverse creditor charge if applicable
       if (budgetToDelete.creditor_id) {
         const creditor = creditors.find(c => c.id === budgetToDelete.creditor_id);
         if (creditor) {
           const newCreditorBalance = creditor.current_balance - budgetToDelete.total_amount;
 
-          // Update creditor balance
           await supabase
             .from('creditors')
             .update({ current_balance: newCreditorBalance })
             .eq('id', creditor.id)
             .eq('user_id', user.id);
 
-          // Record reversal transaction (Payment/Abono)
           await supabase
             .from('creditor_transactions')
             .insert({
@@ -201,7 +213,6 @@ const SharedBudgets = () => {
         }
       }
 
-      // 3. Delete the budget (cascades to participants)
       const { error } = await supabase
         .from('shared_budgets')
         .delete()
@@ -210,11 +221,10 @@ const SharedBudgets = () => {
 
       if (error) throw error;
 
-      showSuccess(`Presupuesto ${budgetName} eliminado y deudas ajustadas.`);
-      fetchBudgetsAndDebtors(); // Refresh data
+      showSuccess(`Presupuesto ${budgetName} eliminado.`);
+      fetchBudgetsAndDebtors();
     } catch (error: any) {
       showError('Error al eliminar presupuesto: ' + error.message);
-      console.error("Delete budget error:", error);
     }
   };
 
@@ -250,9 +260,9 @@ const SharedBudgets = () => {
               <TableHeader>
                 <TableRow>
                   <TableHead>Nombre</TableHead>
+                  <TableHead>Estado</TableHead>
                   <TableHead>Monto Total</TableHead>
                   <TableHead>Acreedor</TableHead>
-                  <TableHead>Participantes</TableHead>
                   <TableHead>Deuda Pendiente</TableHead>
                   <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
@@ -264,30 +274,56 @@ const SharedBudgets = () => {
                   const totalPendingDebt = pendingParticipants.reduce((sum, p) => sum + p.share_amount, 0);
                   const creditor = budget.creditor_id ? creditors.find(c => c.id === budget.creditor_id) : null;
                   const creditorName = creditor ? creditor.name : (budget.creditor_id ? 'Acreedor eliminado' : 'Yo');
+                  const isFullyPaid = pendingParticipants.length === 0;
                   
                   return (
-                    <TableRow key={budget.id}>
+                    <TableRow key={budget.id} className={cn(isFullyPaid && "bg-green-50/30")}>
                       <TableCell className="font-medium">{budget.name}</TableCell>
+                      <TableCell>
+                        {isFullyPaid ? (
+                          <Badge variant="outline" className="bg-green-100 text-green-800 border-green-200 gap-1">
+                            <CheckCircle2 className="h-3 w-3" /> Completado
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="bg-yellow-100 text-yellow-800 border-yellow-200 gap-1">
+                            <Clock className="h-3 w-3" /> Pendiente
+                          </Badge>
+                        )}
+                      </TableCell>
                       <TableCell>${budget.total_amount.toFixed(2)}</TableCell>
                       <TableCell>{creditorName}</TableCell>
-                      <TableCell>{totalParticipants}</TableCell>
                       <TableCell className={cn(totalPendingDebt > 0 ? "text-red-600 font-semibold" : "text-green-600")}>
-                        ${totalPendingDebt.toFixed(2)} ({pendingParticipants.length} pendientes)
+                        ${totalPendingDebt.toFixed(2)}
                       </TableCell>
                       <TableCell className="text-right flex gap-2 justify-end">
                         <Dialog>
                           <DialogTrigger asChild>
                             <Button variant="outline" size="sm" className="h-8 gap-1">
                               <Users className="h-3.5 w-3.5" />
-                              Ver Pagos
+                              Pagos
                             </Button>
                           </DialogTrigger>
                           <DialogContent className="sm:max-w-[500px]">
                             <DialogHeader>
-                              <DialogTitle>Pagos de {budget.name}</DialogTitle>
+                              <DialogTitle className="flex items-center justify-between pr-6">
+                                Pagos de {budget.name}
+                                {!isFullyPaid && (
+                                  <Button 
+                                    variant="outline" 
+                                    size="sm" 
+                                    className="text-xs h-7 gap-1 border-green-600 text-green-600 hover:bg-green-50"
+                                    onClick={() => handleMarkAllPaid(budget)}
+                                    disabled={isProcessing}
+                                  >
+                                    <CheckCircle className="h-3 w-3" /> Marcar todos
+                                  </Button>
+                                )}
+                              </DialogTitle>
                             </DialogHeader>
                             <div className="py-4 overflow-x-auto">
-                              <p className="text-sm mb-4">Monto por persona: ${(budget.total_amount / totalParticipants).toFixed(2)}</p>
+                              <p className="text-sm mb-4 text-muted-foreground">
+                                Monto por persona: <span className="font-bold text-foreground">${(budget.total_amount / totalParticipants).toFixed(2)}</span>
+                              </p>
                               <Table>
                                 <TableHeader>
                                   <TableRow>
@@ -303,7 +339,7 @@ const SharedBudgets = () => {
                                       <TableCell>${p.share_amount.toFixed(2)}</TableCell>
                                       <TableCell className="text-right">
                                         {p.is_paid ? (
-                                          <span className="text-green-600 flex items-center justify-end gap-1">
+                                          <span className="text-green-600 flex items-center justify-end gap-1 font-medium">
                                             <CheckCircle className="h-4 w-4" /> Pagado
                                           </span>
                                         ) : (
@@ -312,8 +348,9 @@ const SharedBudgets = () => {
                                             size="sm" 
                                             className="h-7 text-xs"
                                             onClick={() => handleMarkPaid(p.id, budget.id, p.debtor_id, p.share_amount)}
+                                            disabled={isProcessing}
                                           >
-                                            Marcar como Pagado
+                                            Marcar Pago
                                           </Button>
                                         )}
                                       </TableCell>
@@ -323,7 +360,9 @@ const SharedBudgets = () => {
                               </Table>
                             </div>
                             <DialogFooter>
-                              <Button onClick={() => {}}>Cerrar</Button>
+                              <DialogTrigger asChild>
+                                <Button variant="ghost">Cerrar</Button>
+                              </DialogTrigger>
                             </DialogFooter>
                           </DialogContent>
                         </Dialog>
@@ -339,15 +378,15 @@ const SharedBudgets = () => {
                           </AlertDialogTrigger>
                           <AlertDialogContent>
                             <AlertDialogHeader>
-                              <AlertDialogTitle>¿Estás absolutamente seguro?</AlertDialogTitle>
+                              <AlertDialogTitle>¿Eliminar presupuesto?</AlertDialogTitle>
                               <AlertDialogDescription>
-                                Esta acción eliminará el presupuesto **{budget.name}** y revertirá las deudas pendientes asociadas en la lista de deudores y el cargo al acreedor (si aplica).
+                                Se revertirán las deudas pendientes de los participantes y el cargo al acreedor. Los pagos ya realizados no se revertirán automáticamente.
                               </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>
                               <AlertDialogCancel>Cancelar</AlertDialogCancel>
                               <AlertDialogAction onClick={() => handleDeleteBudget(budget.id, budget.name)}>
-                                Eliminar Presupuesto
+                                Eliminar
                               </AlertDialogAction>
                             </AlertDialogFooter>
                           </AlertDialogContent>
