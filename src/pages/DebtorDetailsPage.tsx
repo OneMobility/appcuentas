@@ -64,7 +64,6 @@ const DebtorDetailsPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isTransactionDialogOpen, setIsTransactionDialogOpen] = useState(false);
   
-  // Estados para WhatsApp
   const [isWhatsAppDialogOpen, setIsWhatsAppDialogOpen] = useState(false);
   const [pendingWhatsApp, setPendingWhatsApp] = useState<{
     type: string;
@@ -145,6 +144,7 @@ const DebtorDetailsPage: React.FC = () => {
     }
 
     const transactionDate = getLocalDateString(new Date());
+    const linkedDescription = `Abono de ${debtor.name}: ${newTransaction.description}`;
 
     try {
       let newDebtorBalance = debtor.current_balance;
@@ -163,7 +163,7 @@ const DebtorDetailsPage: React.FC = () => {
             user_id: user.id,
             type: "ingreso",
             amount,
-            description: `Abono de ${debtor.name}: ${newTransaction.description}`,
+            description: linkedDescription,
             date: transactionDate,
             income_category_id: newTransaction.selectedIncomeCategoryId || null,
           });
@@ -177,7 +177,7 @@ const DebtorDetailsPage: React.FC = () => {
               card_id: card.id,
               type: "payment",
               amount,
-              description: `Abono de ${debtor.name}: ${newTransaction.description}`,
+              description: linkedDescription,
               date: transactionDate,
               income_category_id: newTransaction.selectedIncomeCategoryId || null,
             });
@@ -198,7 +198,6 @@ const DebtorDetailsPage: React.FC = () => {
       showSuccess("Transacción registrada.");
       setIsTransactionDialogOpen(false);
       
-      // Preparar WhatsApp si hay teléfono
       if (debtor.phone) {
         setPendingWhatsApp({
           type: newTransaction.type === "charge" ? "Cargo" : "Abono",
@@ -236,13 +235,56 @@ const DebtorDetailsPage: React.FC = () => {
   const handleDeleteTransaction = async (tx: DebtorTransaction) => {
     if (!user || !debtor) return;
     try {
+      // 1. Revertir saldo del deudor
       const newBalance = tx.type === "charge" ? debtor.current_balance - tx.amount : debtor.current_balance + tx.amount;
+      
+      // 2. Si era un abono (payment), buscar y borrar el registro en efectivo o tarjetas
+      if (tx.type === "payment") {
+        const linkedDesc = `Abono de ${debtor.name}: ${tx.description}`;
+        
+        // Buscar en efectivo
+        const { data: cashMatch } = await supabase
+          .from('cash_transactions')
+          .select('id')
+          .eq('user_id', user.id)
+          .eq('amount', tx.amount)
+          .eq('description', linkedDesc)
+          .eq('date', tx.date)
+          .limit(1);
+
+        if (cashMatch && cashMatch.length > 0) {
+          await supabase.from('cash_transactions').delete().eq('id', cashMatch[0].id);
+        } else {
+          // Buscar en tarjetas
+          const { data: cardMatch } = await supabase
+            .from('card_transactions')
+            .select('id, card_id, amount')
+            .eq('user_id', user.id)
+            .eq('amount', tx.amount)
+            .eq('description', linkedDesc)
+            .eq('date', tx.date)
+            .limit(1);
+
+          if (cardMatch && cardMatch.length > 0) {
+            const match = cardMatch[0];
+            // Revertir saldo de la tarjeta antes de borrar
+            const card = cards.find(c => c.id === match.card_id);
+            if (card) {
+              const revBalance = card.type === "credit" ? card.current_balance + match.amount : card.current_balance - match.amount;
+              await supabase.from('cards').update({ current_balance: revBalance }).eq('id', card.id);
+            }
+            await supabase.from('card_transactions').delete().eq('id', match.id);
+          }
+        }
+      }
+
       await supabase.from('debtors').update({ current_balance: newBalance }).eq('id', debtor.id);
       await supabase.from('debtor_transactions').delete().eq('id', tx.id);
-      showSuccess("Transacción eliminada.");
+      
+      showSuccess("Transacción y su vínculo eliminados correctamente.");
       fetchData();
     } catch (error: any) {
-      showError('Error: ' + error.message);
+      showError('Error al eliminar: ' + error.message);
     }
   };
 
@@ -358,7 +400,9 @@ const DebtorDetailsPage: React.FC = () => {
                       <AlertDialogContent>
                         <AlertDialogHeader>
                           <AlertDialogTitle>¿Eliminar movimiento?</AlertDialogTitle>
-                          <AlertDialogDescription>Se ajustará el saldo del deudor automáticamente.</AlertDialogDescription>
+                          <AlertDialogDescription>
+                            Si es un abono, se eliminará también el ingreso de tu efectivo/tarjeta y se ajustará el saldo del deudor.
+                          </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
                           <AlertDialogCancel>Cancelar</AlertDialogCancel>
@@ -374,7 +418,6 @@ const DebtorDetailsPage: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* Diálogo de Transacción */}
       <Dialog open={isTransactionDialogOpen} onOpenChange={setIsTransactionDialogOpen}>
         <DialogContent>
           <DialogHeader>
@@ -447,7 +490,6 @@ const DebtorDetailsPage: React.FC = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Diálogo de Confirmación WhatsApp */}
       <Dialog open={isWhatsAppDialogOpen} onOpenChange={setIsWhatsAppDialogOpen}>
         <DialogContent className="sm:max-w-[400px]">
           <DialogHeader>
