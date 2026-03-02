@@ -20,6 +20,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { useCategoryContext } from "@/context/CategoryContext";
 import DynamicLucideIcon from "@/components/DynamicLucideIcon";
+import { cn } from "@/lib/utils";
 
 interface Debtor {
   id: string;
