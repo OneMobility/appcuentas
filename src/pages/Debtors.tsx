@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
-import { PlusCircle, Trash2, Eye, Phone, Edit } from "lucide-react";
+import { PlusCircle, Trash2, Eye, Phone, Edit, DollarSign, AlertCircle } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/context/SessionContext";
@@ -15,6 +15,11 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { evaluateExpression } from "@/utils/math-helpers";
 import { useNavigate } from "react-router-dom";
+import { getLocalDateString } from "@/utils/date-helpers";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
+import { useCategoryContext } from "@/context/CategoryContext";
+import DynamicLucideIcon from "@/components/DynamicLucideIcon";
 
 interface Debtor {
   id: string;
@@ -24,31 +29,76 @@ interface Debtor {
   phone?: string;
 }
 
+interface CardData {
+  id: string;
+  name: string;
+  bank_name: string;
+  type: "credit" | "debit";
+  current_balance: number;
+}
+
 const Debtors = () => {
   const { user } = useSession();
   const navigate = useNavigate();
+  const { incomeCategories } = useCategoryContext();
   const [debtors, setDebtors] = useState<Debtor[]>([]);
+  const [cards, setCards] = useState<CardData[]>([]);
+  const [cashBalance, setCashBalance] = useState(0);
+  
   const [isAddDebtorDialogOpen, setIsAddDebtorDialogOpen] = useState(false);
   const [isEditDebtorDialogOpen, setIsEditDebtorDialogOpen] = useState(false);
+  const [isTransactionDialogOpen, setIsTransactionDialogOpen] = useState(false);
+  
   const [editingDebtor, setEditingDebtor] = useState<Debtor | null>(null);
+  const [selectedDebtor, setSelectedDebtor] = useState<Debtor | null>(null);
+  
   const [newDebtor, setNewDebtor] = useState({ name: "", initial_balance: "", phone: "" });
+  const [newTransaction, setNewTransaction] = useState({
+    type: "payment" as "charge" | "payment",
+    amount: "",
+    description: "",
+    destinationAccountId: "cash",
+    selectedIncomeCategoryId: "",
+  });
+  const [skipLinkedTransaction, setSkipLinkedTransaction] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
 
-  const fetchDebtors = async () => {
+  const fetchData = async () => {
     if (!user) return;
-    const { data, error } = await supabase
+    
+    const { data: debtorsData, error: dError } = await supabase
       .from('debtors')
       .select('*')
       .eq('user_id', user.id)
       .order('created_at', { ascending: false });
 
-    if (error) showError('Error al cargar deudores: ' + error.message);
-    else setDebtors(data || []);
+    if (dError) showError('Error al cargar deudores: ' + dError.message);
+    else setDebtors(debtorsData || []);
+
+    const { data: cardsData } = await supabase
+      .from('cards')
+      .select('id, name, bank_name, type, current_balance')
+      .eq('user_id', user.id);
+    setCards(cardsData || []);
+
+    const { data: cashTxData } = await supabase
+      .from('cash_transactions')
+      .select('type, amount')
+      .eq('user_id', user.id);
+    
+    const currentCash = (cashTxData || []).reduce((sum, tx) => 
+      tx.type === "ingreso" ? sum + tx.amount : sum - tx.amount, 0
+    );
+    setCashBalance(currentCash);
+
+    if (!newTransaction.selectedIncomeCategoryId && incomeCategories.length > 0) {
+      setNewTransaction(prev => ({ ...prev, selectedIncomeCategoryId: incomeCategories[0].id }));
+    }
   };
 
   useEffect(() => {
-    fetchDebtors();
-  }, [user]);
+    fetchData();
+  }, [user, incomeCategories]);
 
   const handleSubmitNewDebtor = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -79,7 +129,7 @@ const Debtors = () => {
 
     if (error) showError('Error: ' + error.message);
     else {
-      setDebtors((prev) => [...prev, data[0]]);
+      setDebtors((prev) => [data[0], ...prev]);
       setIsAddDebtorDialogOpen(false);
       setNewDebtor({ name: "", initial_balance: "", phone: "" });
       showSuccess("Deudor registrado.");
@@ -119,6 +169,97 @@ const Debtors = () => {
     }
   };
 
+  const handleOpenTransactionDialog = (debtor: Debtor) => {
+    setSelectedDebtor(debtor);
+    setNewTransaction({
+      type: debtor.current_balance <= 0 ? "charge" : "payment",
+      amount: "",
+      description: "",
+      destinationAccountId: "cash",
+      selectedIncomeCategoryId: incomeCategories[0]?.id || "",
+    });
+    setSkipLinkedTransaction(false);
+    setIsTransactionDialogOpen(true);
+  };
+
+  const handleTransactionSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user || !selectedDebtor) return;
+
+    let amount: number;
+    if (newTransaction.amount.startsWith('=')) {
+      amount = evaluateExpression(newTransaction.amount.substring(1)) || 0;
+    } else {
+      amount = parseFloat(newTransaction.amount);
+    }
+
+    if (isNaN(amount) || amount <= 0) {
+      showError("Monto inválido.");
+      return;
+    }
+
+    const transactionDate = getLocalDateString(new Date());
+    const linkedDescription = `Abono de ${selectedDebtor.name}: ${newTransaction.description}`;
+
+    try {
+      let newDebtorBalance = selectedDebtor.current_balance;
+
+      if (newTransaction.type === "charge") {
+        newDebtorBalance += amount;
+      } else {
+        if (newDebtorBalance < amount - 0.01) {
+          showError("El abono excede la deuda.");
+          return;
+        }
+        newDebtorBalance -= amount;
+
+        if (!skipLinkedTransaction) {
+          if (newTransaction.destinationAccountId === "cash") {
+            await supabase.from('cash_transactions').insert({
+              user_id: user.id,
+              type: "ingreso",
+              amount,
+              description: linkedDescription,
+              date: transactionDate,
+              income_category_id: newTransaction.selectedIncomeCategoryId || null,
+            });
+          } else {
+            const card = cards.find(c => c.id === newTransaction.destinationAccountId);
+            if (card) {
+              const newCardBalance = card.type === "credit" ? card.current_balance - amount : card.current_balance + amount;
+              await supabase.from('cards').update({ current_balance: newCardBalance }).eq('id', card.id);
+              await supabase.from('card_transactions').insert({
+                user_id: user.id,
+                card_id: card.id,
+                type: "payment",
+                amount,
+                description: linkedDescription,
+                date: transactionDate,
+                income_category_id: newTransaction.selectedIncomeCategoryId || null,
+              });
+            }
+          }
+        }
+      }
+
+      await supabase.from('debtors').update({ current_balance: newDebtorBalance }).eq('id', selectedDebtor.id);
+      await supabase.from('debtor_transactions').insert({
+        user_id: user.id,
+        debtor_id: selectedDebtor.id,
+        type: newTransaction.type,
+        amount,
+        description: newTransaction.description + (skipLinkedTransaction ? " (Registro manual previo)" : ""),
+        date: transactionDate,
+      });
+
+      showSuccess("Transacción registrada.");
+      setIsTransactionDialogOpen(false);
+      fetchData();
+    } catch (error: any) {
+      showError('Error: ' + error.message);
+    }
+  };
+
   const handleDeleteDebtor = async (id: string) => {
     const { error } = await supabase.from('debtors').delete().eq('id', id);
     if (error) showError('Error: ' + error.message);
@@ -140,7 +281,6 @@ const Debtors = () => {
             <TableHead>Nombre</TableHead>
             <TableHead>Saldo Inicial</TableHead>
             <TableHead>Saldo Actual</TableHead>
-            <TableHead>Teléfono</TableHead>
             <TableHead className="text-right">Acciones</TableHead>
           </TableRow>
         </TableHeader>
@@ -149,9 +289,14 @@ const Debtors = () => {
             <TableRow key={debtor.id}>
               <TableCell className="font-medium">{debtor.name}</TableCell>
               <TableCell>${debtor.initial_balance.toFixed(2)}</TableCell>
-              <TableCell>${debtor.current_balance.toFixed(2)}</TableCell>
-              <TableCell>{debtor.phone || "-"}</TableCell>
+              <TableCell className={cn(debtor.current_balance > 0 ? "text-red-600 font-semibold" : "text-green-600")}>
+                ${debtor.current_balance.toFixed(2)}
+              </TableCell>
               <TableCell className="text-right flex gap-2 justify-end">
+                <Button variant="outline" size="sm" onClick={() => handleOpenTransactionDialog(debtor)}>
+                  <DollarSign className="h-4 w-4 mr-1" /> 
+                  {debtor.current_balance <= 0 ? "Reabrir" : "Abonar"}
+                </Button>
                 <Button variant="outline" size="sm" onClick={() => navigate(`/debtors/${debtor.id}`)}>
                   <Eye className="h-4 w-4 mr-1" /> Detalles
                 </Button>
@@ -221,7 +366,6 @@ const Debtors = () => {
                     onChange={e => setNewDebtor({...newDebtor, phone: e.target.value})} 
                     placeholder="Ej. 521234567890" 
                   />
-                  <p className="text-[10px] text-muted-foreground">Incluye código de país sin el signo + (ej. 52 para México).</p>
                 </div>
                 <DialogFooter><Button type="submit">Guardar</Button></DialogFooter>
               </form>
@@ -261,6 +405,87 @@ const Debtors = () => {
               />
             </div>
             <DialogFooter><Button type="submit">Actualizar</Button></DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Diálogo de Transacción Rápida */}
+      <Dialog open={isTransactionDialogOpen} onOpenChange={setIsTransactionDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Registrar Movimiento: {selectedDebtor?.name}</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleTransactionSubmit} className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label>Tipo</Label>
+              <Select value={newTransaction.type} onValueChange={(v: any) => setNewTransaction({...newTransaction, type: v})}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="payment">Abono (Me paga)</SelectItem>
+                  <SelectItem value="charge">Cargo (Me debe más / Reabrir)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-2">
+              <Label>Monto</Label>
+              <Input 
+                value={newTransaction.amount} 
+                onChange={(e) => setNewTransaction({...newTransaction, amount: e.target.value})}
+                placeholder="Ej. 100"
+                required
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label>Descripción</Label>
+              <Input 
+                value={newTransaction.description} 
+                onChange={(e) => setNewTransaction({...newTransaction, description: e.target.value})}
+                required
+              />
+            </div>
+            {newTransaction.type === "payment" && (
+              <>
+                <div className="flex items-center space-x-2 bg-blue-50 p-3 rounded-md border border-blue-100">
+                  <Checkbox id="skip" checked={skipLinkedTransaction} onCheckedChange={(v) => setSkipLinkedTransaction(!!v)} />
+                  <div className="grid gap-1.5 leading-none">
+                    <label htmlFor="skip" className="text-sm font-medium leading-none flex items-center gap-1">
+                      Ya registré este ingreso manualmente <AlertCircle className="h-3 w-3 text-blue-500" />
+                    </label>
+                  </div>
+                </div>
+                {!skipLinkedTransaction && (
+                  <>
+                    <div className="grid gap-2">
+                      <Label>Destino</Label>
+                      <Select value={newTransaction.destinationAccountId} onValueChange={(v) => setNewTransaction({...newTransaction, destinationAccountId: v})}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="cash">Efectivo (${cashBalance.toFixed(2)})</SelectItem>
+                          {cards.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="grid gap-2">
+                      <Label>Categoría</Label>
+                      <Select value={newTransaction.selectedIncomeCategoryId} onValueChange={(v) => setNewTransaction({...newTransaction, selectedIncomeCategoryId: v})}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {incomeCategories.map(cat => (
+                            <SelectItem key={cat.id} value={cat.id}>
+                              <div className="flex items-center gap-2">
+                                <DynamicLucideIcon iconName={cat.icon || "Tag"} className="h-4 w-4" />
+                                {cat.name}
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </>
+                )}
+              </>
+            )}
+            <DialogFooter><Button type="submit">Guardar</Button></DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
