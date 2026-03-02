@@ -16,6 +16,7 @@ import Categories from "./pages/Categories";
 import Savings from "./pages/Savings";
 import SharedBudgets from "./pages/SharedBudgets";
 import CreateSharedBudget from "./pages/CreateSharedBudget";
+import EditSharedBudget from "./pages/EditSharedBudget"; // Nueva página
 import NotFound from "./pages/NotFound";
 import Login from "./pages/Login";
 import { CategoryProvider } from "./context/CategoryContext";
@@ -78,6 +79,7 @@ const App = () => {
                   <Route path="/savings" element={<Savings />} />
                   <Route path="/shared-budgets" element={<SharedBudgets />} />
                   <Route path="/shared-budgets/create" element={<CreateSharedBudget />} />
+                  <Route path="/shared-budgets/edit/:budgetId" element={<EditSharedBudget />} />
                 </Route>
                 <Route path="*" element={<NotFound />} />
               </Routes>

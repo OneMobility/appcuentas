@@ -5,7 +5,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
-import { PlusCircle, Users, CheckCircle, Trash2, Banknote, CheckCircle2, Clock, DollarSign } from "lucide-react";
+import { PlusCircle, Users, CheckCircle, Trash2, Banknote, CheckCircle2, Clock, DollarSign, Edit } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/context/SessionContext";
@@ -455,6 +455,14 @@ const SharedBudgets = () => {
                             </DialogFooter>
                           </DialogContent>
                         </Dialog>
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          className="h-8 w-8 p-0"
+                          onClick={() => navigate(`/shared-budgets/edit/${budget.id}`)}
+                        >
+                          <Edit className="h-3.5 w-3.5" />
+                        </Button>
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
                             <Button variant="destructive" size="sm" className="h-8 w-8 p-0">
