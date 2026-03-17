@@ -5,7 +5,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
-import { PlusCircle, Users, CheckCircle, Trash2, Banknote, CheckCircle2, Clock, DollarSign, Edit } from "lucide-react";
+import { PlusCircle, Users, CheckCircle, Trash2, Banknote, CheckCircle2, Clock, DollarSign, Edit, AlertCircle } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/context/SessionContext";
@@ -16,6 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useCategoryContext } from "@/context/CategoryContext";
 import DynamicLucideIcon from "@/components/DynamicLucideIcon";
 import { evaluateExpression } from "@/utils/math-helpers";
@@ -46,7 +47,7 @@ interface Participant {
   debtor_id: string;
   debtors: Debtor;
   share_amount: number;
-  paid_amount: number; // Nueva columna
+  paid_amount: number;
   is_paid: boolean;
 }
 
@@ -73,6 +74,7 @@ const SharedBudgets = () => {
 
   // Estado para el diálogo de abono
   const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false);
+  const [skipLinkedTransaction, setSkipLinkedTransaction] = useState(false);
   const [selectedParticipant, setSelectedParticipant] = useState<{
     participantId: string;
     budgetId: string;
@@ -91,7 +93,6 @@ const SharedBudgets = () => {
   const fetchAllData = async () => {
     if (!user) return;
 
-    // Fetch Debtors, Creditors, Cards, Cash
     const [debtorsRes, creditorsRes, cardsRes, cashRes] = await Promise.all([
       supabase.from('debtors').select('id, name, current_balance').eq('user_id', user.id),
       supabase.from('creditors').select('id, name, current_balance').eq('user_id', user.id),
@@ -108,7 +109,6 @@ const SharedBudgets = () => {
     );
     setCashBalance(currentCash);
 
-    // Fetch Budgets
     const { data: budgetsData, error: budgetsError } = await supabase
       .from('shared_budgets')
       .select('*, budget_participants(id, debtor_id, share_amount, paid_amount, is_paid, debtors(id, name, current_balance))')
@@ -141,6 +141,7 @@ const SharedBudgets = () => {
       destinationId: "cash",
       categoryId: incomeCategories[0]?.id || "",
     });
+    setSkipLinkedTransaction(false);
     setIsPaymentDialogOpen(true);
   };
 
@@ -169,7 +170,6 @@ const SharedBudgets = () => {
     const transactionDate = new Date().toISOString().split('T')[0];
 
     try {
-      // 1. Actualizar participante (paid_amount e is_paid)
       const newPaidAmount = (budgets.find(b => b.id === selectedParticipant.budgetId)
         ?.budget_participants.find(p => p.id === selectedParticipant.participantId)
         ?.paid_amount || 0) + amount;
@@ -185,7 +185,6 @@ const SharedBudgets = () => {
         .eq('id', selectedParticipant.participantId);
       if (partError) throw partError;
 
-      // 2. Actualizar saldo del deudor
       const debtor = debtors.find(d => d.id === selectedParticipant.debtorId);
       if (debtor) {
         const { error: debtorError } = await supabase
@@ -199,38 +198,39 @@ const SharedBudgets = () => {
           debtor_id: debtor.id,
           type: "payment",
           amount,
-          description: `Abono por Presupuesto: ${selectedParticipant.budgetName}`,
+          description: `Abono por Presupuesto: ${selectedParticipant.budgetName}${skipLinkedTransaction ? " (Registro manual previo)" : ""}`,
           date: transactionDate,
         });
       }
 
-      // 3. Registrar ingreso en Efectivo o Tarjeta
-      if (paymentForm.destinationId === "cash") {
-        await supabase.from('cash_transactions').insert({
-          user_id: user.id,
-          type: "ingreso",
-          amount,
-          description: `Abono de ${selectedParticipant.debtorName} (${selectedParticipant.budgetName})`,
-          date: transactionDate,
-          income_category_id: paymentForm.categoryId || null,
-        });
-      } else {
-        const card = cards.find(c => c.id === paymentForm.destinationId);
-        if (card) {
-          const newCardBalance = card.type === "credit" 
-            ? card.current_balance - amount 
-            : card.current_balance + amount;
-
-          await supabase.from('cards').update({ current_balance: newCardBalance }).eq('id', card.id);
-          await supabase.from('card_transactions').insert({
+      if (!skipLinkedTransaction) {
+        if (paymentForm.destinationId === "cash") {
+          await supabase.from('cash_transactions').insert({
             user_id: user.id,
-            card_id: card.id,
-            type: "payment",
+            type: "ingreso",
             amount,
             description: `Abono de ${selectedParticipant.debtorName} (${selectedParticipant.budgetName})`,
             date: transactionDate,
             income_category_id: paymentForm.categoryId || null,
           });
+        } else {
+          const card = cards.find(c => c.id === paymentForm.destinationId);
+          if (card) {
+            const newCardBalance = card.type === "credit" 
+              ? card.current_balance - amount 
+              : card.current_balance + amount;
+
+            await supabase.from('cards').update({ current_balance: newCardBalance }).eq('id', card.id);
+            await supabase.from('card_transactions').insert({
+              user_id: user.id,
+              card_id: card.id,
+              type: "payment",
+              amount,
+              description: `Abono de ${selectedParticipant.debtorName} (${selectedParticipant.budgetName})`,
+              date: transactionDate,
+              income_category_id: paymentForm.categoryId || null,
+            });
+          }
         }
       }
 
@@ -250,12 +250,10 @@ const SharedBudgets = () => {
     const pendingParticipants = budget.budget_participants.filter(p => !p.is_paid);
     if (pendingParticipants.length === 0) return;
 
-    // Para el cierre masivo, usaremos efectivo por defecto y la primera categoría de ingresos
     setIsProcessing(true);
     try {
       for (const p of pendingParticipants) {
         const remaining = p.share_amount - (p.paid_amount || 0);
-        // Reutilizamos la lógica pero de forma simplificada para el bucle
         await supabase.from('budget_participants').update({ paid_amount: p.share_amount, is_paid: true }).eq('id', p.id);
         
         const debtor = debtors.find(d => d.id === p.debtor_id);
@@ -290,7 +288,6 @@ const SharedBudgets = () => {
       const budgetToDelete = budgets.find(b => b.id === budgetId);
       if (!budgetToDelete) return;
 
-      // Revertir deudas pendientes
       for (const participant of budgetToDelete.budget_participants) {
         if (!participant.is_paid) {
           const remaining = participant.share_amount - (participant.paid_amount || 0);
@@ -301,7 +298,6 @@ const SharedBudgets = () => {
         }
       }
 
-      // Revertir cargo al acreedor
       if (budgetToDelete.creditor_id) {
         const creditor = creditors.find(c => c.id === budgetToDelete.creditor_id);
         if (creditor) {
@@ -512,40 +508,64 @@ const SharedBudgets = () => {
                 required
               />
             </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="dest" className="text-right">Destino</Label>
-              <Select value={paymentForm.destinationId} onValueChange={(v) => setPaymentForm({...paymentForm, destinationId: v})}>
-                <SelectTrigger id="dest" className="col-span-3">
-                  <SelectValue placeholder="Selecciona cuenta" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="cash">Efectivo (Saldo: ${cashBalance.toFixed(2)})</SelectItem>
-                  {cards.filter(c => c.type === "debit").map(card => (
-                    <SelectItem key={card.id} value={card.id}>
-                      {card.name} ({card.bank_name}) - ${card.current_balance.toFixed(2)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+
+            <div className="col-span-4 flex items-center space-x-2 bg-blue-50 p-3 rounded-md border border-blue-100">
+              <Checkbox 
+                id="skip" 
+                checked={skipLinkedTransaction} 
+                onCheckedChange={(v) => setSkipLinkedTransaction(!!v)} 
+              />
+              <div className="grid gap-1.5 leading-none">
+                <label
+                  htmlFor="skip"
+                  className="text-sm font-medium leading-none flex items-center gap-1"
+                >
+                  Ya registré este ingreso manualmente <AlertCircle className="h-3 w-3 text-blue-500" />
+                </label>
+                <p className="text-[10px] text-muted-foreground">
+                  Marca esto si ya creaste el registro en "Lo que tienes" o "Tarjetas" para evitar duplicados.
+                </p>
+              </div>
             </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="cat" className="text-right">Categoría</Label>
-              <Select value={paymentForm.categoryId} onValueChange={(v) => setPaymentForm({...paymentForm, categoryId: v})}>
-                <SelectTrigger id="cat" className="col-span-3">
-                  <SelectValue placeholder="Selecciona categoría" />
-                </SelectTrigger>
-                <SelectContent>
-                  {incomeCategories.map(cat => (
-                    <SelectItem key={cat.id} value={cat.id}>
-                      <div className="flex items-center gap-2">
-                        <DynamicLucideIcon iconName={cat.icon || "Tag"} className="h-4 w-4" />
-                        {cat.name}
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+
+            {!skipLinkedTransaction && (
+              <>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="dest" className="text-right">Destino</Label>
+                  <Select value={paymentForm.destinationId} onValueChange={(v) => setPaymentForm({...paymentForm, destinationId: v})}>
+                    <SelectTrigger id="dest" className="col-span-3">
+                      <SelectValue placeholder="Selecciona cuenta" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="cash">Efectivo (Saldo: ${cashBalance.toFixed(2)})</SelectItem>
+                      {cards.filter(c => c.type === "debit").map(card => (
+                        <SelectItem key={card.id} value={card.id}>
+                          {card.name} ({card.bank_name}) - ${card.current_balance.toFixed(2)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="cat" className="text-right">Categoría</Label>
+                  <Select value={paymentForm.categoryId} onValueChange={(v) => setPaymentForm({...paymentForm, categoryId: v})}>
+                    <SelectTrigger id="cat" className="col-span-3">
+                      <SelectValue placeholder="Selecciona categoría" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {incomeCategories.map(cat => (
+                        <SelectItem key={cat.id} value={cat.id}>
+                          <div className="flex items-center gap-2">
+                            <DynamicLucideIcon iconName={cat.icon || "Tag"} className="h-4 w-4" />
+                            {cat.name}
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </>
+            )}
             <DialogFooter>
               <Button type="submit" disabled={isProcessing}>
                 {isProcessing ? "Registrando..." : "Confirmar Abono"}
