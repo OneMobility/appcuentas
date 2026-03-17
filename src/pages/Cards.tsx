@@ -21,20 +21,16 @@ import { useSession } from "@/context/SessionContext";
 import CardTransferDialog from "@/components/CardTransferDialog";
 import { useCategoryContext } from "@/context/CategoryContext";
 import { evaluateExpression } from "@/utils/math-helpers";
-import ImageUpload from "@/components/ImageUpload";
-import DynamicLucideIcon from "@/components/DynamicLucideIcon";
 
 const Cards = () => {
   const { user } = useSession();
-  const { incomeCategories, expenseCategories, isLoadingCategories } = useCategoryContext();
+  const { isLoadingCategories } = useCategoryContext();
   const [cards, setCards] = useState<any[]>([]);
   const [cashBalance, setCashBalance] = useState(0);
   const [isAddCardDialogOpen, setIsAddCardDialogOpen] = useState(false);
-  const [isEditCardDialogOpen, setIsEditCardDialogOpen] = useState(false);
-  const [isAddTransactionDialogOpen, setIsAddTransactionDialogOpen] = useState(false);
   const [isTransferDialogOpen, setIsTransferDialogOpen] = useState(false);
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
-  const [editingCard, setEditingCard] = useState<any>(null);
+  const [isAddTransactionDialogOpen, setIsAddTransactionDialogOpen] = useState(false);
   
   const [newCard, setNewCard] = useState({
     name: "", bank_name: "", last_four_digits: "", expiration_date: "",
@@ -43,24 +39,40 @@ const Cards = () => {
     color: "#3B82F6",
   });
 
-  const [newTransaction, setNewTransaction] = useState({
-    type: "charge" as "charge" | "payment", amount: "", description: "",
-    date: new Date(), selectedCategoryId: "", selectedCategoryType: "" as "income" | "expense" | "",
-    selectedCardForGlobalTransaction: "", imageUrl: null as string | null,
-  });
-
   const [searchTerm, setSearchTerm] = useState("");
 
   const fetchCards = async () => {
     if (!user) return;
-    const { data, error } = await supabase
+    
+    // Cargamos las tarjetas primero
+    const { data: cardsData, error: cardsError } = await supabase
       .from('cards')
-      .select('*, card_pockets(*)')
+      .select('*')
       .eq('user_id', user.id)
       .order('created_at', { ascending: false });
 
-    if (error) showError('Error al cargar tarjetas');
-    else setCards(data || []);
+    if (cardsError) {
+      showError('Error al cargar tarjetas');
+      return;
+    }
+
+    // Intentamos cargar los apartados por separado para no romper la vista si la tabla no existe
+    try {
+      const { data: pocketsData } = await supabase
+        .from('card_pockets')
+        .select('*')
+        .eq('user_id', user.id);
+
+      const cardsWithPockets = (cardsData || []).map(card => ({
+        ...card,
+        card_pockets: (pocketsData || []).filter(p => p.card_id === card.id)
+      }));
+      
+      setCards(cardsWithPockets);
+    } catch (e) {
+      console.warn("La tabla card_pockets podría no existir aún:", e);
+      setCards(cardsData || []);
+    }
   };
 
   const fetchCashBalance = async () => {
@@ -80,7 +92,7 @@ const Cards = () => {
   const handleAddCard = async (e: React.FormEvent) => {
     e.preventDefault();
     const balance = evaluateExpression(newCard.initial_balance) || 0;
-    const { data, error } = await supabase.from('cards').insert({
+    const { error } = await supabase.from('cards').insert({
       user_id: user?.id,
       name: newCard.name || `${newCard.bank_name} ${newCard.type}`,
       bank_name: newCard.bank_name,
@@ -91,9 +103,7 @@ const Cards = () => {
       current_balance: balance,
       color: newCard.color,
       credit_limit: newCard.type === "credit" ? (evaluateExpression(newCard.credit_limit) || 0) : null,
-      cut_off_day: newCard.cut_off_day,
-      days_to_pay_after_cut_off: newCard.days_to_pay_after_cut_off
-    }).select();
+    });
 
     if (error) showError("Error al guardar");
     else {
@@ -113,8 +123,8 @@ const Cards = () => {
   };
 
   const filteredCards = cards.filter(c => 
-    c.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    c.bank_name.toLowerCase().includes(searchTerm.toLowerCase())
+    (c.name || "").toLowerCase().includes(searchTerm.toLowerCase()) || 
+    (c.bank_name || "").toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
@@ -128,7 +138,7 @@ const Cards = () => {
             card={card}
             onAddTransaction={(id) => { setSelectedCardId(id); setIsAddTransactionDialogOpen(true); }}
             onDeleteCard={handleDeleteCard}
-            onEditCard={(c) => { setEditingCard(c); setIsEditCardDialogOpen(true); }}
+            onEditCard={(c) => { /* Implementar edición si es necesario */ }}
             onTransfer={() => setIsTransferDialogOpen(true)}
           />
         ))}

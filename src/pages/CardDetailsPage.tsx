@@ -41,15 +41,16 @@ const CardDetailsPage: React.FC = () => {
     amount: "",
     description: "",
     date: new Date(),
-    imageUrl: null as string | null,
   });
 
   const fetchCardDetails = async () => {
     if (!user || !cardId) return;
     setIsLoading(true);
+    
+    // Cargar tarjeta y transacciones
     const { data, error } = await supabase
       .from('cards')
-      .select('*, card_transactions(*), card_pockets(*)')
+      .select('*, card_transactions(*)')
       .eq('id', cardId)
       .eq('user_id', user.id)
       .single();
@@ -57,9 +58,21 @@ const CardDetailsPage: React.FC = () => {
     if (error) {
       showError('Error al cargar detalles');
       navigate('/cards');
-    } else {
-      setCard(data);
+      return;
     }
+
+    // Cargar apartados por separado
+    try {
+      const { data: pockets } = await supabase
+        .from('card_pockets')
+        .select('*')
+        .eq('card_id', cardId);
+      
+      setCard({ ...data, card_pockets: pockets || [] });
+    } catch (e) {
+      setCard({ ...data, card_pockets: [] });
+    }
+    
     setIsLoading(false);
   };
 
