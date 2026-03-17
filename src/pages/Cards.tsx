@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { PlusCircle, DollarSign, Search, CreditCard, AlertCircle, Scale, Edit, Banknote, ThumbsUp, ThumbsDown, PiggyBank } from "lucide-react";
+import { PlusCircle, DollarSign, Search, Scale, ArrowRightLeft } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { cn } from "@/lib/utils";
 import CardDisplay from "@/components/CardDisplay";
@@ -27,8 +27,6 @@ const Cards = () => {
   
   const [cards, setCards] = useState<any[]>([]);
   const [cashBalance, setCashBalance] = useState(0);
-  const [debtorsBalance, setDebtorsBalance] = useState(0);
-  const [creditorsBalance, setCreditorsBalance] = useState(0);
   
   const [isAddCardDialogOpen, setIsAddCardDialogOpen] = useState(false);
   const [isEditCardDialogOpen, setIsEditCardDialogOpen] = useState(false);
@@ -57,17 +55,13 @@ const Cards = () => {
   const fetchAllData = async () => {
     if (!user) return;
     
-    const [cardsRes, cashRes, debtorsRes, creditorsRes] = await Promise.all([
+    const [cardsRes, cashRes] = await Promise.all([
       supabase.from('cards').select('*, card_pockets(*), card_transactions(*)').eq('user_id', user.id).order('created_at', { ascending: false }),
-      supabase.from('cash_transactions').select('type, amount').eq('user_id', user.id),
-      supabase.from('debtors').select('current_balance').eq('user_id', user.id),
-      supabase.from('creditors').select('current_balance').eq('user_id', user.id)
+      supabase.from('cash_transactions').select('type, amount').eq('user_id', user.id)
     ]);
 
     setCards(cardsRes.data || []);
     setCashBalance((cashRes.data || []).reduce((s, t) => t.type === "ingreso" ? s + t.amount : s - t.amount, 0));
-    setDebtorsBalance((debtorsRes.data || []).reduce((s, d) => s + d.current_balance, 0));
-    setCreditorsBalance((creditorsRes.data || []).reduce((s, c) => s + c.current_balance, 0));
   };
 
   useEffect(() => {
@@ -198,7 +192,8 @@ const Cards = () => {
 
   const totalDebitBalance = cards.filter(c => c.type === "debit").reduce((s, c) => s + c.current_balance, 0);
   const totalCreditDebt = cards.filter(c => c.type === "credit").reduce((s, c) => s + c.current_balance, 0);
-  const overallBalance = cashBalance + totalDebitBalance + debtorsBalance - creditorsBalance - totalCreditDebt;
+  const totalAvailableCredit = cards.filter(c => c.type === "credit").reduce((s, c) => s + ((c.credit_limit || 0) - c.current_balance), 0);
+  const netCardBalance = totalDebitBalance - totalCreditDebt;
 
   return (
     <div className="flex flex-col gap-6 p-4">
@@ -206,32 +201,32 @@ const Cards = () => {
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card className="border-l-4 border-green-600 bg-green-50 text-green-800">
-          <CardHeader className="pb-2"><CardTitle className="text-xs font-medium flex items-center gap-2"><Banknote className="h-3 w-3" /> EFECTIVO</CardTitle></CardHeader>
-          <CardContent><div className="text-xl font-bold">${cashBalance.toFixed(2)}</div></CardContent>
-        </Card>
-        <Card className="border-l-4 border-blue-600 bg-blue-50 text-blue-800">
-          <CardHeader className="pb-2"><CardTitle className="text-xs font-medium flex items-center gap-2"><ThumbsUp className="h-3 w-3" /> TE DEBEN</CardTitle></CardHeader>
-          <CardContent><div className="text-xl font-bold">${debtorsBalance.toFixed(2)}</div></CardContent>
+          <CardHeader className="pb-2"><CardTitle className="text-xs font-medium">SALDO EN DÉBITO</CardTitle></CardHeader>
+          <CardContent><div className="text-xl font-bold">${totalDebitBalance.toFixed(2)}</div></CardContent>
         </Card>
         <Card className="border-l-4 border-red-600 bg-red-50 text-red-800">
-          <CardHeader className="pb-2"><CardTitle className="text-xs font-medium flex items-center gap-2"><ThumbsDown className="h-3 w-3" /> DEBES</CardTitle></CardHeader>
-          <CardContent><div className="text-xl font-bold">${creditorsBalance.toFixed(2)}</div></CardContent>
+          <CardHeader className="pb-2"><CardTitle className="text-xs font-medium">DEUDA DE CRÉDITO</CardTitle></CardHeader>
+          <CardContent><div className="text-xl font-bold">${totalCreditDebt.toFixed(2)}</div></CardContent>
+        </Card>
+        <Card className="border-l-4 border-blue-600 bg-blue-50 text-blue-800">
+          <CardHeader className="pb-2"><CardTitle className="text-xs font-medium">CRÉDITO DISPONIBLE</CardTitle></CardHeader>
+          <CardContent><div className="text-xl font-bold">${totalAvailableCredit.toFixed(2)}</div></CardContent>
         </Card>
         <Card className="border-l-4 border-pink-600 bg-pink-50 text-pink-800">
-          <CardHeader className="pb-2"><CardTitle className="text-xs font-medium flex items-center gap-2"><PiggyBank className="h-3 w-3" /> BALANCE TOTAL</CardTitle></CardHeader>
-          <CardContent><div className="text-xl font-bold">${overallBalance.toFixed(2)}</div></CardContent>
-        </Card>
+          <CardHeader className="pb-2"><CardTitle className="text-xs font-medium">BALANCE NETO TARJETAS</CardTitle></CardHeader>
+          <CardContent><div className="text-xl font-bold">${netCardBalance.toFixed(2)}</div></CardContent>
+        </div>
       </div>
 
       <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
         <div className="relative w-full md:max-w-sm">
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Buscar tarjeta..." className="pl-8" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+          <Input placeholder="Buscar tarjeta..." className="pl-8 h-9" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
         </div>
-        <div className="flex flex-wrap gap-2 w-full md:w-auto">
-          <Button variant="outline" className="flex-1 md:flex-none" onClick={() => setIsTransferDialogOpen(true)}>Transferir</Button>
-          <Button variant="outline" className="flex-1 md:flex-none gap-2" onClick={handleOpenReconcile}><Scale className="h-4 w-4" /> Cuadrar Saldo</Button>
-          <Button className="flex-1 md:flex-none" onClick={handleOpenAddCard}><PlusCircle className="h-4 w-4 mr-2" /> Añadir Tarjeta</Button>
+        <div className="flex items-center gap-2 w-full md:w-auto">
+          <Button variant="outline" size="icon" className="h-9 w-9" onClick={() => setIsTransferDialogOpen(true)} title="Transferir"><ArrowRightLeft className="h-4 w-4" /></Button>
+          <Button variant="outline" size="icon" className="h-9 w-9" onClick={handleOpenReconcile} title="Cuadrar Saldo"><Scale className="h-4 w-4" /></Button>
+          <Button variant="default" size="icon" className="h-9 w-9" onClick={handleOpenAddCard} title="Añadir Tarjeta"><PlusCircle className="h-4 w-4" /></Button>
         </div>
       </div>
 

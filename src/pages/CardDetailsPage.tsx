@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { DollarSign, History, ArrowLeft, FileDown, FileText, ChevronLeft, ChevronRight, Scale } from "lucide-react";
+import { DollarSign, ArrowLeft, FileDown, FileText, ChevronLeft, ChevronRight, Scale, Search, Filter } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { cn } from "@/lib/utils";
 import { format, parseISO, isWithinInterval, startOfMonth, endOfMonth, addMonths, subMonths } from "date-fns";
@@ -38,6 +38,9 @@ const CardDetailsPage: React.FC = () => {
   const [isAddTransactionDialogOpen, setIsAddTransactionDialogOpen] = useState(false);
   const [isReconcileDialogOpen, setIsReconcileDialogOpen] = useState(false);
   
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filterType, setFilterType] = useState<"all" | "charge" | "payment">("all");
+
   const [newTransaction, setNewTransaction] = useState({
     type: "charge" as "charge" | "payment",
     amount: "",
@@ -101,11 +104,16 @@ const CardDetailsPage: React.FC = () => {
   const filteredTransactions = useMemo(() => {
     const start = startOfMonth(currentViewDate);
     const end = endOfMonth(currentViewDate);
+    
     return transactionsWithBalance.filter((tx: any) => {
       const txDate = parseISO(tx.date);
-      return isWithinInterval(txDate, { start, end });
+      const matchesDate = isWithinInterval(txDate, { start, end });
+      const matchesSearch = tx.description.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesType = filterType === "all" || tx.type === filterType;
+      
+      return matchesDate && matchesSearch && matchesType;
     });
-  }, [transactionsWithBalance, currentViewDate]);
+  }, [transactionsWithBalance, currentViewDate, searchTerm, filterType]);
 
   const handleTransactionSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -136,6 +144,27 @@ const CardDetailsPage: React.FC = () => {
       setIsAddTransactionDialogOpen(false);
       fetchCardDetails();
     }
+  };
+
+  const handleExport = (formatType: 'csv' | 'pdf') => {
+    const dataToExport = filteredTransactions.map(tx => ({
+      Fecha: format(parseISO(tx.date), "dd/MM/yyyy"),
+      Descripción: tx.description,
+      Categoría: getCategoryById(tx.income_category_id || tx.expense_category_id)?.name || "Sin categoría",
+      Tipo: tx.type === "charge" ? "Cargo" : "Abono",
+      Monto: tx.amount.toFixed(2),
+      Saldo: tx.runningBalance.toFixed(2)
+    }));
+
+    const filename = `movimientos_${card.name}_${format(new Date(), "yyyyMMdd")}`;
+    const headers = ["Fecha", "Descripción", "Categoría", "Tipo", "Monto", "Saldo"];
+
+    if (formatType === 'csv') {
+      exportToCsv(`${filename}.csv`, dataToExport);
+    } else {
+      exportToPdf(`${filename}.pdf`, `Movimientos: ${card.name}`, headers, dataToExport.map(d => Object.values(d)));
+    }
+    showSuccess(`Exportado a ${formatType.toUpperCase()}`);
   };
 
   if (isLoading) return <LoadingSpinner />;
@@ -175,48 +204,90 @@ const CardDetailsPage: React.FC = () => {
           </Card>
 
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <div className="flex items-center gap-4">
-                <CardTitle>Movimientos</CardTitle>
-                <div className="flex items-center bg-muted rounded-lg p-1">
-                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setCurrentViewDate(subMonths(currentViewDate, 1))}><ChevronLeft className="h-4 w-4" /></Button>
-                  <span className="px-3 text-sm font-medium min-w-[120px] text-center capitalize">{format(currentViewDate, "MMMM yyyy", { locale: es })}</span>
-                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setCurrentViewDate(addMonths(currentViewDate, 1))}><ChevronRight className="h-4 w-4" /></Button>
+            <CardHeader className="flex flex-col gap-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <CardTitle className="text-lg">Movimientos</CardTitle>
+                  <div className="flex items-center bg-muted rounded-lg p-0.5">
+                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setCurrentViewDate(subMonths(currentViewDate, 1))}><ChevronLeft className="h-4 w-4" /></Button>
+                    <span className="px-2 text-xs font-medium min-w-[100px] text-center capitalize">{format(currentViewDate, "MMM yyyy", { locale: es })}</span>
+                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setCurrentViewDate(addMonths(currentViewDate, 1))}><ChevronRight className="h-4 w-4" /></Button>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1">
+                  <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setIsReconcileDialogOpen(true)} title="Cuadrar Saldo"><Scale className="h-4 w-4" /></Button>
+                  <Button variant="default" size="icon" className="h-8 w-8" onClick={() => setIsAddTransactionDialogOpen(true)} title="Nuevo Movimiento"><DollarSign className="h-4 w-4" /></Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" size="icon" className="h-8 w-8" title="Exportar"><FileDown className="h-4 w-4" /></Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => handleExport('csv')}><FileText className="mr-2 h-4 w-4" /> CSV</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleExport('pdf')}><FileText className="mr-2 h-4 w-4" /> PDF</DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
               </div>
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" onClick={() => setIsReconcileDialogOpen(true)}><Scale className="h-4 w-4 mr-1" /> Cuadrar</Button>
-                <Button size="sm" onClick={() => setIsAddTransactionDialogOpen(true)}><DollarSign className="h-4 w-4 mr-1" /> Nuevo</Button>
+              
+              <div className="flex flex-col sm:flex-row gap-2">
+                <div className="relative flex-1">
+                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input 
+                    placeholder="Buscar descripción..." 
+                    className="pl-8 h-9" 
+                    value={searchTerm} 
+                    onChange={e => setSearchTerm(e.target.value)} 
+                  />
+                </div>
+                <Select value={filterType} onValueChange={(v: any) => setFilterType(v)}>
+                  <SelectTrigger className="w-full sm:w-[140px] h-9">
+                    <Filter className="mr-2 h-3 w-3" />
+                    <SelectValue placeholder="Filtrar" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos</SelectItem>
+                    <SelectItem value="charge">Cargos</SelectItem>
+                    <SelectItem value="payment">Abonos</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </CardHeader>
             <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Fecha</TableHead>
-                    <TableHead>Descripción</TableHead>
-                    <TableHead className="text-right">Monto</TableHead>
-                    <TableHead className="text-right">Saldo</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredTransactions.map((tx: any) => (
-                    <TableRow key={tx.id}>
-                      <TableCell>{format(parseISO(tx.date), "dd/MM")}</TableCell>
-                      <TableCell>
-                        <div className="flex flex-col">
-                          <span className="font-medium">{tx.description}</span>
-                          <span className="text-xs text-muted-foreground">{getCategoryById(tx.income_category_id || tx.expense_category_id)?.name || "Sin categoría"}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell className={cn("text-right font-bold", tx.type === "charge" ? "text-red-600" : "text-green-600")}>
-                        {tx.type === "charge" ? "-" : "+"}${tx.amount.toFixed(2)}
-                      </TableCell>
-                      <TableCell className="text-right font-medium text-muted-foreground">${tx.runningBalance.toFixed(2)}</TableCell>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-[80px]">Fecha</TableHead>
+                      <TableHead>Descripción</TableHead>
+                      <TableHead className="text-right">Monto</TableHead>
+                      <TableHead className="text-right">Saldo</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredTransactions.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">No hay movimientos para este periodo.</TableCell>
+                      </TableRow>
+                    ) : (
+                      filteredTransactions.map((tx: any) => (
+                        <TableRow key={tx.id}>
+                          <TableCell className="text-xs">{format(parseISO(tx.date), "dd/MM")}</TableCell>
+                          <TableCell>
+                            <div className="flex flex-col">
+                              <span className="font-medium text-sm">{tx.description}</span>
+                              <span className="text-[10px] text-muted-foreground">{getCategoryById(tx.income_category_id || tx.expense_category_id)?.name || "Sin categoría"}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell className={cn("text-right font-bold text-sm", tx.type === "charge" ? "text-red-600" : "text-green-600")}>
+                            {tx.type === "charge" ? "-" : "+"}${tx.amount.toFixed(2)}
+                          </TableCell>
+                          <TableCell className="text-right text-xs font-medium text-muted-foreground">${tx.runningBalance.toFixed(2)}</TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
             </CardContent>
           </Card>
         </div>
