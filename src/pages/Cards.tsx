@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { PlusCircle, DollarSign, Search, Scale, ArrowRightLeft } from "lucide-react";
+import { PlusCircle, DollarSign, Search, Scale, ArrowRightLeft, Wallet, CreditCard, AlertCircle, PiggyBank } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { cn } from "@/lib/utils";
 import CardDisplay from "@/components/CardDisplay";
@@ -201,19 +201,19 @@ const Cards = () => {
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card className="border-l-4 border-green-600 bg-green-50 text-green-800">
-          <CardHeader className="pb-2"><CardTitle className="text-xs font-medium">SALDO EN DÉBITO</CardTitle></CardHeader>
+          <CardHeader className="pb-2"><CardTitle className="text-xs font-medium flex items-center gap-2"><Wallet className="h-3 w-3" /> SALDO EN DÉBITO</CardTitle></CardHeader>
           <CardContent><div className="text-xl font-bold">${totalDebitBalance.toFixed(2)}</div></CardContent>
         </Card>
+        <Card className="border-l-4 border-yellow-500 bg-yellow-50 text-yellow-800">
+          <CardHeader className="pb-2"><CardTitle className="text-xs font-medium flex items-center gap-2"><CreditCard className="h-3 w-3" /> CRÉDITO DISPONIBLE</CardTitle></CardHeader>
+          <CardContent><div className="text-xl font-bold">${totalAvailableCredit.toFixed(2)}</div></CardContent>
+        </Card>
         <Card className="border-l-4 border-red-600 bg-red-50 text-red-800">
-          <CardHeader className="pb-2"><CardTitle className="text-xs font-medium">DEUDA DE CRÉDITO</CardTitle></CardHeader>
+          <CardHeader className="pb-2"><CardTitle className="text-xs font-medium flex items-center gap-2"><AlertCircle className="h-3 w-3" /> DEUDA DE CRÉDITO</CardTitle></CardHeader>
           <CardContent><div className="text-xl font-bold">${totalCreditDebt.toFixed(2)}</div></CardContent>
         </Card>
         <Card className="border-l-4 border-blue-600 bg-blue-50 text-blue-800">
-          <CardHeader className="pb-2"><CardTitle className="text-xs font-medium">CRÉDITO DISPONIBLE</CardTitle></CardHeader>
-          <CardContent><div className="text-xl font-bold">${totalAvailableCredit.toFixed(2)}</div></CardContent>
-        </Card>
-        <Card className="border-l-4 border-pink-600 bg-pink-50 text-pink-800">
-          <CardHeader className="pb-2"><CardTitle className="text-xs font-medium">BALANCE NETO TARJETAS</CardTitle></CardHeader>
+          <CardHeader className="pb-2"><CardTitle className="text-xs font-medium flex items-center gap-2"><PiggyBank className="h-3 w-3" /> BALANCE NETO</CardTitle></CardHeader>
           <CardContent><div className="text-xl font-bold">${netCardBalance.toFixed(2)}</div></CardContent>
         </Card>
       </div>

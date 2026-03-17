@@ -259,6 +259,7 @@ const CardDetailsPage: React.FC = () => {
                     <TableRow>
                       <TableHead className="w-[80px]">Fecha</TableHead>
                       <TableHead>Descripción</TableHead>
+                      <TableHead>Categoría</TableHead>
                       <TableHead className="text-right">Monto</TableHead>
                       <TableHead className="text-right">Saldo</TableHead>
                     </TableRow>
@@ -266,24 +267,32 @@ const CardDetailsPage: React.FC = () => {
                   <TableBody>
                     {filteredTransactions.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">No hay movimientos para este periodo.</TableCell>
+                        <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">No hay movimientos para este periodo.</TableCell>
                       </TableRow>
                     ) : (
-                      filteredTransactions.map((tx: any) => (
-                        <TableRow key={tx.id}>
-                          <TableCell className="text-xs">{format(parseISO(tx.date), "dd/MM")}</TableCell>
-                          <TableCell>
-                            <div className="flex flex-col">
-                              <span className="font-medium text-sm">{tx.description}</span>
-                              <span className="text-[10px] text-muted-foreground">{getCategoryById(tx.income_category_id || tx.expense_category_id)?.name || "Sin categoría"}</span>
-                            </div>
-                          </TableCell>
-                          <TableCell className={cn("text-right font-bold text-sm", tx.type === "charge" ? "text-red-600" : "text-green-600")}>
-                            {tx.type === "charge" ? "-" : "+"}${tx.amount.toFixed(2)}
-                          </TableCell>
-                          <TableCell className="text-right text-xs font-medium text-muted-foreground">${tx.runningBalance.toFixed(2)}</TableCell>
-                        </TableRow>
-                      ))
+                      filteredTransactions.map((tx: any) => {
+                        const category = getCategoryById(tx.income_category_id || tx.expense_category_id);
+                        return (
+                          <TableRow key={tx.id}>
+                            <TableCell className="text-xs">{format(parseISO(tx.date), "dd/MM")}</TableCell>
+                            <TableCell className="font-medium text-sm">{tx.description}</TableCell>
+                            <TableCell>
+                              {category ? (
+                                <div className="flex items-center gap-1.5 text-xs">
+                                  <DynamicLucideIcon iconName={category.icon || "Tag"} className="h-3 w-3" />
+                                  {category.name}
+                                </div>
+                              ) : (
+                                <span className="text-xs text-muted-foreground italic">Sin categoría</span>
+                              )}
+                            </TableCell>
+                            <TableCell className={cn("text-right font-bold text-sm", tx.type === "charge" ? "text-red-600" : "text-green-600")}>
+                              {tx.type === "charge" ? "-" : "+"}${tx.amount.toFixed(2)}
+                            </TableCell>
+                            <TableCell className="text-right text-xs font-medium text-muted-foreground">${tx.runningBalance.toFixed(2)}</TableCell>
+                          </TableRow>
+                        );
+                      })
                     )}
                   </TableBody>
                 </Table>
