@@ -6,11 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Calendar } from "@/components/ui/calendar";
-import { PlusCircle, CalendarIcon, Edit, Trash2, ArrowRightLeft, Scale, ChevronLeft, ChevronRight } from "lucide-react";
+import { PlusCircle, ChevronLeft, ChevronRight } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { cn } from "@/lib/utils";
 import { format, parseISO, startOfMonth, endOfMonth, isWithinInterval, addMonths, subMonths } from "date-fns";
@@ -20,6 +18,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/context/SessionContext";
 import { evaluateExpression } from "@/utils/math-helpers";
 import { getLocalDateString } from "@/utils/date-helpers";
+import DynamicLucideIcon from "@/components/DynamicLucideIcon";
 
 const Cash = () => {
   const { user } = useSession();
@@ -34,7 +33,6 @@ const Cash = () => {
     type: "ingreso" as "ingreso" | "egreso",
     amount: "",
     description: "",
-    date: new Date(),
     selectedCategoryId: "",
   });
 
@@ -49,8 +47,7 @@ const Cash = () => {
     if (error) showError('Error al cargar transacciones');
     else {
       setTransactions(data || []);
-      const currentBalance = (data || []).reduce((sum, tx) => tx.type === "ingreso" ? sum + tx.amount : sum - tx.amount, 0);
-      setBalance(currentBalance);
+      setBalance((data || []).reduce((sum, tx) => tx.type === "ingreso" ? sum + tx.amount : sum - tx.amount, 0));
     }
   };
 
@@ -61,32 +58,22 @@ const Cash = () => {
   const filteredTransactions = useMemo(() => {
     const start = startOfMonth(currentViewDate);
     const end = endOfMonth(currentViewDate);
-
-    return transactions.filter(tx => {
-      const txDate = parseISO(tx.date);
-      return isWithinInterval(txDate, { start, end });
-    });
+    return transactions.filter(tx => isWithinInterval(parseISO(tx.date), { start, end }));
   }, [transactions, currentViewDate]);
-
-  const handlePrevMonth = () => setCurrentViewDate(subMonths(currentViewDate, 1));
-  const handleNextMonth = () => setCurrentViewDate(addMonths(currentViewDate, 1));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
 
-    let amount = newTransaction.amount.startsWith('=') 
-      ? evaluateExpression(newTransaction.amount.substring(1)) 
-      : parseFloat(newTransaction.amount);
-
-    if (!amount || amount <= 0) { showError("Monto inválido"); return; }
+    const amount = evaluateExpression(newTransaction.amount) || 0;
+    if (amount <= 0) { showError("Monto inválido"); return; }
 
     const { error } = await supabase.from('cash_transactions').insert({
       user_id: user.id,
       type: newTransaction.type,
       amount,
       description: newTransaction.description,
-      date: getLocalDateString(newTransaction.date),
+      date: getLocalDateString(new Date()),
       income_category_id: newTransaction.type === "ingreso" ? newTransaction.selectedCategoryId : null,
       expense_category_id: newTransaction.type === "egreso" ? newTransaction.selectedCategoryId : null,
     });
@@ -113,16 +100,12 @@ const Cash = () => {
           <div className="flex items-center gap-4">
             <CardTitle>Movimientos</CardTitle>
             <div className="flex items-center bg-muted rounded-lg p-1">
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handlePrevMonth}><ChevronLeft className="h-4 w-4" /></Button>
-              <span className="px-3 text-sm font-medium min-w-[120px] text-center capitalize">
-                {format(currentViewDate, "MMMM yyyy", { locale: es })}
-              </span>
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleNextMonth}><ChevronRight className="h-4 w-4" /></Button>
+              <Button variant="ghost" size="icon" onClick={() => setCurrentViewDate(subMonths(currentViewDate, 1))}><ChevronLeft className="h-4 w-4" /></Button>
+              <span className="px-3 text-sm font-medium min-w-[120px] text-center capitalize">{format(currentViewDate, "MMMM yyyy", { locale: es })}</span>
+              <Button variant="ghost" size="icon" onClick={() => setCurrentViewDate(addMonths(currentViewDate, 1))}><ChevronRight className="h-4 w-4" /></Button>
             </div>
           </div>
-          <Button size="sm" onClick={() => setIsAddDialogOpen(true)}>
-            <PlusCircle className="h-4 w-4 mr-1" /> Nueva Transacción
-          </Button>
+          <Button size="sm" onClick={() => setIsAddDialogOpen(true)}><PlusCircle className="h-4 w-4 mr-1" /> Nueva Transacción</Button>
         </CardHeader>
         <CardContent>
           <Table>
@@ -140,9 +123,7 @@ const Cash = () => {
                   <TableCell>
                     <div className="flex flex-col">
                       <span className="font-medium">{tx.description}</span>
-                      <span className="text-xs text-muted-foreground">
-                        {getCategoryById(tx.income_category_id || tx.expense_category_id)?.name || "Sin categoría"}
-                      </span>
+                      <span className="text-xs text-muted-foreground">{getCategoryById(tx.income_category_id || tx.expense_category_id)?.name || "Sin categoría"}</span>
                     </div>
                   </TableCell>
                   <TableCell className={cn("text-right font-bold", tx.type === "egreso" ? "text-red-600" : "text-green-600")}>
@@ -150,9 +131,6 @@ const Cash = () => {
                   </TableCell>
                 </TableRow>
               ))}
-              {filteredTransactions.length === 0 && (
-                <TableRow><TableCell colSpan={3} className="text-center py-8 text-muted-foreground">No hay movimientos en este mes.</TableCell></TableRow>
-              )}
             </TableBody>
           </Table>
         </CardContent>
@@ -172,13 +150,23 @@ const Cash = () => {
                 </SelectContent>
               </Select>
             </div>
+            <Input placeholder="Monto" value={newTransaction.amount} onChange={e => setNewTransaction({...newTransaction, amount: e.target.value})} required />
+            <Input placeholder="Descripción" value={newTransaction.description} onChange={e => setNewTransaction({...newTransaction, description: e.target.value})} required />
             <div className="grid gap-2">
-              <Label>Monto</Label>
-              <Input value={newTransaction.amount} onChange={e => setNewTransaction({...newTransaction, amount: e.target.value})} placeholder="0.00" required />
-            </div>
-            <div className="grid gap-2">
-              <Label>Descripción</Label>
-              <Input value={newTransaction.description} onChange={e => setNewTransaction({...newTransaction, description: e.target.value})} required />
+              <Label>Categoría</Label>
+              <Select value={newTransaction.selectedCategoryId} onValueChange={(v) => setNewTransaction({...newTransaction, selectedCategoryId: v})}>
+                <SelectTrigger><SelectValue placeholder="Selecciona categoría" /></SelectTrigger>
+                <SelectContent>
+                  {(newTransaction.type === "ingreso" ? incomeCategories : expenseCategories).map(cat => (
+                    <SelectItem key={cat.id} value={cat.id}>
+                      <div className="flex items-center gap-2">
+                        <DynamicLucideIcon iconName={cat.icon || "Tag"} className="h-4 w-4" />
+                        {cat.name}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <DialogFooter><Button type="submit">Guardar</Button></DialogFooter>
           </form>

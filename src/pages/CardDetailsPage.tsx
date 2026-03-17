@@ -22,12 +22,14 @@ import LoadingSpinner from "@/components/LoadingSpinner";
 import { useCategoryContext } from "@/context/CategoryContext";
 import { evaluateExpression } from "@/utils/math-helpers";
 import CardPocketsManager from "@/components/CardPocketsManager";
+import DynamicLucideIcon from "@/components/DynamicLucideIcon";
+import { getLocalDateString } from "@/utils/date-helpers";
 
 const CardDetailsPage: React.FC = () => {
   const { cardId } = useParams<{ cardId: string }>();
   const navigate = useNavigate();
   const { user } = useSession();
-  const { getCategoryById, isLoadingCategories } = useCategoryContext();
+  const { incomeCategories, expenseCategories, getCategoryById, isLoadingCategories } = useCategoryContext();
   
   const [card, setCard] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -38,7 +40,7 @@ const CardDetailsPage: React.FC = () => {
     type: "charge" as "charge" | "payment",
     amount: "",
     description: "",
-    date: new Date(),
+    selectedCategoryId: "",
   });
 
   const fetchCardDetails = async () => {
@@ -76,67 +78,32 @@ const CardDetailsPage: React.FC = () => {
     if (user && !isLoadingCategories) fetchCardDetails();
   }, [cardId, user, isLoadingCategories]);
 
-  const pocketsBalance = useMemo(() => 
-    (card?.card_pockets || []).reduce((s: number, p: any) => s + Number(p.amount), 0)
-  , [card]);
-
-  // Calcular saldos históricos sincronizados con el saldo actual
   const transactionsWithBalance = useMemo(() => {
     if (!card) return [];
-    
-    // Ordenar por fecha y creación descendente (lo más nuevo primero)
     const sortedDesc = [...(card.card_transactions || [])].sort((a, b) => 
       parseISO(b.date).getTime() - parseISO(a.date).getTime() || 
       new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
     );
 
-    // Punto de partida: El saldo disponible actual que muestra la app
     let currentRunningPoint = card.type === "debit" 
       ? card.current_balance 
       : (card.credit_limit || 0) - card.current_balance;
 
-    const withBalance = sortedDesc.map(tx => {
+    return sortedDesc.map(tx => {
       const balanceAtThisPoint = currentRunningPoint;
-      
-      // Revertimos el movimiento para encontrar el saldo anterior
-      if (card.type === "debit") {
-        // En débito: Cargo resta, Abono suma. Reversa: Cargo suma, Abono resta.
-        currentRunningPoint = tx.type === "charge" ? currentRunningPoint + tx.amount : currentRunningPoint - tx.amount;
-      } else {
-        // En crédito (Disponible): Cargo resta disponible, Abono suma disponible. Reversa igual que débito.
-        currentRunningPoint = tx.type === "charge" ? currentRunningPoint + tx.amount : currentRunningPoint - tx.amount;
-      }
-      
+      currentRunningPoint = tx.type === "charge" ? currentRunningPoint + tx.amount : currentRunningPoint - tx.amount;
       return { ...tx, runningBalance: balanceAtThisPoint };
     });
-
-    return withBalance;
   }, [card]);
 
   const filteredTransactions = useMemo(() => {
     const start = startOfMonth(currentViewDate);
     const end = endOfMonth(currentViewDate);
-
     return transactionsWithBalance.filter((tx: any) => {
       const txDate = parseISO(tx.date);
       return isWithinInterval(txDate, { start, end });
     });
   }, [transactionsWithBalance, currentViewDate]);
-
-  const handleExport = (formatType: 'csv' | 'pdf') => {
-    const data = filteredTransactions.map((tx: any) => ({
-      Fecha: format(parseISO(tx.date), "dd/MM/yyyy"),
-      Descripción: tx.description,
-      Tipo: tx.type === "charge" ? (card.type === "credit" ? "Gasto" : "Retiro") : (card.type === "credit" ? "Pago" : "Depósito"),
-      Monto: tx.amount.toFixed(2),
-      Saldo: tx.runningBalance.toFixed(2),
-      Categoría: getCategoryById(tx.income_category_id || tx.expense_category_id)?.name || "Sin categoría"
-    }));
-
-    const filename = `movimientos_${card.name}_${format(currentViewDate, "MM_yyyy")}`;
-    if (formatType === 'csv') exportToCsv(`${filename}.csv`, data);
-    else exportToPdf(`${filename}.pdf`, `Movimientos: ${card.name}`, ["Fecha", "Descripción", "Tipo", "Monto", "Saldo", "Categoría"], data.map(d => Object.values(d)));
-  };
 
   const handleTransactionSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -156,7 +123,9 @@ const CardDetailsPage: React.FC = () => {
       type: newTransaction.type,
       amount,
       description: newTransaction.description,
-      date: format(newTransaction.date, "yyyy-MM-dd")
+      date: getLocalDateString(new Date()),
+      income_category_id: newTransaction.type === "payment" ? newTransaction.selectedCategoryId : null,
+      expense_category_id: newTransaction.type === "charge" ? newTransaction.selectedCategoryId : null,
     });
 
     if (!error) {
@@ -169,8 +138,6 @@ const CardDetailsPage: React.FC = () => {
 
   if (isLoading) return <LoadingSpinner />;
   if (!card) return null;
-
-  const availableCredit = card.type === "credit" && card.credit_limit ? card.credit_limit - card.current_balance : 0;
 
   return (
     <div className="flex flex-col gap-6 p-4">
@@ -186,29 +153,15 @@ const CardDetailsPage: React.FC = () => {
               <div className="space-y-1">
                 {card.type === "credit" ? (
                   <>
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm opacity-80">Crédito Disponible:</p>
-                      <p className="text-2xl font-bold">${availableCredit.toFixed(2)}</p>
-                    </div>
-                    <div className="flex items-center gap-2 border-t border-white/20 pt-1">
-                      <p className="text-xs font-bold">Deuda Actual:</p>
-                      <p className="text-xl font-black">${card.current_balance.toFixed(2)}</p>
-                    </div>
+                    <p className="text-sm opacity-80">Crédito Disponible:</p>
+                    <p className="text-2xl font-bold">${((card.credit_limit || 0) - card.current_balance).toFixed(2)}</p>
+                    <p className="text-xs font-bold border-t border-white/20 pt-1">Deuda Actual: ${card.current_balance.toFixed(2)}</p>
                   </>
                 ) : (
                   <>
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm opacity-80">Saldo Disponible:</p>
-                      <p className="text-2xl font-bold">${card.current_balance.toFixed(2)}</p>
-                    </div>
-                    <div className="flex items-center gap-2 opacity-90">
-                      <p className="text-xs opacity-70">Saldo en Apartados:</p>
-                      <p className="text-sm font-semibold">${pocketsBalance.toFixed(2)}</p>
-                    </div>
-                    <div className="flex items-center gap-2 border-t border-white/20 pt-1">
-                      <p className="text-xs font-bold">Saldo Total:</p>
-                      <p className="text-xl font-black">${(card.current_balance + pocketsBalance).toFixed(2)}</p>
-                    </div>
+                    <p className="text-sm opacity-80">Saldo Disponible:</p>
+                    <p className="text-2xl font-bold">${card.current_balance.toFixed(2)}</p>
+                    <p className="text-xs font-bold border-t border-white/20 pt-1">Saldo Total: ${(card.current_balance + (card.card_pockets || []).reduce((s:any,p:any)=>s+p.amount,0)).toFixed(2)}</p>
                   </>
                 )}
               </div>
@@ -229,80 +182,74 @@ const CardDetailsPage: React.FC = () => {
                   <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setCurrentViewDate(addMonths(currentViewDate, 1))}><ChevronRight className="h-4 w-4" /></Button>
                 </div>
               </div>
-              <div className="flex gap-2">
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="sm"><FileDown className="h-4 w-4 mr-1" /> Exportar</Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => handleExport('csv')}><FileText className="h-4 w-4 mr-2" /> CSV</DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => handleExport('pdf')}><FileText className="h-4 w-4 mr-2" /> PDF</DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-                <Button size="sm" onClick={() => setIsAddTransactionDialogOpen(true)}><DollarSign className="h-4 w-4 mr-1" /> Nuevo</Button>
-              </div>
+              <Button size="sm" onClick={() => setIsAddTransactionDialogOpen(true)}><DollarSign className="h-4 w-4 mr-1" /> Nuevo</Button>
             </CardHeader>
             <CardContent>
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Fecha</TableHead>
-                      <TableHead>Descripción</TableHead>
-                      <TableHead className="text-right">Monto</TableHead>
-                      <TableHead className="text-right">Saldo</TableHead>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Fecha</TableHead>
+                    <TableHead>Descripción</TableHead>
+                    <TableHead className="text-right">Monto</TableHead>
+                    <TableHead className="text-right">Saldo</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredTransactions.map((tx: any) => (
+                    <TableRow key={tx.id}>
+                      <TableCell>{format(parseISO(tx.date), "dd/MM")}</TableCell>
+                      <TableCell>
+                        <div className="flex flex-col">
+                          <span className="font-medium">{tx.description}</span>
+                          <span className="text-xs text-muted-foreground">{getCategoryById(tx.income_category_id || tx.expense_category_id)?.name || "Sin categoría"}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className={cn("text-right font-bold", tx.type === "charge" ? "text-red-600" : "text-green-600")}>
+                        {tx.type === "charge" ? "-" : "+"}${tx.amount.toFixed(2)}
+                      </TableCell>
+                      <TableCell className="text-right font-medium text-muted-foreground">${tx.runningBalance.toFixed(2)}</TableCell>
                     </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredTransactions.map((tx: any) => (
-                      <TableRow key={tx.id}>
-                        <TableCell>{format(parseISO(tx.date), "dd/MM")}</TableCell>
-                        <TableCell>
-                          <div className="flex flex-col">
-                            <span className="font-medium">{tx.description}</span>
-                            <span className="text-xs text-muted-foreground">{getCategoryById(tx.income_category_id || tx.expense_category_id)?.name || "Sin categoría"}</span>
-                          </div>
-                        </TableCell>
-                        <TableCell className={cn("text-right font-bold", tx.type === "charge" ? "text-red-600" : "text-green-600")}>
-                          {tx.type === "charge" ? "-" : "+"}${tx.amount.toFixed(2)}
-                        </TableCell>
-                        <TableCell className="text-right font-medium text-muted-foreground">
-                          ${tx.runningBalance.toFixed(2)}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                    {filteredTransactions.length === 0 && (
-                      <TableRow>
-                        <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">No hay movimientos en este periodo.</TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
+                  ))}
+                </TableBody>
+              </Table>
             </CardContent>
           </Card>
         </div>
-
-        {card.type === "debit" && (
-          <div className="flex flex-col gap-6">
-            <CardPocketsManager cardId={card.id} cardBalance={card.current_balance} onUpdate={fetchCardDetails} />
-          </div>
-        )}
+        {card.type === "debit" && <CardPocketsManager cardId={card.id} cardBalance={card.current_balance} onUpdate={fetchCardDetails} />}
       </div>
 
       <Dialog open={isAddTransactionDialogOpen} onOpenChange={setIsAddTransactionDialogOpen}>
         <DialogContent>
           <DialogHeader><DialogTitle>Nueva Transacción</DialogTitle></DialogHeader>
           <form onSubmit={handleTransactionSubmit} className="grid gap-4 py-4">
-            <Select value={newTransaction.type} onValueChange={(v: any) => setNewTransaction({...newTransaction, type: v})}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="charge">{card.type === "credit" ? "Gasto (Aumenta deuda)" : "Retiro (Resta saldo)"}</SelectItem>
-                <SelectItem value="payment">{card.type === "credit" ? "Pago (Resta deuda)" : "Depósito (Suma saldo)"}</SelectItem>
-              </SelectContent>
-            </Select>
+            <div className="grid gap-2">
+              <Label>Tipo</Label>
+              <Select value={newTransaction.type} onValueChange={(v: any) => setNewTransaction({...newTransaction, type: v})}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="charge">Gasto / Retiro</SelectItem>
+                  <SelectItem value="payment">Pago / Depósito</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             <Input placeholder="Monto" value={newTransaction.amount} onChange={e => setNewTransaction({...newTransaction, amount: e.target.value})} required />
             <Input placeholder="Descripción" value={newTransaction.description} onChange={e => setNewTransaction({...newTransaction, description: e.target.value})} required />
+            <div className="grid gap-2">
+              <Label>Categoría</Label>
+              <Select value={newTransaction.selectedCategoryId} onValueChange={(v) => setNewTransaction({...newTransaction, selectedCategoryId: v})}>
+                <SelectTrigger><SelectValue placeholder="Selecciona categoría" /></SelectTrigger>
+                <SelectContent>
+                  {(newTransaction.type === "charge" ? expenseCategories : incomeCategories).map(cat => (
+                    <SelectItem key={cat.id} value={cat.id}>
+                      <div className="flex items-center gap-2">
+                        <DynamicLucideIcon iconName={cat.icon || "Tag"} className="h-4 w-4" />
+                        {cat.name}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <DialogFooter><Button type="submit">Guardar</Button></DialogFooter>
           </form>
         </DialogContent>
