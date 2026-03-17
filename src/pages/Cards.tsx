@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { PlusCircle, DollarSign, Search, CreditCard, AlertCircle, Scale, Edit } from "lucide-react";
+import { PlusCircle, DollarSign, Search, CreditCard, AlertCircle, Scale, Edit, Banknote, ThumbsUp, ThumbsDown, PiggyBank } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { cn } from "@/lib/utils";
 import CardDisplay from "@/components/CardDisplay";
@@ -27,12 +27,15 @@ const Cards = () => {
   
   const [cards, setCards] = useState<any[]>([]);
   const [cashBalance, setCashBalance] = useState(0);
+  const [debtorsBalance, setDebtorsBalance] = useState(0);
+  const [creditorsBalance, setCreditorsBalance] = useState(0);
   
   const [isAddCardDialogOpen, setIsAddCardDialogOpen] = useState(false);
   const [isEditCardDialogOpen, setIsEditCardDialogOpen] = useState(false);
   const [isTransferDialogOpen, setIsTransferDialogOpen] = useState(false);
   const [isAddTransactionDialogOpen, setIsAddTransactionDialogOpen] = useState(false);
   const [isReconcileDialogOpen, setIsReconcileDialogOpen] = useState(false);
+  const [isSelectCardForReconcileOpen, setIsSelectCardForReconcileOpen] = useState(false);
   
   const [selectedCard, setSelectedCard] = useState<any>(null);
   const [searchTerm, setSearchTerm] = useState("");
@@ -54,13 +57,17 @@ const Cards = () => {
   const fetchAllData = async () => {
     if (!user) return;
     
-    const [cardsRes, cashRes] = await Promise.all([
+    const [cardsRes, cashRes, debtorsRes, creditorsRes] = await Promise.all([
       supabase.from('cards').select('*, card_pockets(*), card_transactions(*)').eq('user_id', user.id).order('created_at', { ascending: false }),
-      supabase.from('cash_transactions').select('type, amount').eq('user_id', user.id)
+      supabase.from('cash_transactions').select('type, amount').eq('user_id', user.id),
+      supabase.from('debtors').select('current_balance').eq('user_id', user.id),
+      supabase.from('creditors').select('current_balance').eq('user_id', user.id)
     ]);
 
     setCards(cardsRes.data || []);
     setCashBalance((cashRes.data || []).reduce((s, t) => t.type === "ingreso" ? s + t.amount : s - t.amount, 0));
+    setDebtorsBalance((debtorsRes.data || []).reduce((s, d) => s + d.current_balance, 0));
+    setCreditorsBalance((creditorsRes.data || []).reduce((s, c) => s + c.current_balance, 0));
   };
 
   useEffect(() => {
@@ -167,16 +174,31 @@ const Cards = () => {
     }
   };
 
+  const handleOpenReconcile = () => {
+    if (cards.length === 0) {
+      showError("No tienes tarjetas para cuadrar.");
+      return;
+    }
+    setIsSelectCardForReconcileOpen(true);
+  };
+
+  const handleSelectCardForReconcile = (cardId: string) => {
+    const card = cards.find(c => c.id === cardId);
+    if (card) {
+      setSelectedCard(card);
+      setIsSelectCardForReconcileOpen(false);
+      setIsReconcileDialogOpen(true);
+    }
+  };
+
   const filteredCards = cards.filter(c => 
     (c.name || "").toLowerCase().includes(searchTerm.toLowerCase()) || 
     (c.bank_name || "").toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  // Métricas específicas de tarjetas
   const totalDebitBalance = cards.filter(c => c.type === "debit").reduce((s, c) => s + c.current_balance, 0);
   const totalCreditDebt = cards.filter(c => c.type === "credit").reduce((s, c) => s + c.current_balance, 0);
-  const totalAvailableCredit = cards.filter(c => c.type === "credit").reduce((s, c) => s + ((c.credit_limit || 0) - c.current_balance), 0);
-  const netCardBalance = totalDebitBalance - totalCreditDebt;
+  const overallBalance = cashBalance + totalDebitBalance + debtorsBalance - creditorsBalance - totalCreditDebt;
 
   return (
     <div className="flex flex-col gap-6 p-4">
@@ -184,20 +206,20 @@ const Cards = () => {
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card className="border-l-4 border-green-600 bg-green-50 text-green-800">
-          <CardHeader className="pb-2"><CardTitle className="text-xs font-medium">SALDO EN DÉBITO</CardTitle></CardHeader>
-          <CardContent><div className="text-xl font-bold">${totalDebitBalance.toFixed(2)}</div></CardContent>
-        </Card>
-        <Card className="border-l-4 border-red-600 bg-red-50 text-red-800">
-          <CardHeader className="pb-2"><CardTitle className="text-xs font-medium">DEUDA DE CRÉDITO</CardTitle></CardHeader>
-          <CardContent><div className="text-xl font-bold">${totalCreditDebt.toFixed(2)}</div></CardContent>
+          <CardHeader className="pb-2"><CardTitle className="text-xs font-medium flex items-center gap-2"><Banknote className="h-3 w-3" /> EFECTIVO</CardTitle></CardHeader>
+          <CardContent><div className="text-xl font-bold">${cashBalance.toFixed(2)}</div></CardContent>
         </Card>
         <Card className="border-l-4 border-blue-600 bg-blue-50 text-blue-800">
-          <CardHeader className="pb-2"><CardTitle className="text-xs font-medium">CRÉDITO DISPONIBLE</CardTitle></CardHeader>
-          <CardContent><div className="text-xl font-bold">${totalAvailableCredit.toFixed(2)}</div></CardContent>
+          <CardHeader className="pb-2"><CardTitle className="text-xs font-medium flex items-center gap-2"><ThumbsUp className="h-3 w-3" /> TE DEBEN</CardTitle></CardHeader>
+          <CardContent><div className="text-xl font-bold">${debtorsBalance.toFixed(2)}</div></CardContent>
+        </Card>
+        <Card className="border-l-4 border-red-600 bg-red-50 text-red-800">
+          <CardHeader className="pb-2"><CardTitle className="text-xs font-medium flex items-center gap-2"><ThumbsDown className="h-3 w-3" /> DEBES</CardTitle></CardHeader>
+          <CardContent><div className="text-xl font-bold">${creditorsBalance.toFixed(2)}</div></CardContent>
         </Card>
         <Card className="border-l-4 border-pink-600 bg-pink-50 text-pink-800">
-          <CardHeader className="pb-2"><CardTitle className="text-xs font-medium">BALANCE NETO TARJETAS</CardTitle></CardHeader>
-          <CardContent><div className="text-xl font-bold">${netCardBalance.toFixed(2)}</div></CardContent>
+          <CardHeader className="pb-2"><CardTitle className="text-xs font-medium flex items-center gap-2"><PiggyBank className="h-3 w-3" /> BALANCE TOTAL</CardTitle></CardHeader>
+          <CardContent><div className="text-xl font-bold">${overallBalance.toFixed(2)}</div></CardContent>
         </Card>
       </div>
 
@@ -206,31 +228,23 @@ const Cards = () => {
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input placeholder="Buscar tarjeta..." className="pl-8" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
         </div>
-        <div className="flex gap-2 w-full md:w-auto">
+        <div className="flex flex-wrap gap-2 w-full md:w-auto">
           <Button variant="outline" className="flex-1 md:flex-none" onClick={() => setIsTransferDialogOpen(true)}>Transferir</Button>
+          <Button variant="outline" className="flex-1 md:flex-none gap-2" onClick={handleOpenReconcile}><Scale className="h-4 w-4" /> Cuadrar Saldo</Button>
           <Button className="flex-1 md:flex-none" onClick={handleOpenAddCard}><PlusCircle className="h-4 w-4 mr-2" /> Añadir Tarjeta</Button>
         </div>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {filteredCards.map(card => (
-          <div key={card.id} className="flex flex-col gap-2">
-            <CardDisplay
-              card={card}
-              onAddTransaction={() => { setSelectedCard(card); setIsAddTransactionDialogOpen(true); }}
-              onDeleteCard={fetchAllData}
-              onEditCard={handleOpenEditCard}
-              onTransfer={() => setIsTransferDialogOpen(true)}
-            />
-            <Button 
-              variant="outline" 
-              size="sm" 
-              className="w-full text-xs h-7 gap-1"
-              onClick={() => { setSelectedCard(card); setIsReconcileDialogOpen(true); }}
-            >
-              <Scale className="h-3 w-3" /> Cuadrar Saldo
-            </Button>
-          </div>
+          <CardDisplay
+            key={card.id}
+            card={card}
+            onAddTransaction={() => { setSelectedCard(card); setIsAddTransactionDialogOpen(true); }}
+            onDeleteCard={fetchAllData}
+            onEditCard={handleOpenEditCard}
+            onTransfer={() => setIsTransferDialogOpen(true)}
+          />
         ))}
       </div>
 
@@ -242,10 +256,27 @@ const Cards = () => {
         onTransferSuccess={fetchAllData}
       />
 
+      {/* Diálogo de Selección de Tarjeta para Cuadre */}
+      <Dialog open={isSelectCardForReconcileOpen} onOpenChange={setIsSelectCardForReconcileOpen}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader><DialogTitle>Selecciona Tarjeta para Cuadrar</DialogTitle></DialogHeader>
+          <div className="grid gap-4 py-4">
+            <Select onValueChange={handleSelectCardForReconcile}>
+              <SelectTrigger><SelectValue placeholder="Selecciona una tarjeta" /></SelectTrigger>
+              <SelectContent>
+                {cards.map(c => (
+                  <SelectItem key={c.id} value={c.id}>{c.name} ({c.bank_name})</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {selectedCard && (
         <CardReconciliationDialog
           isOpen={isReconcileDialogOpen}
-          onClose={() => setIsReconcileDialogOpen(false)}
+          onClose={() => { setIsReconcileDialogOpen(false); setSelectedCard(null); }}
           card={{
             ...selectedCard,
             transactions: selectedCard.card_transactions || []
@@ -300,7 +331,7 @@ const Cards = () => {
       </Dialog>
 
       {/* Diálogo de Nueva/Editar Tarjeta */}
-      <Dialog open={isAddCardDialogOpen || isEditCardDialogOpen} onOpenChange={(open) => { setIsAddCardDialogOpen(open && !cardForm.id); setIsEditCardDialogOpen(open && !!cardForm.id); }}>
+      <Dialog open={isAddCardDialogOpen || isEditCardDialogOpen} onOpenChange={(open) => { if(!open) { setIsAddCardDialogOpen(false); setIsEditCardDialogOpen(false); } }}>
         <DialogContent>
           <DialogHeader><DialogTitle>{cardForm.id ? "Editar Tarjeta" : "Nueva Tarjeta"}</DialogTitle></DialogHeader>
           <form onSubmit={handleSaveCard} className="grid gap-4 py-4">

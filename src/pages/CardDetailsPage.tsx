@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { DollarSign, History, ArrowLeft, FileDown, FileText, ChevronLeft, ChevronRight } from "lucide-react";
+import { DollarSign, History, ArrowLeft, FileDown, FileText, ChevronLeft, ChevronRight, Scale } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { cn } from "@/lib/utils";
 import { format, parseISO, isWithinInterval, startOfMonth, endOfMonth, addMonths, subMonths } from "date-fns";
@@ -24,6 +24,7 @@ import { evaluateExpression } from "@/utils/math-helpers";
 import CardPocketsManager from "@/components/CardPocketsManager";
 import DynamicLucideIcon from "@/components/DynamicLucideIcon";
 import { getLocalDateString } from "@/utils/date-helpers";
+import CardReconciliationDialog from "@/components/CardReconciliationDialog";
 
 const CardDetailsPage: React.FC = () => {
   const { cardId } = useParams<{ cardId: string }>();
@@ -35,6 +36,7 @@ const CardDetailsPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [currentViewDate, setCurrentViewDate] = useState(new Date());
   const [isAddTransactionDialogOpen, setIsAddTransactionDialogOpen] = useState(false);
+  const [isReconcileDialogOpen, setIsReconcileDialogOpen] = useState(false);
   
   const [newTransaction, setNewTransaction] = useState({
     type: "charge" as "charge" | "payment",
@@ -182,7 +184,10 @@ const CardDetailsPage: React.FC = () => {
                   <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setCurrentViewDate(addMonths(currentViewDate, 1))}><ChevronRight className="h-4 w-4" /></Button>
                 </div>
               </div>
-              <Button size="sm" onClick={() => setIsAddTransactionDialogOpen(true)}><DollarSign className="h-4 w-4 mr-1" /> Nuevo</Button>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={() => setIsReconcileDialogOpen(true)}><Scale className="h-4 w-4 mr-1" /> Cuadrar</Button>
+                <Button size="sm" onClick={() => setIsAddTransactionDialogOpen(true)}><DollarSign className="h-4 w-4 mr-1" /> Nuevo</Button>
+              </div>
             </CardHeader>
             <CardContent>
               <Table>
@@ -217,6 +222,17 @@ const CardDetailsPage: React.FC = () => {
         </div>
         {card.type === "debit" && <CardPocketsManager cardId={card.id} cardBalance={card.current_balance} onUpdate={fetchCardDetails} />}
       </div>
+
+      <CardReconciliationDialog
+        isOpen={isReconcileDialogOpen}
+        onClose={() => setIsReconcileDialogOpen(false)}
+        card={{
+          ...card,
+          transactions: card.card_transactions || []
+        }}
+        onReconciliationSuccess={fetchCardDetails}
+        onNoAdjustmentSuccess={() => showSuccess("El saldo ya está cuadrado.")}
+      />
 
       <Dialog open={isAddTransactionDialogOpen} onOpenChange={setIsAddTransactionDialogOpen}>
         <DialogContent>
