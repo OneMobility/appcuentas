@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { DollarSign, ArrowLeft, FileDown, FileText, ChevronLeft, ChevronRight, Scale, Search, Filter } from "lucide-react";
+import { DollarSign, ArrowLeft, FileDown, FileText, ChevronLeft, ChevronRight, Scale, Search, Filter, Trash2 } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { cn } from "@/lib/utils";
 import { format, parseISO, isWithinInterval, startOfMonth, endOfMonth, addMonths, subMonths } from "date-fns";
@@ -25,6 +25,7 @@ import CardPocketsManager from "@/components/CardPocketsManager";
 import DynamicLucideIcon from "@/components/DynamicLucideIcon";
 import { getLocalDateString } from "@/utils/date-helpers";
 import CardReconciliationDialog from "@/components/CardReconciliationDialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 
 const CardDetailsPage: React.FC = () => {
   const { cardId } = useParams<{ cardId: string }>();
@@ -146,6 +147,31 @@ const CardDetailsPage: React.FC = () => {
     }
   };
 
+  const handleDeleteTransaction = async (tx: any) => {
+    try {
+      // Calcular el nuevo saldo revirtiendo el efecto de la transacción
+      let newBalance = card.current_balance;
+      if (card.type === "debit") {
+        // Si era cargo (restó), ahora sumamos. Si era abono (sumó), ahora restamos.
+        newBalance = tx.type === "charge" ? newBalance + tx.amount : newBalance - tx.amount;
+      } else {
+        // Crédito: Si era cargo (sumó deuda), ahora restamos. Si era abono (restó deuda), ahora sumamos.
+        newBalance = tx.type === "charge" ? newBalance - tx.amount : newBalance + tx.amount;
+      }
+
+      const { error: deleteError } = await supabase.from('card_transactions').delete().eq('id', tx.id);
+      if (deleteError) throw deleteError;
+
+      const { error: updateError } = await supabase.from('cards').update({ current_balance: newBalance }).eq('id', card.id);
+      if (updateError) throw updateError;
+
+      showSuccess("Movimiento eliminado y saldo actualizado");
+      fetchCardDetails();
+    } catch (error: any) {
+      showError("Error al eliminar: " + error.message);
+    }
+  };
+
   const handleExport = (formatType: 'csv' | 'pdf') => {
     const dataToExport = filteredTransactions.map(tx => ({
       Fecha: format(parseISO(tx.date), "dd/MM/yyyy"),
@@ -262,12 +288,13 @@ const CardDetailsPage: React.FC = () => {
                       <TableHead>Categoría</TableHead>
                       <TableHead className="text-right">Monto</TableHead>
                       <TableHead className="text-right">Saldo</TableHead>
+                      <TableHead className="text-right">Acciones</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {filteredTransactions.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">No hay movimientos para este periodo.</TableCell>
+                        <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">No hay movimientos para este periodo.</TableCell>
                       </TableRow>
                     ) : (
                       filteredTransactions.map((tx: any) => {
@@ -290,6 +317,27 @@ const CardDetailsPage: React.FC = () => {
                               {tx.type === "charge" ? "-" : "+"}${tx.amount.toFixed(2)}
                             </TableCell>
                             <TableCell className="text-right text-xs font-medium text-muted-foreground">${tx.runningBalance.toFixed(2)}</TableCell>
+                            <TableCell className="text-right">
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive">
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>¿Eliminar movimiento?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      Esta acción no se puede deshacer. El saldo de tu tarjeta se ajustará automáticamente.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                    <AlertDialogAction onClick={() => handleDeleteTransaction(tx)}>Eliminar</AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            </TableCell>
                           </TableRow>
                         );
                       })

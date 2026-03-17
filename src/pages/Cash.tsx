@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { PlusCircle, ChevronLeft, ChevronRight } from "lucide-react";
+import { PlusCircle, ChevronLeft, ChevronRight, Trash2 } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { cn } from "@/lib/utils";
 import { format, parseISO, startOfMonth, endOfMonth, isWithinInterval, addMonths, subMonths } from "date-fns";
@@ -19,6 +19,7 @@ import { useSession } from "@/context/SessionContext";
 import { evaluateExpression } from "@/utils/math-helpers";
 import { getLocalDateString } from "@/utils/date-helpers";
 import DynamicLucideIcon from "@/components/DynamicLucideIcon";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 
 const Cash = () => {
   const { user } = useSession();
@@ -42,7 +43,8 @@ const Cash = () => {
       .from('cash_transactions')
       .select('*')
       .eq('user_id', user.id)
-      .order('date', { ascending: false });
+      .order('date', { ascending: false })
+      .order('created_at', { ascending: false });
 
     if (error) showError('Error al cargar transacciones');
     else {
@@ -86,6 +88,16 @@ const Cash = () => {
     }
   };
 
+  const handleDeleteTransaction = async (id: string) => {
+    const { error } = await supabase.from('cash_transactions').delete().eq('id', id);
+    if (error) {
+      showError("Error al eliminar el movimiento");
+    } else {
+      showSuccess("Movimiento eliminado correctamente");
+      fetchTransactions();
+    }
+  };
+
   return (
     <div className="flex flex-col gap-6 p-4">
       <h1 className="text-3xl font-bold">Lo que tienes (Efectivo)</h1>
@@ -114,6 +126,7 @@ const Cash = () => {
                 <TableHead>Fecha</TableHead>
                 <TableHead>Descripción</TableHead>
                 <TableHead className="text-right">Monto</TableHead>
+                <TableHead className="text-right">Acciones</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -128,6 +141,27 @@ const Cash = () => {
                   </TableCell>
                   <TableCell className={cn("text-right font-bold", tx.type === "egreso" ? "text-red-600" : "text-green-600")}>
                     {tx.type === "egreso" ? "-" : "+"}${tx.amount.toFixed(2)}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive">
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>¿Eliminar movimiento?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            Esta acción no se puede deshacer. El saldo de tu efectivo se ajustará automáticamente.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                          <AlertDialogAction onClick={() => handleDeleteTransaction(tx.id)}>Eliminar</AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
                   </TableCell>
                 </TableRow>
               ))}
