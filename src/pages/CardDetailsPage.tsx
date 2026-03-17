@@ -9,9 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Calendar } from "@/components/ui/calendar";
-import { DollarSign, History, Trash2, Edit, CalendarIcon, ArrowLeft, FileDown, FileText, ChevronLeft, ChevronRight } from "lucide-react";
+import { DollarSign, History, ArrowLeft, FileDown, FileText, ChevronLeft, ChevronRight } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { cn } from "@/lib/utils";
 import { format, parseISO, isWithinInterval, startOfMonth, endOfMonth, addMonths, subMonths } from "date-fns";
@@ -82,31 +80,57 @@ const CardDetailsPage: React.FC = () => {
     (card?.card_pockets || []).reduce((s: number, p: any) => s + Number(p.amount), 0)
   , [card]);
 
-  const filteredTransactions = useMemo(() => {
+  // Calcular saldos históricos para todos los movimientos
+  const transactionsWithBalance = useMemo(() => {
     if (!card) return [];
+    
+    // Ordenar por fecha ascendente para calcular el saldo acumulado
+    const sortedAll = [...(card.card_transactions || [])].sort((a, b) => 
+      parseISO(a.date).getTime() - parseISO(b.date).getTime() || 
+      new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    );
+
+    let runningBalance = card.initial_balance;
+    const withBalance = sortedAll.map(tx => {
+      if (card.type === "debit") {
+        runningBalance = tx.type === "charge" ? runningBalance - tx.amount : runningBalance + tx.amount;
+      } else {
+        // Para crédito, el saldo representa la DEUDA
+        runningBalance = tx.type === "charge" ? runningBalance + tx.amount : runningBalance - tx.amount;
+      }
+      return { ...tx, runningBalance };
+    });
+
+    // Devolver ordenados por fecha descendente para la tabla
+    return withBalance.sort((a, b) => 
+      parseISO(b.date).getTime() - parseISO(a.date).getTime() || 
+      new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
+  }, [card]);
+
+  const filteredTransactions = useMemo(() => {
     const start = startOfMonth(currentViewDate);
     const end = endOfMonth(currentViewDate);
 
-    return (card.card_transactions || [])
-      .filter((tx: any) => {
-        const txDate = parseISO(tx.date);
-        return isWithinInterval(txDate, { start, end });
-      })
-      .sort((a: any, b: any) => parseISO(b.date).getTime() - parseISO(a.date).getTime());
-  }, [card, currentViewDate]);
+    return transactionsWithBalance.filter((tx: any) => {
+      const txDate = parseISO(tx.date);
+      return isWithinInterval(txDate, { start, end });
+    });
+  }, [transactionsWithBalance, currentViewDate]);
 
   const handleExport = (formatType: 'csv' | 'pdf') => {
     const data = filteredTransactions.map((tx: any) => ({
       Fecha: format(parseISO(tx.date), "dd/MM/yyyy"),
       Descripción: tx.description,
-      Tipo: tx.type === "charge" ? "Cargo" : "Abono",
+      Tipo: tx.type === "charge" ? (card.type === "credit" ? "Gasto" : "Retiro") : (card.type === "credit" ? "Pago" : "Depósito"),
       Monto: tx.amount.toFixed(2),
+      Saldo: tx.runningBalance.toFixed(2),
       Categoría: getCategoryById(tx.income_category_id || tx.expense_category_id)?.name || "Sin categoría"
     }));
 
     const filename = `movimientos_${card.name}_${format(currentViewDate, "MM_yyyy")}`;
     if (formatType === 'csv') exportToCsv(`${filename}.csv`, data);
-    else exportToPdf(`${filename}.pdf`, `Movimientos: ${card.name}`, ["Fecha", "Descripción", "Tipo", "Monto", "Categoría"], data.map(d => Object.values(d)));
+    else exportToPdf(`${filename}.pdf`, `Movimientos: ${card.name}`, ["Fecha", "Descripción", "Tipo", "Monto", "Saldo", "Categoría"], data.map(d => Object.values(d)));
   };
 
   const handleTransactionSubmit = async (e: React.FormEvent) => {
@@ -141,6 +165,8 @@ const CardDetailsPage: React.FC = () => {
   if (isLoading) return <LoadingSpinner />;
   if (!card) return null;
 
+  const availableCredit = card.type === "credit" && card.credit_limit ? card.credit_limit - card.current_balance : 0;
+
   return (
     <div className="flex flex-col gap-6 p-4">
       <div className="flex items-center gap-4">
@@ -153,12 +179,23 @@ const CardDetailsPage: React.FC = () => {
           <Card className="p-6 text-white shadow-xl" style={{ backgroundColor: card.color }}>
             <div className="flex justify-between items-start mb-6">
               <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <p className="text-sm opacity-80">Saldo Disponible:</p>
-                  <p className="text-2xl font-bold">${card.current_balance.toFixed(2)}</p>
-                </div>
-                {card.type === "debit" && (
+                {card.type === "credit" ? (
                   <>
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm opacity-80">Crédito Disponible:</p>
+                      <p className="text-2xl font-bold">${availableCredit.toFixed(2)}</p>
+                    </div>
+                    <div className="flex items-center gap-2 border-t border-white/20 pt-1">
+                      <p className="text-xs font-bold">Deuda Actual:</p>
+                      <p className="text-xl font-black">${card.current_balance.toFixed(2)}</p>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm opacity-80">Saldo Disponible:</p>
+                      <p className="text-2xl font-bold">${card.current_balance.toFixed(2)}</p>
+                    </div>
                     <div className="flex items-center gap-2 opacity-90">
                       <p className="text-xs opacity-70">Saldo en Apartados:</p>
                       <p className="text-sm font-semibold">${pocketsBalance.toFixed(2)}</p>
@@ -201,31 +238,42 @@ const CardDetailsPage: React.FC = () => {
               </div>
             </CardHeader>
             <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Fecha</TableHead>
-                    <TableHead>Descripción</TableHead>
-                    <TableHead className="text-right">Monto</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredTransactions.map((tx: any) => (
-                    <TableRow key={tx.id}>
-                      <TableCell>{format(parseISO(tx.date), "dd/MM")}</TableCell>
-                      <TableCell>
-                        <div className="flex flex-col">
-                          <span className="font-medium">{tx.description}</span>
-                          <span className="text-xs text-muted-foreground">{getCategoryById(tx.income_category_id || tx.expense_category_id)?.name || "Sin categoría"}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell className={cn("text-right font-bold", tx.type === "charge" ? "text-red-600" : "text-green-600")}>
-                        {tx.type === "charge" ? "-" : "+"}${tx.amount.toFixed(2)}
-                      </TableCell>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Fecha</TableHead>
+                      <TableHead>Descripción</TableHead>
+                      <TableHead className="text-right">Monto</TableHead>
+                      <TableHead className="text-right">Saldo</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredTransactions.map((tx: any) => (
+                      <TableRow key={tx.id}>
+                        <TableCell>{format(parseISO(tx.date), "dd/MM")}</TableCell>
+                        <TableCell>
+                          <div className="flex flex-col">
+                            <span className="font-medium">{tx.description}</span>
+                            <span className="text-xs text-muted-foreground">{getCategoryById(tx.income_category_id || tx.expense_category_id)?.name || "Sin categoría"}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell className={cn("text-right font-bold", tx.type === "charge" ? "text-red-600" : "text-green-600")}>
+                          {tx.type === "charge" ? "-" : "+"}${tx.amount.toFixed(2)}
+                        </TableCell>
+                        <TableCell className="text-right font-medium text-muted-foreground">
+                          ${tx.runningBalance.toFixed(2)}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    {filteredTransactions.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">No hay movimientos en este periodo.</TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
             </CardContent>
           </Card>
         </div>
@@ -241,7 +289,10 @@ const CardDetailsPage: React.FC = () => {
           <form onSubmit={handleTransactionSubmit} className="grid gap-4 py-4">
             <Select value={newTransaction.type} onValueChange={(v: any) => setNewTransaction({...newTransaction, type: v})}>
               <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent><SelectItem value="charge">Cargo (Gasto)</SelectItem><SelectItem value="payment">Abono (Ingreso)</SelectItem></SelectContent>
+              <SelectContent>
+                <SelectItem value="charge">{card.type === "credit" ? "Gasto (Aumenta deuda)" : "Retiro (Resta saldo)"}</SelectItem>
+                <SelectItem value="payment">{card.type === "credit" ? "Pago (Resta deuda)" : "Depósito (Suma saldo)"}</SelectItem>
+              </SelectContent>
             </Select>
             <Input placeholder="Monto" value={newTransaction.amount} onChange={e => setNewTransaction({...newTransaction, amount: e.target.value})} required />
             <Input placeholder="Descripción" value={newTransaction.description} onChange={e => setNewTransaction({...newTransaction, description: e.target.value})} required />

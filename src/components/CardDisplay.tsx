@@ -3,18 +3,9 @@
 import React from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { CreditCard, DollarSign, History, Trash2, Edit, ArrowRightLeft, Wallet } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { CreditCard, DollarSign, History, Trash2, Edit, ArrowRightLeft } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { useNavigate } from "react-router-dom";
-
-interface CardTransaction {
-  id: string;
-  type: "charge" | "payment";
-  amount: number;
-  description: string;
-  date: string;
-}
 
 interface CardPocket {
   id: string;
@@ -29,7 +20,7 @@ interface CardData {
   expiration_date: string;
   type: "credit" | "debit";
   initial_balance: number;
-  current_balance: number; // Saldo en cuenta (sin contar apartados)
+  current_balance: number; 
   credit_limit?: number;
   color: string;
   card_pockets?: CardPocket[];
@@ -49,6 +40,7 @@ const CardDisplay: React.FC<CardDisplayProps> = ({ card, onAddTransaction, onDel
   
   const pocketsBalance = (card.card_pockets || []).reduce((sum, p) => sum + Number(p.amount), 0);
   const totalBalance = card.current_balance + pocketsBalance;
+  const availableCredit = isCredit && card.credit_limit ? card.credit_limit - card.current_balance : 0;
 
   const handleViewDetails = () => {
     navigate(`/cards/${card.id}`);
@@ -67,13 +59,23 @@ const CardDisplay: React.FC<CardDisplayProps> = ({ card, onAddTransaction, onDel
       </CardHeader>
       <CardContent className="p-0 relative z-10">
         <div className="space-y-2 mb-4">
-          <div className="flex justify-between items-center">
-            <p className="text-xs opacity-80">Saldo Disponible:</p>
-            <p className="text-xl font-bold">${card.current_balance.toFixed(2)}</p>
-          </div>
-          
-          {!isCredit && (
+          {isCredit ? (
             <>
+              <div className="flex justify-between items-center">
+                <p className="text-xs opacity-80">Crédito Disponible:</p>
+                <p className="text-xl font-bold">${availableCredit.toFixed(2)}</p>
+              </div>
+              <div className="flex justify-between items-center opacity-90 border-t border-white/20 pt-1">
+                <p className="text-xs opacity-80">Deuda Actual:</p>
+                <p className="text-sm font-semibold">${card.current_balance.toFixed(2)}</p>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="flex justify-between items-center">
+                <p className="text-xs opacity-80">Saldo Disponible:</p>
+                <p className="text-xl font-bold">${card.current_balance.toFixed(2)}</p>
+              </div>
               <div className="flex justify-between items-center opacity-90">
                 <p className="text-xs opacity-80">Saldo en Apartados:</p>
                 <p className="text-sm font-semibold">${pocketsBalance.toFixed(2)}</p>
@@ -83,13 +85,6 @@ const CardDisplay: React.FC<CardDisplayProps> = ({ card, onAddTransaction, onDel
                 <p className="text-lg font-black">${totalBalance.toFixed(2)}</p>
               </div>
             </>
-          )}
-          
-          {isCredit && card.credit_limit && (
-            <div className="flex justify-between items-center opacity-90">
-              <p className="text-xs opacity-80">Límite de Crédito:</p>
-              <p className="text-sm font-semibold">${card.credit_limit.toFixed(2)}</p>
-            </div>
           )}
         </div>
 
