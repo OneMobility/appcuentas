@@ -9,12 +9,11 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Checkbox } from "@/components/ui/checkbox"; // Importar Checkbox
-import { DollarSign, Trash2, Edit, ArrowLeft, FileText, FileDown, History, MessageCircle, AlertCircle } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { DollarSign, Trash2, Edit, ArrowLeft, FileDown, History, MessageCircle, AlertCircle, Search, Filter } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { cn } from "@/lib/utils";
 import { format, parseISO } from "date-fns";
-import { es } from "date-fns/locale";
 import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/context/SessionContext";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
@@ -45,36 +44,27 @@ interface Debtor {
   debtor_transactions: DebtorTransaction[];
 }
 
-interface CardData {
-  id: string;
-  name: string;
-  bank_name: string;
-  last_four_digits: string;
-  type: "credit" | "debit";
-  current_balance: number;
-}
-
 const DebtorDetailsPage: React.FC = () => {
   const { debtorId } = useParams<{ debtorId: string }>();
   const navigate = useNavigate();
   const { user } = useSession();
-  const { incomeCategories, isLoadingCategories } = useCategoryContext();
+  const { incomeCategories } = useCategoryContext();
+  
   const [debtor, setDebtor] = useState<Debtor | null>(null);
-  const [cards, setCards] = useState<CardData[]>([]);
+  const [cards, setCards] = useState<any[]>([]);
   const [cashBalance, setCashBalance] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filterType, setFilterType] = useState<"all" | "charge" | "payment">("all");
+
   const [isTransactionDialogOpen, setIsTransactionDialogOpen] = useState(false);
-  const [skipLinkedTransaction, setSkipLinkedTransaction] = useState(false); // Nuevo estado
+  const [editingTransaction, setEditingTransaction] = useState<any>(null);
+  const [skipLinkedTransaction, setSkipLinkedTransaction] = useState(false);
   
   const [isWhatsAppDialogOpen, setIsWhatsAppDialogOpen] = useState(false);
-  const [pendingWhatsApp, setPendingWhatsApp] = useState<{
-    type: string;
-    amount: number;
-    description: string;
-    newBalance: number;
-  } | null>(null);
+  const [pendingWhatsApp, setPendingWhatsApp] = useState<any>(null);
 
-  const [newTransaction, setNewTransaction] = useState({
+  const [transactionForm, setTransactionForm] = useState({
     type: "payment" as "charge" | "payment",
     amount: "",
     description: "",
@@ -84,7 +74,6 @@ const DebtorDetailsPage: React.FC = () => {
 
   const fetchData = async () => {
     if (!user || !debtorId) return;
-
     setIsLoading(true);
     try {
       const { data: debtorData, error: debtorError } = await supabase
@@ -97,28 +86,17 @@ const DebtorDetailsPage: React.FC = () => {
       if (debtorError) throw debtorError;
       setDebtor(debtorData);
 
-      const { data: cardsData } = await supabase
-        .from('cards')
-        .select('id, name, bank_name, last_four_digits, type, current_balance')
-        .eq('user_id', user.id);
+      const { data: cardsData } = await supabase.from('cards').select('*').eq('user_id', user.id);
       setCards(cardsData || []);
 
-      const { data: cashTxData } = await supabase
-        .from('cash_transactions')
-        .select('type, amount')
-        .eq('user_id', user.id);
-      
-      const currentCash = (cashTxData || []).reduce((sum, tx) => 
-        tx.type === "ingreso" ? sum + tx.amount : sum - tx.amount, 0
-      );
-      setCashBalance(currentCash);
+      const { data: cashTxData } = await supabase.from('cash_transactions').select('type, amount').eq('user_id', user.id);
+      setCashBalance((cashTxData || []).reduce((s, t) => t.type === "ingreso" ? s + t.amount : s - t.amount, 0));
 
-      if (!newTransaction.selectedIncomeCategoryId && incomeCategories.length > 0) {
-        setNewTransaction(prev => ({ ...prev, selectedIncomeCategoryId: incomeCategories[0].id }));
+      if (!transactionForm.selectedIncomeCategoryId && incomeCategories.length > 0) {
+        setTransactionForm(prev => ({ ...prev, selectedIncomeCategoryId: incomeCategories[0].id }));
       }
-
     } catch (error: any) {
-      showError('Error al cargar detalles: ' + error.message);
+      showError('Error al cargar detalles');
       navigate('/debtors');
     } finally {
       setIsLoading(false);
@@ -129,180 +107,119 @@ const DebtorDetailsPage: React.FC = () => {
     fetchData();
   }, [debtorId, user, incomeCategories]);
 
+  const filteredTransactions = useMemo(() => {
+    if (!debtor) return [];
+    return debtor.debtor_transactions.filter(tx => {
+      const matchesSearch = tx.description.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesType = filterType === "all" || tx.type === filterType;
+      return matchesSearch && matchesType;
+    }).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  }, [debtor, searchTerm, filterType]);
+
+  const handleOpenAdd = () => {
+    setEditingTransaction(null);
+    setTransactionForm({
+      type: (debtor?.current_balance || 0) <= 0 ? "charge" : "payment",
+      amount: "",
+      description: "",
+      destinationAccountId: "cash",
+      selectedIncomeCategoryId: incomeCategories[0]?.id || "",
+    });
+    setSkipLinkedTransaction(false);
+    setIsTransactionDialogOpen(true);
+  };
+
+  const handleOpenEdit = (tx: any) => {
+    setEditingTransaction(tx);
+    setTransactionForm({
+      type: tx.type,
+      amount: tx.amount.toString(),
+      description: tx.description,
+      destinationAccountId: "cash", // No podemos saber el destino original fácilmente
+      selectedIncomeCategoryId: incomeCategories[0]?.id || "",
+    });
+    setSkipLinkedTransaction(true); // Al editar, no vinculamos de nuevo para evitar duplicados
+    setIsTransactionDialogOpen(true);
+  };
+
   const handleTransactionSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user || !debtor) return;
 
-    let amount: number;
-    if (newTransaction.amount.startsWith('=')) {
-      amount = evaluateExpression(newTransaction.amount.substring(1)) || 0;
-    } else {
-      amount = parseFloat(newTransaction.amount);
-    }
-
-    if (isNaN(amount) || amount <= 0) {
-      showError("Monto inválido.");
-      return;
-    }
-
-    const transactionDate = getLocalDateString(new Date());
-    const linkedDescription = `Abono de ${debtor.name}: ${newTransaction.description}`;
+    const amount = evaluateExpression(transactionForm.amount) || 0;
+    if (amount <= 0) { showError("Monto inválido"); return; }
 
     try {
       let newDebtorBalance = debtor.current_balance;
 
-      if (newTransaction.type === "charge") {
-        newDebtorBalance += amount;
-      } else {
-        if (newDebtorBalance < amount - 0.01) {
-          showError("El abono excede la deuda.");
-          return;
-        }
+      if (editingTransaction) {
+        // Revertir efecto anterior
+        newDebtorBalance = editingTransaction.type === "charge" ? newDebtorBalance - editingTransaction.amount : newDebtorBalance + editingTransaction.amount;
+      }
+
+      // Aplicar nuevo efecto
+      if (transactionForm.type === "charge") newDebtorBalance += amount;
+      else {
+        if (newDebtorBalance < amount - 0.01) { showError("El abono excede la deuda."); return; }
         newDebtorBalance -= amount;
 
-        // Solo registrar el ingreso si NO se marcó "skipLinkedTransaction"
-        if (!skipLinkedTransaction) {
-          if (newTransaction.destinationAccountId === "cash") {
-            await supabase.from('cash_transactions').insert({
-              user_id: user.id,
-              type: "ingreso",
-              amount,
-              description: linkedDescription,
-              date: transactionDate,
-              income_category_id: newTransaction.selectedIncomeCategoryId || null,
-            });
+        if (!editingTransaction && !skipLinkedTransaction) {
+          const linkedDesc = `Abono de ${debtor.name}: ${transactionForm.description}`;
+          if (transactionForm.destinationAccountId === "cash") {
+            await supabase.from('cash_transactions').insert({ user_id: user.id, type: "ingreso", amount, description: linkedDesc, date: getLocalDateString(new Date()), income_category_id: transactionForm.selectedIncomeCategoryId || null });
           } else {
-            const card = cards.find(c => c.id === newTransaction.destinationAccountId);
+            const card = cards.find(c => c.id === transactionForm.destinationAccountId);
             if (card) {
               const newCardBalance = card.type === "credit" ? card.current_balance - amount : card.current_balance + amount;
               await supabase.from('cards').update({ current_balance: newCardBalance }).eq('id', card.id);
-              await supabase.from('card_transactions').insert({
-                user_id: user.id,
-                card_id: card.id,
-                type: "payment",
-                amount,
-                description: linkedDescription,
-                date: transactionDate,
-                income_category_id: newTransaction.selectedIncomeCategoryId || null,
-              });
+              await supabase.from('card_transactions').insert({ user_id: user.id, card_id: card.id, type: "payment", amount, description: linkedDesc, date: getLocalDateString(new Date()), income_category_id: transactionForm.selectedIncomeCategoryId || null });
             }
           }
         }
       }
 
       await supabase.from('debtors').update({ current_balance: newDebtorBalance }).eq('id', debtor.id);
-      await supabase.from('debtor_transactions').insert({
-        user_id: user.id,
-        debtor_id: debtor.id,
-        type: newTransaction.type,
-        amount,
-        description: newTransaction.description + (skipLinkedTransaction ? " (Registro manual previo)" : ""),
-        date: transactionDate,
-      });
-
-      showSuccess("Transacción registrada.");
-      setIsTransactionDialogOpen(false);
-      setSkipLinkedTransaction(false); // Reset
       
-      if (debtor.phone) {
-        setPendingWhatsApp({
-          type: newTransaction.type === "charge" ? "Cargo" : "Abono",
-          amount,
-          description: newTransaction.description,
-          newBalance: newDebtorBalance
-        });
-        setIsWhatsAppDialogOpen(true);
+      if (editingTransaction) {
+        await supabase.from('debtor_transactions').update({ type: transactionForm.type, amount, description: transactionForm.description }).eq('id', editingTransaction.id);
+      } else {
+        await supabase.from('debtor_transactions').insert({ user_id: user.id, debtor_id: debtor.id, type: transactionForm.type, amount, description: transactionForm.description, date: getLocalDateString(new Date()) });
+        
+        if (debtor.phone) {
+          setPendingWhatsApp({ type: transactionForm.type === "charge" ? "Cargo" : "Abono", amount, description: transactionForm.description, newBalance: newDebtorBalance });
+          setIsWhatsAppDialogOpen(true);
+        }
       }
 
+      showSuccess(editingTransaction ? "Movimiento actualizado" : "Movimiento registrado");
+      setIsTransactionDialogOpen(false);
       fetchData();
     } catch (error: any) {
       showError('Error: ' + error.message);
     }
   };
 
-  const handleSendWhatsApp = () => {
-    if (!debtor?.phone || !pendingWhatsApp) return;
-
-    const cleanPhone = debtor.phone.replace(/\D/g, '');
-    const message = `💰 *Oinkash - Notificación de Movimiento*\n\n` +
-                    `Hola *${debtor.name}*,\n` +
-                    `Se ha registrado un *${pendingWhatsApp.type}* en tu cuenta.\n\n` +
-                    `*Monto:* $${pendingWhatsApp.amount.toFixed(2)}\n` +
-                    `*Concepto:* ${pendingWhatsApp.description}\n` +
-                    `*Saldo Pendiente:* $${pendingWhatsApp.newBalance.toFixed(2)}\n\n` +
-                    `¡Gracias!`;
-
-    const encodedMessage = encodeURIComponent(message);
-    window.open(`https://wa.me/${cleanPhone}?text=${encodedMessage}`, '_blank');
-    setIsWhatsAppDialogOpen(false);
-    setPendingWhatsApp(null);
-  };
-
   const handleDeleteTransaction = async (tx: DebtorTransaction) => {
     if (!user || !debtor) return;
     try {
-      // 1. Revertir saldo del deudor
       const newBalance = tx.type === "charge" ? debtor.current_balance - tx.amount : debtor.current_balance + tx.amount;
-      
-      // 2. Si era un abono (payment), buscar y borrar el registro en efectivo o tarjetas
-      if (tx.type === "payment") {
-        const linkedDesc = `Abono de ${debtor.name}: ${tx.description}`;
-        
-        // Buscar en efectivo
-        const { data: cashMatch } = await supabase
-          .from('cash_transactions')
-          .select('id')
-          .eq('user_id', user.id)
-          .eq('amount', tx.amount)
-          .eq('description', linkedDesc)
-          .eq('date', tx.date)
-          .limit(1);
-
-        if (cashMatch && cashMatch.length > 0) {
-          await supabase.from('cash_transactions').delete().eq('id', cashMatch[0].id);
-        } else {
-          // Buscar en tarjetas
-          const { data: cardMatch } = await supabase
-            .from('card_transactions')
-            .select('id, card_id, amount')
-            .eq('user_id', user.id)
-            .eq('amount', tx.amount)
-            .eq('description', linkedDesc)
-            .eq('date', tx.date)
-            .limit(1);
-
-          if (cardMatch && cardMatch.length > 0) {
-            const match = cardMatch[0];
-            // Revertir saldo de la tarjeta antes de borrar
-            const card = cards.find(c => c.id === match.card_id);
-            if (card) {
-              const revBalance = card.type === "credit" ? card.current_balance + match.amount : card.current_balance - match.amount;
-              await supabase.from('cards').update({ current_balance: revBalance }).eq('id', card.id);
-            }
-            await supabase.from('card_transactions').delete().eq('id', match.id);
-          }
-        }
-      }
-
       await supabase.from('debtors').update({ current_balance: newBalance }).eq('id', debtor.id);
       await supabase.from('debtor_transactions').delete().eq('id', tx.id);
-      
-      showSuccess("Transacción y su vínculo eliminados correctamente.");
+      showSuccess("Movimiento eliminado");
       fetchData();
     } catch (error: any) {
-      showError('Error al eliminar: ' + error.message);
+      showError('Error al eliminar');
     }
   };
 
   const handleExport = (formatType: 'csv' | 'pdf') => {
     if (!debtor) return;
-    const data = debtor.debtor_transactions.map(tx => ({
+    const data = filteredTransactions.map(tx => ({
       Fecha: format(parseISO(tx.date), "dd/MM/yyyy"),
       Tipo: tx.type === "charge" ? "Cargo" : "Abono",
       Descripción: tx.description,
       Monto: tx.amount.toFixed(2)
     }));
-
     if (formatType === 'csv') exportToCsv(`historial_${debtor.name}.csv`, data);
     else exportToPdf(`historial_${debtor.name}.pdf`, `Historial: ${debtor.name}`, ["Fecha", "Tipo", "Descripción", "Monto"], data.map(d => Object.values(d)));
   };
@@ -313,63 +230,53 @@ const DebtorDetailsPage: React.FC = () => {
   return (
     <div className="flex flex-col gap-6 p-4">
       <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={() => navigate('/debtors')}>
-          <ArrowLeft className="h-5 w-5" />
-        </Button>
-        <h1 className="text-3xl font-bold">Gestión de Deudor: {debtor.name}</h1>
+        <Button variant="ghost" size="icon" onClick={() => navigate('/debtors')}><ArrowLeft className="h-5 w-5" /></Button>
+        <h1 className="text-3xl font-bold">Deudor: {debtor.name}</h1>
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
         <Card className="bg-yellow-50 border-yellow-200">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-yellow-800">Saldo Pendiente</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-yellow-900">${debtor.current_balance.toFixed(2)}</div>
-          </CardContent>
+          <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-yellow-800">Saldo Pendiente</CardTitle></CardHeader>
+          <CardContent><div className="text-3xl font-bold text-yellow-900">${debtor.current_balance.toFixed(2)}</div></CardContent>
         </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Deuda Inicial</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-semibold">${debtor.initial_balance.toFixed(2)}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Estado</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Badge className={cn(debtor.current_balance <= 0 ? "bg-green-100 text-green-800" : "bg-yellow-100 text-yellow-800")}>
-              {debtor.current_balance <= 0 ? "Completado" : "Activo"}
-            </Badge>
-          </CardContent>
-        </Card>
+        <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Deuda Inicial</CardTitle></CardHeader><CardContent><div className="text-2xl font-semibold">${debtor.initial_balance.toFixed(2)}</div></CardContent></Card>
+        <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Estado</CardTitle></CardHeader><CardContent><Badge className={cn(debtor.current_balance <= 0 ? "bg-green-100 text-green-800" : "bg-yellow-100 text-yellow-800")}>{debtor.current_balance <= 0 ? "Completado" : "Activo"}</Badge></CardContent></Card>
+      </div>
+
+      <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
+        <div className="flex flex-col sm:flex-row gap-2 w-full md:max-w-2xl">
+          <div className="relative flex-1">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input placeholder="Buscar descripción..." className="pl-8 h-9" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+          </div>
+          <Select value={filterType} onValueChange={(v: any) => setFilterType(v)}>
+            <SelectTrigger className="w-full sm:w-[140px] h-9">
+              <Filter className="mr-2 h-3 w-3" />
+              <SelectValue placeholder="Filtrar" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos</SelectItem>
+              <SelectItem value="charge">Cargos</SelectItem>
+              <SelectItem value="payment">Abonos</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex items-center gap-2 w-full md:w-auto">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="icon" className="h-9 w-9" title="Exportar"><FileDown className="h-4 w-4" /></Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => handleExport('csv')}><FileText className="mr-2 h-4 w-4" /> CSV</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleExport('pdf')}><FileText className="mr-2 h-4 w-4" /> PDF</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <Button size="sm" className="h-9 gap-1" onClick={handleOpenAdd}><DollarSign className="h-4 w-4" /> Nuevo</Button>
+        </div>
       </div>
 
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="flex items-center gap-2">
-            <History className="h-5 w-5" /> Historial de Movimientos
-          </CardTitle>
-          <div className="flex gap-2">
-            <Button size="sm" onClick={() => setIsTransactionDialogOpen(true)}>
-              <DollarSign className="h-4 w-4 mr-1" /> Nueva Transacción
-            </Button>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm">
-                  <FileDown className="h-4 w-4 mr-1" /> Exportar
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => handleExport('csv')}>CSV</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => handleExport('pdf')}>PDF</DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </CardHeader>
+        <CardHeader><CardTitle className="flex items-center gap-2"><History className="h-5 w-5" /> Historial</CardTitle></CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
@@ -382,38 +289,19 @@ const DebtorDetailsPage: React.FC = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {debtor.debtor_transactions
-                .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-                .map((tx) => (
+              {filteredTransactions.map((tx) => (
                 <TableRow key={tx.id}>
                   <TableCell>{format(parseISO(tx.date), "dd/MM/yyyy")}</TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className={tx.type === "charge" ? "text-red-600 border-red-200" : "text-green-600 border-green-200"}>
-                      {tx.type === "charge" ? "Cargo" : "Abono"}
-                    </Badge>
-                  </TableCell>
+                  <TableCell><Badge variant="outline" className={tx.type === "charge" ? "text-red-600 border-red-200" : "text-green-600 border-green-200"}>{tx.type === "charge" ? "Cargo" : "Abono"}</Badge></TableCell>
                   <TableCell>{tx.description}</TableCell>
-                  <TableCell className="text-right font-medium">
-                    {tx.type === "charge" ? "+" : "-"}${tx.amount.toFixed(2)}
-                  </TableCell>
-                  <TableCell className="text-right">
+                  <TableCell className="text-right font-medium">{tx.type === "charge" ? "+" : "-"}${tx.amount.toFixed(2)}</TableCell>
+                  <TableCell className="text-right flex gap-1 justify-end">
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleOpenEdit(tx)}><Edit className="h-4 w-4" /></Button>
                     <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-destructive">
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </AlertDialogTrigger>
+                      <AlertDialogTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8 text-destructive"><Trash2 className="h-4 w-4" /></Button></AlertDialogTrigger>
                       <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>¿Eliminar movimiento?</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            Si es un abono, se eliminará también el ingreso de tu efectivo/tarjeta y se ajustará el saldo del deudor.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                          <AlertDialogAction onClick={() => handleDeleteTransaction(tx)}>Eliminar</AlertDialogAction>
-                        </AlertDialogFooter>
+                        <AlertDialogHeader><AlertDialogTitle>¿Eliminar movimiento?</AlertDialogTitle><AlertDialogDescription>Se ajustará el saldo del deudor.</AlertDialogDescription></AlertDialogHeader>
+                        <AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel><AlertDialogAction onClick={() => handleDeleteTransaction(tx)}>Eliminar</AlertDialogAction></AlertDialogFooter>
                       </AlertDialogContent>
                     </AlertDialog>
                   </TableCell>
@@ -426,115 +314,48 @@ const DebtorDetailsPage: React.FC = () => {
 
       <Dialog open={isTransactionDialogOpen} onOpenChange={setIsTransactionDialogOpen}>
         <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Registrar Movimiento</DialogTitle>
-          </DialogHeader>
+          <DialogHeader><DialogTitle>{editingTransaction ? "Editar Movimiento" : "Registrar Movimiento"}</DialogTitle></DialogHeader>
           <form onSubmit={handleTransactionSubmit} className="grid gap-4 py-4">
             <div className="grid gap-2">
               <Label>Tipo</Label>
-              <Select value={newTransaction.type} onValueChange={(v: any) => setNewTransaction({...newTransaction, type: v})}>
+              <Select value={transactionForm.type} onValueChange={(v: any) => setTransactionForm({...transactionForm, type: v})}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="payment">Abono (Me paga)</SelectItem>
-                  <SelectItem value="charge">Cargo (Me debe más)</SelectItem>
-                </SelectContent>
+                <SelectContent><SelectItem value="payment">Abono (Me paga)</SelectItem><SelectItem value="charge">Cargo (Me debe más)</SelectItem></SelectContent>
               </Select>
             </div>
-            <div className="grid gap-2">
-              <Label>Monto</Label>
-              <Input 
-                value={newTransaction.amount} 
-                onChange={(e) => setNewTransaction({...newTransaction, amount: e.target.value})}
-                placeholder="Ej. 100 o =50*2"
-                required
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label>Descripción</Label>
-              <Input 
-                value={newTransaction.description} 
-                onChange={(e) => setNewTransaction({...newTransaction, description: e.target.value})}
-                required
-              />
-            </div>
-            {newTransaction.type === "payment" && (
+            <div className="grid gap-2"><Label>Monto</Label><Input value={transactionForm.amount} onChange={e => setTransactionForm({...transactionForm, amount: e.target.value})} required /></div>
+            <div className="grid gap-2"><Label>Descripción</Label><Input value={transactionForm.description} onChange={e => setTransactionForm({...transactionForm, description: e.target.value})} required /></div>
+            {transactionForm.type === "payment" && !editingTransaction && (
               <>
                 <div className="flex items-center space-x-2 bg-blue-50 p-3 rounded-md border border-blue-100">
-                  <Checkbox 
-                    id="skip" 
-                    checked={skipLinkedTransaction} 
-                    onCheckedChange={(v) => setSkipLinkedTransaction(!!v)} 
-                  />
-                  <div className="grid gap-1.5 leading-none">
-                    <label
-                      htmlFor="skip"
-                      className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex items-center gap-1"
-                    >
-                      Ya registré este ingreso manualmente <AlertCircle className="h-3 w-3 text-blue-500" />
-                    </label>
-                    <p className="text-xs text-muted-foreground">
-                      Marca esto si ya creaste el registro en "Lo que tienes" o "Tarjetas" para evitar duplicados.
-                    </p>
-                  </div>
+                  <Checkbox id="skip" checked={skipLinkedTransaction} onCheckedChange={(v) => setSkipLinkedTransaction(!!v)} />
+                  <Label htmlFor="skip" className="text-xs">Ya registré este ingreso manualmente</Label>
                 </div>
-
                 {!skipLinkedTransaction && (
                   <>
                     <div className="grid gap-2">
-                      <Label>Destino del Dinero</Label>
-                      <Select value={newTransaction.destinationAccountId} onValueChange={(v) => setNewTransaction({...newTransaction, destinationAccountId: v})}>
+                      <Label>Destino</Label>
+                      <Select value={transactionForm.destinationAccountId} onValueChange={(v) => setTransactionForm({...transactionForm, destinationAccountId: v})}>
                         <SelectTrigger><SelectValue /></SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="cash">Efectivo (Saldo: ${cashBalance.toFixed(2)})</SelectItem>
-                          {cards.map(c => (
-                            <SelectItem key={c.id} value={c.id}>{c.name} ({c.bank_name})</SelectItem>
-                          ))}
+                          <SelectItem value="cash">Efectivo (${cashBalance.toFixed(2)})</SelectItem>
+                          {cards.map(c => <SelectItem key={c.id} value={c.id}>{c.name} ({c.bank_name})</SelectItem>)}
                         </SelectContent>
                       </Select>
                     </div>
                     <div className="grid gap-2">
-                      <Label>Categoría de Ingreso</Label>
-                      <Select value={newTransaction.selectedIncomeCategoryId} onValueChange={(v) => setNewTransaction({...newTransaction, selectedIncomeCategoryId: v})}>
+                      <Label>Categoría</Label>
+                      <Select value={transactionForm.selectedIncomeCategoryId} onValueChange={(v) => setTransactionForm({...transactionForm, selectedIncomeCategoryId: v})}>
                         <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          {incomeCategories.map(cat => (
-                            <SelectItem key={cat.id} value={cat.id}>
-                              <div className="flex items-center gap-2">
-                                <DynamicLucideIcon iconName={cat.icon || "Tag"} className="h-4 w-4" />
-                                {cat.name}
-                              </div>
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
+                        <SelectContent>{incomeCategories.map(cat => <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>)}</SelectContent>
                       </Select>
                     </div>
                   </>
                 )}
               </>
             )}
-            <DialogFooter>
-              <Button type="submit">Guardar Movimiento</Button>
-            </DialogFooter>
+            <DialogFooter><Button type="submit">Guardar</Button></DialogFooter>
           </form>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={isWhatsAppDialogOpen} onOpenChange={setIsWhatsAppDialogOpen}>
-        <DialogContent className="sm:max-w-[400px]">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <MessageCircle className="h-5 w-5 text-green-600" /> ¿Enviar comprobante?
-            </DialogTitle>
-            <DialogDescription>
-              Se ha registrado el movimiento. ¿Deseas enviar el detalle a <strong>{debtor.name}</strong> por WhatsApp?
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="flex gap-2 sm:justify-end">
-            <Button variant="outline" onClick={() => setIsWhatsAppDialogOpen(false)}>No, terminar</Button>
-            <Button className="bg-green-600 hover:bg-green-700 text-white" onClick={handleSendWhatsApp}>
-              Sí, enviar WhatsApp
-            </Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
