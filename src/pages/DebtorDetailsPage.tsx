@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { DollarSign, Trash2, Edit, ArrowLeft, FileDown, History, MessageCircle, AlertCircle, Search, Filter } from "lucide-react";
+import { DollarSign, Trash2, Edit, ArrowLeft, FileDown, History, MessageCircle, AlertCircle, Search, Filter, FileText } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { cn } from "@/lib/utils";
 import { format, parseISO } from "date-fns";
