@@ -80,32 +80,37 @@ const CardDetailsPage: React.FC = () => {
     (card?.card_pockets || []).reduce((s: number, p: any) => s + Number(p.amount), 0)
   , [card]);
 
-  // Calcular saldos históricos para todos los movimientos
+  // Calcular saldos históricos sincronizados con el saldo actual
   const transactionsWithBalance = useMemo(() => {
     if (!card) return [];
     
-    // Ordenar por fecha ascendente para calcular el saldo acumulado
-    const sortedAll = [...(card.card_transactions || [])].sort((a, b) => 
-      parseISO(a.date).getTime() - parseISO(b.date).getTime() || 
-      new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-    );
-
-    let runningBalance = card.initial_balance;
-    const withBalance = sortedAll.map(tx => {
-      if (card.type === "debit") {
-        runningBalance = tx.type === "charge" ? runningBalance - tx.amount : runningBalance + tx.amount;
-      } else {
-        // Para crédito, el saldo representa la DEUDA
-        runningBalance = tx.type === "charge" ? runningBalance + tx.amount : runningBalance - tx.amount;
-      }
-      return { ...tx, runningBalance };
-    });
-
-    // Devolver ordenados por fecha descendente para la tabla
-    return withBalance.sort((a, b) => 
+    // Ordenar por fecha y creación descendente (lo más nuevo primero)
+    const sortedDesc = [...(card.card_transactions || [])].sort((a, b) => 
       parseISO(b.date).getTime() - parseISO(a.date).getTime() || 
       new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
     );
+
+    // Punto de partida: El saldo disponible actual que muestra la app
+    let currentRunningPoint = card.type === "debit" 
+      ? card.current_balance 
+      : (card.credit_limit || 0) - card.current_balance;
+
+    const withBalance = sortedDesc.map(tx => {
+      const balanceAtThisPoint = currentRunningPoint;
+      
+      // Revertimos el movimiento para encontrar el saldo anterior
+      if (card.type === "debit") {
+        // En débito: Cargo resta, Abono suma. Reversa: Cargo suma, Abono resta.
+        currentRunningPoint = tx.type === "charge" ? currentRunningPoint + tx.amount : currentRunningPoint - tx.amount;
+      } else {
+        // En crédito (Disponible): Cargo resta disponible, Abono suma disponible. Reversa igual que débito.
+        currentRunningPoint = tx.type === "charge" ? currentRunningPoint + tx.amount : currentRunningPoint - tx.amount;
+      }
+      
+      return { ...tx, runningBalance: balanceAtThisPoint };
+    });
+
+    return withBalance;
   }, [card]);
 
   const filteredTransactions = useMemo(() => {
