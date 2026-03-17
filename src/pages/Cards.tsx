@@ -215,7 +215,7 @@ const Cards = () => {
         <Card className="border-l-4 border-pink-600 bg-pink-50 text-pink-800">
           <CardHeader className="pb-2"><CardTitle className="text-xs font-medium">BALANCE NETO TARJETAS</CardTitle></CardHeader>
           <CardContent><div className="text-xl font-bold">${netCardBalance.toFixed(2)}</div></CardContent>
-        </div>
+        </Card>
       </div>
 
       <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
