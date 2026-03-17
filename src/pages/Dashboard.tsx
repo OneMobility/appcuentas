@@ -21,14 +21,7 @@ import CreditCardsChart from "@/components/CreditCardsChart";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-
-const exchangeRates: { [key: string]: number } = {
-  MXN: 1,
-  USD: 19.0,
-  EUR: 20.5,
-  COP: 0.0045,
-  BOB: 2.7,
-};
+import { Badge } from "@/components/ui/badge";
 
 interface CardTransaction {
   id: string;
@@ -38,8 +31,6 @@ interface CardTransaction {
   date: string;
   card_id?: string;
   user_id?: string;
-  income_category_id?: string | null;
-  expense_category_id?: string | null;
 }
 
 interface CardData {
@@ -57,15 +48,11 @@ interface CardData {
   color: string;
   transactions: CardTransaction[];
   user_id?: string;
-  last_payment_date?: string | null;
 }
 
 const Dashboard = () => {
   const { user } = useSession();
-  const { incomeCategories, expenseCategories, isLoadingCategories } = useCategoryContext();
-  const [amountToConvert, setAmountToConvert] = useState<string>("");
-  const [fromCurrency, setFromCurrency] = useState<string>("USD");
-  const [toCurrency, setToCurrency] = useState<string>("MXN");
+  const { isLoadingCategories } = useCategoryContext();
 
   const [cards, setCards] = useState<CardData[]>([]);
   const [cashTransactions, setCashTransactions] = useState<any[]>([]);
@@ -78,6 +65,20 @@ const Dashboard = () => {
   const [selectedCardForPayment, setSelectedCardForPayment] = useState<string>("");
   const [paymentDate, setPaymentDate] = useState<Date>(new Date());
   const [isSubmittingPayment, setIsSubmittingPayment] = useState(false);
+
+  // Cargar pagos manuales desde localStorage
+  const [manualPayments, setManualPayments] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    const saved = localStorage.getItem('oinkash_manual_payments');
+    if (saved) {
+      try {
+        setManualPayments(JSON.parse(saved));
+      } catch (e) {
+        setManualPayments({});
+      }
+    }
+  }, [refreshKey]);
 
   const fetchDashboardData = async () => {
     if (!user) return;
@@ -126,27 +127,22 @@ const Dashboard = () => {
     showSuccess("Datos actualizados.");
   };
 
-  const handleMarkAsPaid = async () => {
-    if (!selectedCardForPayment || !user) return;
+  const handleMarkAsPaid = () => {
+    if (!selectedCardForPayment) return;
     
     setIsSubmittingPayment(true);
-    try {
-      const { error } = await supabase
-        .from('cards')
-        .update({ last_payment_date: getLocalDateString(paymentDate) })
-        .eq('id', selectedCardForPayment)
-        .eq('user_id', user.id);
-
-      if (error) throw error;
-
-      showSuccess("Pago registrado manualmente. Las alertas se actualizarán.");
-      setIsPaymentDialogOpen(false);
-      handleRefreshData();
-    } catch (error: any) {
-      showError("Error al registrar pago: " + error.message);
-    } finally {
-      setIsSubmittingPayment(false);
-    }
+    const updatedPayments = {
+      ...manualPayments,
+      [selectedCardForPayment]: getLocalDateString(paymentDate)
+    };
+    
+    localStorage.setItem('oinkash_manual_payments', JSON.stringify(updatedPayments));
+    setManualPayments(updatedPayments);
+    
+    showSuccess("Pago marcado localmente. Las alertas se actualizarán.");
+    setIsPaymentDialogOpen(false);
+    setIsSubmittingPayment(false);
+    setRefreshKey(prev => prev + 1);
   };
 
   const totalCashBalance = useMemo(() => {
@@ -177,8 +173,9 @@ const Dashboard = () => {
         }
 
         if (card.cut_off_day !== undefined && card.days_to_pay_after_cut_off !== undefined) {
-          // Verificar si ya se marcó como pagado para este ciclo
-          const isPaidManually = isPaymentDoneForCurrentStatement(card.last_payment_date, card.cut_off_day, card.days_to_pay_after_cut_off);
+          // Verificar si ya se marcó como pagado localmente
+          const lastPaymentDate = manualPayments[card.id];
+          const isPaidManually = isPaymentDoneForCurrentStatement(lastPaymentDate, card.cut_off_day, card.days_to_pay_after_cut_off);
           
           if (!isPaidManually && card.current_balance > 0) {
             const paymentDueDate = getUpcomingPaymentDueDate(card.cut_off_day, card.days_to_pay_after_cut_off, today);
@@ -201,7 +198,7 @@ const Dashboard = () => {
       status: hasCriticalIssue ? "critical" : (hasWarningIssue ? "warning" : "all_good"), 
       cards: [...criticalCards, ...warningCards] 
     };
-  }, [cards]);
+  }, [cards, manualPayments]);
 
   const piggyBankImageSrc = cardHealthStatus.status === "critical"
     ? "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Cochinito%20Fuego.png"
@@ -303,7 +300,9 @@ const Dashboard = () => {
                   const dueDate = card.cut_off_day && card.days_to_pay_after_cut_off 
                     ? getUpcomingPaymentDueDate(card.cut_off_day, card.days_to_pay_after_cut_off) 
                     : null;
-                  const isPaid = isPaymentDoneForCurrentStatement(card.last_payment_date, card.cut_off_day!, card.days_to_pay_after_cut_off!);
+                  
+                  const lastPaymentDate = manualPayments[card.id];
+                  const isPaid = isPaymentDoneForCurrentStatement(lastPaymentDate, card.cut_off_day!, card.days_to_pay_after_cut_off!);
 
                   return (
                     <TableRow key={card.id}>

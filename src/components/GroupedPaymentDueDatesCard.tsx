@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Eye, CalendarIcon, CheckCircle2 } from "lucide-react";
 import { format, differenceInDays, isBefore, isSameDay, addDays } from "date-fns";
@@ -16,7 +16,6 @@ interface CardDataForDueDate {
   cut_off_day?: number;
   days_to_pay_after_cut_off?: number;
   current_balance: number;
-  last_payment_date?: string | null;
 }
 
 interface GroupedPaymentDueDatesCardProps {
@@ -27,14 +26,31 @@ const GroupedPaymentDueDatesCard: React.FC<GroupedPaymentDueDatesCardProps> = ({
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
+  // Cargar pagos manuales desde localStorage para control local
+  const [manualPayments, setManualPayments] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    const saved = localStorage.getItem('oinkash_manual_payments');
+    if (saved) {
+      try {
+        setManualPayments(JSON.parse(saved));
+      } catch (e) {
+        setManualPayments({});
+      }
+    }
+  }, []);
+
   const upcomingPayments = cards
-    .filter(card => 
-      card.type === "credit" && 
-      card.cut_off_day !== undefined && 
-      card.days_to_pay_after_cut_off !== undefined &&
-      card.current_balance > 0 &&
-      !isPaymentDoneForCurrentStatement(card.last_payment_date, card.cut_off_day, card.days_to_pay_after_cut_off)
-    )
+    .filter(card => {
+      const lastPaymentDate = manualPayments[card.id];
+      return (
+        card.type === "credit" && 
+        card.cut_off_day !== undefined && 
+        card.days_to_pay_after_cut_off !== undefined &&
+        card.current_balance > 0 &&
+        !isPaymentDoneForCurrentStatement(lastPaymentDate, card.cut_off_day, card.days_to_pay_after_cut_off)
+      );
+    })
     .map(card => {
       const paymentDueDate = getUpcomingPaymentDueDate(card.cut_off_day!, card.days_to_pay_after_cut_off!, today);
       const daysRemaining = differenceInDays(paymentDueDate, today);
