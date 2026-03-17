@@ -5,7 +5,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { PlusCircle, Trash2, ArrowRightLeft, Wallet } from "lucide-react";
+import { PlusCircle, Trash2, ArrowRightLeft, Wallet, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/context/SessionContext";
 import { showError, showSuccess } from "@/utils/toast";
@@ -30,6 +30,7 @@ const CardPocketsManager: React.FC<CardPocketsManagerProps> = ({ cardId, cardBal
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isTransferDialogOpen, setIsTransferDialogOpen] = useState(false);
   const [selectedPocket, setSelectedPocket] = useState<Pocket | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
   const [newPocketName, setNewPocketName] = useState("");
   const [transferAmount, setTransferAmount] = useState("");
@@ -37,14 +38,18 @@ const CardPocketsManager: React.FC<CardPocketsManagerProps> = ({ cardId, cardBal
 
   const fetchPockets = async () => {
     if (!user) return;
-    const { data, error } = await supabase
-      .from('card_pockets')
-      .select('*')
-      .eq('card_id', cardId)
-      .eq('user_id', user.id);
-    
-    if (error) showError("Error al cargar apartados");
-    else setPockets(data || []);
+    try {
+      const { data, error } = await supabase
+        .from('card_pockets')
+        .select('*')
+        .eq('card_id', cardId)
+        .eq('user_id', user.id);
+      
+      if (error) throw error;
+      setPockets(data || []);
+    } catch (e: any) {
+      console.error("Error fetching pockets:", e.message);
+    }
   };
 
   useEffect(() => {
@@ -52,23 +57,36 @@ const CardPocketsManager: React.FC<CardPocketsManagerProps> = ({ cardId, cardBal
   }, [cardId, user]);
 
   const handleCreatePocket = async () => {
-    if (!newPocketName.trim()) return;
-    const { error } = await supabase
-      .from('card_pockets')
-      .insert({ card_id: cardId, user_id: user?.id, name: newPocketName.trim(), amount: 0 });
+    if (!newPocketName.trim() || !user) return;
     
-    if (error) showError("Error al crear apartado");
-    else {
-      showSuccess("Apartado creado");
+    setIsSubmitting(true);
+    try {
+      const { error } = await supabase
+        .from('card_pockets')
+        .insert({ 
+          card_id: cardId, 
+          user_id: user.id, 
+          name: newPocketName.trim(), 
+          amount: 0 
+        });
+      
+      if (error) throw error;
+
+      showSuccess("Apartado creado exitosamente");
       setNewPocketName("");
       setIsAddDialogOpen(false);
       fetchPockets();
+    } catch (e: any) {
+      showError("Error al crear apartado. Asegúrate de haber ejecutado el SQL necesario.");
+      console.error("Create pocket error:", e.message);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   const handleTransfer = async () => {
     const amount = parseFloat(transferAmount);
-    if (isNaN(amount) || amount <= 0 || !selectedPocket) return;
+    if (isNaN(amount) || amount <= 0 || !selectedPocket || !user) return;
 
     if (transferType === "to_pocket" && cardBalance < amount) {
       showError("Saldo insuficiente en la tarjeta");
@@ -79,6 +97,7 @@ const CardPocketsManager: React.FC<CardPocketsManagerProps> = ({ cardId, cardBal
       return;
     }
 
+    setIsSubmitting(true);
     try {
       const newPocketAmount = transferType === "to_pocket" 
         ? selectedPocket.amount + amount 
@@ -88,27 +107,48 @@ const CardPocketsManager: React.FC<CardPocketsManagerProps> = ({ cardId, cardBal
         ? cardBalance - amount
         : cardBalance + amount;
 
-      await supabase.from('card_pockets').update({ amount: newPocketAmount }).eq('id', selectedPocket.id);
-      await supabase.from('cards').update({ current_balance: newCardBalance }).eq('id', cardId);
+      const { error: pocketError } = await supabase
+        .from('card_pockets')
+        .update({ amount: newPocketAmount })
+        .eq('id', selectedPocket.id);
+      
+      if (pocketError) throw pocketError;
+
+      const { error: cardError } = await supabase
+        .from('cards')
+        .update({ current_balance: newCardBalance })
+        .eq('id', cardId);
+      
+      if (cardError) throw cardError;
 
       showSuccess("Transferencia exitosa");
       setIsTransferDialogOpen(false);
       setTransferAmount("");
       fetchPockets();
       onUpdate();
-    } catch (e) {
-      showError("Error en la transferencia");
+    } catch (e: any) {
+      showError("Error en la transferencia: " + e.message);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   const handleDeletePocket = async (pocket: Pocket) => {
-    if (pocket.amount > 0) {
-      await supabase.from('cards').update({ current_balance: cardBalance + pocket.amount }).eq('id', cardId);
+    if (!user) return;
+    
+    try {
+      if (pocket.amount > 0) {
+        await supabase.from('cards').update({ current_balance: cardBalance + pocket.amount }).eq('id', cardId);
+      }
+      const { error } = await supabase.from('card_pockets').delete().eq('id', pocket.id);
+      if (error) throw error;
+
+      showSuccess("Apartado eliminado");
+      fetchPockets();
+      onUpdate();
+    } catch (e: any) {
+      showError("Error al eliminar apartado: " + e.message);
     }
-    await supabase.from('card_pockets').delete().eq('id', pocket.id);
-    showSuccess("Apartado eliminado");
-    fetchPockets();
-    onUpdate();
   };
 
   return (
@@ -142,17 +182,25 @@ const CardPocketsManager: React.FC<CardPocketsManagerProps> = ({ cardId, cardBal
           ))}
         </div>
 
-        {/* Dialogs */}
         <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
           <DialogContent>
             <DialogHeader><DialogTitle>Crear Apartado</DialogTitle></DialogHeader>
             <div className="grid gap-4 py-4">
               <div className="grid gap-2">
                 <Label>Nombre del Apartado</Label>
-                <Input value={newPocketName} onChange={e => setNewPocketName(e.target.value)} placeholder="Ej. Renta, Ahorro..." />
+                <Input 
+                  value={newPocketName} 
+                  onChange={e => setNewPocketName(e.target.value)} 
+                  placeholder="Ej. Renta, Ahorro..." 
+                  disabled={isSubmitting}
+                />
               </div>
             </div>
-            <DialogFooter><Button onClick={handleCreatePocket}>Crear</Button></DialogFooter>
+            <DialogFooter>
+              <Button onClick={handleCreatePocket} disabled={isSubmitting}>
+                {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Crear"}
+              </Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
 
@@ -172,10 +220,20 @@ const CardPocketsManager: React.FC<CardPocketsManagerProps> = ({ cardId, cardBal
               </div>
               <div className="grid gap-2">
                 <Label>Monto</Label>
-                <Input type="number" value={transferAmount} onChange={e => setTransferAmount(e.target.value)} placeholder="0.00" />
+                <Input 
+                  type="number" 
+                  value={transferAmount} 
+                  onChange={e => setTransferAmount(e.target.value)} 
+                  placeholder="0.00" 
+                  disabled={isSubmitting}
+                />
               </div>
             </div>
-            <DialogFooter><Button onClick={handleTransfer}>Confirmar</Button></DialogFooter>
+            <DialogFooter>
+              <Button onClick={handleTransfer} disabled={isSubmitting}>
+                {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Confirmar"}
+              </Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
       </CardContent>
