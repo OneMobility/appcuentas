@@ -175,7 +175,7 @@ const CardDetailsPage: React.FC = () => {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
-        <div className="lg:col-span-2 flex flex-col gap-6">
+        <div className={cn("lg:col-span-2 flex flex-col gap-6", card.type !== "debit" && "lg:col-span-3")}>
           <Card className="p-6 text-white shadow-xl" style={{ backgroundColor: card.color }}>
             <div className="flex justify-between items-start mb-6">
               <div className="space-y-1">
@@ -278,9 +278,11 @@ const CardDetailsPage: React.FC = () => {
           </Card>
         </div>
 
-        <div className="flex flex-col gap-6">
-          <CardPocketsManager cardId={card.id} cardBalance={card.current_balance} onUpdate={fetchCardDetails} />
-        </div>
+        {card.type === "debit" && (
+          <div className="flex flex-col gap-6">
+            <CardPocketsManager cardId={card.id} cardBalance={card.current_balance} onUpdate={fetchCardDetails} />
+          </div>
+        )}
       </div>
 
       <Dialog open={isAddTransactionDialogOpen} onOpenChange={setIsAddTransactionDialogOpen}>
