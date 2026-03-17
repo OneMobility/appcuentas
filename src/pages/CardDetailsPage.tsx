@@ -47,7 +47,6 @@ const CardDetailsPage: React.FC = () => {
     if (!user || !cardId) return;
     setIsLoading(true);
     
-    // Cargar tarjeta y transacciones
     const { data, error } = await supabase
       .from('cards')
       .select('*, card_transactions(*)')
@@ -61,7 +60,6 @@ const CardDetailsPage: React.FC = () => {
       return;
     }
 
-    // Cargar apartados por separado
     try {
       const { data: pockets } = await supabase
         .from('card_pockets')
@@ -154,27 +152,29 @@ const CardDetailsPage: React.FC = () => {
         <div className="lg:col-span-2 flex flex-col gap-6">
           <Card className="p-6 text-white shadow-xl" style={{ backgroundColor: card.color }}>
             <div className="flex justify-between items-start mb-6">
-              <div>
-                <p className="text-sm opacity-80">Saldo Disponible</p>
-                <p className="text-4xl font-black">${card.current_balance.toFixed(2)}</p>
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <p className="text-sm opacity-80">Saldo Disponible:</p>
+                  <p className="text-2xl font-bold">${card.current_balance.toFixed(2)}</p>
+                </div>
+                {card.type === "debit" && (
+                  <>
+                    <div className="flex items-center gap-2 opacity-90">
+                      <p className="text-xs opacity-70">Saldo en Apartados:</p>
+                      <p className="text-sm font-semibold">${pocketsBalance.toFixed(2)}</p>
+                    </div>
+                    <div className="flex items-center gap-2 border-t border-white/20 pt-1">
+                      <p className="text-xs font-bold">Saldo Total:</p>
+                      <p className="text-xl font-black">${(card.current_balance + pocketsBalance).toFixed(2)}</p>
+                    </div>
+                  </>
+                )}
               </div>
               <div className="text-right">
                 <p className="text-sm opacity-80">{card.bank_name}</p>
                 <p className="font-bold">**** {card.last_four_digits}</p>
               </div>
             </div>
-            {pocketsBalance > 0 && (
-              <div className="grid grid-cols-2 gap-4 pt-4 border-t border-white/20">
-                <div>
-                  <p className="text-xs opacity-70">En Apartados</p>
-                  <p className="text-lg font-bold">${pocketsBalance.toFixed(2)}</p>
-                </div>
-                <div className="text-right">
-                  <p className="text-xs opacity-70">Saldo Total</p>
-                  <p className="text-lg font-bold">${(card.current_balance + pocketsBalance).toFixed(2)}</p>
-                </div>
-              </div>
-            )}
           </Card>
 
           <Card>

@@ -66,26 +66,34 @@ const CardDisplay: React.FC<CardDisplayProps> = ({ card, onAddTransaction, onDel
         </CardTitle>
       </CardHeader>
       <CardContent className="p-0 relative z-10">
-        <div className="space-y-1 mb-4">
-          <div>
-            <p className="text-xs opacity-80">Saldo Disponible</p>
-            <p className="text-2xl font-extrabold">${card.current_balance.toFixed(2)}</p>
+        <div className="space-y-2 mb-4">
+          <div className="flex justify-between items-center">
+            <p className="text-xs opacity-80">Saldo Disponible:</p>
+            <p className="text-xl font-bold">${card.current_balance.toFixed(2)}</p>
           </div>
-          {!isCredit && pocketsBalance > 0 && (
-            <div className="flex justify-between items-end border-t border-white/20 pt-1">
-              <div>
-                <p className="text-[10px] opacity-70">En Apartados</p>
+          
+          {!isCredit && (
+            <>
+              <div className="flex justify-between items-center opacity-90">
+                <p className="text-xs opacity-80">Saldo en Apartados:</p>
                 <p className="text-sm font-semibold">${pocketsBalance.toFixed(2)}</p>
               </div>
-              <div className="text-right">
-                <p className="text-[10px] opacity-70">Saldo Total</p>
-                <p className="text-sm font-semibold">${totalBalance.toFixed(2)}</p>
+              <div className="flex justify-between items-center border-t border-white/20 pt-1">
+                <p className="text-xs font-bold">Saldo Total:</p>
+                <p className="text-lg font-black">${totalBalance.toFixed(2)}</p>
               </div>
+            </>
+          )}
+          
+          {isCredit && card.credit_limit && (
+            <div className="flex justify-between items-center opacity-90">
+              <p className="text-xs opacity-80">Límite de Crédito:</p>
+              <p className="text-sm font-semibold">${card.credit_limit.toFixed(2)}</p>
             </div>
           )}
         </div>
 
-        <div className="grid grid-cols-2 gap-2 text-xs mb-4 opacity-90">
+        <div className="grid grid-cols-2 gap-2 text-[10px] mb-4 opacity-80">
           <div>
             <p>Número</p>
             <p className="font-semibold">**** {card.last_four_digits}</p>
@@ -97,23 +105,23 @@ const CardDisplay: React.FC<CardDisplayProps> = ({ card, onAddTransaction, onDel
         </div>
 
         <div className="flex flex-wrap gap-2 mt-4">
-          <Button variant="secondary" size="sm" onClick={() => onAddTransaction(card.id)} className="flex-1 bg-white/20 hover:bg-white/30 text-white border-none">
-            <DollarSign className="h-3.5 w-3.5 mr-1" /> Movimiento
+          <Button variant="secondary" size="sm" onClick={() => onAddTransaction(card.id)} className="flex-1 bg-white/20 hover:bg-white/30 text-white border-none h-8 text-xs">
+            <DollarSign className="h-3 w-3 mr-1" /> Movimiento
           </Button>
-          <Button variant="secondary" size="sm" onClick={handleViewDetails} className="flex-1 bg-white/20 hover:bg-white/30 text-white border-none">
-            <History className="h-3.5 w-3.5 mr-1" /> Detalles
+          <Button variant="secondary" size="sm" onClick={handleViewDetails} className="flex-1 bg-white/20 hover:bg-white/30 text-white border-none h-8 text-xs">
+            <History className="h-3 w-3 mr-1" /> Detalles
           </Button>
           <div className="flex gap-1">
-            <Button variant="secondary" size="sm" onClick={onTransfer} className="w-9 p-0 bg-white/20 hover:bg-white/30 text-white border-none">
-              <ArrowRightLeft className="h-3.5 w-3.5" />
+            <Button variant="secondary" size="sm" onClick={onTransfer} className="w-8 h-8 p-0 bg-white/20 hover:bg-white/30 text-white border-none">
+              <ArrowRightLeft className="h-3 w-3" />
             </Button>
-            <Button variant="secondary" size="sm" onClick={() => onEditCard(card)} className="w-9 p-0 bg-white/20 hover:bg-white/30 text-white border-none">
-              <Edit className="h-3.5 w-3.5" />
+            <Button variant="secondary" size="sm" onClick={() => onEditCard(card)} className="w-8 h-8 p-0 bg-white/20 hover:bg-white/30 text-white border-none">
+              <Edit className="h-3 w-3" />
             </Button>
             <AlertDialog>
               <AlertDialogTrigger asChild>
-                <Button variant="destructive" size="sm" className="w-9 p-0 bg-white/20 hover:bg-red-600 text-white border-none">
-                  <Trash2 className="h-3.5 w-3.5" />
+                <Button variant="destructive" size="sm" className="w-8 h-8 p-0 bg-white/20 hover:bg-red-600 text-white border-none">
+                  <Trash2 className="h-3 w-3" />
                 </Button>
               </AlertDialogTrigger>
               <AlertDialogContent>
