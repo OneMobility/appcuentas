@@ -12,66 +12,26 @@ import {
   Tag,
   LogOut,
   Wallet,
-  BarChart, // Importar BarChart
+  BarChart,
 } from "lucide-react";
 import { useSession } from "@/context/SessionContext";
 import { supabase } from "@/integrations/supabase/client";
-import { Button } from "@/components/ui/button";
 
 const navItems = [
-  {
-    name: "Resumen",
-    path: "/dashboard",
-    icon: PiggyBank,
-  },
-  {
-    name: "Lo que tienes",
-    path: "/cash",
-    icon: Banknote,
-  },
-  {
-    name: "Los que te deben",
-    path: "/debtors",
-    icon: ThumbsUp,
-  },
-  {
-  name: "A quien le debes",
-    path: "/creditors",
-    icon: ThumbsDown,
-  },
-  {
-    name: "Tus Tarjetas",
-    path: "/cards",
-    icon: CreditCard,
-  },
-  {
-    name: "Tus Metas",
-    path: "/savings",
-    icon: Wallet,
-  },
-  {
-    name: "Presupuestos",
-    path: "/shared-budgets",
-    icon: BarChart, // Usar BarChart
-  },
-  {
-    name: "Categorías",
-    path: "/categories",
-    icon: Tag,
-  },
+  { name: "Resumen", path: "/dashboard", icon: PiggyBank },
+  { name: "Dinero", path: "/cash", icon: Banknote },
+  { name: "Deudas", path: "/debtors", icon: ThumbsUp },
+  { name: "Pagos", path: "/creditors", icon: ThumbsDown },
+  { name: "Tarjetas", path: "/cards", icon: CreditCard },
 ];
 
 const MobileNavbar = () => {
   const location = useLocation();
   const { user } = useSession();
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-  };
-
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-40 bg-card border-t shadow-lg md:hidden">
-      <div className="flex h-16 items-center justify-around overflow-x-auto flex-nowrap px-1 py-1">
+    <nav className="fixed bottom-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-lg border-t border-border pb-[env(safe-area-inset-bottom)] md:hidden">
+      <div className="flex h-16 items-center justify-around px-2">
         {navItems.map((item) => {
           const isActive = location.pathname === item.path;
           const Icon = item.icon;
@@ -80,27 +40,22 @@ const MobileNavbar = () => {
               key={item.name}
               to={item.path}
               className={cn(
-                "flex flex-col items-center justify-center gap-0.5 px-1 py-1 text-[10px] font-medium transition-all duration-200 flex-shrink min-w-[60px] max-w-[80px] text-center",
+                "flex flex-col items-center justify-center flex-1 gap-1 transition-all duration-200",
                 isActive
-                  ? "text-primary-foreground bg-primary rounded-md scale-100"
-                  : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                  ? "text-primary scale-110"
+                  : "text-muted-foreground hover:text-foreground"
               )}
             >
-              <Icon className="h-5 w-5" />
-              <span className="leading-none">{item.name}</span>
+              <div className={cn(
+                "p-1.5 rounded-xl transition-colors",
+                isActive ? "bg-primary/10" : ""
+              )}>
+                <Icon className="h-6 w-6" />
+              </div>
+              <span className="text-[10px] font-medium leading-none">{item.name}</span>
             </Link>
           );
         })}
-        {user && (
-          <Button
-            variant="ghost"
-            onClick={handleLogout}
-            className="flex flex-col items-center justify-center gap-0.5 px-1 py-1 text-[10px] font-medium transition-all duration-200 flex-shrink min-w-[60px] max-w-[80px] text-muted-foreground hover:text-destructive hover:bg-destructive/20"
-          >
-            <LogOut className="h-5 w-5" />
-            <span className="leading-none">Salir</span>
-          </Button>
-        )}
       </div>
     </nav>
   );

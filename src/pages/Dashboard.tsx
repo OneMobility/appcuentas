@@ -2,17 +2,14 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Home, Users, DollarSign, CreditCard, AlertTriangle, Meh, RefreshCw, PiggyBank, CheckCircle2, CalendarIcon } from "lucide-react";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Home, Users, DollarSign, CreditCard, RefreshCw, PiggyBank, CheckCircle2, CalendarIcon } from "lucide-react";
 import { useCategoryContext } from "@/context/CategoryContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/context/SessionContext";
 import { showError, showSuccess } from "@/utils/toast";
-import { format, isBefore, isSameDay, addDays, parseISO } from "date-fns";
+import { format, isBefore, isSameDay, addDays } from "date-fns";
 import { es } from "date-fns/locale";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { getUpcomingPaymentDueDate, isPaymentDoneForCurrentStatement, getLocalDateString } from "@/utils/date-helpers";
 import { Button } from "@/components/ui/button";
 import GroupedPaymentDueDatesCard from "@/components/GroupedPaymentDueDatesCard";
@@ -22,16 +19,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Badge } from "@/components/ui/badge";
-
-interface CardTransaction {
-  id: string;
-  type: "charge" | "payment";
-  amount: number;
-  description: string;
-  date: string;
-  card_id?: string;
-  user_id?: string;
-}
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface CardData {
   id: string;
@@ -46,7 +35,6 @@ interface CardData {
   cut_off_day?: number;
   days_to_pay_after_cut_off?: number;
   color: string;
-  transactions: CardTransaction[];
   user_id?: string;
 }
 
@@ -60,267 +48,185 @@ const Dashboard = () => {
   const [creditors, setCreditors] = useState<any[]>([]);
   const [refreshKey, setRefreshKey] = useState(0);
 
-  // Estado para el diálogo de "Ya pagué"
   const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false);
   const [selectedCardForPayment, setSelectedCardForPayment] = useState<string>("");
   const [paymentDate, setPaymentDate] = useState<Date>(new Date());
   const [isSubmittingPayment, setIsSubmittingPayment] = useState(false);
-
-  // Cargar pagos manuales desde localStorage
   const [manualPayments, setManualPayments] = useState<Record<string, string>>({});
 
   useEffect(() => {
     const saved = localStorage.getItem('oinkash_manual_payments');
     if (saved) {
-      try {
-        setManualPayments(JSON.parse(saved));
-      } catch (e) {
-        setManualPayments({});
-      }
+      try { setManualPayments(JSON.parse(saved)); } catch (e) { setManualPayments({}); }
     }
   }, [refreshKey]);
 
   const fetchDashboardData = async () => {
     if (!user) return;
-
     try {
-      const { data: cardsData, error: cardsError } = await supabase
-        .from('cards')
-        .select('*, card_transactions(*)')
-        .eq('user_id', user.id);
-      if (cardsError) throw cardsError;
-      setCards(cardsData || []);
-
-      const { data: cashTxData, error: cashTxError } = await supabase
-        .from('cash_transactions')
-        .select('*')
-        .eq('user_id', user.id);
-      if (cashTxError) throw cashTxError;
-      setCashTransactions(cashTxData || []);
-
-      const { data: debtorsData, error: debtorsError } = await supabase
-        .from('debtors')
-        .select('*')
-        .eq('user_id', user.id);
-      if (debtorsError) throw debtorsError;
-      setDebtors(debtorsData || []);
-
-      const { data: creditorsData, error: creditorError } = await supabase
-        .from('creditors')
-        .select('*')
-        .eq('user_id', user.id);
-      if (creditorError) throw creditorError;
-      setCreditors(creditorsData || []);
+      const [cardsRes, cashRes, debtorsRes, creditorsRes] = await Promise.all([
+        supabase.from('cards').select('*').eq('user_id', user.id),
+        supabase.from('cash_transactions').select('*').eq('user_id', user.id),
+        supabase.from('debtors').select('*').eq('user_id', user.id),
+        supabase.from('creditors').select('*').eq('user_id', user.id)
+      ]);
+      setCards(cardsRes.data || []);
+      setCashTransactions(cashRes.data || []);
+      setDebtors(debtorsRes.data || []);
+      setCreditors(creditorsRes.data || []);
     } catch (error: any) {
-      showError('Error al cargar datos: ' + error.message);
+      showError('Error al cargar datos');
     }
   };
 
   useEffect(() => {
-    if (user && !isLoadingCategories) {
-      fetchDashboardData();
-    }
+    if (user && !isLoadingCategories) fetchDashboardData();
   }, [user, isLoadingCategories, refreshKey]);
-
-  const handleRefreshData = () => {
-    setRefreshKey(prevKey => prevKey + 1);
-    showSuccess("Datos actualizados.");
-  };
 
   const handleMarkAsPaid = () => {
     if (!selectedCardForPayment) return;
-    
     setIsSubmittingPayment(true);
-    const updatedPayments = {
-      ...manualPayments,
-      [selectedCardForPayment]: getLocalDateString(paymentDate)
-    };
-    
+    const updatedPayments = { ...manualPayments, [selectedCardForPayment]: getLocalDateString(paymentDate) };
     localStorage.setItem('oinkash_manual_payments', JSON.stringify(updatedPayments));
     setManualPayments(updatedPayments);
-    
-    showSuccess("Pago marcado localmente. Las alertas se actualizarán.");
+    showSuccess("Pago marcado.");
     setIsPaymentDialogOpen(false);
     setIsSubmittingPayment(false);
     setRefreshKey(prev => prev + 1);
   };
 
-  const totalCashBalance = useMemo(() => {
-    return cashTransactions.reduce((sum, tx) => tx.type === "ingreso" ? sum + tx.amount : sum - tx.amount, 0);
-  }, [cashTransactions]);
+  const totals = useMemo(() => {
+    const cash = cashTransactions.reduce((s, t) => t.type === "ingreso" ? s + t.amount : s - t.amount, 0);
+    const debt = debtors.reduce((s, d) => s + d.current_balance, 0);
+    const cred = creditors.reduce((s, c) => s + c.current_balance, 0);
+    const debitCards = cards.filter(c => c.type === "debit").reduce((s, c) => s + c.current_balance, 0);
+    const creditDebt = cards.filter(c => c.type === "credit").reduce((s, c) => s + c.current_balance, 0);
+    return { cash, debt, cred, debitCards, creditDebt, total: cash + debt + debitCards - cred - creditDebt };
+  }, [cashTransactions, debtors, creditors, cards]);
 
-  const totalDebtorsBalance = useMemo(() => debtors.reduce((sum, d) => sum + d.current_balance, 0), [debtors]);
-  const totalCreditorsBalance = useMemo(() => creditors.reduce((sum, c) => sum + c.current_balance, 0), [creditors]);
-  const totalDebitCardsBalance = useMemo(() => cards.filter(c => c.type === "debit").reduce((sum, c) => sum + c.current_balance, 0), [cards]);
-  const totalCreditCardDebt = useMemo(() => cards.filter(c => c.type === "credit").reduce((sum, c) => sum + c.current_balance, 0), [cards]);
-  const totalOverallBalance = useMemo(() => totalCashBalance + totalDebtorsBalance + totalDebitCardsBalance - totalCreditorsBalance - totalCreditCardDebt, [totalCashBalance, totalDebtorsBalance, totalDebitCardsBalance, totalCreditorsBalance, totalCreditCardDebt]);
-
-  const cardHealthStatus = useMemo(() => {
+  const cardHealth = useMemo(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const twoDaysFromNow = addDays(today, 2);
+    const twoDays = addDays(today, 2);
+    const issues: string[] = [];
+    let status: "all_good" | "warning" | "critical" = "all_good";
 
-    let hasCriticalIssue = false;
-    let hasWarningIssue = false;
-    const criticalCards: string[] = [];
-    const warningCards: string[] = [];
-
-    for (const card of cards) {
-      if (card.type === "credit") {
-        if (card.credit_limit !== undefined && card.current_balance >= card.credit_limit) {
-          hasCriticalIssue = true;
-          criticalCards.push(`${card.name} (límite alcanzado)`);
+    cards.forEach(c => {
+      if (c.type === "credit") {
+        if (c.credit_limit && c.current_balance >= c.credit_limit) {
+          status = "critical";
+          issues.push(`${c.name}: Límite alcanzado`);
         }
-
-        if (card.cut_off_day !== undefined && card.days_to_pay_after_cut_off !== undefined) {
-          // Verificar si ya se marcó como pagado localmente
-          const lastPaymentDate = manualPayments[card.id];
-          const isPaidManually = isPaymentDoneForCurrentStatement(lastPaymentDate, card.cut_off_day, card.days_to_pay_after_cut_off);
-          
-          if (!isPaidManually && card.current_balance > 0) {
-            const paymentDueDate = getUpcomingPaymentDueDate(card.cut_off_day, card.days_to_pay_after_cut_off, today);
-            if (isBefore(paymentDueDate, today) && !isSameDay(paymentDueDate, today)) {
-              hasCriticalIssue = true;
-              criticalCards.push(`${card.name} (pago vencido el ${format(paymentDueDate, "dd/MM/yyyy")})`);
-            } else if ((isBefore(paymentDueDate, twoDaysFromNow) || isSameDay(paymentDueDate, twoDaysFromNow))) {
-              hasWarningIssue = true;
-              warningCards.push(`${card.name} (pago próximo el ${format(paymentDueDate, "dd/MM/yyyy")})`);
-            }
+        if (c.cut_off_day && c.days_to_pay_after_cut_off && !isPaymentDoneForCurrentStatement(manualPayments[c.id], c.cut_off_day, c.days_to_pay_after_cut_off)) {
+          const due = getUpcomingPaymentDueDate(c.cut_off_day, c.days_to_pay_after_cut_off, today);
+          if (isBefore(due, today) && !isSameDay(due, today)) {
+            status = "critical";
+            issues.push(`${c.name}: Pago vencido`);
+          } else if (isBefore(due, twoDays) || isSameDay(due, twoDays)) {
+            if (status !== "critical") status = "warning";
+            issues.push(`${c.name}: Pago próximo`);
           }
         }
-      } else if (card.current_balance < 0) {
-        hasCriticalIssue = true;
-        criticalCards.push(`${card.name} (saldo negativo)`);
+      } else if (c.current_balance < 0) {
+        status = "critical";
+        issues.push(`${c.name}: Saldo negativo`);
       }
-    }
-
-    return { 
-      status: hasCriticalIssue ? "critical" : (hasWarningIssue ? "warning" : "all_good"), 
-      cards: [...criticalCards, ...warningCards] 
-    };
+    });
+    return { status, issues };
   }, [cards, manualPayments]);
-
-  const piggyBankImageSrc = cardHealthStatus.status === "critical"
-    ? "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Cochinito%20Fuego.png"
-    : "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Conchinito%20feliz.png";
 
   const userFirstName = user?.user_metadata?.first_name || user?.email?.split('@')[0] || 'Usuario';
 
   return (
-    <div className="flex flex-col gap-6 p-4">
+    <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold">Hola, {userFirstName}</h1>
-        <Button variant="outline" size="sm" onClick={handleRefreshData}>
-          <RefreshCw className="h-4 w-4 mr-2" /> Actualizar
+        <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Hola, {userFirstName}</h1>
+        <Button variant="outline" size="icon" onClick={() => setRefreshKey(k => k + 1)} className="rounded-full">
+          <RefreshCw className="h-4 w-4" />
         </Button>
       </div>
 
-      {cardHealthStatus.status !== "all_good" && (
+      {cardHealth.status !== "all_good" && (
         <Card className={cn(
-          "relative overflow-hidden",
-          cardHealthStatus.status === "critical" ? "border-blue-600 bg-blue-50 text-blue-800" : "border-orange-600 bg-orange-50 text-orange-800"
+          "relative overflow-hidden border-none shadow-lg",
+          cardHealth.status === "critical" ? "bg-blue-600 text-white" : "bg-orange-500 text-white"
         )}>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Estado de Tarjetas</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col items-center pr-4 md:block md:pr-48">
-            <img src={piggyBankImageSrc} alt="Cochinito" className="h-[180px] w-[180px] mb-4 mx-auto md:absolute md:top-[20px] md:right-[4px] md:z-10" />
-            <div className="text-lg font-bold text-center md:text-left">
-              {cardHealthStatus.status === "critical" ? "Oye, pon atención en tus saldos" : "Atención: Algo no cuadra"}
-            </div>
-            <div className="text-xs mt-1 text-center md:text-left">
-              <ul className="list-disc pl-5 mt-1">
-                {cardHealthStatus.cards.map((msg, index) => <li key={index}>{msg}</li>)}
+          <CardContent className="p-6 flex flex-col md:flex-row items-center gap-6">
+            <div className="flex-1 text-center md:text-left">
+              <h3 className="text-xl font-bold mb-2">
+                {cardHealth.status === "critical" ? "¡Atención con tus saldos!" : "Algo requiere tu atención"}
+              </h3>
+              <ul className="text-sm opacity-90 space-y-1">
+                {cardHealth.issues.map((msg, i) => <li key={i} className="flex items-center justify-center md:justify-start gap-2"><AlertCircle className="h-3 w-3" /> {msg}</li>)}
               </ul>
-            </div>
-            <div className="mt-4 flex justify-center md:justify-start">
               <Button 
-                variant="outline" 
+                variant="secondary" 
                 size="sm" 
-                className="bg-white/50 hover:bg-white border-current gap-2"
+                className="mt-4 rounded-full font-bold"
                 onClick={() => setIsPaymentDialogOpen(true)}
               >
-                <CheckCircle2 className="h-4 w-4" /> Ya pagué
+                <CheckCircle2 className="h-4 w-4 mr-2" /> Ya pagué
               </Button>
             </div>
+            <img 
+              src={cardHealth.status === "critical" ? "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Cochinito%20Fuego.png" : "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Conchinito%20feliz.png"} 
+              alt="Status" 
+              className="h-32 w-32 object-contain"
+            />
           </CardContent>
         </Card>
       )}
 
       <GroupedPaymentDueDatesCard cards={cards} />
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card className="border-l-4 border-green-600 bg-green-50 text-green-800">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">TU DINERITO</CardTitle>
-            <Home className="h-4 w-4 text-green-600" />
-          </CardHeader>
-          <CardContent><div className="text-2xl font-bold">${totalCashBalance.toFixed(2)}</div></CardContent>
-        </Card>
-        <Card className="border-l-4 border-green-600 bg-green-50 text-green-800">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">QUIEN TE DEBE</CardTitle>
-            <Users className="h-4 w-4 text-green-600" />
-          </CardHeader>
-          <CardContent><div className="text-2xl font-bold">${totalDebtorsBalance.toFixed(2)}</div></CardContent>
-        </Card>
-        <Card className="border-l-4 border-yellow-500 bg-yellow-50 text-yellow-800">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">A QUIEN LE DEBES</CardTitle>
-            <DollarSign className="h-4 w-4 text-yellow-600" />
-          </CardHeader>
-          <CardContent><div className="text-2xl font-bold">${totalCreditorsBalance.toFixed(2)}</div></CardContent>
-        </Card>
-        <Card className="border-l-4 border-pink-500 bg-pink-50 text-pink-800">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">BALANCE TOTAL</CardTitle>
-            <PiggyBank className="h-4 w-4 text-pink-600" />
-          </CardHeader>
-          <CardContent><div className="text-2xl font-bold">${totalOverallBalance.toFixed(2)}</div></CardContent>
-        </Card>
+      <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
+        {[
+          { label: "TU DINERITO", val: totals.cash, icon: Home, color: "text-green-600", bg: "bg-green-50" },
+          { label: "TE DEBEN", val: totals.debt, icon: Users, color: "text-blue-600", bg: "bg-blue-50" },
+          { label: "DEBES", val: totals.cred, icon: DollarSign, color: "text-red-600", bg: "bg-red-50" },
+          { label: "BALANCE", val: totals.total, icon: PiggyBank, color: "text-pink-600", bg: "bg-pink-50" },
+        ].map((item, i) => (
+          <Card key={i} className={cn("border-none shadow-sm", item.bg)}>
+            <CardHeader className="p-4 pb-0 flex flex-row items-center justify-between space-y-0">
+              <CardTitle className="text-[10px] font-bold uppercase tracking-wider opacity-70">{item.label}</CardTitle>
+              <item.icon className={cn("h-4 w-4", item.color)} />
+            </CardHeader>
+            <CardContent className="p-4 pt-2">
+              <div className="text-lg md:text-xl font-bold">${item.val.toFixed(2)}</div>
+            </CardContent>
+          </Card>
+        ))}
       </div>
 
-      <Card>
-        <CardHeader><CardTitle>Resumen de Créditos</CardTitle></CardHeader>
-        <CardContent>
+      <Card className="border-none shadow-sm overflow-hidden">
+        <CardHeader className="bg-muted/30"><CardTitle className="text-lg">Resumen de Créditos</CardTitle></CardHeader>
+        <CardContent className="p-0">
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Tarjeta</TableHead>
-                  <TableHead>Límite</TableHead>
+                  <TableHead className="pl-6">Tarjeta</TableHead>
                   <TableHead>Deuda</TableHead>
                   <TableHead>Disponible</TableHead>
-                  <TableHead>Próx. Pago</TableHead>
+                  <TableHead className="pr-6">Próx. Pago</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {cards.filter(c => c.type === "credit").map((card) => {
-                  const available = (card.credit_limit || 0) - card.current_balance;
-                  const dueDate = card.cut_off_day && card.days_to_pay_after_cut_off 
-                    ? getUpcomingPaymentDueDate(card.cut_off_day, card.days_to_pay_after_cut_off) 
-                    : null;
-                  
-                  const lastPaymentDate = manualPayments[card.id];
-                  const isPaid = isPaymentDoneForCurrentStatement(lastPaymentDate, card.cut_off_day!, card.days_to_pay_after_cut_off!);
-
+                  const avail = (card.credit_limit || 0) - card.current_balance;
+                  const isPaid = isPaymentDoneForCurrentStatement(manualPayments[card.id], card.cut_off_day!, card.days_to_pay_after_cut_off!);
                   return (
                     <TableRow key={card.id}>
-                      <TableCell className="font-medium">
+                      <TableCell className="pl-6 font-medium">
                         <div className="flex items-center gap-2">
-                          <div className="h-3 w-3 rounded-full" style={{ backgroundColor: card.color }} />
+                          <div className="h-2 w-2 rounded-full" style={{ backgroundColor: card.color }} />
                           {card.name}
                         </div>
                       </TableCell>
-                      <TableCell>${card.credit_limit?.toFixed(2)}</TableCell>
                       <TableCell>${card.current_balance.toFixed(2)}</TableCell>
-                      <TableCell className={available < 0 ? "text-red-600" : ""}>${available.toFixed(2)}</TableCell>
-                      <TableCell>
-                        {isPaid ? (
-                          <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">Pagado</Badge>
-                        ) : (
-                          dueDate ? format(dueDate, "dd/MM/yyyy") : "N/A"
-                        )}
+                      <TableCell className={avail < 0 ? "text-red-600 font-bold" : ""}>${avail.toFixed(2)}</TableCell>
+                      <TableCell className="pr-6">
+                        {isPaid ? <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">Pagado</Badge> : (card.cut_off_day ? format(getUpcomingPaymentDueDate(card.cut_off_day, card.days_to_pay_after_cut_off!), "dd/MM") : "N/A")}
                       </TableCell>
                     </TableRow>
                   );
@@ -331,54 +237,44 @@ const Dashboard = () => {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader><CardTitle>Gráfico de Créditos</CardTitle></CardHeader>
+      <Card className="border-none shadow-sm">
+        <CardHeader><CardTitle className="text-lg">Uso de Crédito</CardTitle></CardHeader>
         <CardContent><CreditCardsChart cards={cards} /></CardContent>
       </Card>
 
-      {/* Diálogo de Ya Pagué */}
       <Dialog open={isPaymentDialogOpen} onOpenChange={setIsPaymentDialogOpen}>
-        <DialogContent className="sm:max-w-[400px]">
+        <DialogContent className="sm:max-w-[400px] rounded-3xl">
           <DialogHeader>
-            <DialogTitle>Confirmar Pago de Tarjeta</DialogTitle>
-            <DialogDescription>
-              Si ya realizaste el pago pero aún no registras el movimiento, puedes marcarlo aquí para ocultar las alertas.
-            </DialogDescription>
+            <DialogTitle>Confirmar Pago</DialogTitle>
+            <DialogDescription>Marca una tarjeta como pagada para este ciclo.</DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
-              <Label>¿Qué tarjeta pagaste?</Label>
+              <Label>Tarjeta</Label>
               <Select value={selectedCardForPayment} onValueChange={setSelectedCardForPayment}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecciona tarjeta" />
-                </SelectTrigger>
+                <SelectTrigger className="rounded-xl"><SelectValue placeholder="Selecciona" /></SelectTrigger>
                 <SelectContent>
                   {cards.filter(c => c.type === "credit" && c.current_balance > 0).map(c => (
-                    <SelectItem key={c.id} value={c.id}>{c.name} (${c.current_balance.toFixed(2)})</SelectItem>
+                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
             <div className="grid gap-2">
-              <Label>Fecha del Pago</Label>
+              <Label>Fecha</Label>
               <Popover>
                 <PopoverTrigger asChild>
-                  <Button variant="outline" className="justify-start text-left font-normal">
+                  <Button variant="outline" className="justify-start text-left font-normal rounded-xl">
                     <CalendarIcon className="mr-2 h-4 w-4" />
-                    {paymentDate ? format(paymentDate, "PPP", { locale: es }) : <span>Selecciona fecha</span>}
+                    {format(paymentDate, "PPP", { locale: es })}
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-auto p-0">
-                  <Calendar mode="single" selected={paymentDate} onSelect={(d) => d && setPaymentDate(d)} initialFocus locale={es} />
-                </PopoverContent>
+                <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={paymentDate} onSelect={(d) => d && setPaymentDate(d)} locale={es} /></PopoverContent>
               </Popover>
             </div>
           </div>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setIsPaymentDialogOpen(false)}>Cancelar</Button>
-            <Button onClick={handleMarkAsPaid} disabled={!selectedCardForPayment || isSubmittingPayment}>
-              {isSubmittingPayment ? "Guardando..." : "Confirmar Pago"}
-            </Button>
+            <Button onClick={handleMarkAsPaid} disabled={!selectedCardForPayment || isSubmittingPayment} className="w-full rounded-xl font-bold">Confirmar Pago</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
