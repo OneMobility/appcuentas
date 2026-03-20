@@ -26,7 +26,7 @@
     --border: 210 30% 88%;
     --input: 210 30% 88%;
     --ring: 210 70% 75%;
-    --radius: 1rem; /* Bordes más redondeados para look moderno */
+    --radius: 1rem;
 
     --sidebar-background: 210 60% 65%;
     --sidebar-foreground: 0 0% 100%;
@@ -64,7 +64,7 @@
 @layer base {
   * {
     @apply border-border;
-    -webkit-tap-highlight-color: transparent; /* Elimina el recuadro gris al tocar en móviles */
+    -webkit-tap-highlight-color: transparent;
   }
 
   html, body {
@@ -72,7 +72,7 @@
     font-family: 'Poppins', sans-serif;
     height: 100%;
     width: 100%;
-    position: fixed; /* Evita el rebote de scroll en iOS */
+    position: fixed;
     overflow: hidden;
   }
 
@@ -83,6 +83,17 @@
     -webkit-overflow-scrolling: touch;
     padding-top: env(safe-area-inset-top);
     padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
+@layer utilities {
+  /* Definición manual de scrollbar-hide */
+  .scrollbar-hide {
+    -ms-overflow-style: none;  /* IE and Edge */
+    scrollbar-width: none;  /* Firefox */
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none; /* Chrome, Safari and Opera */
   }
 }
 
