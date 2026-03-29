@@ -10,12 +10,9 @@ import {
   ThumbsDown,
   CreditCard,
   Tag,
-  LogOut,
   Wallet,
   BarChart,
 } from "lucide-react";
-import { useSession } from "@/context/SessionContext";
-import { supabase } from "@/integrations/supabase/client";
 
 const navItems = [
   { name: "Resumen", path: "/dashboard", icon: PiggyBank },
@@ -23,15 +20,17 @@ const navItems = [
   { name: "Deudas", path: "/debtors", icon: ThumbsUp },
   { name: "Pagos", path: "/creditors", icon: ThumbsDown },
   { name: "Tarjetas", path: "/cards", icon: CreditCard },
+  { name: "Metas", path: "/savings", icon: Wallet },
+  { name: "Presupuestos", path: "/shared-budgets", icon: BarChart },
+  { name: "Categorías", path: "/categories", icon: Tag },
 ];
 
 const MobileNavbar = () => {
   const location = useLocation();
-  const { user } = useSession();
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-lg border-t border-border pb-[env(safe-area-inset-bottom)] md:hidden">
-      <div className="flex h-16 items-center justify-around px-2">
+      <div className="flex h-16 items-center overflow-x-auto scrollbar-hide px-4 gap-2">
         {navItems.map((item) => {
           const isActive = location.pathname === item.path;
           const Icon = item.icon;
@@ -40,9 +39,9 @@ const MobileNavbar = () => {
               key={item.name}
               to={item.path}
               className={cn(
-                "flex flex-col items-center justify-center flex-1 gap-1 transition-all duration-200",
+                "flex flex-col items-center justify-center flex-none min-w-[70px] gap-1 transition-all duration-200",
                 isActive
-                  ? "text-primary scale-110"
+                  ? "text-primary scale-105"
                   : "text-muted-foreground hover:text-foreground"
               )}
             >
@@ -50,9 +49,9 @@ const MobileNavbar = () => {
                 "p-1.5 rounded-xl transition-colors",
                 isActive ? "bg-primary/10" : ""
               )}>
-                <Icon className="h-6 w-6" />
+                <Icon className="h-5 w-5" />
               </div>
-              <span className="text-[10px] font-medium leading-none">{item.name}</span>
+              <span className="text-[10px] font-medium leading-none whitespace-nowrap">{item.name}</span>
             </Link>
           );
         })}
