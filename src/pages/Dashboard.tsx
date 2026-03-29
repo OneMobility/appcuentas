@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Home, Users, DollarSign, CreditCard, RefreshCw, PiggyBank, CheckCircle2, CalendarIcon } from "lucide-react";
+import { Home, Users, DollarSign, CreditCard, RefreshCw, PiggyBank, CheckCircle2, CalendarIcon, AlertCircle } from "lucide-react";
 import { useCategoryContext } from "@/context/CategoryContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/context/SessionContext";
