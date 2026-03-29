@@ -154,23 +154,23 @@ const Cash = () => {
   };
 
   return (
-    <div className="flex flex-col gap-6 p-4">
-      <h1 className="text-3xl font-bold">Lo que tienes (Efectivo)</h1>
+    <div className="flex flex-col gap-4 md:gap-6 p-1 md:p-4">
+      <h1 className="text-2xl md:text-3xl font-bold">Lo que tienes (Efectivo)</h1>
 
-      <Card className="border-l-4 border-primary bg-primary/10">
-        <CardHeader><CardTitle>Saldo Actual</CardTitle></CardHeader>
-        <CardContent><div className="text-4xl font-bold">${balance.toFixed(2)}</div></CardContent>
+      <Card className="border-l-4 border-primary bg-primary/10 shadow-sm">
+        <CardHeader className="p-4 pb-2"><CardTitle className="text-sm font-medium opacity-70">Saldo Actual</CardTitle></CardHeader>
+        <CardContent className="p-4 pt-0"><div className="text-3xl md:text-4xl font-bold">${balance.toFixed(2)}</div></CardContent>
       </Card>
 
-      <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
-        <div className="flex flex-col sm:flex-row gap-2 w-full md:max-w-2xl">
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-col sm:flex-row gap-2 w-full">
           <div className="relative flex-1">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input placeholder="Buscar descripción..." className="pl-8 h-9" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+            <Input placeholder="Buscar descripción..." className="pl-8 h-10 rounded-xl" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
           </div>
           <Select value={filterType} onValueChange={(v: any) => setFilterType(v)}>
-            <SelectTrigger className="w-full sm:w-[140px] h-9">
-              <Filter className="mr-2 h-3 w-3" />
+            <SelectTrigger className="w-full sm:w-[140px] h-10 rounded-xl">
+              <Filter className="mr-2 h-3.5 w-3.5" />
               <SelectValue placeholder="Filtrar" />
             </SelectTrigger>
             <SelectContent>
@@ -180,79 +180,81 @@ const Cash = () => {
             </SelectContent>
           </Select>
         </div>
-        <div className="flex items-center gap-2 w-full md:w-auto">
-          <Button variant="outline" size="icon" className="h-9 w-9" onClick={() => setIsReconcileDialogOpen(true)} title="Cuadrar Saldo"><Scale className="h-4 w-4" /></Button>
+        <div className="flex items-center gap-2 w-full">
+          <Button variant="outline" size="icon" className="h-10 w-10 rounded-xl shrink-0" onClick={() => setIsReconcileDialogOpen(true)} title="Cuadrar Saldo"><Scale className="h-4 w-4" /></Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="icon" className="h-9 w-9" title="Exportar"><FileDown className="h-4 w-4" /></Button>
+              <Button variant="outline" size="icon" className="h-10 w-10 rounded-xl shrink-0" title="Exportar"><FileDown className="h-4 w-4" /></Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem onClick={() => handleExport('csv')}><FileText className="mr-2 h-4 w-4" /> CSV</DropdownMenuItem>
               <DropdownMenuItem onClick={() => handleExport('pdf')}><FileText className="mr-2 h-4 w-4" /> PDF</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          <Button size="sm" className="h-9 gap-1" onClick={handleOpenAdd}><PlusCircle className="h-4 w-4" /> Nuevo</Button>
+          <Button size="sm" className="h-10 gap-1.5 rounded-xl flex-1 font-bold" onClick={handleOpenAdd}><PlusCircle className="h-4 w-4" /> Nuevo Movimiento</Button>
         </div>
       </div>
 
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>Movimientos</CardTitle>
-          <div className="flex items-center bg-muted rounded-lg p-1">
-            <Button variant="ghost" size="icon" onClick={() => setCurrentViewDate(subMonths(currentViewDate, 1))}><ChevronLeft className="h-4 w-4" /></Button>
-            <span className="px-3 text-sm font-medium min-w-[120px] text-center capitalize">{format(currentViewDate, "MMMM yyyy", { locale: es })}</span>
-            <Button variant="ghost" size="icon" onClick={() => setCurrentViewDate(addMonths(currentViewDate, 1))}><ChevronRight className="h-4 w-4" /></Button>
+      <Card className="shadow-sm overflow-hidden">
+        <CardHeader className="flex flex-row items-center justify-between p-4 bg-muted/20">
+          <CardTitle className="text-sm font-bold">Movimientos</CardTitle>
+          <div className="flex items-center bg-background rounded-lg p-0.5 border">
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setCurrentViewDate(subMonths(currentViewDate, 1))}><ChevronLeft className="h-4 w-4" /></Button>
+            <span className="px-2 text-[10px] font-bold min-w-[80px] text-center capitalize">{format(currentViewDate, "MMM yyyy", { locale: es })}</span>
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setCurrentViewDate(addMonths(currentViewDate, 1))}><ChevronRight className="h-4 w-4" /></Button>
           </div>
         </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Fecha</TableHead>
-                <TableHead>Descripción</TableHead>
-                <TableHead className="text-right">Monto</TableHead>
-                <TableHead className="text-right">Acciones</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredTransactions.length === 0 ? (
-                <TableRow><TableCell colSpan={4} className="text-center py-8 text-muted-foreground">No hay movimientos.</TableCell></TableRow>
-              ) : (
-                filteredTransactions.map(tx => (
-                  <TableRow key={tx.id}>
-                    <TableCell>{format(parseISO(tx.date), "dd/MM")}</TableCell>
-                    <TableCell>
-                      <div className="flex flex-col">
-                        <span className="font-medium">{tx.description}</span>
-                        <span className="text-xs text-muted-foreground">{getCategoryById(tx.income_category_id || tx.expense_category_id)?.name || "Sin categoría"}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell className={cn("text-right font-bold", tx.type === "egreso" ? "text-red-600" : "text-green-600")}>
-                      {tx.type === "egreso" ? "-" : "+"}${tx.amount.toFixed(2)}
-                    </TableCell>
-                    <TableCell className="text-right flex gap-1 justify-end">
-                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleOpenEdit(tx)}><Edit className="h-4 w-4" /></Button>
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive"><Trash2 className="h-4 w-4" /></Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>¿Eliminar movimiento?</AlertDialogTitle>
-                            <AlertDialogDescription>Se ajustará el saldo automáticamente.</AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                            <AlertDialogAction onClick={() => handleDeleteTransaction(tx.id)}>Eliminar</AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
+        <CardContent className="p-0">
+          <div className="overflow-x-auto scrollbar-hide">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="pl-4 text-xs">Fecha</TableHead>
+                  <TableHead className="text-xs">Descripción</TableHead>
+                  <TableHead className="text-right text-xs">Monto</TableHead>
+                  <TableHead className="text-right pr-4 text-xs">Acciones</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredTransactions.length === 0 ? (
+                  <TableRow><TableCell colSpan={4} className="text-center py-8 text-muted-foreground text-xs">No hay movimientos.</TableCell></TableRow>
+                ) : (
+                  filteredTransactions.map(tx => (
+                    <TableRow key={tx.id}>
+                      <TableCell className="pl-4 text-xs">{format(parseISO(tx.date), "dd/MM")}</TableCell>
+                      <TableCell>
+                        <div className="flex flex-col">
+                          <span className="font-medium text-xs truncate max-w-[100px]">{tx.description}</span>
+                          <span className="text-[9px] text-muted-foreground">{getCategoryById(tx.income_category_id || tx.expense_category_id)?.name || "Sin categoría"}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className={cn("text-right font-bold text-xs", tx.type === "egreso" ? "text-red-600" : "text-green-600")}>
+                        {tx.type === "egreso" ? "-" : "+"}${tx.amount.toFixed(2)}
+                      </TableCell>
+                      <TableCell className="text-right pr-4 flex gap-1 justify-end">
+                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleOpenEdit(tx)}><Edit className="h-3.5 w-3.5" /></Button>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive"><Trash2 className="h-3.5 w-3.5" /></Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent className="w-[90vw] rounded-2xl">
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>¿Eliminar movimiento?</AlertDialogTitle>
+                              <AlertDialogDescription>Se ajustará el saldo automáticamente.</AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel className="rounded-xl">Cancelar</AlertDialogCancel>
+                              <AlertDialogAction className="rounded-xl" onClick={() => handleDeleteTransaction(tx.id)}>Eliminar</AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
         </CardContent>
       </Card>
 
@@ -266,13 +268,13 @@ const Cash = () => {
       />
 
       <Dialog open={isAddDialogOpen || isEditDialogOpen} onOpenChange={(open) => { if(!open) { setIsAddDialogOpen(false); setIsEditDialogOpen(false); setEditingTransaction(null); } }}>
-        <DialogContent>
+        <DialogContent className="w-[90vw] max-w-[400px] rounded-3xl p-6">
           <DialogHeader><DialogTitle>{editingTransaction ? "Editar Transacción" : "Registrar Transacción"}</DialogTitle></DialogHeader>
           <form onSubmit={handleSubmit} className="grid gap-4 py-4">
             <div className="grid gap-2">
               <Label>Tipo</Label>
               <Select value={transactionForm.type} onValueChange={(v: any) => setTransactionForm({...transactionForm, type: v})}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger className="rounded-xl h-10"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="ingreso">Ingreso</SelectItem>
                   <SelectItem value="egreso">Egreso</SelectItem>
@@ -281,16 +283,16 @@ const Cash = () => {
             </div>
             <div className="grid gap-2">
               <Label>Monto</Label>
-              <Input value={transactionForm.amount} onChange={e => setTransactionForm({...transactionForm, amount: e.target.value})} required />
+              <Input value={transactionForm.amount} onChange={e => setTransactionForm({...transactionForm, amount: e.target.value})} className="rounded-xl h-10" placeholder="0.00" required />
             </div>
             <div className="grid gap-2">
               <Label>Descripción</Label>
-              <Input value={transactionForm.description} onChange={e => setTransactionForm({...transactionForm, description: e.target.value})} required />
+              <Input value={transactionForm.description} onChange={e => setTransactionForm({...transactionForm, description: e.target.value})} className="rounded-xl h-10" placeholder="Ej. Comida, Sueldo..." required />
             </div>
             <div className="grid gap-2">
               <Label>Categoría</Label>
               <Select value={transactionForm.selectedCategoryId} onValueChange={(v) => setTransactionForm({...transactionForm, selectedCategoryId: v})}>
-                <SelectTrigger><SelectValue placeholder="Selecciona categoría" /></SelectTrigger>
+                <SelectTrigger className="rounded-xl h-10"><SelectValue placeholder="Selecciona categoría" /></SelectTrigger>
                 <SelectContent>
                   {(transactionForm.type === "ingreso" ? incomeCategories : expenseCategories).map(cat => (
                     <SelectItem key={cat.id} value={cat.id}>
@@ -303,7 +305,7 @@ const Cash = () => {
                 </SelectContent>
               </Select>
             </div>
-            <DialogFooter><Button type="submit">Guardar</Button></DialogFooter>
+            <DialogFooter><Button type="submit" className="w-full rounded-xl font-bold h-11">Guardar</Button></DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
