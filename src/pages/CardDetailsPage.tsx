@@ -42,7 +42,7 @@ const CardDetailsPage: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterType, setFilterType] = useState<"all" | "charge" | "payment">("all");
 
-  const [newTransaction, setNewTransaction] = useState({
+  const [transactionForm, setTransactionForm] = useState({
     type: "charge" as "charge" | "payment",
     amount: "",
     description: "",
@@ -149,13 +149,10 @@ const CardDetailsPage: React.FC = () => {
 
   const handleDeleteTransaction = async (tx: any) => {
     try {
-      // Calcular el nuevo saldo revirtiendo el efecto de la transacción
       let newBalance = card.current_balance;
       if (card.type === "debit") {
-        // Si era cargo (restó), ahora sumamos. Si era abono (sumó), ahora restamos.
         newBalance = tx.type === "charge" ? newBalance + tx.amount : newBalance - tx.amount;
       } else {
-        // Crédito: Si era cargo (sumó deuda), ahora restamos. Si era abono (restó deuda), ahora sumamos.
         newBalance = tx.type === "charge" ? newBalance - tx.amount : newBalance + tx.amount;
       }
 
@@ -165,7 +162,7 @@ const CardDetailsPage: React.FC = () => {
       const { error: updateError } = await supabase.from('cards').update({ current_balance: newBalance }).eq('id', card.id);
       if (updateError) throw updateError;
 
-      showSuccess("Movimiento eliminado y saldo actualizado");
+      showSuccess("Movimiento eliminado");
       fetchCardDetails();
     } catch (error: any) {
       showError("Error al eliminar: " + error.message);
@@ -197,55 +194,55 @@ const CardDetailsPage: React.FC = () => {
   if (!card) return null;
 
   return (
-    <div className="flex flex-col gap-6 p-4">
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={() => navigate('/cards')}><ArrowLeft className="h-5 w-5" /></Button>
-        <h1 className="text-3xl font-bold">{card.name}</h1>
+    <div className="flex flex-col gap-4 md:gap-6 p-1 md:p-4 max-w-full overflow-x-hidden">
+      <div className="flex items-center gap-3 px-1">
+        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => navigate('/cards')}><ArrowLeft className="h-5 w-5" /></Button>
+        <h1 className="text-xl md:text-3xl font-bold truncate">{card.name}</h1>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        <div className={cn("lg:col-span-2 flex flex-col gap-6", card.type !== "debit" && "lg:col-span-3")}>
-          <Card className="p-6 text-white shadow-xl" style={{ backgroundColor: card.color }}>
-            <div className="flex justify-between items-start mb-6">
+      <div className="grid gap-4 lg:grid-cols-3 w-full">
+        <div className={cn("lg:col-span-2 flex flex-col gap-4 md:gap-6", card.type !== "debit" && "lg:col-span-3")}>
+          <Card className="p-4 md:p-6 text-white shadow-xl border-none mx-1" style={{ backgroundColor: card.color }}>
+            <div className="flex justify-between items-start mb-4 md:mb-6">
               <div className="space-y-1">
                 {card.type === "credit" ? (
                   <>
-                    <p className="text-sm opacity-80">Crédito Disponible:</p>
-                    <p className="text-2xl font-bold">${((card.credit_limit || 0) - card.current_balance).toFixed(2)}</p>
-                    <p className="text-xs font-bold border-t border-white/20 pt-1">Deuda Actual: ${card.current_balance.toFixed(2)}</p>
+                    <p className="text-[10px] md:text-sm opacity-80 uppercase font-bold">Crédito Disponible</p>
+                    <p className="text-2xl md:text-3xl font-black">${((card.credit_limit || 0) - card.current_balance).toFixed(2)}</p>
+                    <p className="text-[10px] md:text-xs font-bold border-t border-white/20 pt-1 mt-1">Deuda: ${card.current_balance.toFixed(2)}</p>
                   </>
                 ) : (
                   <>
-                    <p className="text-sm opacity-80">Saldo Disponible:</p>
-                    <p className="text-2xl font-bold">${card.current_balance.toFixed(2)}</p>
-                    <p className="text-xs font-bold border-t border-white/20 pt-1">Saldo Total: ${(card.current_balance + (card.card_pockets || []).reduce((s:any,p:any)=>s+p.amount,0)).toFixed(2)}</p>
+                    <p className="text-[10px] md:text-sm opacity-80 uppercase font-bold">Saldo Disponible</p>
+                    <p className="text-2xl md:text-3xl font-black">${card.current_balance.toFixed(2)}</p>
+                    <p className="text-[10px] md:text-xs font-bold border-t border-white/20 pt-1 mt-1">Total: ${(card.current_balance + (card.card_pockets || []).reduce((s:any,p:any)=>s+p.amount,0)).toFixed(2)}</p>
                   </>
                 )}
               </div>
               <div className="text-right">
-                <p className="text-sm opacity-80">{card.bank_name}</p>
-                <p className="font-bold">**** {card.last_four_digits}</p>
+                <p className="text-[10px] md:text-sm opacity-80 font-bold">{card.bank_name}</p>
+                <p className="text-xs md:text-base font-black">**** {card.last_four_digits}</p>
               </div>
             </div>
           </Card>
 
-          <Card>
-            <CardHeader className="flex flex-col gap-4">
+          <Card className="border-none shadow-sm mx-1 overflow-hidden">
+            <CardHeader className="p-4 space-y-4 bg-muted/10">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
-                  <CardTitle className="text-lg">Movimientos</CardTitle>
-                  <div className="flex items-center bg-muted rounded-lg p-0.5">
-                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setCurrentViewDate(subMonths(currentViewDate, 1))}><ChevronLeft className="h-4 w-4" /></Button>
-                    <span className="px-2 text-xs font-medium min-w-[100px] text-center capitalize">{format(currentViewDate, "MMM yyyy", { locale: es })}</span>
-                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setCurrentViewDate(addMonths(currentViewDate, 1))}><ChevronRight className="h-4 w-4" /></Button>
+                  <CardTitle className="text-base">Movimientos</CardTitle>
+                  <div className="flex items-center bg-background rounded-lg p-0.5 border">
+                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setCurrentViewDate(subMonths(currentViewDate, 1))}><ChevronLeft className="h-3 w-3" /></Button>
+                    <span className="px-1 text-[10px] font-bold min-w-[70px] text-center capitalize">{format(currentViewDate, "MMM yy", { locale: es })}</span>
+                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setCurrentViewDate(addMonths(currentViewDate, 1))}><ChevronRight className="h-3 w-3" /></Button>
                   </div>
                 </div>
                 <div className="flex items-center gap-1">
-                  <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setIsReconcileDialogOpen(true)} title="Cuadrar Saldo"><Scale className="h-4 w-4" /></Button>
-                  <Button variant="default" size="icon" className="h-8 w-8" onClick={() => setIsAddTransactionDialogOpen(true)} title="Nuevo Movimiento"><DollarSign className="h-4 w-4" /></Button>
+                  <Button variant="outline" size="icon" className="h-8 w-8 rounded-xl" onClick={() => setIsReconcileDialogOpen(true)} title="Cuadrar"><Scale className="h-4 w-4" /></Button>
+                  <Button variant="default" size="icon" className="h-8 w-8 rounded-xl" onClick={() => setIsAddTransactionDialogOpen(true)} title="Nuevo"><DollarSign className="h-4 w-4" /></Button>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button variant="outline" size="icon" className="h-8 w-8" title="Exportar"><FileDown className="h-4 w-4" /></Button>
+                      <Button variant="outline" size="icon" className="h-8 w-8 rounded-xl"><FileDown className="h-4 w-4" /></Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
                       <DropdownMenuItem onClick={() => handleExport('csv')}><FileText className="mr-2 h-4 w-4" /> CSV</DropdownMenuItem>
@@ -255,18 +252,13 @@ const CardDetailsPage: React.FC = () => {
                 </div>
               </div>
               
-              <div className="flex flex-col sm:flex-row gap-2">
-                <div className="relative flex-1">
+              <div className="flex flex-col gap-2">
+                <div className="relative w-full">
                   <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input 
-                    placeholder="Buscar descripción..." 
-                    className="pl-8 h-9" 
-                    value={searchTerm} 
-                    onChange={e => setSearchTerm(e.target.value)} 
-                  />
+                  <Input placeholder="Buscar..." className="pl-8 h-9 rounded-xl text-sm" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
                 </div>
                 <Select value={filterType} onValueChange={(v: any) => setFilterType(v)}>
-                  <SelectTrigger className="w-full sm:w-[140px] h-9">
+                  <SelectTrigger className="w-full h-9 rounded-xl text-sm">
                     <Filter className="mr-2 h-3 w-3" />
                     <SelectValue placeholder="Filtrar" />
                   </SelectTrigger>
@@ -278,62 +270,49 @@ const CardDetailsPage: React.FC = () => {
                 </Select>
               </div>
             </CardHeader>
-            <CardContent>
-              <div className="overflow-x-auto">
+            <CardContent className="p-0">
+              <div className="overflow-x-auto scrollbar-hide">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="w-[80px]">Fecha</TableHead>
-                      <TableHead>Descripción</TableHead>
-                      <TableHead>Categoría</TableHead>
-                      <TableHead className="text-right">Monto</TableHead>
-                      <TableHead className="text-right">Saldo</TableHead>
-                      <TableHead className="text-right">Acciones</TableHead>
+                      <TableHead className="pl-4 text-[10px] uppercase font-bold w-[60px]">Fecha</TableHead>
+                      <TableHead className="text-[10px] uppercase font-bold">Detalle</TableHead>
+                      <TableHead className="hidden sm:table-cell text-[10px] uppercase font-bold">Categoría</TableHead>
+                      <TableHead className="text-right text-[10px] uppercase font-bold">Monto</TableHead>
+                      <TableHead className="text-right pr-4 text-[10px] uppercase font-bold">Acción</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {filteredTransactions.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">No hay movimientos para este periodo.</TableCell>
-                      </TableRow>
+                      <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground text-xs">Sin movimientos.</TableCell></TableRow>
                     ) : (
                       filteredTransactions.map((tx: any) => {
                         const category = getCategoryById(tx.income_category_id || tx.expense_category_id);
                         return (
                           <TableRow key={tx.id}>
-                            <TableCell className="text-xs">{format(parseISO(tx.date), "dd/MM")}</TableCell>
-                            <TableCell className="font-medium text-sm">{tx.description}</TableCell>
+                            <TableCell className="pl-4 text-[10px] font-medium">{format(parseISO(tx.date), "dd/MM")}</TableCell>
                             <TableCell>
-                              {category ? (
-                                <div className="flex items-center gap-1.5 text-xs">
-                                  <DynamicLucideIcon iconName={category.icon || "Tag"} className="h-3 w-3" />
-                                  {category.name}
-                                </div>
-                              ) : (
-                                <span className="text-xs text-muted-foreground italic">Sin categoría</span>
-                              )}
+                              <div className="flex flex-col">
+                                <span className="font-bold text-xs truncate max-w-[100px]">{tx.description}</span>
+                                <span className="sm:hidden text-[9px] text-muted-foreground truncate">{category?.name || "Sin cat."}</span>
+                              </div>
                             </TableCell>
-                            <TableCell className={cn("text-right font-bold text-sm", tx.type === "charge" ? "text-red-600" : "text-green-600")}>
-                              {tx.type === "charge" ? "-" : "+"}${tx.amount.toFixed(2)}
+                            <TableCell className="hidden sm:table-cell">
+                              {category && <div className="flex items-center gap-1 text-xs"><DynamicLucideIcon iconName={category.icon || "Tag"} className="h-3 w-3" /> {category.name}</div>}
                             </TableCell>
-                            <TableCell className="text-right text-xs font-medium text-muted-foreground">${tx.runningBalance.toFixed(2)}</TableCell>
-                            <TableCell className="text-right">
+                            <TableCell className={cn("text-right font-black text-xs", tx.type === "charge" ? "text-red-600" : "text-green-600")}>
+                              {tx.type === "charge" ? "-" : "+"}${tx.amount.toFixed(0)}
+                            </TableCell>
+                            <TableCell className="text-right pr-4">
                               <AlertDialog>
                                 <AlertDialogTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive">
-                                    <Trash2 className="h-4 w-4" />
-                                  </Button>
+                                  <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive"><Trash2 className="h-3.5 w-3.5" /></Button>
                                 </AlertDialogTrigger>
-                                <AlertDialogContent>
-                                  <AlertDialogHeader>
-                                    <AlertDialogTitle>¿Eliminar movimiento?</AlertDialogTitle>
-                                    <AlertDialogDescription>
-                                      Esta acción no se puede deshacer. El saldo de tu tarjeta se ajustará automáticamente.
-                                    </AlertDialogDescription>
-                                  </AlertDialogHeader>
+                                <AlertDialogContent className="w-[90vw] rounded-2xl">
+                                  <AlertDialogHeader><AlertDialogTitle>¿Eliminar?</AlertDialogTitle><AlertDialogDescription>Se ajustará el saldo.</AlertDialogDescription></AlertDialogHeader>
                                   <AlertDialogFooter>
-                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                    <AlertDialogAction onClick={() => handleDeleteTransaction(tx)}>Eliminar</AlertDialogAction>
+                                    <AlertDialogCancel className="rounded-xl">No</AlertDialogCancel>
+                                    <AlertDialogAction className="rounded-xl" onClick={() => handleDeleteTransaction(tx)}>Sí</AlertDialogAction>
                                   </AlertDialogFooter>
                                 </AlertDialogContent>
                               </AlertDialog>
@@ -348,53 +327,54 @@ const CardDetailsPage: React.FC = () => {
             </CardContent>
           </Card>
         </div>
-        {card.type === "debit" && <CardPocketsManager cardId={card.id} cardBalance={card.current_balance} onUpdate={fetchCardDetails} />}
+        {card.type === "debit" && (
+          <div className="mx-1">
+            <CardPocketsManager cardId={card.id} cardBalance={card.current_balance} onUpdate={fetchCardDetails} />
+          </div>
+        )}
       </div>
 
       <CardReconciliationDialog
         isOpen={isReconcileDialogOpen}
         onClose={() => setIsReconcileDialogOpen(false)}
-        card={{
-          ...card,
-          transactions: card.card_transactions || []
-        }}
+        card={{ ...card, transactions: card.card_transactions || [] }}
         onReconciliationSuccess={fetchCardDetails}
-        onNoAdjustmentSuccess={() => showSuccess("El saldo ya está cuadrado.")}
+        onNoAdjustmentSuccess={() => showSuccess("Saldo cuadrado.")}
       />
 
       <Dialog open={isAddTransactionDialogOpen} onOpenChange={setIsAddTransactionDialogOpen}>
-        <DialogContent>
+        <DialogContent className="w-[90vw] max-w-[400px] rounded-3xl p-6">
           <DialogHeader><DialogTitle>Nueva Transacción</DialogTitle></DialogHeader>
           <form onSubmit={handleTransactionSubmit} className="grid gap-4 py-4">
             <div className="grid gap-2">
               <Label>Tipo</Label>
-              <Select value={newTransaction.type} onValueChange={(v: any) => setNewTransaction({...newTransaction, type: v})}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="charge">Gasto / Retiro</SelectItem>
-                  <SelectItem value="payment">Pago / Depósito</SelectItem>
-                </SelectContent>
+              <Select value={transactionForm.type} onValueChange={(v: any) => setTransactionForm({...transactionForm, type: v})}>
+                <SelectTrigger className="rounded-xl h-10"><SelectValue /></SelectTrigger>
+                <SelectContent><SelectItem value="charge">Gasto</SelectItem><SelectItem value="payment">Abono</SelectItem></SelectContent>
               </Select>
             </div>
-            <Input placeholder="Monto" value={newTransaction.amount} onChange={e => setNewTransaction({...newTransaction, amount: e.target.value})} required />
-            <Input placeholder="Descripción" value={newTransaction.description} onChange={e => setNewTransaction({...newTransaction, description: e.target.value})} required />
+            <div className="grid gap-2">
+              <Label>Monto</Label>
+              <Input value={transactionForm.amount} onChange={e => setTransactionForm({...transactionForm, amount: e.target.value})} className="rounded-xl h-10" placeholder="0.00" required />
+            </div>
+            <div className="grid gap-2">
+              <Label>Descripción</Label>
+              <Input value={transactionForm.description} onChange={e => setTransactionForm({...transactionForm, description: e.target.value})} className="rounded-xl h-10" placeholder="Detalle..." required />
+            </div>
             <div className="grid gap-2">
               <Label>Categoría</Label>
-              <Select value={newTransaction.selectedCategoryId} onValueChange={(v) => setNewTransaction({...newTransaction, selectedCategoryId: v})}>
-                <SelectTrigger><SelectValue placeholder="Selecciona categoría" /></SelectTrigger>
+              <Select value={transactionForm.selectedCategoryId} onValueChange={(v) => setTransactionForm({...transactionForm, selectedCategoryId: v})}>
+                <SelectTrigger className="rounded-xl h-10"><SelectValue placeholder="Selecciona" /></SelectTrigger>
                 <SelectContent>
-                  {(newTransaction.type === "charge" ? expenseCategories : incomeCategories).map(cat => (
+                  {(transactionForm.type === "charge" ? expenseCategories : incomeCategories).map(cat => (
                     <SelectItem key={cat.id} value={cat.id}>
-                      <div className="flex items-center gap-2">
-                        <DynamicLucideIcon iconName={cat.icon || "Tag"} className="h-4 w-4" />
-                        {cat.name}
-                      </div>
+                      <div className="flex items-center gap-2"><DynamicLucideIcon iconName={cat.icon || "Tag"} className="h-4 w-4" /> {cat.name}</div>
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
-            <DialogFooter><Button type="submit">Guardar</Button></DialogFooter>
+            <DialogFooter><Button type="submit" className="w-full rounded-xl font-bold h-11">Guardar</Button></DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
