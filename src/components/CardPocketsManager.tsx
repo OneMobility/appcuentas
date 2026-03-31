@@ -5,12 +5,13 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { PlusCircle, Trash2, ArrowRightLeft, Wallet, Loader2 } from "lucide-react";
+import { PlusCircle, Trash2, ArrowRightLeft, Wallet, Loader2, Info } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/context/SessionContext";
 import { showError, showSuccess } from "@/utils/toast";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { evaluateExpression } from "@/utils/math-helpers";
 
 interface Pocket {
   id: string;
@@ -33,7 +34,7 @@ const CardPocketsManager: React.FC<CardPocketsManagerProps> = ({ cardId, cardBal
   const [isSubmitting, setIsSubmitting] = useState(false);
   
   const [newPocketName, setNewPocketName] = useState("");
-  const [transferAmount, setTransferAmount] = useState("");
+  const [transferAmountInput, setTransferAmountInput] = useState("");
   const [transferType, setTransferType] = useState<"to_pocket" | "from_pocket">("to_pocket");
 
   const fetchPockets = async () => {
@@ -77,7 +78,7 @@ const CardPocketsManager: React.FC<CardPocketsManagerProps> = ({ cardId, cardBal
       setIsAddDialogOpen(false);
       fetchPockets();
     } catch (e: any) {
-      showError("Error al crear apartado. Asegúrate de haber ejecutado el SQL necesario.");
+      showError("Error al crear apartado.");
       console.error("Create pocket error:", e.message);
     } finally {
       setIsSubmitting(false);
@@ -85,27 +86,43 @@ const CardPocketsManager: React.FC<CardPocketsManagerProps> = ({ cardId, cardBal
   };
 
   const handleTransfer = async () => {
-    const amount = parseFloat(transferAmount);
-    if (isNaN(amount) || amount <= 0 || !selectedPocket || !user) return;
+    if (!selectedPocket || !user) return;
 
-    if (transferType === "to_pocket" && cardBalance < amount) {
-      showError("Saldo insuficiente en la tarjeta");
+    let amount: number;
+    if (transferAmountInput.startsWith('=')) {
+      amount = evaluateExpression(transferAmountInput.substring(1)) || 0;
+    } else {
+      amount = parseFloat(transferAmountInput);
+    }
+
+    if (isNaN(amount) || amount <= 0) {
+      showError("Monto inválido");
       return;
     }
-    if (transferType === "from_pocket" && selectedPocket.amount < amount) {
-      showError("Saldo insuficiente en el apartado");
+
+    // Redondear para evitar errores de precisión de punto flotante
+    const roundedAmount = Math.round(amount * 100) / 100;
+    const roundedCardBalance = Math.round(cardBalance * 100) / 100;
+    const roundedPocketAmount = Math.round(selectedPocket.amount * 100) / 100;
+
+    if (transferType === "to_pocket" && roundedAmount > roundedCardBalance) {
+      showError(`Saldo insuficiente en la tarjeta ($${roundedCardBalance.toFixed(2)})`);
+      return;
+    }
+    if (transferType === "from_pocket" && roundedAmount > roundedPocketAmount) {
+      showError(`Saldo insuficiente en el apartado ($${roundedPocketAmount.toFixed(2)})`);
       return;
     }
 
     setIsSubmitting(true);
     try {
       const newPocketAmount = transferType === "to_pocket" 
-        ? selectedPocket.amount + amount 
-        : selectedPocket.amount - amount;
+        ? roundedPocketAmount + roundedAmount 
+        : roundedPocketAmount - roundedAmount;
       
       const newCardBalance = transferType === "to_pocket"
-        ? cardBalance - amount
-        : cardBalance + amount;
+        ? roundedCardBalance - roundedAmount
+        : roundedCardBalance + roundedAmount;
 
       const { error: pocketError } = await supabase
         .from('card_pockets')
@@ -123,7 +140,7 @@ const CardPocketsManager: React.FC<CardPocketsManagerProps> = ({ cardId, cardBal
 
       showSuccess("Transferencia exitosa");
       setIsTransferDialogOpen(false);
-      setTransferAmount("");
+      setTransferAmountInput("");
       fetchPockets();
       onUpdate();
     } catch (e: any) {
@@ -205,33 +222,45 @@ const CardPocketsManager: React.FC<CardPocketsManagerProps> = ({ cardId, cardBal
         </Dialog>
 
         <Dialog open={isTransferDialogOpen} onOpenChange={setIsTransferDialogOpen}>
-          <DialogContent>
+          <DialogContent className="w-[90vw] max-w-[400px] rounded-3xl">
             <DialogHeader><DialogTitle>Mover Dinero: {selectedPocket?.name}</DialogTitle></DialogHeader>
             <div className="grid gap-4 py-4">
+              <div className="bg-blue-50 p-4 rounded-2xl flex flex-col gap-2">
+                <div className="flex justify-between items-center text-xs text-blue-700 font-bold uppercase">
+                  <span>Tarjeta</span>
+                  <span>Saldo: ${cardBalance.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between items-center text-xs text-blue-700 font-bold uppercase border-t border-blue-200 pt-2">
+                  <span>{selectedPocket?.name}</span>
+                  <span>Saldo: ${selectedPocket?.amount.toFixed(2)}</span>
+                </div>
+              </div>
+
               <div className="grid gap-2">
                 <Label>Dirección</Label>
                 <Select value={transferType} onValueChange={(v: any) => setTransferType(v)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="rounded-xl"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="to_pocket">De Tarjeta a Apartado</SelectItem>
-                    <SelectItem value="from_pocket">De Apartado a Tarjeta</SelectItem>
+                    <SelectItem value="to_pocket">Ahorrar (Tarjeta → Apartado)</SelectItem>
+                    <SelectItem value="from_pocket">Retirar (Apartado → Tarjeta)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div className="grid gap-2">
                 <Label>Monto</Label>
                 <Input 
-                  type="number" 
-                  value={transferAmount} 
-                  onChange={e => setTransferAmount(e.target.value)} 
-                  placeholder="0.00" 
+                  type="text" 
+                  value={transferAmountInput} 
+                  onChange={e => setTransferAmountInput(e.target.value)} 
+                  placeholder="Ej. 100 o =50+50" 
                   disabled={isSubmitting}
+                  className="rounded-xl h-11"
                 />
               </div>
             </div>
             <DialogFooter>
-              <Button onClick={handleTransfer} disabled={isSubmitting}>
-                {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Confirmar"}
+              <Button onClick={handleTransfer} disabled={isSubmitting} className="w-full h-12 rounded-xl font-bold">
+                {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Confirmar Movimiento"}
               </Button>
             </DialogFooter>
           </DialogContent>

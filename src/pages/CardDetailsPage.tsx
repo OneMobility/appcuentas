@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { DollarSign, ArrowLeft, FileDown, FileText, ChevronLeft, ChevronRight, Scale, Search, Filter, Trash2 } from "lucide-react";
+import { DollarSign, ArrowLeft, FileDown, FileText, ChevronLeft, ChevronRight, Scale, Search, Filter, Trash2, Edit } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { cn } from "@/lib/utils";
 import { format, parseISO, isWithinInterval, startOfMonth, endOfMonth, addMonths, subMonths } from "date-fns";
@@ -38,6 +38,7 @@ const CardDetailsPage: React.FC = () => {
   const [currentViewDate, setCurrentViewDate] = useState(new Date());
   const [isAddTransactionDialogOpen, setIsAddTransactionDialogOpen] = useState(false);
   const [isReconcileDialogOpen, setIsReconcileDialogOpen] = useState(false);
+  const [editingTransaction, setEditingTransaction] = useState<any>(null);
   
   const [searchTerm, setSearchTerm] = useState("");
   const [filterType, setFilterType] = useState<"all" | "charge" | "payment">("all");
@@ -116,34 +117,74 @@ const CardDetailsPage: React.FC = () => {
     });
   }, [transactionsWithBalance, currentViewDate, searchTerm, filterType]);
 
+  const handleOpenAdd = () => {
+    setEditingTransaction(null);
+    setTransactionForm({ type: "charge", amount: "", description: "", selectedCategoryId: "" });
+    setIsAddTransactionDialogOpen(true);
+  };
+
+  const handleOpenEdit = (tx: any) => {
+    setEditingTransaction(tx);
+    setTransactionForm({
+      type: tx.type,
+      amount: tx.amount.toString(),
+      description: tx.description,
+      selectedCategoryId: tx.income_category_id || tx.expense_category_id || "",
+    });
+    setIsAddTransactionDialogOpen(true);
+  };
+
   const handleTransactionSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const amount = evaluateExpression(transactionForm.amount) || 0;
     if (amount <= 0) return;
 
     let newBalance = card.current_balance;
+    
+    // Revertir efecto de la transacción anterior si estamos editando
+    if (editingTransaction) {
+      if (card.type === "debit") {
+        newBalance = editingTransaction.type === "charge" ? newBalance + editingTransaction.amount : newBalance - editingTransaction.amount;
+      } else {
+        newBalance = editingTransaction.type === "charge" ? newBalance - editingTransaction.amount : newBalance + editingTransaction.amount;
+      }
+    }
+
+    // Aplicar nuevo efecto
     if (card.type === "debit") {
       newBalance = transactionForm.type === "charge" ? newBalance - amount : newBalance + amount;
     } else {
       newBalance = transactionForm.type === "charge" ? newBalance + amount : newBalance - amount;
     }
 
-    const { error } = await supabase.from('card_transactions').insert({
+    const txData = {
       user_id: user?.id,
       card_id: card.id,
       type: transactionForm.type,
       amount,
       description: transactionForm.description,
-      date: getLocalDateString(new Date()),
+      date: editingTransaction ? editingTransaction.date : getLocalDateString(new Date()),
       income_category_id: transactionForm.type === "payment" ? transactionForm.selectedCategoryId : null,
       expense_category_id: transactionForm.type === "charge" ? transactionForm.selectedCategoryId : null,
-    });
+    };
+
+    let error;
+    if (editingTransaction) {
+      const { error: updateError } = await supabase.from('card_transactions').update(txData).eq('id', editingTransaction.id);
+      error = updateError;
+    } else {
+      const { error: insertError } = await supabase.from('card_transactions').insert(txData);
+      error = insertError;
+    }
 
     if (!error) {
       await supabase.from('cards').update({ current_balance: newBalance }).eq('id', card.id);
-      showSuccess("Transacción registrada");
+      showSuccess(editingTransaction ? "Transacción actualizada" : "Transacción registrada");
       setIsAddTransactionDialogOpen(false);
+      setEditingTransaction(null);
       fetchCardDetails();
+    } else {
+      showError("Error al guardar: " + error.message);
     }
   };
 
@@ -239,7 +280,7 @@ const CardDetailsPage: React.FC = () => {
                 </div>
                 <div className="flex items-center gap-1">
                   <Button variant="outline" size="icon" className="h-8 w-8 rounded-xl" onClick={() => setIsReconcileDialogOpen(true)} title="Cuadrar"><Scale className="h-4 w-4" /></Button>
-                  <Button variant="default" size="icon" className="h-8 w-8 rounded-xl" onClick={() => setIsAddTransactionDialogOpen(true)} title="Nuevo"><DollarSign className="h-4 w-4" /></Button>
+                  <Button variant="default" size="icon" className="h-8 w-8 rounded-xl" onClick={handleOpenAdd} title="Nuevo"><DollarSign className="h-4 w-4" /></Button>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button variant="outline" size="icon" className="h-8 w-8 rounded-xl"><FileDown className="h-4 w-4" /></Button>
@@ -303,7 +344,8 @@ const CardDetailsPage: React.FC = () => {
                             <TableCell className={cn("text-right font-black text-xs", tx.type === "charge" ? "text-red-600" : "text-green-600")}>
                               {tx.type === "charge" ? "-" : "+"}${tx.amount.toFixed(0)}
                             </TableCell>
-                            <TableCell className="text-right pr-4">
+                            <TableCell className="text-right pr-4 flex gap-1 justify-end">
+                              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleOpenEdit(tx)}><Edit className="h-3.5 w-3.5" /></Button>
                               <AlertDialog>
                                 <AlertDialogTrigger asChild>
                                   <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive"><Trash2 className="h-3.5 w-3.5" /></Button>
@@ -344,7 +386,7 @@ const CardDetailsPage: React.FC = () => {
 
       <Dialog open={isAddTransactionDialogOpen} onOpenChange={setIsAddTransactionDialogOpen}>
         <DialogContent className="w-[90vw] max-w-[400px] rounded-3xl p-6">
-          <DialogHeader><DialogTitle>Nueva Transacción</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{editingTransaction ? "Editar Transacción" : "Nueva Transacción"}</DialogTitle></DialogHeader>
           <form onSubmit={handleTransactionSubmit} className="grid gap-4 py-4">
             <div className="grid gap-2">
               <Label>Tipo</Label>
