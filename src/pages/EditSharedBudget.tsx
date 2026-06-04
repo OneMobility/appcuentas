@@ -8,13 +8,18 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Divide, Banknote, ArrowLeft, AlertCircle, Save, Loader2 } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { Divide, Banknote, ArrowLeft, AlertCircle, Save, Loader2, CalendarIcon } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/context/SessionContext";
 import { evaluateExpression } from "@/utils/math-helpers";
 import { getLocalDateString } from "@/utils/date-helpers";
 import LoadingSpinner from "@/components/LoadingSpinner";
+import { format, parseISO } from "date-fns";
+import { es } from "date-fns/locale";
+import { cn } from "@/lib/utils";
 
 interface Debtor {
   id: string;
@@ -26,13 +31,6 @@ interface Creditor {
   id: string;
   name: string;
   current_balance: number;
-}
-
-interface Participant {
-  id: string;
-  debtor_id: string;
-  share_amount: number;
-  paid_amount: number;
 }
 
 const EditSharedBudget: React.FC = () => {
@@ -50,6 +48,7 @@ const EditSharedBudget: React.FC = () => {
     total_amount: "",
     description: "",
     creditorId: "none",
+    due_date: undefined as Date | undefined,
     selectedDebtors: [] as { debtorId: string; paidAmount: number }[],
   });
 
@@ -59,7 +58,6 @@ const EditSharedBudget: React.FC = () => {
     if (!user || !budgetId) return;
 
     try {
-      // Cargar presupuesto y participantes
       const { data: budget, error: bError } = await supabase
         .from('shared_budgets')
         .select('*, budget_participants(*)')
@@ -69,7 +67,6 @@ const EditSharedBudget: React.FC = () => {
       if (bError) throw bError;
       setOriginalBudget(budget);
 
-      // Cargar Deudores y Acreedores
       const [debtorsRes, creditorsRes] = await Promise.all([
         supabase.from('debtors').select('id, name, current_balance').eq('user_id', user.id),
         supabase.from('creditors').select('id, name, current_balance').eq('user_id', user.id)
@@ -83,6 +80,7 @@ const EditSharedBudget: React.FC = () => {
         total_amount: budget.total_amount.toString(),
         description: budget.description || "",
         creditorId: budget.creditor_id || "none",
+        due_date: budget.due_date ? parseISO(budget.due_date) : undefined,
         selectedDebtors: budget.budget_participants.map((p: any) => ({
           debtorId: p.debtor_id,
           paidAmount: p.paid_amount || 0
@@ -156,12 +154,9 @@ const EditSharedBudget: React.FC = () => {
 
     setIsSaving(true);
     const shareAmount = calculateShare;
-    const transactionDate = getLocalDateString(new Date());
 
     try {
-      // --- 1. REVERTIR ESTADO ANTERIOR ---
-      
-      // Revertir deudas de participantes originales (solo la parte pendiente)
+      // 1. REVERTIR ESTADO ANTERIOR
       for (const p of originalBudget.budget_participants) {
         const debtor = debtors.find(d => d.id === p.debtor_id);
         if (debtor) {
@@ -172,7 +167,6 @@ const EditSharedBudget: React.FC = () => {
         }
       }
 
-      // Revertir cargo al acreedor original
       if (originalBudget.creditor_id) {
         const creditor = creditors.find(c => c.id === originalBudget.creditor_id);
         if (creditor) {
@@ -182,9 +176,7 @@ const EditSharedBudget: React.FC = () => {
         }
       }
 
-      // --- 2. APLICAR NUEVO ESTADO ---
-
-      // Actualizar presupuesto
+      // 2. APLICAR NUEVO ESTADO
       const creditorIdToUse = budgetData.creditorId === "none" ? null : budgetData.creditorId;
       const { error: bUpdateError } = await supabase
         .from('shared_budgets')
@@ -193,17 +185,15 @@ const EditSharedBudget: React.FC = () => {
           total_amount: newTotalAmount,
           description: budgetData.description,
           creditor_id: creditorIdToUse,
+          due_date: budgetData.due_date ? getLocalDateString(budgetData.due_date) : null,
         })
         .eq('id', budgetId);
 
       if (bUpdateError) throw bUpdateError;
 
-      // Eliminar participantes antiguos
       await supabase.from('budget_participants').delete().eq('budget_id', budgetId);
 
-      // Insertar nuevos participantes y actualizar saldos de deudores
       for (const dSelection of budgetData.selectedDebtors) {
-        // Mantener el paidAmount si ya existía en el original
         const originalP = originalBudget.budget_participants.find((p: any) => p.debtor_id === dSelection.debtorId);
         const paidAmount = originalP ? originalP.paid_amount : 0;
         const isPaid = paidAmount >= shareAmount - 0.01;
@@ -217,24 +207,15 @@ const EditSharedBudget: React.FC = () => {
           user_id: user.id
         });
 
-        // Actualizar saldo del deudor (sumar la nueva parte pendiente)
-        const debtor = debtors.find(d => d.id === dSelection.debtorId);
-        if (debtor) {
+        const { data: currentDebtor } = await supabase.from('debtors').select('current_balance').eq('id', dSelection.debtorId).single();
+        if (currentDebtor) {
           const newPending = shareAmount - paidAmount;
-          // Nota: El saldo del deudor ya fue restado arriba, ahora sumamos lo nuevo
-          // Pero como los deudores en el estado local 'debtors' no se han actualizado, 
-          // necesitamos obtener el saldo real actual o calcularlo.
-          // Para simplificar, haremos un fetch rápido o usaremos la lógica de compensación.
-          const { data: currentDebtor } = await supabase.from('debtors').select('current_balance').eq('id', debtor.id).single();
-          if (currentDebtor) {
-            await supabase.from('debtors').update({ 
-              current_balance: currentDebtor.current_balance + newPending 
-            }).eq('id', debtor.id);
-          }
+          await supabase.from('debtors').update({ 
+            current_balance: currentDebtor.current_balance + newPending 
+          }).eq('id', dSelection.debtorId);
         }
       }
 
-      // Aplicar nuevo cargo al acreedor
       if (creditorIdToUse) {
         const { data: currentCreditor } = await supabase.from('creditors').select('current_balance').eq('id', creditorIdToUse).single();
         if (currentCreditor) {
@@ -244,7 +225,7 @@ const EditSharedBudget: React.FC = () => {
         }
       }
 
-      showSuccess("Presupuesto actualizado y saldos recalculados.");
+      showSuccess("Presupuesto actualizado.");
       navigate('/shared-budgets');
     } catch (error: any) {
       showError("Error al actualizar: " + error.message);
@@ -266,7 +247,7 @@ const EditSharedBudget: React.FC = () => {
 
       <Card>
         <CardHeader>
-          <CardTitle>Ajustar Detalles y Participantes</CardTitle>
+          <CardTitle>Ajustar Detalles</CardTitle>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleUpdateBudget} className="grid gap-6 py-4">
@@ -287,19 +268,47 @@ const EditSharedBudget: React.FC = () => {
               </div>
             </div>
 
-            <div className="flex flex-col gap-2">
-              <Label>Acreedor</Label>
-              <Select value={budgetData.creditorId} onValueChange={(v) => setBudgetData({...budgetData, creditorId: v})}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecciona Acreedor" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">-- Ninguno (Pagado por mí) --</SelectItem>
-                  {creditors.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="flex flex-col gap-2">
+                <Label>Fecha de Vencimiento</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant={"outline"}
+                      className={cn(
+                        "w-full justify-start text-left font-normal",
+                        !budgetData.due_date && "text-muted-foreground"
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {budgetData.due_date ? format(budgetData.due_date, "PPP", { locale: es }) : <span>Selecciona una fecha</span>}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={budgetData.due_date}
+                      onSelect={(date) => setBudgetData(prev => ({ ...prev, due_date: date }))}
+                      initialFocus
+                      locale={es}
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+              <div className="flex flex-col gap-2">
+                <Label>Acreedor</Label>
+                <Select value={budgetData.creditorId} onValueChange={(v) => setBudgetData({...budgetData, creditorId: v})}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecciona Acreedor" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">-- Ninguno --</SelectItem>
+                    {creditors.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
             <Card className="p-4 border-green-200 bg-green-50">
@@ -316,16 +325,9 @@ const EditSharedBudget: React.FC = () => {
                   </div>
                 ))}
               </div>
-
               <div className="mt-4 p-3 bg-white/50 rounded-md border border-green-100">
-                <p className="font-semibold flex items-center gap-2">
-                  <Divide className="h-4 w-4" /> Nueva División ({budgetData.selectedDebtors.length + 1} personas)
-                </p>
+                <p className="font-semibold">Nueva División ({budgetData.selectedDebtors.length + 1} personas)</p>
                 <p className="text-sm mt-1">Parte de cada uno: <span className="font-bold">${calculateShare.toFixed(2)}</span></p>
-                <p className="text-[10px] text-muted-foreground mt-2">
-                  <AlertCircle className="h-3 w-3 inline mr-1" /> 
-                  Al guardar, se ajustarán automáticamente las deudas de los participantes seleccionados.
-                </p>
               </div>
             </Card>
 

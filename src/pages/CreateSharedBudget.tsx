@@ -8,7 +8,9 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { PlusCircle, Divide, Banknote, UserPlus, ArrowLeft, AlertCircle } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { PlusCircle, Divide, Banknote, UserPlus, ArrowLeft, AlertCircle, CalendarIcon } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/context/SessionContext";
@@ -16,6 +18,8 @@ import { cn } from "@/lib/utils";
 import { evaluateExpression } from "@/utils/math-helpers";
 import { getLocalDateString } from "@/utils/date-helpers";
 import { useNavigate } from "react-router-dom";
+import { format } from "date-fns";
+import { es } from "date-fns/locale";
 
 interface Debtor {
   id: string;
@@ -162,7 +166,7 @@ const CreateSharedBudget: React.FC = () => {
   const [creditors, setCreditors] = useState<Creditor[]>([]);
   const [isQuickDebtorDialogOpen, setIsQuickDebtorDialogOpen] = useState(false);
   const [isQuickCreditorDialogOpen, setIsQuickCreditorDialogOpen] = useState(false);
-  const [skipCreditorCharge, setSkipCreditorCharge] = useState(false); // Nuevo estado
+  const [skipCreditorCharge, setSkipCreditorCharge] = useState(false);
   
   const [newBudget, setNewBudget] = useState({
     name: "",
@@ -171,6 +175,7 @@ const CreateSharedBudget: React.FC = () => {
     description: "",
     selectedDebtors: [] as { debtorId: string; shareAmount: string }[],
     creditorId: "none" as string,
+    due_date: undefined as Date | undefined,
   });
 
   const fetchDebtorsAndCreditors = async () => {
@@ -260,14 +265,9 @@ const CreateSharedBudget: React.FC = () => {
       return { myShare: 0, debtorShare: 0, totalParticipants: 0 };
     }
 
-    if (newBudget.split_type === 'equal') {
-      const share = totalAmount / totalParticipants;
-      return { myShare: share, debtorShare: share, totalParticipants };
-    } 
-    
-    return { myShare: totalAmount / totalParticipants, debtorShare: totalAmount / totalParticipants, totalParticipants };
-
-  }, [newBudget.total_amount, newBudget.selectedDebtors.length, newBudget.split_type]);
+    const share = totalAmount / totalParticipants;
+    return { myShare: share, debtorShare: share, totalParticipants };
+  }, [newBudget.total_amount, newBudget.selectedDebtors.length]);
 
   const handleSubmitBudget = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -308,7 +308,6 @@ const CreateSharedBudget: React.FC = () => {
 
         const newCreditorBalance = creditor.current_balance + totalAmount;
 
-        // Update creditor balance
         const { error: creditorUpdateError } = await supabase
           .from('creditors')
           .update({ current_balance: newCreditorBalance })
@@ -317,7 +316,6 @@ const CreateSharedBudget: React.FC = () => {
         
         if (creditorUpdateError) throw creditorUpdateError;
 
-        // Record transaction in creditor_transactions (Charge)
         const { error: creditorTxError } = await supabase
           .from('creditor_transactions')
           .insert({
@@ -341,6 +339,7 @@ const CreateSharedBudget: React.FC = () => {
           split_type: newBudget.split_type,
           description: newBudget.description + (skipCreditorCharge ? " (Gasto ya registrado previamente)" : ""),
           creditor_id: creditorIdToUse,
+          due_date: newBudget.due_date ? getLocalDateString(newBudget.due_date) : null,
         })
         .select()
         .single();
@@ -364,13 +363,12 @@ const CreateSharedBudget: React.FC = () => {
 
       if (participantsError) throw participantsError;
 
-      // 5. Update Debtor balances (increase current_balance by their share)
+      // 5. Update Debtor balances
       for (const participant of newBudget.selectedDebtors) {
         const debtor = debtors.find(d => d.id === participant.debtorId);
         if (debtor) {
           const newDebtorBalance = debtor.current_balance + shareAmount;
           
-          // Update debtor balance
           const { error: debtorUpdateError } = await supabase
             .from('debtors')
             .update({ current_balance: newDebtorBalance })
@@ -379,7 +377,6 @@ const CreateSharedBudget: React.FC = () => {
           
           if (debtorUpdateError) throw debtorUpdateError;
 
-          // Record transaction in debtor_transactions (Charge)
           const { error: txError } = await supabase
             .from('debtor_transactions')
             .insert({
@@ -394,8 +391,8 @@ const CreateSharedBudget: React.FC = () => {
         }
       }
 
-      showSuccess("Presupuesto compartido creado exitosamente. Deudas registradas.");
-      navigate('/shared-budgets'); // Navigate back to the list
+      showSuccess("Presupuesto compartido creado exitosamente.");
+      navigate('/shared-budgets');
     } catch (error: any) {
       showError('Error al crear presupuesto: ' + error.message);
       console.error("Budget creation error:", error);
@@ -436,9 +433,38 @@ const CreateSharedBudget: React.FC = () => {
                 />
               </div>
             </div>
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="description">Descripción (Opcional)</Label>
-              <Input id="description" name="description" value={newBudget.description} onChange={handleNewBudgetChange} />
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="due_date">Fecha de Vencimiento (Opcional)</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant={"outline"}
+                      className={cn(
+                        "w-full justify-start text-left font-normal",
+                        !newBudget.due_date && "text-muted-foreground"
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {newBudget.due_date ? format(newBudget.due_date, "PPP", { locale: es }) : <span>Selecciona una fecha</span>}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={newBudget.due_date}
+                      onSelect={(date) => setNewBudget(prev => ({ ...prev, due_date: date }))}
+                      initialFocus
+                      locale={es}
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="description">Descripción (Opcional)</Label>
+                <Input id="description" name="description" value={newBudget.description} onChange={handleNewBudgetChange} />
+              </div>
             </div>
 
             <Card className="p-4 border-indigo-200 bg-indigo-50">
@@ -555,7 +581,6 @@ const CreateSharedBudget: React.FC = () => {
         </CardContent>
       </Card>
       
-      {/* Diálogos de Creación Rápida */}
       <QuickCreateDialog
         isOpen={isQuickDebtorDialogOpen}
         onClose={() => setIsQuickDebtorDialogOpen(false)}
