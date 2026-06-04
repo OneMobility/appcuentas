@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
-import { PlusCircle, Trash2, Eye, Phone, Edit, DollarSign, AlertCircle } from "lucide-react";
+import { PlusCircle, Trash2, Eye, Phone, Edit, DollarSign, AlertCircle, CalendarIcon } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/context/SessionContext";
@@ -21,6 +21,10 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useCategoryContext } from "@/context/CategoryContext";
 import DynamicLucideIcon from "@/components/DynamicLucideIcon";
 import { cn } from "@/lib/utils";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { format, parseISO } from "date-fns";
+import { es } from "date-fns/locale";
 
 interface Debtor {
   id: string;
@@ -28,6 +32,7 @@ interface Debtor {
   initial_balance: number;
   current_balance: number;
   phone?: string;
+  due_date?: string;
 }
 
 interface CardData {
@@ -53,7 +58,7 @@ const Debtors = () => {
   const [editingDebtor, setEditingDebtor] = useState<Debtor | null>(null);
   const [selectedDebtor, setSelectedDebtor] = useState<Debtor | null>(null);
   
-  const [newDebtor, setNewDebtor] = useState({ name: "", initial_balance: "", phone: "" });
+  const [newDebtor, setNewDebtor] = useState({ name: "", initial_balance: "", phone: "", due_date: undefined as Date | undefined });
   const [newTransaction, setNewTransaction] = useState({
     type: "payment" as "charge" | "payment",
     amount: "",
@@ -125,6 +130,7 @@ const Debtors = () => {
         initial_balance: initialBalance,
         current_balance: initialBalance,
         phone: newDebtor.phone.trim() || null,
+        due_date: newDebtor.due_date ? getLocalDateString(newDebtor.due_date) : null,
       })
       .select();
 
@@ -132,7 +138,7 @@ const Debtors = () => {
     else {
       setDebtors((prev) => [data[0], ...prev]);
       setIsAddDebtorDialogOpen(false);
-      setNewDebtor({ name: "", initial_balance: "", phone: "" });
+      setNewDebtor({ name: "", initial_balance: "", phone: "", due_date: undefined });
       showSuccess("Deudor registrado.");
     }
   };
@@ -143,6 +149,7 @@ const Debtors = () => {
       name: debtor.name,
       initial_balance: debtor.initial_balance.toString(),
       phone: debtor.phone || "",
+      due_date: debtor.due_date ? parseISO(debtor.due_date) : undefined,
     });
     setIsEditDebtorDialogOpen(true);
   };
@@ -156,6 +163,7 @@ const Debtors = () => {
       .update({
         name: newDebtor.name.trim(),
         phone: newDebtor.phone.trim() || null,
+        due_date: newDebtor.due_date ? getLocalDateString(newDebtor.due_date) : null,
       })
       .eq('id', editingDebtor.id)
       .select();
@@ -165,7 +173,7 @@ const Debtors = () => {
       setDebtors((prev) => prev.map(d => d.id === editingDebtor.id ? data[0] : d));
       setIsEditDebtorDialogOpen(false);
       setEditingDebtor(null);
-      setNewDebtor({ name: "", initial_balance: "", phone: "" });
+      setNewDebtor({ name: "", initial_balance: "", phone: "", due_date: undefined });
       showSuccess("Deudor actualizado.");
     }
   };
@@ -255,6 +263,18 @@ const Debtors = () => {
 
       showSuccess("Transacción registrada.");
       setIsTransactionDialogOpen(false);
+      
+      // WhatsApp prompt handled by the details page or custom redirect?
+      // User said "recuerda que al registrar abono o cargo se pide si queremos enviar mensaje de whatsapp"
+      // I'll redirect them to the details page if they want to send WhatsApp, or add a simple check here.
+      if (selectedDebtor.phone) {
+        if (window.confirm("¿Deseas enviar un comprobante por WhatsApp?")) {
+          const typeLabel = newTransaction.type === "charge" ? "Cargo" : "Abono";
+          const msg = `Hola ${selectedDebtor.name}, se ha registrado un ${typeLabel} por $${amount.toFixed(2)}. Tu saldo actual es $${newDebtorBalance.toFixed(2)}.`;
+          window.open(`https://wa.me/${selectedDebtor.phone}?text=${encodeURIComponent(msg)}`, '_blank');
+        }
+      }
+      
       fetchData();
     } catch (error: any) {
       showError('Error: ' + error.message);
@@ -280,7 +300,7 @@ const Debtors = () => {
         <TableHeader>
           <TableRow>
             <TableHead>Nombre</TableHead>
-            <TableHead>Saldo Inicial</TableHead>
+            <TableHead>Vencimiento</TableHead>
             <TableHead>Saldo Actual</TableHead>
             <TableHead className="text-right">Acciones</TableHead>
           </TableRow>
@@ -289,7 +309,7 @@ const Debtors = () => {
           {list.map((debtor) => (
             <TableRow key={debtor.id}>
               <TableCell className="font-medium">{debtor.name}</TableCell>
-              <TableCell>${debtor.initial_balance.toFixed(2)}</TableCell>
+              <TableCell className="text-xs">{debtor.due_date ? format(parseISO(debtor.due_date), "dd/MM/yy") : "-"}</TableCell>
               <TableCell className={cn(debtor.current_balance > 0 ? "text-red-600 font-semibold" : "text-green-600")}>
                 ${debtor.current_balance.toFixed(2)}
               </TableCell>
@@ -359,6 +379,18 @@ const Debtors = () => {
                   <Input value={newDebtor.initial_balance} onChange={e => setNewDebtor({...newDebtor, initial_balance: e.target.value})} placeholder="Ej. 100" required />
                 </div>
                 <div className="grid gap-2">
+                  <Label>Vencimiento (Opcional)</Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" className={cn("justify-start text-left font-normal", !newDebtor.due_date && "text-muted-foreground")}>
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {newDebtor.due_date ? format(newDebtor.due_date, "PPP", { locale: es }) : "Selecciona una fecha"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={newDebtor.due_date} onSelect={d => setNewDebtor({...newDebtor, due_date: d})} locale={es} /></PopoverContent>
+                  </Popover>
+                </div>
+                <div className="grid gap-2">
                   <Label className="flex items-center gap-2">
                     <Phone className="h-4 w-4" /> Teléfono (Opcional)
                   </Label>
@@ -394,6 +426,18 @@ const Debtors = () => {
             <div className="grid gap-2">
               <Label>Nombre</Label>
               <Input value={newDebtor.name} onChange={e => setNewDebtor({...newDebtor, name: e.target.value})} required />
+            </div>
+            <div className="grid gap-2">
+              <Label>Vencimiento</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className={cn("justify-start text-left font-normal", !newDebtor.due_date && "text-muted-foreground")}>
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {newDebtor.due_date ? format(newDebtor.due_date, "PPP", { locale: es }) : "Selecciona una fecha"}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={newDebtor.due_date} onSelect={d => setNewDebtor({...newDebtor, due_date: d})} locale={es} /></PopoverContent>
+              </Popover>
             </div>
             <div className="grid gap-2">
               <Label className="flex items-center gap-2">

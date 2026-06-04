@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { PlusCircle, ChevronLeft, ChevronRight, Trash2, Edit, Search, Filter, FileDown, FileText, Scale } from "lucide-react";
+import { PlusCircle, ChevronLeft, ChevronRight, Trash2, Edit, Search, Filter, FileDown, FileText, Scale, ArrowRightLeft } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { cn } from "@/lib/utils";
 import { format, parseISO, startOfMonth, endOfMonth, isWithinInterval, addMonths, subMonths } from "date-fns";
@@ -23,6 +23,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { exportToCsv, exportToPdf } from "@/utils/export";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import CashReconciliationDialog from "@/components/CashReconciliationDialog";
+import CardTransferDialog from "@/components/CardTransferDialog";
 
 const Cash = () => {
   const { user } = useSession();
@@ -30,6 +31,7 @@ const Cash = () => {
   
   const [balance, setBalance] = useState(0);
   const [transactions, setTransactions] = useState<any[]>([]);
+  const [cards, setCards] = useState<any[]>([]);
   const [currentViewDate, setCurrentViewDate] = useState(new Date());
   const [searchTerm, setSearchTerm] = useState("");
   const [filterType, setFilterType] = useState<"all" | "ingreso" | "egreso">("all");
@@ -37,6 +39,7 @@ const Cash = () => {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isReconcileDialogOpen, setIsReconcileDialogOpen] = useState(false);
+  const [isTransferDialogOpen, setIsTransferDialogOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<any>(null);
 
   const [transactionForm, setTransactionForm] = useState({
@@ -46,24 +49,32 @@ const Cash = () => {
     selectedCategoryId: "",
   });
 
-  const fetchTransactions = async () => {
+  const fetchData = async () => {
     if (!user) return;
     const { data, error } = await supabase
       .from('cash_transactions')
       .select('*')
       .eq('user_id', user.id)
-      .order('date', { ascending: false })
-      .order('created_at', { ascending: false });
+      .order('date', { ascending: true })
+      .order('created_at', { ascending: true });
 
     if (error) showError('Error al cargar transacciones');
     else {
-      setTransactions(data || []);
-      setBalance((data || []).reduce((sum, tx) => tx.type === "ingreso" ? sum + tx.amount : sum - tx.amount, 0));
+      let current = 0;
+      const computed = (data || []).map(tx => {
+        current = tx.type === "ingreso" ? current + tx.amount : current - tx.amount;
+        return { ...tx, runningBalance: current };
+      });
+      setTransactions([...computed].reverse());
+      setBalance(current);
     }
+
+    const { data: cardsData } = await supabase.from('cards').select('*').eq('user_id', user.id);
+    setCards(cardsData || []);
   };
 
   useEffect(() => {
-    if (user && !isLoadingCategories) fetchTransactions();
+    if (user && !isLoadingCategories) fetchData();
   }, [user, isLoadingCategories]);
 
   const filteredTransactions = useMemo(() => {
@@ -78,79 +89,19 @@ const Cash = () => {
     });
   }, [transactions, currentViewDate, searchTerm, filterType]);
 
-  const handleOpenAdd = () => {
-    setTransactionForm({ type: "ingreso", amount: "", description: "", selectedCategoryId: "" });
-    setIsAddDialogOpen(true);
-  };
-
-  const handleOpenEdit = (tx: any) => {
-    setEditingTransaction(tx);
-    setTransactionForm({
-      type: tx.type,
-      amount: tx.amount.toString(),
-      description: tx.description,
-      selectedCategoryId: tx.income_category_id || tx.expense_category_id || "",
-    });
-    setIsEditDialogOpen(true);
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!user) return;
-
-    const amount = evaluateExpression(transactionForm.amount) || 0;
-    if (amount <= 0) { showError("Monto inválido"); return; }
-
-    const data = {
-      user_id: user.id,
-      type: transactionForm.type,
-      amount,
-      description: transactionForm.description,
-      date: editingTransaction ? editingTransaction.date : getLocalDateString(new Date()),
-      income_category_id: transactionForm.type === "ingreso" ? transactionForm.selectedCategoryId : null,
-      expense_category_id: transactionForm.type === "egreso" ? transactionForm.selectedCategoryId : null,
-    };
-
-    let error;
-    if (editingTransaction) {
-      const { error: updateError } = await supabase.from('cash_transactions').update(data).eq('id', editingTransaction.id);
-      error = updateError;
-    } else {
-      const { error: insertError } = await supabase.from('cash_transactions').insert(data);
-      error = insertError;
-    }
-
-    if (error) showError("Error al guardar");
-    else {
-      showSuccess(editingTransaction ? "Transacción actualizada" : "Transacción registrada");
-      setIsAddDialogOpen(false);
-      setIsEditDialogOpen(false);
-      setEditingTransaction(null);
-      fetchTransactions();
-    }
-  };
-
-  const handleDeleteTransaction = async (id: string) => {
-    const { error } = await supabase.from('cash_transactions').delete().eq('id', id);
-    if (error) showError("Error al eliminar");
-    else {
-      showSuccess("Movimiento eliminado");
-      fetchTransactions();
-    }
-  };
-
   const handleExport = (formatType: 'csv' | 'pdf') => {
     const data = filteredTransactions.map(tx => ({
       Fecha: format(parseISO(tx.date), "dd/MM/yyyy"),
       Descripción: tx.description,
       Categoría: getCategoryById(tx.income_category_id || tx.expense_category_id)?.name || "N/A",
       Tipo: tx.type === "ingreso" ? "Ingreso" : "Egreso",
-      Monto: tx.amount.toFixed(2)
+      Monto: tx.amount.toFixed(2),
+      Saldo: tx.runningBalance.toFixed(2)
     }));
 
     const filename = `efectivo_${format(currentViewDate, "yyyyMM")}`;
     if (formatType === 'csv') exportToCsv(`${filename}.csv`, data);
-    else exportToPdf(`${filename}.pdf`, `Reporte Efectivo - ${format(currentViewDate, "MMMM yyyy", { locale: es })}`, ["Fecha", "Descripción", "Categoría", "Tipo", "Monto"], data.map(d => Object.values(d)));
+    else exportToPdf(`${filename}.pdf`, `Reporte Efectivo - ${format(currentViewDate, "MMMM yyyy", { locale: es })}`, ["Fecha", "Descripción", "Categoría", "Tipo", "Monto", "Saldo"], data.map(d => Object.values(d)));
   };
 
   return (
@@ -166,37 +117,29 @@ const Cash = () => {
         <div className="flex flex-col sm:flex-row gap-2 w-full">
           <div className="relative flex-1">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input placeholder="Buscar descripción..." className="pl-8 h-10 rounded-xl" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+            <Input placeholder="Buscar..." className="pl-8 h-10 rounded-xl" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
           </div>
           <Select value={filterType} onValueChange={(v: any) => setFilterType(v)}>
             <SelectTrigger className="w-full sm:w-[140px] h-10 rounded-xl">
               <Filter className="mr-2 h-3.5 w-3.5" />
               <SelectValue placeholder="Filtrar" />
             </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos</SelectItem>
-              <SelectItem value="ingreso">Ingresos</SelectItem>
-              <SelectItem value="egreso">Egresos</SelectItem>
-            </SelectContent>
+            <SelectContent><SelectItem value="all">Todos</SelectItem><SelectItem value="ingreso">Ingresos</SelectItem><SelectItem value="egreso">Egresos</SelectItem></SelectContent>
           </Select>
         </div>
         <div className="flex items-center gap-2 w-full">
-          <Button variant="outline" size="icon" className="h-10 w-10 rounded-xl shrink-0" onClick={() => setIsReconcileDialogOpen(true)} title="Cuadrar Saldo"><Scale className="h-4 w-4" /></Button>
+          <Button variant="outline" size="icon" className="h-10 w-10 rounded-xl" onClick={() => setIsTransferDialogOpen(true)} title="Transferir"><ArrowRightLeft className="h-4 w-4" /></Button>
+          <Button variant="outline" size="icon" className="h-10 w-10 rounded-xl" onClick={() => setIsReconcileDialogOpen(true)} title="Cuadrar"><Scale className="h-4 w-4" /></Button>
           <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="icon" className="h-10 w-10 rounded-xl shrink-0" title="Exportar"><FileDown className="h-4 w-4" /></Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => handleExport('csv')}><FileText className="mr-2 h-4 w-4" /> CSV</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handleExport('pdf')}><FileText className="mr-2 h-4 w-4" /> PDF</DropdownMenuItem>
-            </DropdownMenuContent>
+            <DropdownMenuTrigger asChild><Button variant="outline" size="icon" className="h-10 w-10 rounded-xl"><FileDown className="h-4 w-4" /></Button></DropdownMenuTrigger>
+            <DropdownMenuContent align="end"><DropdownMenuItem onClick={() => handleExport('csv')}>CSV</DropdownMenuItem><DropdownMenuItem onClick={() => handleExport('pdf')}>PDF</DropdownMenuItem></DropdownMenuContent>
           </DropdownMenu>
-          <Button size="sm" className="h-10 gap-1.5 rounded-xl flex-1 font-bold" onClick={handleOpenAdd}><PlusCircle className="h-4 w-4" /> Nuevo Movimiento</Button>
+          <Button size="sm" className="h-10 gap-1.5 rounded-xl flex-1 font-bold" onClick={() => setIsAddDialogOpen(true)}><PlusCircle className="h-4 w-4" /> Nuevo</Button>
         </div>
       </div>
 
       <Card className="shadow-sm overflow-hidden">
-        <CardHeader className="flex flex-row items-center justify-between p-4 bg-muted/20">
+        <CardHeader className="flex items-center justify-between p-4 bg-muted/20">
           <CardTitle className="text-sm font-bold">Movimientos</CardTitle>
           <div className="flex items-center bg-background rounded-lg p-0.5 border">
             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setCurrentViewDate(subMonths(currentViewDate, 1))}><ChevronLeft className="h-4 w-4" /></Button>
@@ -205,110 +148,38 @@ const Cash = () => {
           </div>
         </CardHeader>
         <CardContent className="p-0">
-          <div className="overflow-x-auto scrollbar-hide">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="pl-4 text-xs">Fecha</TableHead>
-                  <TableHead className="text-xs">Descripción</TableHead>
-                  <TableHead className="text-right text-xs">Monto</TableHead>
-                  <TableHead className="text-right pr-4 text-xs">Acciones</TableHead>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="pl-4 text-[10px]">Fecha</TableHead>
+                <TableHead className="text-[10px]">Descripción</TableHead>
+                <TableHead className="text-right text-[10px]">Monto</TableHead>
+                <TableHead className="text-right pr-4 text-[10px]">Saldo</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredTransactions.map(tx => (
+                <TableRow key={tx.id}>
+                  <TableCell className="pl-4 text-[10px] font-medium">{format(parseISO(tx.date), "dd/MM")}</TableCell>
+                  <TableCell>
+                    <div className="flex flex-col">
+                      <span className="font-bold text-xs truncate max-w-[100px]">{tx.description}</span>
+                      <span className="text-[9px] text-muted-foreground">{getCategoryById(tx.income_category_id || tx.expense_category_id)?.name || "Sin cat."}</span>
+                    </div>
+                  </TableCell>
+                  <TableCell className={cn("text-right font-bold text-xs", tx.type === "egreso" ? "text-red-600" : "text-green-600")}>
+                    {tx.type === "egreso" ? "-" : "+"}${tx.amount.toFixed(0)}
+                  </TableCell>
+                  <TableCell className="text-right pr-4 font-black text-xs">${tx.runningBalance.toFixed(0)}</TableCell>
                 </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredTransactions.length === 0 ? (
-                  <TableRow><TableCell colSpan={4} className="text-center py-8 text-muted-foreground text-xs">No hay movimientos.</TableCell></TableRow>
-                ) : (
-                  filteredTransactions.map(tx => (
-                    <TableRow key={tx.id}>
-                      <TableCell className="pl-4 text-xs">{format(parseISO(tx.date), "dd/MM")}</TableCell>
-                      <TableCell>
-                        <div className="flex flex-col">
-                          <span className="font-medium text-xs truncate max-w-[100px]">{tx.description}</span>
-                          <span className="text-[9px] text-muted-foreground">{getCategoryById(tx.income_category_id || tx.expense_category_id)?.name || "Sin categoría"}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell className={cn("text-right font-bold text-xs", tx.type === "egreso" ? "text-red-600" : "text-green-600")}>
-                        {tx.type === "egreso" ? "-" : "+"}${tx.amount.toFixed(2)}
-                      </TableCell>
-                      <TableCell className="text-right pr-4 flex gap-1 justify-end">
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleOpenEdit(tx)}><Edit className="h-3.5 w-3.5" /></Button>
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive"><Trash2 className="h-3.5 w-3.5" /></Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent className="w-[90vw] rounded-2xl">
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>¿Eliminar movimiento?</AlertDialogTitle>
-                              <AlertDialogDescription>Se ajustará el saldo automáticamente.</AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel className="rounded-xl">Cancelar</AlertDialogCancel>
-                              <AlertDialogAction className="rounded-xl" onClick={() => handleDeleteTransaction(tx.id)}>Eliminar</AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
+              ))}
+            </TableBody>
+          </Table>
         </CardContent>
       </Card>
 
-      <CashReconciliationDialog
-        isOpen={isReconcileDialogOpen}
-        onClose={() => setIsReconcileDialogOpen(false)}
-        appBalance={balance}
-        transactionCount={transactions.length}
-        onReconciliationSuccess={fetchTransactions}
-        onNoAdjustmentSuccess={() => showSuccess("El saldo ya está cuadrado.")}
-      />
-
-      <Dialog open={isAddDialogOpen || isEditDialogOpen} onOpenChange={(open) => { if(!open) { setIsAddDialogOpen(false); setIsEditDialogOpen(false); setEditingTransaction(null); } }}>
-        <DialogContent className="w-[90vw] max-w-[400px] rounded-3xl p-6">
-          <DialogHeader><DialogTitle>{editingTransaction ? "Editar Transacción" : "Registrar Transacción"}</DialogTitle></DialogHeader>
-          <form onSubmit={handleSubmit} className="grid gap-4 py-4">
-            <div className="grid gap-2">
-              <Label>Tipo</Label>
-              <Select value={transactionForm.type} onValueChange={(v: any) => setTransactionForm({...transactionForm, type: v})}>
-                <SelectTrigger className="rounded-xl h-10"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ingreso">Ingreso</SelectItem>
-                  <SelectItem value="egreso">Egreso</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid gap-2">
-              <Label>Monto</Label>
-              <Input value={transactionForm.amount} onChange={e => setTransactionForm({...transactionForm, amount: e.target.value})} className="rounded-xl h-10" placeholder="0.00" required />
-            </div>
-            <div className="grid gap-2">
-              <Label>Descripción</Label>
-              <Input value={transactionForm.description} onChange={e => setTransactionForm({...transactionForm, description: e.target.value})} className="rounded-xl h-10" placeholder="Ej. Comida, Sueldo..." required />
-            </div>
-            <div className="grid gap-2">
-              <Label>Categoría</Label>
-              <Select value={transactionForm.selectedCategoryId} onValueChange={(v) => setTransactionForm({...transactionForm, selectedCategoryId: v})}>
-                <SelectTrigger className="rounded-xl h-10"><SelectValue placeholder="Selecciona categoría" /></SelectTrigger>
-                <SelectContent>
-                  {(transactionForm.type === "ingreso" ? incomeCategories : expenseCategories).map(cat => (
-                    <SelectItem key={cat.id} value={cat.id}>
-                      <div className="flex items-center gap-2">
-                        <DynamicLucideIcon iconName={cat.icon || "Tag"} className="h-4 w-4" />
-                        {cat.name}
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <DialogFooter><Button type="submit" className="w-full rounded-xl font-bold h-11">Guardar</Button></DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+      <CardTransferDialog isOpen={isTransferDialogOpen} onClose={() => setIsTransferDialogOpen(false)} cards={cards} cashBalance={balance} onTransferSuccess={fetchData} />
+      <CashReconciliationDialog isOpen={isReconcileDialogOpen} onClose={() => setIsReconcileDialogOpen(false)} appBalance={balance} transactionCount={transactions.length} onReconciliationSuccess={fetchData} onNoAdjustmentSuccess={() => showSuccess("Saldo cuadrado.")} />
     </div>
   );
 };

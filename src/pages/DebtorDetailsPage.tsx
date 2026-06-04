@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { DollarSign, Trash2, Edit, ArrowLeft, FileDown, History, MessageCircle, AlertCircle, Search, Filter, FileText } from "lucide-react";
+import { DollarSign, Trash2, Edit, ArrowLeft, FileDown, History, AlertCircle, Search, Filter, FileText } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { cn } from "@/lib/utils";
 import { format, parseISO } from "date-fns";
@@ -41,6 +41,7 @@ interface Debtor {
   initial_balance: number;
   current_balance: number;
   phone?: string;
+  due_date?: string;
   debtor_transactions: DebtorTransaction[];
 }
 
@@ -60,9 +61,6 @@ const DebtorDetailsPage: React.FC = () => {
   const [isTransactionDialogOpen, setIsTransactionDialogOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<any>(null);
   const [skipLinkedTransaction, setSkipLinkedTransaction] = useState(false);
-  
-  const [isWhatsAppDialogOpen, setIsWhatsAppDialogOpen] = useState(false);
-  const [pendingWhatsApp, setPendingWhatsApp] = useState<any>(null);
 
   const [transactionForm, setTransactionForm] = useState({
     type: "payment" as "charge" | "payment",
@@ -107,14 +105,32 @@ const DebtorDetailsPage: React.FC = () => {
     fetchData();
   }, [debtorId, user, incomeCategories]);
 
-  const filteredTransactions = useMemo(() => {
+  // Cálculo de Saldo Acumulado
+  const transactionsWithBalance = useMemo(() => {
     if (!debtor) return [];
-    return debtor.debtor_transactions.filter(tx => {
+    
+    // 1. Ordenar por fecha de creación ascendente para calcular el saldo históricamente
+    const sortedAsc = [...debtor.debtor_transactions].sort((a, b) => 
+      new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    );
+
+    let current = debtor.initial_balance;
+    const computed = sortedAsc.map(tx => {
+      current = tx.type === "charge" ? current + tx.amount : current - tx.amount;
+      return { ...tx, runningBalance: current };
+    });
+
+    // 2. Invertir para mostrar lo más reciente arriba
+    return computed.reverse();
+  }, [debtor]);
+
+  const filteredTransactions = useMemo(() => {
+    return transactionsWithBalance.filter(tx => {
       const matchesSearch = tx.description.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesType = filterType === "all" || tx.type === filterType;
       return matchesSearch && matchesType;
-    }).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-  }, [debtor, searchTerm, filterType]);
+    });
+  }, [transactionsWithBalance, searchTerm, filterType]);
 
   const handleOpenAdd = () => {
     setEditingTransaction(null);
@@ -135,10 +151,10 @@ const DebtorDetailsPage: React.FC = () => {
       type: tx.type,
       amount: tx.amount.toString(),
       description: tx.description,
-      destinationAccountId: "cash", // No podemos saber el destino original fácilmente
+      destinationAccountId: "cash",
       selectedIncomeCategoryId: incomeCategories[0]?.id || "",
     });
-    setSkipLinkedTransaction(true); // Al editar, no vinculamos de nuevo para evitar duplicados
+    setSkipLinkedTransaction(true);
     setIsTransactionDialogOpen(true);
   };
 
@@ -153,14 +169,12 @@ const DebtorDetailsPage: React.FC = () => {
       let newDebtorBalance = debtor.current_balance;
 
       if (editingTransaction) {
-        // Revertir efecto anterior
         newDebtorBalance = editingTransaction.type === "charge" ? newDebtorBalance - editingTransaction.amount : newDebtorBalance + editingTransaction.amount;
       }
 
-      // Aplicar nuevo efecto
       if (transactionForm.type === "charge") newDebtorBalance += amount;
       else {
-        if (newDebtorBalance < amount - 0.01) { showError("El abono excede la deuda."); return; }
+        if (newDebtorBalance < amount - 0.01) { showError("El pago excede la deuda."); return; }
         newDebtorBalance -= amount;
 
         if (!editingTransaction && !skipLinkedTransaction) {
@@ -184,22 +198,26 @@ const DebtorDetailsPage: React.FC = () => {
         await supabase.from('debtor_transactions').update({ type: transactionForm.type, amount, description: transactionForm.description }).eq('id', editingTransaction.id);
       } else {
         await supabase.from('debtor_transactions').insert({ user_id: user.id, debtor_id: debtor.id, type: transactionForm.type, amount, description: transactionForm.description, date: getLocalDateString(new Date()) });
-        
-        if (debtor.phone) {
-          setPendingWhatsApp({ type: transactionForm.type === "charge" ? "Cargo" : "Abono", amount, description: transactionForm.description, newBalance: newDebtorBalance });
-          setIsWhatsAppDialogOpen(true);
-        }
       }
 
       showSuccess(editingTransaction ? "Movimiento actualizado" : "Movimiento registrado");
       setIsTransactionDialogOpen(false);
+      
+      if (!editingTransaction && debtor.phone) {
+        if (window.confirm("¿Enviar comprobante por WhatsApp?")) {
+          const typeLabel = transactionForm.type === "charge" ? "Cargo" : "Abono";
+          const msg = `Hola ${debtor.name}, se registró un ${typeLabel} por $${amount.toFixed(2)}. Saldo actual: $${newDebtorBalance.toFixed(2)}.`;
+          window.open(`https://wa.me/${debtor.phone}?text=${encodeURIComponent(msg)}`, '_blank');
+        }
+      }
+
       fetchData();
     } catch (error: any) {
       showError('Error: ' + error.message);
     }
   };
 
-  const handleDeleteTransaction = async (tx: DebtorTransaction) => {
+  const handleDeleteTransaction = async (tx: any) => {
     if (!user || !debtor) return;
     try {
       const newBalance = tx.type === "charge" ? debtor.current_balance - tx.amount : debtor.current_balance + tx.amount;
@@ -218,10 +236,11 @@ const DebtorDetailsPage: React.FC = () => {
       Fecha: format(parseISO(tx.date), "dd/MM/yyyy"),
       Tipo: tx.type === "charge" ? "Cargo" : "Abono",
       Descripción: tx.description,
-      Monto: tx.amount.toFixed(2)
+      Monto: tx.amount.toFixed(2),
+      Saldo: tx.runningBalance.toFixed(2)
     }));
     if (formatType === 'csv') exportToCsv(`historial_${debtor.name}.csv`, data);
-    else exportToPdf(`historial_${debtor.name}.pdf`, `Historial: ${debtor.name}`, ["Fecha", "Tipo", "Descripción", "Monto"], data.map(d => Object.values(d)));
+    else exportToPdf(`historial_${debtor.name}.pdf`, `Historial: ${debtor.name}`, ["Fecha", "Tipo", "Descripción", "Monto", "Saldo"], data.map(d => Object.values(d)));
   };
 
   if (isLoading) return <LoadingSpinner />;
@@ -240,7 +259,10 @@ const DebtorDetailsPage: React.FC = () => {
           <CardContent><div className="text-3xl font-bold text-yellow-900">${debtor.current_balance.toFixed(2)}</div></CardContent>
         </Card>
         <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Deuda Inicial</CardTitle></CardHeader><CardContent><div className="text-2xl font-semibold">${debtor.initial_balance.toFixed(2)}</div></CardContent></Card>
-        <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Estado</CardTitle></CardHeader><CardContent><Badge className={cn(debtor.current_balance <= 0 ? "bg-green-100 text-green-800" : "bg-yellow-100 text-yellow-800")}>{debtor.current_balance <= 0 ? "Completado" : "Activo"}</Badge></CardContent></Card>
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Vencimiento</CardTitle></CardHeader>
+          <CardContent><div className="text-2xl font-semibold">{debtor.due_date ? format(parseISO(debtor.due_date), "dd/MM/yyyy") : "-"}</div></CardContent>
+        </Card>
       </div>
 
       <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
@@ -282,26 +304,35 @@ const DebtorDetailsPage: React.FC = () => {
             <TableHeader>
               <TableRow>
                 <TableHead>Fecha</TableHead>
-                <TableHead>Tipo</TableHead>
                 <TableHead>Descripción</TableHead>
                 <TableHead className="text-right">Monto</TableHead>
+                <TableHead className="text-right">Saldo</TableHead>
                 <TableHead className="text-right">Acciones</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredTransactions.map((tx) => (
                 <TableRow key={tx.id}>
-                  <TableCell>{format(parseISO(tx.date), "dd/MM/yyyy")}</TableCell>
-                  <TableCell><Badge variant="outline" className={tx.type === "charge" ? "text-red-600 border-red-200" : "text-green-600 border-green-200"}>{tx.type === "charge" ? "Cargo" : "Abono"}</Badge></TableCell>
-                  <TableCell>{tx.description}</TableCell>
-                  <TableCell className="text-right font-medium">{tx.type === "charge" ? "+" : "-"}${tx.amount.toFixed(2)}</TableCell>
+                  <TableCell className="text-xs">{format(parseISO(tx.date), "dd/MM/yy")}</TableCell>
+                  <TableCell>
+                    <div className="flex flex-col">
+                      <span className="font-medium text-xs">{tx.description}</span>
+                      <Badge variant="outline" className={cn("w-fit text-[9px] px-1 py-0", tx.type === "charge" ? "text-red-600 border-red-100" : "text-green-600 border-green-100")}>
+                        {tx.type === "charge" ? "Cargo" : "Abono"}
+                      </Badge>
+                    </div>
+                  </TableCell>
+                  <TableCell className={cn("text-right font-bold text-xs", tx.type === "charge" ? "text-red-600" : "text-green-600")}>
+                    {tx.type === "charge" ? "+" : "-"}${tx.amount.toFixed(2)}
+                  </TableCell>
+                  <TableCell className="text-right font-black text-xs">${tx.runningBalance.toFixed(2)}</TableCell>
                   <TableCell className="text-right flex gap-1 justify-end">
-                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleOpenEdit(tx)}><Edit className="h-4 w-4" /></Button>
+                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleOpenEdit(tx)}><Edit className="h-3.5 w-3.5" /></Button>
                     <AlertDialog>
-                      <AlertDialogTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8 text-destructive"><Trash2 className="h-4 w-4" /></Button></AlertDialogTrigger>
+                      <AlertDialogTrigger asChild><Button variant="ghost" size="icon" className="h-7 w-7 text-destructive"><Trash2 className="h-3.5 w-3.5" /></Button></AlertDialogTrigger>
                       <AlertDialogContent>
-                        <AlertDialogHeader><AlertDialogTitle>¿Eliminar movimiento?</AlertDialogTitle><AlertDialogDescription>Se ajustará el saldo del deudor.</AlertDialogDescription></AlertDialogHeader>
-                        <AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel><AlertDialogAction onClick={() => handleDeleteTransaction(tx)}>Eliminar</AlertDialogAction></AlertDialogFooter>
+                        <AlertDialogHeader><AlertDialogTitle>¿Eliminar movimiento?</AlertDialogTitle><AlertDialogDescription>Se ajustará el saldo.</AlertDialogDescription></AlertDialogHeader>
+                        <AlertDialogFooter><AlertDialogCancel>No</AlertDialogCancel><AlertDialogAction onClick={() => handleDeleteTransaction(tx)}>Sí</AlertDialogAction></AlertDialogFooter>
                       </AlertDialogContent>
                     </AlertDialog>
                   </TableCell>
