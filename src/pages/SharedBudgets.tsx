@@ -20,7 +20,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useCategoryContext } from "@/context/CategoryContext";
 import DynamicLucideIcon from "@/components/DynamicLucideIcon";
 import { evaluateExpression } from "@/utils/math-helpers";
-import { format, parseISO, isBefore, isSameDay } from "date-fns";
+import { format, parseISO, isBefore, isSameDay, addDays } from "date-fns";
 import { es } from "date-fns/locale";
 
 interface Debtor {
