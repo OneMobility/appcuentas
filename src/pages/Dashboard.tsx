@@ -7,7 +7,7 @@ import { useCategoryContext } from "@/context/CategoryContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/context/SessionContext";
 import { showError, showSuccess } from "@/utils/toast";
-import { format, isBefore, isSameDay, addDays, startOfMonth, endOfMonth, parseISO } from "date-fns";
+import { format, isBefore, isSameDay, addDays, startOfMonth, endOfMonth, parseISO, isWithinInterval } from "date-fns";
 import { es } from "date-fns/locale";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { getUpcomingPaymentDueDate, isPaymentDoneForCurrentStatement, getLocalDateString } from "@/utils/date-helpers";
@@ -96,6 +96,7 @@ const Dashboard = () => {
 
     const processTx = (tx: any, isCash: boolean) => {
       const date = parseISO(tx.date);
+      // Usamos isWithinInterval de date-fns directamente
       if (!isWithinInterval(date, { start, end })) return;
 
       const catId = isCash 
@@ -133,10 +134,6 @@ const Dashboard = () => {
     const creditDebt = cards.filter(c => c.type === "credit").reduce((s, c) => s + c.current_balance, 0);
     return { cash, debt, cred, debitCards, creditDebt, total: cash + debt + debitCards - cred - creditDebt };
   }, [cashTransactions, debtors, creditors, cards]);
-
-  const isWithinInterval = (date: Date, interval: { start: Date; end: Date }) => {
-    return date >= interval.start && date <= interval.end;
-  };
 
   const handleMarkAsPaid = () => {
     if (!selectedCardForPayment) return;
