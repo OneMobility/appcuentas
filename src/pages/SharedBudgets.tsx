@@ -5,7 +5,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
-import { PlusCircle, Users, CheckCircle, Trash2, Banknote, CheckCircle2, Clock, DollarSign, Edit, AlertCircle, Calendar as CalendarIcon } from "lucide-react";
+import { PlusCircle, Users, CheckCircle, Trash2, Banknote, CheckCircle2, Clock, DollarSign, Edit, AlertCircle, Calendar as CalendarIcon, UserCheck } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/context/SessionContext";
@@ -206,6 +206,25 @@ const SharedBudgets = () => {
     }
   };
 
+  const handleMarkAsPaidInternally = async (p: Participant, budget: SharedBudget) => {
+    if (!user || isProcessing) return;
+    setIsProcessing(true);
+    try {
+      // Solo actualizamos el registro del presupuesto, NO tocamos deudores ni efectivo
+      await supabase.from('budget_participants').update({ 
+        paid_amount: p.share_amount, 
+        is_paid: true 
+      }).eq('id', p.id);
+      
+      showSuccess(`Marcado como pagado internamente (la deuda de ${p.debtors?.name} se mantiene).`);
+      fetchAllData();
+    } catch (e) {
+      showError('Error al procesar');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   const handleMarkAllPaid = async (budget: SharedBudget) => {
     if (!user || isProcessing) return;
     setIsProcessing(true);
@@ -272,6 +291,7 @@ const SharedBudgets = () => {
                   <TableHead>Vencimiento</TableHead>
                   <TableHead>Estado</TableHead>
                   <TableHead>Total</TableHead>
+                  <TableHead>Pendiente</TableHead>
                   <TableHead>Acreedor</TableHead>
                   <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
@@ -279,6 +299,7 @@ const SharedBudgets = () => {
               <TableBody>
                 {budgets.map((budget) => {
                   const isFullyPaid = budget.budget_participants.every(p => p.is_paid);
+                  const totalPending = budget.budget_participants.reduce((sum, p) => sum + (p.share_amount - p.paid_amount), 0);
                   const creditor = creditors.find(c => c.id === budget.creditor_id);
                   const today = new Date();
                   today.setHours(0,0,0,0);
@@ -302,26 +323,50 @@ const SharedBudgets = () => {
                         </Badge>
                       </TableCell>
                       <TableCell>${budget.total_amount.toFixed(2)}</TableCell>
+                      <TableCell className={cn("font-bold", totalPending > 0 ? "text-red-600" : "text-green-600")}>
+                        ${totalPending.toFixed(2)}
+                      </TableCell>
                       <TableCell>{creditor ? creditor.name : (budget.creditor_id ? 'Eliminado' : 'Yo')}</TableCell>
                       <TableCell className="text-right flex gap-2 justify-end">
                         <Dialog>
                           <DialogTrigger asChild><Button variant="outline" size="sm" className="h-8 gap-1"><Users className="h-3.5 w-3.5" /> Pagos</Button></DialogTrigger>
-                          <DialogContent className="sm:max-w-[500px]">
+                          <DialogContent className="sm:max-w-[600px]">
                             <DialogHeader>
                               <DialogTitle className="flex justify-between items-center">
-                                Pagos: {budget.name}
-                                {!isFullyPaid && <Button variant="outline" size="sm" onClick={() => handleMarkAllPaid(budget)}>Liquidar Todo</Button>}
+                                Gestión de Pagos: {budget.name}
+                                {!isFullyPaid && <Button variant="outline" size="sm" onClick={() => handleMarkAllPaid(budget)}>Abonar Todo</Button>}
                               </DialogTitle>
                             </DialogHeader>
+                            <div className="text-xs text-muted-foreground mb-4">
+                              <p><b>Abonar:</b> Resta la deuda al deudor y registra el ingreso en tu cuenta.</p>
+                              <p><b>Saldar (Yo cubro):</b> Marca como pagado aquí sin quitarle la deuda al deudor (tú pusiste el dinero).</p>
+                            </div>
                             <Table>
-                              <TableHeader><TableRow><TableHead>Deudor</TableHead><TableHead>Saldo</TableHead><TableHead className="text-right">Acción</TableHead></TableRow></TableHeader>
+                              <TableHeader>
+                                <TableRow>
+                                  <TableHead>Deudor</TableHead>
+                                  <TableHead>Falta</TableHead>
+                                  <TableHead className="text-right">Acciones</TableHead>
+                                </TableRow>
+                              </TableHeader>
                               <TableBody>
                                 {budget.budget_participants.map(p => (
                                   <TableRow key={p.id}>
-                                    <TableCell>{p.debtors?.name || 'Eliminado'}</TableCell>
+                                    <TableCell className="font-medium">{p.debtors?.name || 'Eliminado'}</TableCell>
                                     <TableCell>${(p.share_amount - (p.paid_amount || 0)).toFixed(2)}</TableCell>
-                                    <TableCell className="text-right">
-                                      {p.is_paid ? <Badge className="bg-green-100 text-green-800">OK</Badge> : <Button size="sm" onClick={() => handleOpenPaymentDialog(p, budget)}>Abonar</Button>}
+                                    <TableCell className="text-right flex gap-2 justify-end">
+                                      {p.is_paid ? (
+                                        <Badge className="bg-green-100 text-green-800">Completado</Badge>
+                                      ) : (
+                                        <>
+                                          <Button variant="outline" size="xs" className="h-7 text-[10px]" onClick={() => handleMarkAsPaidInternally(p, budget)} title="Yo lo pago">
+                                            <UserCheck className="h-3 w-3 mr-1" /> Saldar
+                                          </Button>
+                                          <Button size="xs" className="h-7 text-[10px]" onClick={() => handleOpenPaymentDialog(p, budget)}>
+                                            <DollarSign className="h-3 w-3 mr-1" /> Abonar
+                                          </Button>
+                                        </>
+                                      )}
                                     </TableCell>
                                   </TableRow>
                                 ))}
@@ -334,7 +379,7 @@ const SharedBudgets = () => {
                           <AlertDialogTrigger asChild><Button variant="destructive" size="sm" className="h-8 w-8 p-0"><Trash2 className="h-3.5 w-3.5" /></Button></AlertDialogTrigger>
                           <AlertDialogContent>
                             <AlertDialogHeader><AlertDialogTitle>¿Eliminar?</AlertDialogTitle><AlertDialogDescription>Se revertirán deudas y cargos.</AlertDialogDescription></AlertDialogHeader>
-                            <AlertDialogFooter><AlertDialogCancel>No</AlertDialogCancel><AlertDialogAction onClick={() => handleDeleteBudget(budget.id)}>Sí</AlertDialogAction></AlertDialogFooter>
+                            <AlertDialogFooter><AlertDialogCancel>No</AlertDialogCancel><AlertDialogAction className="rounded-xl" onClick={() => handleDeleteBudget(budget.id)}>Sí</AlertDialogAction></AlertDialogFooter>
                           </AlertDialogContent>
                         </AlertDialog>
                       </TableCell>
@@ -349,20 +394,23 @@ const SharedBudgets = () => {
 
       <Dialog open={isPaymentDialogOpen} onOpenChange={setIsPaymentDialogOpen}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Abono: {selectedParticipant?.debtorName}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>Registrar Abono Real: {selectedParticipant?.debtorName}</DialogTitle></DialogHeader>
           <form onSubmit={handleRecordPayment} className="grid gap-4 py-4">
-            <div className="grid gap-2"><Label>Monto</Label><Input value={paymentForm.amount} onChange={e => setPaymentForm({...paymentForm, amount: e.target.value})} required /></div>
+            <div className="grid gap-2">
+              <Label>Monto recibido</Label>
+              <Input value={paymentForm.amount} onChange={e => setPaymentForm({...paymentForm, amount: e.target.value})} required />
+            </div>
             <div className="flex items-center space-x-2 bg-blue-50 p-2 rounded border border-blue-100">
               <Checkbox id="skip" checked={skipLinkedTransaction} onCheckedChange={(v) => setSkipLinkedTransaction(!!v)} />
-              <Label htmlFor="skip" className="text-xs">Ya registrado manualmente</Label>
+              <Label htmlFor="skip" className="text-xs">Ya registré este dinero en mi efectivo/banco manualmente</Label>
             </div>
             {!skipLinkedTransaction && (
               <div className="grid gap-4">
-                <div className="grid gap-2"><Label>Destino</Label><Select value={paymentForm.destinationId} onValueChange={(v) => setPaymentForm({...paymentForm, destinationId: v})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="cash">Efectivo</SelectItem>{cards.filter(c => c.type === "debit").map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent></Select></div>
-                <div className="grid gap-2"><Label>Categoría</Label><Select value={paymentForm.categoryId} onValueChange={(v) => setPaymentForm({...paymentForm, categoryId: v})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{incomeCategories.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent></Select></div>
+                <div className="grid gap-2"><Label>Destino del dinero</Label><Select value={paymentForm.destinationId} onValueChange={(v) => setPaymentForm({...paymentForm, destinationId: v})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="cash">Efectivo</SelectItem>{cards.filter(c => c.type === "debit").map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent></Select></div>
+                <div className="grid gap-2"><Label>Categoría de ingreso</Label><Select value={paymentForm.categoryId} onValueChange={(v) => setPaymentForm({...paymentForm, categoryId: v})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{incomeCategories.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent></Select></div>
               </div>
             )}
-            <DialogFooter><Button type="submit">Confirmar</Button></DialogFooter>
+            <DialogFooter><Button type="submit" className="w-full">Confirmar Abono</Button></DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
