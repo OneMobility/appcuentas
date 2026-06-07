@@ -195,6 +195,17 @@ const CardDetailsPage: React.FC = () => {
         {card.type === "debit" && <div className="mx-1"><CardPocketsManager cardId={card.id} cardBalance={card.current_balance} onUpdate={fetchCardDetails} /></div>}
       </div>
 
+      <CardReconciliationDialog
+        isOpen={isReconcileDialogOpen}
+        onClose={() => setIsReconcileDialogOpen(false)}
+        card={{
+          ...card,
+          transactions: card?.card_transactions || []
+        }}
+        onReconciliationSuccess={fetchCardDetails}
+        onNoAdjustmentSuccess={() => showSuccess("El saldo ya está cuadrado.")}
+      />
+
       <Dialog open={isAddTransactionDialogOpen} onOpenChange={setIsAddTransactionDialogOpen}>
         <DialogContent className="w-[90vw] max-w-[400px] rounded-3xl">
           <DialogHeader><DialogTitle>{editingTransaction ? "Editar" : "Nuevo"} Movimiento</DialogTitle></DialogHeader>

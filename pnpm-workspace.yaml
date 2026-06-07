@@ -141,7 +141,6 @@ allowBuilds:
   contentlayer: true
   contextify: true
   cordova.plugins.diagnostic: true
-  core-js: set this to true or false
   couchbase: true
   cpu-features: true
   cwebp-bin: true
