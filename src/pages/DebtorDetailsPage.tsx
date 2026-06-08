@@ -105,23 +105,24 @@ const DebtorDetailsPage: React.FC = () => {
     fetchData();
   }, [debtorId, user, incomeCategories]);
 
-  // Cálculo de Saldo Acumulado
+  // Cálculo de Saldo Acumulado corregido (Cálculo inverso para consistencia con current_balance)
   const transactionsWithBalance = useMemo(() => {
     if (!debtor) return [];
     
-    // 1. Ordenar por fecha de creación ascendente para calcular el saldo históricamente
-    const sortedAsc = [...debtor.debtor_transactions].sort((a, b) => 
-      new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    // 1. Ordenar por fecha de creación descendente (lo más nuevo primero)
+    const sortedDesc = [...debtor.debtor_transactions].sort((a, b) => 
+      new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
     );
 
-    let current = debtor.initial_balance;
-    const computed = sortedAsc.map(tx => {
-      current = tx.type === "charge" ? current + tx.amount : current - tx.amount;
-      return { ...tx, runningBalance: current };
+    let current = debtor.current_balance;
+    const computed = sortedDesc.map(tx => {
+      const runningBalance = current;
+      // Para saber el saldo ANTERIOR a este movimiento, hacemos la operación inversa
+      current = tx.type === "charge" ? current - tx.amount : current + tx.amount;
+      return { ...tx, runningBalance };
     });
 
-    // 2. Invertir para mostrar lo más reciente arriba
-    return computed.reverse();
+    return computed;
   }, [debtor]);
 
   const filteredTransactions = useMemo(() => {
@@ -370,7 +371,7 @@ const DebtorDetailsPage: React.FC = () => {
                         <SelectTrigger><SelectValue /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="cash">Efectivo (${cashBalance.toFixed(2)})</SelectItem>
-                          {cards.map(c => <SelectItem key={c.id} value={c.id}>{c.name} ({c.bank_name})</SelectItem>)}
+                          {cards.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
                         </SelectContent>
                       </Select>
                     </div>

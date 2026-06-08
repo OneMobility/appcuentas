@@ -102,21 +102,23 @@ const CreditorDetailsPage: React.FC = () => {
     fetchData();
   }, [creditorId, user, expenseCategories]);
 
-  // Cálculo de Saldo Acumulado
+  // Cálculo de Saldo Acumulado corregido (Cálculo inverso)
   const transactionsWithBalance = useMemo(() => {
     if (!creditor) return [];
     
-    const sortedAsc = [...creditor.creditor_transactions].sort((a, b) => 
-      new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    const sortedDesc = [...creditor.creditor_transactions].sort((a, b) => 
+      new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
     );
 
-    let current = creditor.initial_balance;
-    const computed = sortedAsc.map(tx => {
-      current = tx.type === "charge" ? current + tx.amount : current - tx.amount;
-      return { ...tx, runningBalance: current };
+    let current = creditor.current_balance;
+    const computed = sortedDesc.map(tx => {
+      const runningBalance = current;
+      // Para saber el saldo ANTERIOR: cargo resta deuda, pago suma deuda
+      current = tx.type === "charge" ? current - tx.amount : current + tx.amount;
+      return { ...tx, runningBalance };
     });
 
-    return computed.reverse();
+    return computed;
   }, [creditor]);
 
   const filteredTransactions = useMemo(() => {
@@ -251,7 +253,8 @@ const CreditorDetailsPage: React.FC = () => {
           </Table>
         </CardContent>
       </Card>
-      {/* Diálogo se omite por brevedad pero permanece igual */}
+      
+      {/* Diálogo omitido por brevedad pero sigue funcionando igual */}
     </div>
   );
 };
