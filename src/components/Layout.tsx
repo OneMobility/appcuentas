@@ -24,8 +24,8 @@ import { supabase } from "@/integrations/supabase/client";
 const navItems = [
   { name: "Resumen", path: "/dashboard", icon: PiggyBank },
   { name: "Lo que tienes", path: "/cash", icon: Banknote },
-  { name: "Los que te deben", path: "/debtors", icon: ThumbsUp },
-  { name: "A quien le debes", path: "/creditors", icon: ThumbsDown },
+  { name: "Te deben", path: "/debtors", icon: ThumbsUp },
+  { name: "Debes", path: "/creditors", icon: ThumbsDown },
   { name: "Tus Tarjetas", path: "/cards", icon: CreditCard },
   { name: "Tus Metas", path: "/savings", icon: Wallet },
   { name: "Presupuestos", path: "/shared-budgets", icon: BarChart },
@@ -109,3 +109,4 @@ const Layout: React.FC = () => {
 };
 
 export default Layout;
+</dyad-file>

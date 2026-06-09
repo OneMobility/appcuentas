@@ -17,8 +17,8 @@ import {
 const navItems = [
   { name: "Resumen", path: "/dashboard", icon: PiggyBank },
   { name: "Dinero", path: "/cash", icon: Banknote },
-  { name: "Deudas", path: "/debtors", icon: ThumbsUp },
-  { name: "Pagos", path: "/creditors", icon: ThumbsDown },
+  { name: "Te deben", path: "/debtors", icon: ThumbsUp },
+  { name: "Debes", path: "/creditors", icon: ThumbsDown },
   { name: "Tarjetas", path: "/cards", icon: CreditCard },
   { name: "Metas", path: "/savings", icon: Wallet },
   { name: "Presupuestos", path: "/shared-budgets", icon: BarChart },
@@ -61,3 +61,4 @@ const MobileNavbar = () => {
 };
 
 export default MobileNavbar;
+</dyad-file>
