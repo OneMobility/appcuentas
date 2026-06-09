@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { DollarSign, ArrowLeft, FileDown, FileText, ChevronLeft, ChevronRight, Scale, Search, Filter, Trash2, Edit, Image as ImageIcon } from "lucide-react";
+import { DollarSign, ArrowLeft, FileDown, FileText, ChevronLeft, ChevronRight, Scale, Search, Filter, Trash2, Edit, Image as ImageIcon, CalendarDays, Eye } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { cn } from "@/lib/utils";
 import { format, parseISO, isWithinInterval, startOfMonth, endOfMonth, addMonths, subMonths } from "date-fns";
@@ -23,7 +23,7 @@ import { useCategoryContext } from "@/context/CategoryContext";
 import { evaluateExpression } from "@/utils/math-helpers";
 import CardPocketsManager from "@/components/CardPocketsManager";
 import DynamicLucideIcon from "@/components/DynamicLucideIcon";
-import { getLocalDateString } from "@/utils/date-helpers";
+import { getLocalDateString, getUpcomingCutOffDate, getUpcomingPaymentDueDate } from "@/utils/date-helpers";
 import CardReconciliationDialog from "@/components/CardReconciliationDialog";
 import ImageUpload from "@/components/ImageUpload";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
@@ -56,7 +56,7 @@ const CardDetailsPage: React.FC = () => {
     if (!user || !cardId) return;
     setIsLoading(true);
     const { data, error } = await supabase.from('cards').select('*, card_transactions(*)').eq('id', cardId).single();
-    if (error) { showError('Error'); navigate('/cards'); return; }
+    if (error) { showError('Error al cargar tarjeta'); navigate('/cards'); return; }
     const { data: pockets } = await supabase.from('card_pockets').select('*').eq('card_id', cardId);
     setCard({ ...data, card_pockets: pockets || [] });
     setIsLoading(false);
@@ -130,11 +130,60 @@ const CardDetailsPage: React.FC = () => {
 
     if (!error) {
       await supabase.from('cards').update({ current_balance: newBalance }).eq('id', card.id);
-      showSuccess("Guardado");
+      showSuccess("Movimiento guardado");
       setIsAddTransactionDialogOpen(false);
       fetchCardDetails();
-    } else showError("Error");
+    } else showError("Error al guardar movimiento");
   };
+
+  const handleDeleteTransaction = async (tx: any) => {
+    if (!user || !card) return;
+    try {
+      let newBalance = card.current_balance;
+      
+      // Ajustar el saldo de la tarjeta al eliminar la transacción
+      if (card.type === "debit") {
+        // En débito: eliminar un cargo (gasto) devuelve dinero (+), eliminar un abono (depósito) resta dinero (-)
+        newBalance = tx.type === "charge" ? newBalance + tx.amount : newBalance - tx.amount;
+      } else {
+        // En crédito: eliminar un cargo (gasto/deuda) resta deuda (-), eliminar un abono (pago) suma deuda (+)
+        newBalance = tx.type === "charge" ? newBalance - tx.amount : newBalance + tx.amount;
+      }
+
+      const { error: deleteError } = await supabase
+        .from('card_transactions')
+        .delete()
+        .eq('id', tx.id);
+
+      if (deleteError) throw deleteError;
+
+      const { error: cardUpdateError } = await supabase
+        .from('cards')
+        .update({ current_balance: newBalance })
+        .eq('id', card.id);
+
+      if (cardUpdateError) throw cardUpdateError;
+
+      showSuccess("Movimiento eliminado exitosamente");
+      fetchCardDetails();
+    } catch (error: any) {
+      showError("Error al eliminar movimiento: " + error.message);
+    }
+  };
+
+  const upcomingCutOffDate = useMemo(() => {
+    if (card?.type === "credit" && card?.cut_off_day) {
+      return getUpcomingCutOffDate(card.cut_off_day);
+    }
+    return null;
+  }, [card]);
+
+  const upcomingPaymentDueDate = useMemo(() => {
+    if (card?.type === "credit" && card?.cut_off_day && card?.days_to_pay_after_cut_off) {
+      return getUpcomingPaymentDueDate(card.cut_off_day, card.days_to_pay_after_cut_off);
+    }
+    return null;
+  }, [card]);
 
   if (isLoading) return <LoadingSpinner />;
 
@@ -153,8 +202,34 @@ const CardDetailsPage: React.FC = () => {
                 <p className="text-[10px] md:text-sm opacity-80 uppercase font-bold">{card.type === "credit" ? "Crédito Disponible" : "Saldo Disponible"}</p>
                 <p className="text-2xl md:text-3xl font-black">${(card.type === "credit" ? (card.credit_limit - card.current_balance) : card.current_balance).toFixed(2)}</p>
               </div>
-              <div className="text-right"><p className="text-[10px] md:text-sm font-bold opacity-80">{card.bank_name}</p><p className="text-xs font-black">**** {card.last_four_digits}</p></div>
+              <div className="text-right">
+                <p className="text-[10px] md:text-sm font-bold opacity-80">{card.bank_name}</p>
+                <p className="text-xs font-black">**** {card.last_four_digits}</p>
+              </div>
             </div>
+
+            {card.type === "credit" && (
+              <div className="grid grid-cols-2 gap-4 mt-4 pt-4 border-t border-white/20 text-xs opacity-90">
+                {upcomingCutOffDate && (
+                  <div className="flex items-center gap-2">
+                    <CalendarDays className="h-4 w-4" />
+                    <div>
+                      <p className="opacity-75 text-[10px] uppercase">Próximo Corte</p>
+                      <p className="font-bold">{format(upcomingCutOffDate, "dd 'de' MMM", { locale: es })}</p>
+                    </div>
+                  </div>
+                )}
+                {upcomingPaymentDueDate && (
+                  <div className="flex items-center gap-2">
+                    <Eye className="h-4 w-4" />
+                    <div>
+                      <p className="opacity-75 text-[10px] uppercase">Límite de Pago</p>
+                      <p className="font-bold">{format(upcomingPaymentDueDate, "dd 'de' MMM", { locale: es })}</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </Card>
 
           <Card className="border-none shadow-sm mx-1 overflow-hidden">
@@ -167,26 +242,69 @@ const CardDetailsPage: React.FC = () => {
             </CardHeader>
             <CardContent className="p-0">
               <Table>
-                <TableHeader><TableRow><TableHead className="pl-4">Fecha</TableHead><TableHead>Detalle</TableHead><TableHead className="text-right pr-4">Monto</TableHead></TableRow></TableHeader>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="pl-4">Fecha</TableHead>
+                    <TableHead>Detalle</TableHead>
+                    <TableHead className="text-right pr-4">Monto</TableHead>
+                  </TableRow>
+                </TableHeader>
                 <TableBody>
-                  {filteredTransactions.map((tx: any) => (
-                    <TableRow key={tx.id}>
-                      <TableCell className="pl-4 text-[10px]">{format(parseISO(tx.date), "dd/MM")}</TableCell>
-                      <TableCell>
-                        <div className="flex flex-col">
-                          <span className="font-bold text-xs">{tx.description}</span>
-                          <span className="text-[9px] text-muted-foreground">{getCategoryById(tx.income_category_id || tx.expense_category_id)?.name || "Sin cat."}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-right pr-4">
-                        <div className="flex items-center justify-end gap-2">
-                          <span className={cn("font-black text-xs", tx.type === "charge" ? "text-red-600" : "text-green-600")}>${tx.amount.toFixed(0)}</span>
-                          {tx.image_url && <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => window.open(tx.image_url, '_blank')}><ImageIcon className="h-3 w-3" /></Button>}
-                          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleOpenEdit(tx)}><Edit className="h-3 w-3" /></Button>
-                        </div>
+                  {filteredTransactions.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={3} className="text-center py-8 text-muted-foreground text-xs">
+                        Sin movimientos registrados.
                       </TableCell>
                     </TableRow>
-                  ))}
+                  ) : (
+                    filteredTransactions.map((tx: any) => (
+                      <TableRow key={tx.id}>
+                        <TableCell className="pl-4 text-[10px]">{format(parseISO(tx.date), "dd/MM")}</TableCell>
+                        <TableCell>
+                          <div className="flex flex-col">
+                            <span className="font-bold text-xs">{tx.description}</span>
+                            <span className="text-[9px] text-muted-foreground">{getCategoryById(tx.income_category_id || tx.expense_category_id)?.name || "Sin cat."}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right pr-4">
+                          <div className="flex items-center justify-end gap-2">
+                            <span className={cn("font-black text-xs", tx.type === "charge" ? "text-red-600" : "text-green-600")}>
+                              {tx.type === "charge" ? "-" : "+"}${tx.amount.toFixed(0)}
+                            </span>
+                            {tx.image_url && (
+                              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => window.open(tx.image_url, '_blank')}>
+                                <ImageIcon className="h-3 w-3" />
+                              </Button>
+                            )}
+                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleOpenEdit(tx)}>
+                              <Edit className="h-3 w-3" />
+                            </Button>
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive">
+                                  <Trash2 className="h-3 w-3" />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent className="w-[90vw] rounded-2xl">
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>¿Eliminar movimiento?</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Esta acción no se puede deshacer. Se ajustará el saldo de la tarjeta automáticamente.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel className="rounded-xl">Cancelar</AlertDialogCancel>
+                                  <AlertDialogAction className="rounded-xl" onClick={() => handleDeleteTransaction(tx)}>
+                                    Eliminar
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
                 </TableBody>
               </Table>
             </CardContent>

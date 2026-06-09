@@ -1,11 +1,14 @@
 "use client";
 
-import React from "react";
+import React, { useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { CreditCard, DollarSign, History, Trash2, Edit, ArrowRightLeft } from "lucide-react";
+import { CreditCard, DollarSign, History, Trash2, Edit, ArrowRightLeft, CalendarDays, Eye } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { useNavigate } from "react-router-dom";
+import { getUpcomingCutOffDate, getUpcomingPaymentDueDate } from "@/utils/date-helpers";
+import { format } from "date-fns";
+import { es } from "date-fns/locale";
 
 interface CardPocket {
   id: string;
@@ -24,6 +27,8 @@ interface CardData {
   credit_limit?: number;
   color: string;
   card_pockets?: CardPocket[];
+  cut_off_day?: number;
+  days_to_pay_after_cut_off?: number;
 }
 
 interface CardDisplayProps {
@@ -45,6 +50,20 @@ const CardDisplay: React.FC<CardDisplayProps> = ({ card, onAddTransaction, onDel
   const handleViewDetails = () => {
     navigate(`/cards/${card.id}`);
   };
+
+  const upcomingCutOffDate = useMemo(() => {
+    if (isCredit && card.cut_off_day) {
+      return getUpcomingCutOffDate(card.cut_off_day);
+    }
+    return null;
+  }, [isCredit, card.cut_off_day]);
+
+  const upcomingPaymentDueDate = useMemo(() => {
+    if (isCredit && card.cut_off_day && card.days_to_pay_after_cut_off) {
+      return getUpcomingPaymentDueDate(card.cut_off_day, card.days_to_pay_after_cut_off);
+    }
+    return null;
+  }, [isCredit, card.cut_off_day, card.days_to_pay_after_cut_off]);
 
   return (
     <Card className="relative w-full max-w-sm mx-auto p-4 md:p-6 rounded-2xl shadow-lg overflow-hidden text-white border-none" style={{ backgroundColor: card.color }}>
@@ -69,6 +88,24 @@ const CardDisplay: React.FC<CardDisplayProps> = ({ card, onAddTransaction, onDel
                 <p className="text-[10px] md:text-xs opacity-80">Deuda Actual:</p>
                 <p className="text-xs md:text-sm font-semibold">${card.current_balance.toFixed(2)}</p>
               </div>
+              
+              {/* Mostrar fechas de corte y pago para tarjetas de crédito */}
+              {(upcomingCutOffDate || upcomingPaymentDueDate) && (
+                <div className="grid grid-cols-2 gap-2 pt-2 border-t border-white/10 text-[9px] opacity-90">
+                  {upcomingCutOffDate && (
+                    <div className="flex items-center gap-1">
+                      <CalendarDays className="h-3 w-3 opacity-80" />
+                      <span>Corte: <b>{format(upcomingCutOffDate, "dd 'de' MMM", { locale: es })}</b></span>
+                    </div>
+                  )}
+                  {upcomingPaymentDueDate && (
+                    <div className="flex items-center gap-1">
+                      <Eye className="h-3 w-3 opacity-80" />
+                      <span>Pago: <b>{format(upcomingPaymentDueDate, "dd 'de' MMM", { locale: es })}</b></span>
+                    </div>
+                  )}
+                </div>
+              )}
             </>
           ) : (
             <>
