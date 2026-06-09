@@ -102,6 +102,18 @@ const CardDetailsPage: React.FC = () => {
     });
   }, [transactionsWithBalance, currentViewDate, searchTerm, filterType]);
 
+  const handleOpenAdd = () => {
+    setEditingTransaction(null);
+    setTransactionForm({
+      type: "charge",
+      amount: "",
+      description: "",
+      selectedCategoryId: "",
+      imageUrl: "",
+    });
+    setIsAddTransactionDialogOpen(true);
+  };
+
   const handleOpenEdit = (tx: any) => {
     setEditingTransaction(tx);
     setTransactionForm({
