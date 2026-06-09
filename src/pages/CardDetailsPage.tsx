@@ -7,9 +7,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { DollarSign, ArrowLeft, FileDown, FileText, ChevronLeft, ChevronRight, Scale, Search, Filter, Trash2, Edit, Image as ImageIcon, CalendarDays, Eye, CreditCard, PlusCircle } from "lucide-react";
+import { DollarSign, ArrowLeft, FileDown, FileText, ChevronLeft, ChevronRight, Scale, Search, Filter, Trash2, Edit, Image as ImageIcon } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { cn } from "@/lib/utils";
 import { format, parseISO, isWithinInterval, startOfMonth, endOfMonth, addMonths, subMonths } from "date-fns";
@@ -23,9 +23,10 @@ import { useCategoryContext } from "@/context/CategoryContext";
 import { evaluateExpression } from "@/utils/math-helpers";
 import CardPocketsManager from "@/components/CardPocketsManager";
 import DynamicLucideIcon from "@/components/DynamicLucideIcon";
-import { getLocalDateString, getUpcomingCutOffDate, getUpcomingPaymentDueDate } from "@/utils/date-helpers";
+import { getLocalDateString } from "@/utils/date-helpers";
 import CardReconciliationDialog from "@/components/CardReconciliationDialog";
 import ImageUpload from "@/components/ImageUpload";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 
 const CardDetailsPage: React.FC = () => {
   const { cardId } = useParams<{ cardId: string }>();
@@ -38,8 +39,6 @@ const CardDetailsPage: React.FC = () => {
   const [currentViewDate, setCurrentViewDate] = useState(new Date());
   const [isAddTransactionDialogOpen, setIsAddTransactionDialogOpen] = useState(false);
   const [isReconcileDialogOpen, setIsReconcileDialogOpen] = useState(false);
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [transactionToDelete, setTransactionToDelete] = useState<any>(null);
   const [editingTransaction, setEditingTransaction] = useState<any>(null);
   
   const [searchTerm, setSearchTerm] = useState("");
@@ -57,7 +56,7 @@ const CardDetailsPage: React.FC = () => {
     if (!user || !cardId) return;
     setIsLoading(true);
     const { data, error } = await supabase.from('cards').select('*, card_transactions(*)').eq('id', cardId).single();
-    if (error) { showError('Error al cargar tarjeta'); navigate('/cards'); return; }
+    if (error) { showError('Error'); navigate('/cards'); return; }
     const { data: pockets } = await supabase.from('card_pockets').select('*').eq('card_id', cardId);
     setCard({ ...data, card_pockets: pockets || [] });
     setIsLoading(false);
@@ -69,24 +68,14 @@ const CardDetailsPage: React.FC = () => {
 
   const transactionsWithBalance = useMemo(() => {
     if (!card) return [];
-    // Ordenar para el historial (el saldo se calcula basado en el saldo actual yendo hacia atrás)
     const sortedDesc = [...(card.card_transactions || [])].sort((a, b) => 
       parseISO(b.date).getTime() - parseISO(a.date).getTime() || 
       new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
     );
-    
-    let currentRunningPoint = card.current_balance;
-    
+    let currentRunningPoint = card.type === "debit" ? card.current_balance : (card.credit_limit || 0) - card.current_balance;
     return sortedDesc.map(tx => {
       const bal = currentRunningPoint;
-      // Revertir para el historial:
-      // Si es débito: un cargo restó saldo, así que para ir atrás sumamos. Un abono sumó, así que restamos.
-      // Si es crédito: un cargo sumó deuda, así que restamos. Un abono restó deuda, así que sumamos.
-      if (card.type === "debit") {
-        currentRunningPoint = tx.type === "charge" ? currentRunningPoint + tx.amount : currentRunningPoint - tx.amount;
-      } else {
-        currentRunningPoint = tx.type === "charge" ? currentRunningPoint - tx.amount : currentRunningPoint + tx.amount;
-      }
+      currentRunningPoint = tx.type === "charge" ? currentRunningPoint + tx.amount : currentRunningPoint - tx.amount;
       return { ...tx, runningBalance: bal };
     });
   }, [card]);
@@ -101,18 +90,6 @@ const CardDetailsPage: React.FC = () => {
       return matchesDate && matchesSearch && matchesType;
     });
   }, [transactionsWithBalance, currentViewDate, searchTerm, filterType]);
-
-  const handleOpenAdd = () => {
-    setEditingTransaction(null);
-    setTransactionForm({
-      type: "charge",
-      amount: "",
-      description: "",
-      selectedCategoryId: "",
-      imageUrl: "",
-    });
-    setIsAddTransactionDialogOpen(true);
-  };
 
   const handleOpenEdit = (tx: any) => {
     setEditingTransaction(tx);
@@ -132,262 +109,91 @@ const CardDetailsPage: React.FC = () => {
     if (amount <= 0) return;
 
     let newBalance = card.current_balance;
-    // Si estamos editando, primero revertimos el monto viejo
     if (editingTransaction) {
-      if (card.type === "debit") {
-        newBalance = editingTransaction.type === "charge" ? newBalance + editingTransaction.amount : newBalance - editingTransaction.amount;
-      } else {
-        newBalance = editingTransaction.type === "charge" ? newBalance - editingTransaction.amount : newBalance + editingTransaction.amount;
-      }
+      if (card.type === "debit") newBalance = editingTransaction.type === "charge" ? newBalance + editingTransaction.amount : newBalance - editingTransaction.amount;
+      else newBalance = editingTransaction.type === "charge" ? newBalance - editingTransaction.amount : newBalance + editingTransaction.amount;
     }
-    
-    // Aplicamos el monto nuevo
-    if (card.type === "debit") {
-      newBalance = transactionForm.type === "charge" ? newBalance - amount : newBalance + amount;
-    } else {
-      newBalance = transactionForm.type === "charge" ? newBalance + amount : newBalance - amount;
-    }
+    if (card.type === "debit") newBalance = transactionForm.type === "charge" ? newBalance - amount : newBalance + amount;
+    else newBalance = transactionForm.type === "charge" ? newBalance + amount : newBalance - amount;
 
     const txData = {
-      user_id: user?.id, 
-      card_id: card.id, 
-      type: transactionForm.type, 
-      amount, 
-      description: transactionForm.description,
+      user_id: user?.id, card_id: card.id, type: transactionForm.type, amount, description: transactionForm.description,
       date: editingTransaction ? editingTransaction.date : getLocalDateString(new Date()),
       income_category_id: transactionForm.type === "payment" ? transactionForm.selectedCategoryId : null,
       expense_category_id: transactionForm.type === "charge" ? transactionForm.selectedCategoryId : null,
       image_url: transactionForm.imageUrl,
     };
 
-    try {
-      const { error } = editingTransaction 
-        ? await supabase.from('card_transactions').update(txData).eq('id', editingTransaction.id)
-        : await supabase.from('card_transactions').insert(txData);
+    const { error } = editingTransaction 
+      ? await supabase.from('card_transactions').update(txData).eq('id', editingTransaction.id)
+      : await supabase.from('card_transactions').insert(txData);
 
-      if (error) throw error;
-
+    if (!error) {
       await supabase.from('cards').update({ current_balance: newBalance }).eq('id', card.id);
-      showSuccess("Movimiento guardado exitosamente");
+      showSuccess("Guardado");
       setIsAddTransactionDialogOpen(false);
       fetchCardDetails();
-    } catch (err: any) {
-      showError("Error al guardar: " + err.message);
-    }
+    } else showError("Error");
   };
-
-  const handleDeleteMovement = async (revert: boolean) => {
-    if (!transactionToDelete || !card) return;
-
-    try {
-      if (revert) {
-        let newBalance = card.current_balance;
-        // Lógica de reversión:
-        if (card.type === "debit") {
-          // Si era un cargo (gasto), el dinero regresa (+). Si era un abono, se descuenta (-).
-          newBalance = transactionToDelete.type === "charge" 
-            ? newBalance + transactionToDelete.amount 
-            : newBalance - transactionToDelete.amount;
-        } else {
-          // Crédito: Si era un cargo (aumentó deuda), restamos deuda (-). Si era un pago, sumamos deuda (+).
-          newBalance = transactionToDelete.type === "charge" 
-            ? newBalance - transactionToDelete.amount 
-            : newBalance + transactionToDelete.amount;
-        }
-        await supabase.from('cards').update({ current_balance: newBalance }).eq('id', card.id);
-      }
-
-      const { error } = await supabase.from('card_transactions').delete().eq('id', transactionToDelete.id);
-      if (error) throw error;
-
-      showSuccess(revert ? "Movimiento eliminado y saldo revertido" : "Movimiento eliminado (saldo omitido)");
-      setIsDeleteDialogOpen(false);
-      setTransactionToDelete(null);
-      fetchCardDetails();
-    } catch (err: any) {
-      showError("Error al eliminar: " + err.message);
-    }
-  };
-
-  const upcomingCutOff = card?.type === "credit" && card.cut_off_day ? getUpcomingCutOffDate(card.cut_off_day) : null;
-  const upcomingPayment = card?.type === "credit" && card.cut_off_day && card.days_to_pay_after_cut_off ? getUpcomingPaymentDueDate(card.cut_off_day, card.days_to_pay_after_cut_off) : null;
 
   if (isLoading) return <LoadingSpinner />;
 
   return (
     <div className="flex flex-col gap-4 p-1 md:p-4">
       <div className="flex items-center gap-3 px-1">
-        <Button variant="ghost" size="icon" onClick={() => navigate('/cards')} className="rounded-full">
-          <ArrowLeft className="h-5 w-5" />
-        </Button>
-        <div className="flex flex-col">
-          <h1 className="text-xl md:text-3xl font-bold truncate">{card.name}</h1>
-          <p className="text-xs text-muted-foreground">{card.bank_name} • **** {card.last_four_digits}</p>
-        </div>
+        <Button variant="ghost" size="icon" onClick={() => navigate('/cards')}><ArrowLeft className="h-5 w-5" /></Button>
+        <h1 className="text-xl md:text-3xl font-bold truncate">{card.name}</h1>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">
         <div className={cn("lg:col-span-2 flex flex-col gap-4", card.type !== "debit" && "lg:col-span-3")}>
-          <Card className="relative p-4 md:p-6 text-white shadow-xl border-none mx-1 overflow-hidden" style={{ backgroundColor: card.color }}>
-            <div className="absolute top-0 right-0 p-4 opacity-20">
-              <CreditCard className="h-20 w-20" />
-            </div>
-            <div className="flex flex-col gap-4 relative z-10">
-              <div className="flex justify-between items-start">
-                <div className="space-y-1">
-                  <p className="text-[10px] md:text-sm opacity-80 uppercase font-bold">
-                    {card.type === "credit" ? "Deuda Actual" : "Saldo Disponible"}
-                  </p>
-                  <p className="text-2xl md:text-4xl font-black">${card.current_balance.toFixed(2)}</p>
-                </div>
-                {card.type === "credit" && (
-                  <div className="text-right">
-                    <p className="text-[10px] opacity-80 uppercase font-bold">Crédito Disponible</p>
-                    <p className="text-lg md:text-xl font-bold">${((card.credit_limit || 0) - card.current_balance).toFixed(2)}</p>
-                  </div>
-                )}
+          <Card className="p-4 md:p-6 text-white shadow-xl border-none mx-1" style={{ backgroundColor: card.color }}>
+            <div className="flex justify-between items-start">
+              <div className="space-y-1">
+                <p className="text-[10px] md:text-sm opacity-80 uppercase font-bold">{card.type === "credit" ? "Crédito Disponible" : "Saldo Disponible"}</p>
+                <p className="text-2xl md:text-3xl font-black">${(card.type === "credit" ? (card.credit_limit - card.current_balance) : card.current_balance).toFixed(2)}</p>
               </div>
-
-              {card.type === "credit" && (
-                <div className="grid grid-cols-2 gap-4 pt-2 border-t border-white/20">
-                  <div className="flex items-center gap-2">
-                    <CalendarDays className="h-4 w-4 opacity-70" />
-                    <div className="flex flex-col">
-                      <span className="text-[9px] uppercase opacity-70 font-bold">Próximo Corte</span>
-                      <span className="text-xs font-bold">{upcomingCutOff ? format(upcomingCutOff, "dd 'de' MMM", { locale: es }) : "N/A"}</span>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Eye className="h-4 w-4 opacity-70" />
-                    <div className="flex flex-col">
-                      <span className="text-[9px] uppercase opacity-70 font-bold">Límite de Pago</span>
-                      <span className="text-xs font-bold">{upcomingPayment ? format(upcomingPayment, "dd 'de' MMM", { locale: es }) : "N/A"}</span>
-                    </div>
-                  </div>
-                </div>
-              )}
+              <div className="text-right"><p className="text-[10px] md:text-sm font-bold opacity-80">{card.bank_name}</p><p className="text-xs font-black">**** {card.last_four_digits}</p></div>
             </div>
           </Card>
 
           <Card className="border-none shadow-sm mx-1 overflow-hidden">
-            <CardHeader className="p-4 flex flex-col sm:flex-row items-center justify-between gap-4 bg-muted/10">
-              <CardTitle className="text-sm font-bold flex items-center gap-2">
-                <History className="h-4 w-4" /> Movimientos
-              </CardTitle>
-              <div className="flex items-center gap-2 w-full sm:w-auto">
-                <div className="flex items-center bg-background rounded-xl p-0.5 border shadow-sm flex-1 sm:flex-none">
-                  <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg" onClick={() => setCurrentViewDate(subMonths(currentViewDate, 1))}>
-                    <ChevronLeft className="h-4 w-4" />
-                  </Button>
-                  <span className="px-3 text-[10px] font-bold min-w-[90px] text-center capitalize">
-                    {format(currentViewDate, "MMMM yyyy", { locale: es })}
-                  </span>
-                  <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg" onClick={() => setCurrentViewDate(addMonths(currentViewDate, 1))}>
-                    <ChevronRight className="h-4 w-4" />
-                  </Button>
-                </div>
-                <Button variant="outline" size="icon" className="h-9 w-9 rounded-xl shadow-sm" onClick={() => setIsReconcileDialogOpen(true)} title="Cuadrar Saldo">
-                  <Scale className="h-4 w-4" />
-                </Button>
-                <Button variant="default" size="icon" className="h-9 w-9 rounded-xl shadow-sm font-bold" onClick={handleOpenAdd} title="Nuevo Movimiento">
-                  <PlusCircle className="h-4 w-4" />
-                </Button>
+            <CardHeader className="p-4 flex flex-row items-center justify-between bg-muted/10">
+              <CardTitle className="text-sm">Movimientos</CardTitle>
+              <div className="flex items-center gap-1">
+                <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setIsReconcileDialogOpen(true)}><Scale className="h-4 w-4" /></Button>
+                <Button variant="default" size="icon" className="h-8 w-8" onClick={() => { setEditingTransaction(null); setTransactionForm({ type: "charge", amount: "", description: "", selectedCategoryId: "", imageUrl: "" }); setIsAddTransactionDialogOpen(true); }}><DollarSign className="h-4 w-4" /></Button>
               </div>
             </CardHeader>
             <CardContent className="p-0">
-              <div className="overflow-x-auto scrollbar-hide">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="pl-4 text-[10px]">Fecha</TableHead>
-                      <TableHead className="text-[10px]">Detalle</TableHead>
-                      <TableHead className="text-right text-[10px]">Monto</TableHead>
-                      <TableHead className="text-right pr-4 text-[10px]">Saldo</TableHead>
-                      <TableHead className="text-right pr-4 text-[10px]"></TableHead>
+              <Table>
+                <TableHeader><TableRow><TableHead className="pl-4">Fecha</TableHead><TableHead>Detalle</TableHead><TableHead className="text-right pr-4">Monto</TableHead></TableRow></TableHeader>
+                <TableBody>
+                  {filteredTransactions.map((tx: any) => (
+                    <TableRow key={tx.id}>
+                      <TableCell className="pl-4 text-[10px]">{format(parseISO(tx.date), "dd/MM")}</TableCell>
+                      <TableCell>
+                        <div className="flex flex-col">
+                          <span className="font-bold text-xs">{tx.description}</span>
+                          <span className="text-[9px] text-muted-foreground">{getCategoryById(tx.income_category_id || tx.expense_category_id)?.name || "Sin cat."}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right pr-4">
+                        <div className="flex items-center justify-end gap-2">
+                          <span className={cn("font-black text-xs", tx.type === "charge" ? "text-red-600" : "text-green-600")}>${tx.amount.toFixed(0)}</span>
+                          {tx.image_url && <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => window.open(tx.image_url, '_blank')}><ImageIcon className="h-3 w-3" /></Button>}
+                          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleOpenEdit(tx)}><Edit className="h-3 w-3" /></Button>
+                        </div>
+                      </TableCell>
                     </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredTransactions.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={5} className="text-center py-10 text-muted-foreground text-xs">
-                          No hay movimientos en este periodo.
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      filteredTransactions.map((tx: any) => {
-                        const category = getCategoryById(tx.income_category_id || tx.expense_category_id);
-                        return (
-                          <TableRow key={tx.id}>
-                            <TableCell className="pl-4 text-[10px] font-medium">{format(parseISO(tx.date), "dd/MM")}</TableCell>
-                            <TableCell>
-                              <div className="flex flex-col">
-                                <span className="font-bold text-xs truncate max-w-[120px]">{tx.description}</span>
-                                <span className="text-[9px] text-muted-foreground">{category?.name || "Sin categoría"}</span>
-                              </div>
-                            </TableCell>
-                            <TableCell className={cn("text-right font-black text-xs", tx.type === "charge" ? "text-red-600" : "text-green-600")}>
-                              {tx.type === "charge" ? "-" : "+"}${tx.amount.toFixed(0)}
-                            </TableCell>
-                            <TableCell className="text-right pr-4 font-bold text-[10px] text-muted-foreground">
-                              ${tx.runningBalance.toFixed(0)}
-                            </TableCell>
-                            <TableCell className="text-right pr-4">
-                              <div className="flex items-center justify-end gap-1">
-                                {tx.image_url && (
-                                  <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg" onClick={() => window.open(tx.image_url, '_blank')}>
-                                    <ImageIcon className="h-3.5 w-3.5" />
-                                  </Button>
-                                )}
-                                <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg" onClick={() => handleOpenEdit(tx)}>
-                                  <Edit className="h-3.5 w-3.5" />
-                                </Button>
-                                <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg text-destructive" onClick={() => { setTransactionToDelete(tx); setIsDeleteDialogOpen(true); }}>
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                </Button>
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
+                  ))}
+                </TableBody>
+              </Table>
             </CardContent>
           </Card>
         </div>
-
-        {card.type === "debit" && (
-          <div className="mx-1">
-            <CardPocketsManager cardId={card.id} cardBalance={card.current_balance} onUpdate={fetchCardDetails} />
-          </div>
-        )}
+        {card.type === "debit" && <div className="mx-1"><CardPocketsManager cardId={card.id} cardBalance={card.current_balance} onUpdate={fetchCardDetails} /></div>}
       </div>
-
-      {/* Diálogo de Eliminación con Reversión */}
-      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-        <DialogContent className="w-[90vw] max-w-[400px] rounded-3xl">
-          <DialogHeader>
-            <DialogTitle>Eliminar Movimiento</DialogTitle>
-            <DialogDescription>
-              ¿Cómo deseas eliminar este registro de <strong>${transactionToDelete?.amount.toFixed(2)}</strong>?
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-3 py-4">
-            <Button variant="default" className="rounded-xl h-12 flex flex-col items-center justify-center gap-0" onClick={() => handleDeleteMovement(true)}>
-              <span className="font-bold">Revertir Saldo</span>
-              <span className="text-[10px] opacity-80">El dinero regresará/se descontará de la tarjeta</span>
-            </Button>
-            <Button variant="outline" className="rounded-xl h-12 flex flex-col items-center justify-center gap-0" onClick={() => handleDeleteMovement(false)}>
-              <span className="font-bold">Solo Borrar Registro</span>
-              <span className="text-[10px] opacity-80">No afectará el saldo actual de la tarjeta</span>
-            </Button>
-          </div>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setIsDeleteDialogOpen(false)} className="w-full rounded-xl">Cancelar</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       <CardReconciliationDialog
         isOpen={isReconcileDialogOpen}
@@ -401,71 +207,30 @@ const CardDetailsPage: React.FC = () => {
       />
 
       <Dialog open={isAddTransactionDialogOpen} onOpenChange={setIsAddTransactionDialogOpen}>
-        <DialogContent className="w-[90vw] max-w-[400px] rounded-3xl p-6">
-          <DialogHeader>
-            <DialogTitle>{editingTransaction ? "Editar" : "Nuevo"} Movimiento</DialogTitle>
-          </DialogHeader>
+        <DialogContent className="w-[90vw] max-w-[400px] rounded-3xl">
+          <DialogHeader><DialogTitle>{editingTransaction ? "Editar" : "Nuevo"} Movimiento</DialogTitle></DialogHeader>
           <form onSubmit={handleTransactionSubmit} className="grid gap-4 py-4">
             <div className="grid gap-2">
               <Label>Tipo</Label>
               <Select value={transactionForm.type} onValueChange={(v: any) => setTransactionForm({...transactionForm, type: v})}>
-                <SelectTrigger className="rounded-xl h-10"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="charge">Gasto / Retiro</SelectItem>
-                  <SelectItem value="payment">Abono / Pago</SelectItem>
-                </SelectContent>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent><SelectItem value="charge">Gasto</SelectItem><SelectItem value="payment">Abono/Pago</SelectItem></SelectContent>
               </Select>
             </div>
-            <div className="grid gap-2">
-              <Label>Monto</Label>
-              <Input 
-                value={transactionForm.amount} 
-                onChange={e => setTransactionForm({...transactionForm, amount: e.target.value})} 
-                className="rounded-xl h-10" 
-                placeholder="0.00" 
-                required 
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label>Descripción</Label>
-              <Input 
-                value={transactionForm.description} 
-                onChange={e => setTransactionForm({...transactionForm, description: e.target.value})} 
-                className="rounded-xl h-10" 
-                placeholder="Detalle..." 
-                required 
-              />
-            </div>
+            <div className="grid gap-2"><Label>Monto</Label><Input value={transactionForm.amount} onChange={e => setTransactionForm({...transactionForm, amount: e.target.value})} required /></div>
+            <div className="grid gap-2"><Label>Descripción</Label><Input value={transactionForm.description} onChange={e => setTransactionForm({...transactionForm, description: e.target.value})} required /></div>
             <div className="grid gap-2">
               <Label>Categoría</Label>
               <Select value={transactionForm.selectedCategoryId} onValueChange={(v) => setTransactionForm({...transactionForm, selectedCategoryId: v})}>
-                <SelectTrigger className="rounded-xl h-10">
-                  <SelectValue placeholder="Selecciona categoría" />
-                </SelectTrigger>
-                <SelectContent>
-                  {(transactionForm.type === "charge" ? expenseCategories : incomeCategories).map(cat => (
-                    <SelectItem key={cat.id} value={cat.id}>
-                      <div className="flex items-center gap-2">
-                        <DynamicLucideIcon iconName={cat.icon || "Tag"} className="h-4 w-4" />
-                        {cat.name}
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
+                <SelectTrigger><SelectValue placeholder="Selecciona" /></SelectTrigger>
+                <SelectContent>{(transactionForm.type === "charge" ? expenseCategories : incomeCategories).map(cat => <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>)}</SelectContent>
               </Select>
             </div>
             <div className="grid gap-2">
               <Label>Imagen/Ticket</Label>
-              <ImageUpload 
-                onUploadSuccess={(url) => setTransactionForm({...transactionForm, imageUrl: url})} 
-                initialUrl={transactionForm.imageUrl} 
-                onRemove={() => setTransactionForm({...transactionForm, imageUrl: ""})} 
-                folder="card_tickets" 
-              />
+              <ImageUpload onUploadSuccess={(url) => setTransactionForm({...transactionForm, imageUrl: url})} initialUrl={transactionForm.imageUrl} onRemove={() => setTransactionForm({...transactionForm, imageUrl: ""})} folder="card_tickets" />
             </div>
-            <DialogFooter>
-              <Button type="submit" className="w-full h-11 rounded-xl font-bold">Guardar Cambios</Button>
-            </DialogFooter>
+            <DialogFooter><Button type="submit" className="w-full h-11 rounded-xl">Guardar</Button></DialogFooter>
           </form>
         </DialogContent>
       </Dialog>

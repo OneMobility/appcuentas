@@ -130,14 +130,8 @@ const Categories = () => {
   };
 
   const getIconComponent = (iconName: string | undefined) => {
-    if (!iconName || iconName === 'constructor' || iconName === 'toString' || iconName === 'valueOf') {
-      return LucideIcons.Tag;
-    }
-    const IconComponent = (LucideIcons as any)[iconName];
-    if (IconComponent && typeof IconComponent === 'function' && IconComponent.name !== 'Object') {
-      return IconComponent;
-    }
-    return LucideIcons.Tag;
+    const IconComponent = iconName ? (LucideIcons as any)[iconName] : LucideIcons.Tag;
+    return IconComponent || LucideIcons.Tag;
   };
 
   return (
