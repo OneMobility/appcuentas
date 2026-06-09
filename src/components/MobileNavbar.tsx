@@ -61,4 +61,3 @@ const MobileNavbar = () => {
 };
 
 export default MobileNavbar;
-</dyad-file>
