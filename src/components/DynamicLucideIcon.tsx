@@ -11,26 +11,29 @@ interface DynamicLucideIconProps extends IconProps {
 }
 
 const DynamicLucideIcon: React.FC<DynamicLucideIconProps> = ({ iconName, ...props }) => {
-  // Validamos de forma segura si el icono ya está registrado
-  if (!LucideIconComponents[iconName]) {
-    LucideIconComponents[iconName] = lazy(() =>
+  // Sanitizar iconName para evitar propiedades del prototipo de Object
+  const safeIconName = (iconName && iconName !== 'constructor' && iconName !== 'toString' && iconName !== 'valueOf') 
+    ? iconName 
+    : 'Tag';
+
+  if (!LucideIconComponents[safeIconName]) {
+    LucideIconComponents[safeIconName] = lazy(() =>
       import('lucide-react').then(module => {
-        const IconComponent = module[iconName as keyof typeof module];
-        // Nos aseguramos de que sea una función (componente) válida y no una propiedad heredada
-        if (IconComponent && typeof IconComponent === 'function') {
+        const IconComponent = module[safeIconName as keyof typeof module];
+        if (IconComponent && typeof IconComponent === 'function' && IconComponent.name !== 'Object') {
           return { default: IconComponent as ComponentType<any> };
         } else {
-          console.warn(`Icono "${iconName}" no encontrado en lucide-react. Usando 'Tag' como fallback.`);
+          console.warn(`Icono "${safeIconName}" no encontrado en lucide-react. Usando 'Tag' como fallback.`);
           return { default: module.Tag };
         }
       }).catch(error => {
-        console.error(`Error al cargar el icono "${iconName}":`, error);
+        console.error(`Error al cargar el icono "${safeIconName}":`, error);
         return import('lucide-react').then(module => ({ default: module.Tag }));
       })
     );
   }
 
-  const Icon = LucideIconComponents[iconName];
+  const Icon = LucideIconComponents[safeIconName];
 
   return (
     <Suspense fallback={<div className="h-4 w-4" />}>
