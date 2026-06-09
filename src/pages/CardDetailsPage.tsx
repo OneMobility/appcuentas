@@ -269,7 +269,7 @@ const CardDetailsPage: React.FC = () => {
                         <TableCell className="text-right pr-4">
                           <div className="flex items-center justify-end gap-2">
                             <span className={cn("font-black text-xs", tx.type === "charge" ? "text-red-600" : "text-green-600")}>
-                              {tx.type === "charge" ? "-" : "+"}${tx.amount.toFixed(0)}
+                              {tx.type === "charge" ? "-" : "+"}${tx.amount.toFixed(2)}
                             </span>
                             {tx.image_url && (
                               <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => window.open(tx.image_url, '_blank')}>

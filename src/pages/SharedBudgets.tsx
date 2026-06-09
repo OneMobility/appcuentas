@@ -22,6 +22,7 @@ import DynamicLucideIcon from "@/components/DynamicLucideIcon";
 import { evaluateExpression } from "@/utils/math-helpers";
 import { format, parseISO, isBefore, isSameDay, addDays } from "date-fns";
 import { es } from "date-fns/locale";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface Debtor {
   id: string;
@@ -139,7 +140,7 @@ const SharedBudgets = () => {
       budgetName: budget.name
     });
     setPaymentForm({
-      amount: remaining.toString(),
+      amount: remaining.toFixed(2),
       destinationId: "cash",
       categoryId: incomeCategories[0]?.id || "",
     });
@@ -268,6 +269,123 @@ const SharedBudgets = () => {
     } catch (e) {}
   };
 
+  const activeBudgets = useMemo(() => {
+    return budgets.filter(b => !b.budget_participants.every(p => p.is_paid));
+  }, [budgets]);
+
+  const completedBudgets = useMemo(() => {
+    return budgets.filter(b => b.budget_participants.every(p => p.is_paid));
+  }, [budgets]);
+
+  const BudgetTable = ({ list }: { list: SharedBudget[] }) => (
+    <div className="overflow-x-auto">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Nombre</TableHead>
+            <TableHead>Vencimiento</TableHead>
+            <TableHead>Estado</TableHead>
+            <TableHead>Total</TableHead>
+            <TableHead>Pendiente</TableHead>
+            <TableHead>Acreedor</TableHead>
+            <TableHead className="text-right">Acciones</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {list.map((budget) => {
+            const isFullyPaid = budget.budget_participants.every(p => p.is_paid);
+            const totalPending = budget.budget_participants.reduce((sum, p) => sum + (p.share_amount - p.paid_amount), 0);
+            const creditor = creditors.find(c => c.id === budget.creditor_id);
+            const today = new Date();
+            today.setHours(0,0,0,0);
+            const isOverdue = !isFullyPaid && budget.due_date && isBefore(parseISO(budget.due_date), today);
+            const isDueSoon = !isFullyPaid && budget.due_date && (isSameDay(parseISO(budget.due_date), today) || isSameDay(parseISO(budget.due_date), addDays(today, 2)));
+
+            return (
+              <TableRow key={budget.id} className={cn(isFullyPaid && "bg-green-50/30")}>
+                <TableCell className="font-medium">{budget.name}</TableCell>
+                <TableCell>
+                  {budget.due_date ? (
+                    <div className={cn("flex items-center gap-1 text-xs", isOverdue ? "text-red-600 font-bold" : isDueSoon ? "text-orange-600" : "")}>
+                      <CalendarIcon className="h-3 w-3" />
+                      {format(parseISO(budget.due_date), "dd/MM/yy")}
+                    </div>
+                  ) : "-"}
+                </TableCell>
+                <TableCell>
+                  <Badge variant="outline" className={cn(isFullyPaid ? "bg-green-100 text-green-800" : isOverdue ? "bg-red-100 text-red-800 animate-pulse" : "bg-yellow-100 text-yellow-800")}>
+                    {isFullyPaid ? "Pagado" : isOverdue ? "Vencido" : "Pendiente"}
+                  </Badge>
+                </TableCell>
+                <TableCell>${budget.total_amount.toFixed(2)}</TableCell>
+                <TableCell className={cn("font-bold", totalPending > 0 ? "text-red-600" : "text-green-600")}>
+                  ${totalPending.toFixed(2)}
+                </TableCell>
+                <TableCell>{creditor ? creditor.name : (budget.creditor_id ? 'Eliminado' : 'Yo')}</TableCell>
+                <TableCell className="text-right flex gap-2 justify-end">
+                  <Dialog>
+                    <DialogTrigger asChild><Button variant="outline" size="sm" className="h-8 gap-1"><Users className="h-3.5 w-3.5" /> Pagos</Button></DialogTrigger>
+                    <DialogContent className="sm:max-w-[600px]">
+                      <DialogHeader>
+                        <DialogTitle className="flex justify-between items-center">
+                          Gestión de Pagos: {budget.name}
+                          {!isFullyPaid && <Button variant="outline" size="sm" onClick={() => handleMarkAllPaid(budget)}>Abonar Todo</Button>}
+                        </DialogTitle>
+                      </DialogHeader>
+                      <div className="text-xs text-muted-foreground mb-4">
+                        <p><b>Abonar:</b> Resta la deuda al deudor y registra el ingreso en tu cuenta.</p>
+                        <p><b>Saldar (Yo cubro):</b> Marca como pagado aquí sin quitarle la deuda al deudor (tú pusiste el dinero).</p>
+                      </div>
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Deudor</TableHead>
+                            <TableHead>Falta</TableHead>
+                            <TableHead className="text-right">Acciones</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {budget.budget_participants.map(p => (
+                            <TableRow key={p.id}>
+                              <TableCell className="font-medium">{p.debtors?.name || 'Eliminado'}</TableCell>
+                              <TableCell>${(p.share_amount - (p.paid_amount || 0)).toFixed(2)}</TableCell>
+                              <TableCell className="text-right flex gap-2 justify-end">
+                                {p.is_paid ? (
+                                  <Badge className="bg-green-100 text-green-800">Completado</Badge>
+                                ) : (
+                                  <>
+                                    <Button variant="outline" size="xs" className="h-7 text-[10px]" onClick={() => handleMarkAsPaidInternally(p, budget)} title="Yo lo pago">
+                                      <UserCheck className="h-3 w-3 mr-1" /> Saldar
+                                    </Button>
+                                    <Button size="xs" className="h-7 text-[10px]" onClick={() => handleOpenPaymentDialog(p, budget)}>
+                                      <DollarSign className="h-3 w-3 mr-1" /> Abonar
+                                    </Button>
+                                  </>
+                                )}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </DialogContent>
+                  </Dialog>
+                  <Button variant="outline" size="sm" onClick={() => navigate(`/shared-budgets/edit/${budget.id}`)}><Edit className="h-3.5 w-3.5" /></Button>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild><Button variant="destructive" size="sm" className="h-8 w-8 p-0"><Trash2 className="h-3.5 w-3.5" /></Button></AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader><AlertDialogTitle>¿Eliminar?</AlertDialogTitle><AlertDialogDescription>Se revertirán deudas y cargos.</AlertDialogDescription></AlertDialogHeader>
+                      <AlertDialogFooter><AlertDialogCancel>No</AlertDialogCancel><AlertDialogAction className="rounded-xl" onClick={() => handleDeleteBudget(budget.id)}>Sí</AlertDialogAction></AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </TableCell>
+              </TableRow>
+            );
+          })}
+        </TableBody>
+      </Table>
+    </div>
+  );
+
   return (
     <div className="flex flex-col gap-6 p-4">
       <h1 className="text-3xl font-bold">Presupuestos Compartidos</h1>
@@ -283,112 +401,18 @@ const SharedBudgets = () => {
           <Button size="sm" onClick={() => navigate('/shared-budgets/create')}><PlusCircle className="h-4 w-4 mr-1" /> Nuevo</Button>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Nombre</TableHead>
-                  <TableHead>Vencimiento</TableHead>
-                  <TableHead>Estado</TableHead>
-                  <TableHead>Total</TableHead>
-                  <TableHead>Pendiente</TableHead>
-                  <TableHead>Acreedor</TableHead>
-                  <TableHead className="text-right">Acciones</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {budgets.map((budget) => {
-                  const isFullyPaid = budget.budget_participants.every(p => p.is_paid);
-                  const totalPending = budget.budget_participants.reduce((sum, p) => sum + (p.share_amount - p.paid_amount), 0);
-                  const creditor = creditors.find(c => c.id === budget.creditor_id);
-                  const today = new Date();
-                  today.setHours(0,0,0,0);
-                  const isOverdue = !isFullyPaid && budget.due_date && isBefore(parseISO(budget.due_date), today);
-                  const isDueSoon = !isFullyPaid && budget.due_date && (isSameDay(parseISO(budget.due_date), today) || isSameDay(parseISO(budget.due_date), addDays(today, 2)));
-
-                  return (
-                    <TableRow key={budget.id} className={cn(isFullyPaid && "bg-green-50/30")}>
-                      <TableCell className="font-medium">{budget.name}</TableCell>
-                      <TableCell>
-                        {budget.due_date ? (
-                          <div className={cn("flex items-center gap-1 text-xs", isOverdue ? "text-red-600 font-bold" : isDueSoon ? "text-orange-600" : "")}>
-                            <CalendarIcon className="h-3 w-3" />
-                            {format(parseISO(budget.due_date), "dd/MM/yy")}
-                          </div>
-                        ) : "-"}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className={cn(isFullyPaid ? "bg-green-100 text-green-800" : isOverdue ? "bg-red-100 text-red-800 animate-pulse" : "bg-yellow-100 text-yellow-800")}>
-                          {isFullyPaid ? "Pagado" : isOverdue ? "Vencido" : "Pendiente"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>${budget.total_amount.toFixed(2)}</TableCell>
-                      <TableCell className={cn("font-bold", totalPending > 0 ? "text-red-600" : "text-green-600")}>
-                        ${totalPending.toFixed(2)}
-                      </TableCell>
-                      <TableCell>{creditor ? creditor.name : (budget.creditor_id ? 'Eliminado' : 'Yo')}</TableCell>
-                      <TableCell className="text-right flex gap-2 justify-end">
-                        <Dialog>
-                          <DialogTrigger asChild><Button variant="outline" size="sm" className="h-8 gap-1"><Users className="h-3.5 w-3.5" /> Pagos</Button></DialogTrigger>
-                          <DialogContent className="sm:max-w-[600px]">
-                            <DialogHeader>
-                              <DialogTitle className="flex justify-between items-center">
-                                Gestión de Pagos: {budget.name}
-                                {!isFullyPaid && <Button variant="outline" size="sm" onClick={() => handleMarkAllPaid(budget)}>Abonar Todo</Button>}
-                              </DialogTitle>
-                            </DialogHeader>
-                            <div className="text-xs text-muted-foreground mb-4">
-                              <p><b>Abonar:</b> Resta la deuda al deudor y registra el ingreso en tu cuenta.</p>
-                              <p><b>Saldar (Yo cubro):</b> Marca como pagado aquí sin quitarle la deuda al deudor (tú pusiste el dinero).</p>
-                            </div>
-                            <Table>
-                              <TableHeader>
-                                <TableRow>
-                                  <TableHead>Deudor</TableHead>
-                                  <TableHead>Falta</TableHead>
-                                  <TableHead className="text-right">Acciones</TableHead>
-                                </TableRow>
-                              </TableHeader>
-                              <TableBody>
-                                {budget.budget_participants.map(p => (
-                                  <TableRow key={p.id}>
-                                    <TableCell className="font-medium">{p.debtors?.name || 'Eliminado'}</TableCell>
-                                    <TableCell>${(p.share_amount - (p.paid_amount || 0)).toFixed(2)}</TableCell>
-                                    <TableCell className="text-right flex gap-2 justify-end">
-                                      {p.is_paid ? (
-                                        <Badge className="bg-green-100 text-green-800">Completado</Badge>
-                                      ) : (
-                                        <>
-                                          <Button variant="outline" size="xs" className="h-7 text-[10px]" onClick={() => handleMarkAsPaidInternally(p, budget)} title="Yo lo pago">
-                                            <UserCheck className="h-3 w-3 mr-1" /> Saldar
-                                          </Button>
-                                          <Button size="xs" className="h-7 text-[10px]" onClick={() => handleOpenPaymentDialog(p, budget)}>
-                                            <DollarSign className="h-3 w-3 mr-1" /> Abonar
-                                          </Button>
-                                        </>
-                                      )}
-                                    </TableCell>
-                                  </TableRow>
-                                ))}
-                              </TableBody>
-                            </Table>
-                          </DialogContent>
-                        </Dialog>
-                        <Button variant="outline" size="sm" onClick={() => navigate(`/shared-budgets/edit/${budget.id}`)}><Edit className="h-3.5 w-3.5" /></Button>
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild><Button variant="destructive" size="sm" className="h-8 w-8 p-0"><Trash2 className="h-3.5 w-3.5" /></Button></AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader><AlertDialogTitle>¿Eliminar?</AlertDialogTitle><AlertDialogDescription>Se revertirán deudas y cargos.</AlertDialogDescription></AlertDialogHeader>
-                            <AlertDialogFooter><AlertDialogCancel>No</AlertDialogCancel><AlertDialogAction className="rounded-xl" onClick={() => handleDeleteBudget(budget.id)}>Sí</AlertDialogAction></AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </div>
+          <Tabs defaultValue="active">
+            <TabsList className="grid w-full grid-cols-2 mb-4">
+              <TabsTrigger value="active">Activos ({activeBudgets.length})</TabsTrigger>
+              <TabsTrigger value="completed">Completados ({completedBudgets.length})</TabsTrigger>
+            </TabsList>
+            <TabsContent value="active">
+              <BudgetTable list={activeBudgets} />
+            </TabsContent>
+            <TabsContent value="completed">
+              <BudgetTable list={completedBudgets} />
+            </TabsContent>
+          </Tabs>
         </CardContent>
       </Card>
 

@@ -274,7 +274,7 @@ const Cash = () => {
                           </div>
                         </TableCell>
                         <TableCell className={cn("text-right font-bold text-xs", tx.type === "egreso" ? "text-red-600" : "text-green-600")}>
-                          {tx.type === "egreso" ? "-" : "+"}${tx.amount.toFixed(0)}
+                          {tx.type === "egreso" ? "-" : "+"}${tx.amount.toFixed(2)}
                         </TableCell>
                         <TableCell className="text-right pr-4 flex gap-1 justify-end">
                           {tx.image_url && (
