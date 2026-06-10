@@ -526,7 +526,7 @@ const DebtorDetailsPage: React.FC = () => {
               <Label>Tipo</Label>
               <Select value={transactionForm.type} onValueChange={(v: any) => setTransactionForm({...transactionForm, type: v})}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent><SelectItem value="payment">Pago (Abono a deuda)</SelectItem><SelectItem value="charge">Cargo (Debo más)</SelectItem></SelectContent>
+                <SelectContent><SelectItem value="payment">Abono (Me paga)</SelectItem><SelectItem value="charge">Cargo (Me debe más)</SelectItem></SelectContent>
               </Select>
             </div>
             <div className="grid gap-2"><Label>Monto</Label><Input value={transactionForm.amount} onChange={e => setTransactionForm({...transactionForm, amount: e.target.value})} required /></div>
@@ -535,13 +535,13 @@ const DebtorDetailsPage: React.FC = () => {
               <>
                 <div className="flex items-center space-x-2 bg-blue-50 p-3 rounded-md border border-blue-100">
                   <Checkbox id="skip" checked={skipLinkedTransaction} onCheckedChange={(v) => setSkipLinkedTransaction(!!v)} />
-                  <Label htmlFor="skip" className="text-xs">Ya registré este egreso manualmente</Label>
+                  <Label htmlFor="skip" className="text-xs">Ya registré este ingreso manualmente</Label>
                 </div>
                 {!skipLinkedTransaction && (
                   <>
                     <div className="grid gap-2">
-                      <Label>Origen del dinero</Label>
-                      <Select value={transactionForm.sourceAccountId} onValueChange={(v) => setTransactionForm({...transactionForm, sourceAccountId: v})}>
+                      <Label>Destino</Label>
+                      <Select value={transactionForm.destinationAccountId} onValueChange={(v) => setTransactionForm({...transactionForm, destinationAccountId: v})}>
                         <SelectTrigger><SelectValue /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="cash">Efectivo (${cashBalance.toFixed(2)})</SelectItem>
@@ -550,10 +550,10 @@ const DebtorDetailsPage: React.FC = () => {
                       </Select>
                     </div>
                     <div className="grid gap-2">
-                      <Label>Categoría de gasto</Label>
-                      <Select value={transactionForm.selectedExpenseCategoryId} onValueChange={(v) => setTransactionForm({...transactionForm, selectedExpenseCategoryId: v})}>
+                      <Label>Categoría</Label>
+                      <Select value={transactionForm.selectedIncomeCategoryId} onValueChange={(v) => setTransactionForm({...transactionForm, selectedIncomeCategoryId: v})}>
                         <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>{expenseCategories.map(cat => <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>)}</SelectContent>
+                        <SelectContent>{incomeCategories.map(cat => <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>)}</SelectContent>
                       </Select>
                     </div>
                   </>
