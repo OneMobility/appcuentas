@@ -10,10 +10,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { DollarSign, Trash2, Edit, ArrowLeft, FileDown, History, AlertCircle, Search, Filter, FileText } from "lucide-react";
+import { DollarSign, Trash2, Edit, ArrowLeft, FileDown, History, AlertCircle, Search, Filter, FileText, Share2, Copy, MessageSquare } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { cn } from "@/lib/utils";
 import { format, parseISO } from "date-fns";
+import { es } from "date-fns/locale";
 import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/context/SessionContext";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
@@ -59,8 +60,11 @@ const DebtorDetailsPage: React.FC = () => {
   const [filterType, setFilterType] = useState<"all" | "charge" | "payment">("all");
 
   const [isTransactionDialogOpen, setIsTransactionDialogOpen] = useState(false);
+  const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<any>(null);
   const [skipLinkedTransaction, setSkipLinkedTransaction] = useState(false);
+
+  const [sharePhone, setSharePhone] = useState("");
 
   const [transactionForm, setTransactionForm] = useState({
     type: "payment" as "charge" | "payment",
@@ -83,6 +87,7 @@ const DebtorDetailsPage: React.FC = () => {
 
       if (debtorError) throw debtorError;
       setDebtor(debtorData);
+      setSharePhone(debtorData.phone || "");
 
       const { data: cardsData } = await supabase.from('cards').select('*').eq('user_id', user.id);
       setCards(cardsData || []);
@@ -348,6 +353,67 @@ const DebtorDetailsPage: React.FC = () => {
     else exportToPdf(`historial_${debtor.name}.pdf`, `Historial: ${debtor.name}`, ["Fecha", "Tipo", "Descripción", "Monto", "Saldo"], data.map(d => Object.values(d)));
   };
 
+  // Generar el texto del estado de cuenta formateado
+  const generateStatementText = () => {
+    if (!debtor) return "";
+
+    const totalCharges = debtor.debtor_transactions
+      .filter(t => t.type === 'charge')
+      .reduce((sum, t) => sum + Number(t.amount), 0);
+
+    const totalPayments = debtor.debtor_transactions
+      .filter(t => t.type === 'payment')
+      .reduce((sum, t) => sum + Number(t.amount), 0);
+
+    let text = `📄 *ESTADO DE CUENTA - OINKASH*\n\n`;
+    text += `Hola *${debtor.name}*, aquí tienes el resumen de tu cuenta:\n`;
+    text += `----------------------------------\n`;
+    text += `💰 *Deuda Inicial:* $${debtor.initial_balance.toFixed(2)}\n`;
+    text += `➕ *Cargos Adicionales:* $${totalCharges.toFixed(2)}\n`;
+    text += `➖ *Abonos Realizados:* $${totalPayments.toFixed(2)}\n`;
+    text += `📉 *Saldo Pendiente:* $${debtor.current_balance.toFixed(2)}\n`;
+    if (debtor.due_date) {
+      text += `📅 *Fecha de Vencimiento:* ${format(parseISO(debtor.due_date), "dd 'de' MMMM, yyyy", { locale: es })}\n`;
+    }
+    text += `----------------------------------\n\n`;
+
+    // Agregar los últimos 5 movimientos
+    const lastTxs = [...debtor.debtor_transactions]
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      .slice(0, 5);
+
+    if (lastTxs.length > 0) {
+      text += `📝 *Últimos Movimientos:*\n`;
+      lastTxs.forEach(tx => {
+        const sign = tx.type === "charge" ? "+" : "-";
+        text += `• ${format(parseISO(tx.date), "dd/MM")}: ${tx.description} (${sign}$${tx.amount.toFixed(2)})\n`;
+      });
+      text += `\n----------------------------------\n`;
+    }
+
+    text += `¡Gracias por tu puntualidad! 😊`;
+    return text;
+  };
+
+  const handleCopyStatement = () => {
+    const text = generateStatementText();
+    navigator.clipboard.writeText(text);
+    showSuccess("Estado de cuenta copiado al portapapeles.");
+    setIsShareDialogOpen(false);
+  };
+
+  const handleSendWhatsAppStatement = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!sharePhone.trim()) {
+      showError("Por favor, ingresa un número de teléfono.");
+      return;
+    }
+    const text = generateStatementText();
+    const cleanPhone = sharePhone.replace(/\D/g, '');
+    window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(text)}`, '_blank');
+    setIsShareDialogOpen(false);
+  };
+
   if (isLoading) return <LoadingSpinner />;
   if (!debtor) return null;
 
@@ -389,6 +455,9 @@ const DebtorDetailsPage: React.FC = () => {
           </Select>
         </div>
         <div className="flex items-center gap-2 w-full md:w-auto">
+          <Button variant="outline" size="sm" className="h-9 gap-1" onClick={() => setIsShareDialogOpen(true)}>
+            <Share2 className="h-4 w-4" /> Compartir Estado
+          </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="icon" className="h-9 w-9" title="Exportar"><FileDown className="h-4 w-4" /></Button>
@@ -448,6 +517,7 @@ const DebtorDetailsPage: React.FC = () => {
         </CardContent>
       </Card>
 
+      {/* Diálogo de Transacción */}
       <Dialog open={isTransactionDialogOpen} onOpenChange={setIsTransactionDialogOpen}>
         <DialogContent>
           <DialogHeader><DialogTitle>{editingTransaction ? "Editar Movimiento" : "Registrar Movimiento"}</DialogTitle></DialogHeader>
@@ -456,7 +526,7 @@ const DebtorDetailsPage: React.FC = () => {
               <Label>Tipo</Label>
               <Select value={transactionForm.type} onValueChange={(v: any) => setTransactionForm({...transactionForm, type: v})}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent><SelectItem value="payment">Abono (Me paga)</SelectItem><SelectItem value="charge">Cargo (Me debe más)</SelectItem></SelectContent>
+                <SelectContent><SelectItem value="payment">Pago (Abono a deuda)</SelectItem><SelectItem value="charge">Cargo (Debo más)</SelectItem></SelectContent>
               </Select>
             </div>
             <div className="grid gap-2"><Label>Monto</Label><Input value={transactionForm.amount} onChange={e => setTransactionForm({...transactionForm, amount: e.target.value})} required /></div>
@@ -465,13 +535,13 @@ const DebtorDetailsPage: React.FC = () => {
               <>
                 <div className="flex items-center space-x-2 bg-blue-50 p-3 rounded-md border border-blue-100">
                   <Checkbox id="skip" checked={skipLinkedTransaction} onCheckedChange={(v) => setSkipLinkedTransaction(!!v)} />
-                  <Label htmlFor="skip" className="text-xs">Ya registré este ingreso manualmente</Label>
+                  <Label htmlFor="skip" className="text-xs">Ya registré este egreso manualmente</Label>
                 </div>
                 {!skipLinkedTransaction && (
                   <>
                     <div className="grid gap-2">
-                      <Label>Destino</Label>
-                      <Select value={transactionForm.destinationAccountId} onValueChange={(v) => setTransactionForm({...transactionForm, destinationAccountId: v})}>
+                      <Label>Origen del dinero</Label>
+                      <Select value={transactionForm.sourceAccountId} onValueChange={(v) => setTransactionForm({...transactionForm, sourceAccountId: v})}>
                         <SelectTrigger><SelectValue /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="cash">Efectivo (${cashBalance.toFixed(2)})</SelectItem>
@@ -480,10 +550,10 @@ const DebtorDetailsPage: React.FC = () => {
                       </Select>
                     </div>
                     <div className="grid gap-2">
-                      <Label>Categoría</Label>
-                      <Select value={transactionForm.selectedIncomeCategoryId} onValueChange={(v) => setTransactionForm({...transactionForm, selectedIncomeCategoryId: v})}>
+                      <Label>Categoría de gasto</Label>
+                      <Select value={transactionForm.selectedExpenseCategoryId} onValueChange={(v) => setTransactionForm({...transactionForm, selectedExpenseCategoryId: v})}>
                         <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>{incomeCategories.map(cat => <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>)}</SelectContent>
+                        <SelectContent>{expenseCategories.map(cat => <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>)}</SelectContent>
                       </Select>
                     </div>
                   </>
@@ -492,6 +562,47 @@ const DebtorDetailsPage: React.FC = () => {
             )}
             <DialogFooter><Button type="submit">Guardar</Button></DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Diálogo para Compartir Estado de Cuenta */}
+      <Dialog open={isShareDialogOpen} onOpenChange={setIsShareDialogOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Share2 className="h-5 w-5" /> Compartir Estado de Cuenta
+            </DialogTitle>
+            <DialogDescription>
+              Envía un resumen detallado de la cuenta por WhatsApp o cópialo para enviarlo por otro medio.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="border rounded-lg p-3 bg-muted/50 max-h-[200px] overflow-y-auto text-xs font-mono whitespace-pre-wrap">
+              {generateStatementText()}
+            </div>
+            <form onSubmit={handleSendWhatsAppStatement} className="grid gap-3">
+              <div className="grid gap-1.5">
+                <Label htmlFor="sharePhone">Número de WhatsApp</Label>
+                <Input
+                  id="sharePhone"
+                  placeholder="Ej. 521234567890"
+                  value={sharePhone}
+                  onChange={(e) => setSharePhone(e.target.value)}
+                />
+              </div>
+              <Button type="submit" className="w-full gap-2">
+                <MessageSquare className="h-4 w-4" /> Enviar por WhatsApp
+              </Button>
+            </form>
+            <div className="relative flex py-1 items-center">
+              <div className="flex-grow border-t border-muted"></div>
+              <span className="flex-shrink mx-4 text-muted-foreground text-xs">O</span>
+              <div className="flex-grow border-t border-muted"></div>
+            </div>
+            <Button variant="outline" onClick={handleCopyStatement} className="w-full gap-2">
+              <Copy className="h-4 w-4" /> Copiar al Portapapeles
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
