@@ -167,48 +167,98 @@ const DebtorDetailsPage: React.FC = () => {
     if (amount <= 0) { showError("Monto inválido"); return; }
 
     try {
-      let newDebtorBalance = debtor.current_balance;
-
+      // 1. Insertar o actualizar la transacción primero
       if (editingTransaction) {
-        newDebtorBalance = editingTransaction.type === "charge" ? newDebtorBalance - editingTransaction.amount : newDebtorBalance + editingTransaction.amount;
-      }
+        const { error: updateTxError } = await supabase
+          .from('debtor_transactions')
+          .update({ 
+            type: transactionForm.type, 
+            amount, 
+            description: transactionForm.description 
+          })
+          .eq('id', editingTransaction.id);
+        
+        if (updateTxError) throw updateTxError;
+      } else {
+        const { error: insertTxError } = await supabase
+          .from('debtor_transactions')
+          .insert({ 
+            user_id: user.id, 
+            debtor_id: debtor.id, 
+            type: transactionForm.type, 
+            amount, 
+            description: transactionForm.description, 
+            date: getLocalDateString(new Date()) 
+          });
+        
+        if (insertTxError) throw insertTxError;
 
-      if (transactionForm.type === "charge") newDebtorBalance += amount;
-      else {
-        if (newDebtorBalance < amount - 0.01) { showError("El pago excede la deuda."); return; }
-        newDebtorBalance -= amount;
-
-        if (!editingTransaction && !skipLinkedTransaction) {
+        // Manejar transacción vinculada si es un abono y no se omite
+        if (transactionForm.type === "payment" && !skipLinkedTransaction) {
           const linkedDesc = `Abono de ${debtor.name}: ${transactionForm.description}`;
           if (transactionForm.destinationAccountId === "cash") {
-            await supabase.from('cash_transactions').insert({ user_id: user.id, type: "ingreso", amount, description: linkedDesc, date: getLocalDateString(new Date()), income_category_id: transactionForm.selectedIncomeCategoryId || null });
+            await supabase.from('cash_transactions').insert({ 
+              user_id: user.id, 
+              type: "ingreso", 
+              amount, 
+              description: linkedDesc, 
+              date: getLocalDateString(new Date()), 
+              income_category_id: transactionForm.selectedIncomeCategoryId || null 
+            });
           } else {
             const card = cards.find(c => c.id === transactionForm.destinationAccountId);
             if (card) {
               const newCardBalance = card.type === "credit" ? card.current_balance - amount : card.current_balance + amount;
               await supabase.from('cards').update({ current_balance: newCardBalance }).eq('id', card.id);
-              await supabase.from('card_transactions').insert({ user_id: user.id, card_id: card.id, type: "payment", amount, description: linkedDesc, date: getLocalDateString(new Date()), income_category_id: transactionForm.selectedIncomeCategoryId || null });
+              await supabase.from('card_transactions').insert({ 
+                user_id: user.id, 
+                card_id: card.id, 
+                type: "payment", 
+                amount, 
+                description: linkedDesc, 
+                date: getLocalDateString(new Date()), 
+                income_category_id: transactionForm.selectedIncomeCategoryId || null 
+              });
             }
           }
         }
       }
 
-      await supabase.from('debtors').update({ current_balance: newDebtorBalance }).eq('id', debtor.id);
+      // 2. Recalcular el saldo basado en todas las transacciones existentes
+      const { data: txs, error: fetchError } = await supabase
+        .from('debtor_transactions')
+        .select('type, amount')
+        .eq('debtor_id', debtor.id);
       
-      if (editingTransaction) {
-        await supabase.from('debtor_transactions').update({ type: transactionForm.type, amount, description: transactionForm.description }).eq('id', editingTransaction.id);
-      } else {
-        await supabase.from('debtor_transactions').insert({ user_id: user.id, debtor_id: debtor.id, type: transactionForm.type, amount, description: transactionForm.description, date: getLocalDateString(new Date()) });
-      }
+      if (fetchError) throw fetchError;
+
+      const totalCharges = (txs || [])
+        .filter(t => t.type === 'charge')
+        .reduce((sum, t) => sum + Number(t.amount), 0);
+
+      const totalPayments = (txs || [])
+        .filter(t => t.type === 'payment')
+        .reduce((sum, t) => sum + Number(t.amount), 0);
+
+      const newBalance = debtor.initial_balance + totalCharges - totalPayments;
+
+      const { error: updateError } = await supabase
+        .from('debtors')
+        .update({ current_balance: newBalance })
+        .eq('id', debtor.id);
+
+      if (updateError) throw updateError;
 
       showSuccess(editingTransaction ? "Movimiento actualizado" : "Movimiento registrado");
       setIsTransactionDialogOpen(false);
       
+      // 3. Enviar mensaje de WhatsApp si tiene teléfono
       if (!editingTransaction && debtor.phone) {
         if (window.confirm("¿Enviar comprobante por WhatsApp?")) {
           const typeLabel = transactionForm.type === "charge" ? "Cargo" : "Abono";
-          const msg = `Hola ${debtor.name}, se registró un ${typeLabel} por $${amount.toFixed(2)}. Saldo actual: $${newDebtorBalance.toFixed(2)}.`;
-          window.open(`https://wa.me/${debtor.phone}?text=${encodeURIComponent(msg)}`, '_blank');
+          const msg = `Hola ${debtor.name}, se registró un ${typeLabel} por $${amount.toFixed(2)}. Saldo actual: $${newBalance.toFixed(2)}.`;
+          const cleanPhone = debtor.phone.replace(/\D/g, '');
+          window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`, '_blank');
         }
       }
 
@@ -221,13 +271,43 @@ const DebtorDetailsPage: React.FC = () => {
   const handleDeleteTransaction = async (tx: any) => {
     if (!user || !debtor) return;
     try {
-      const newBalance = tx.type === "charge" ? debtor.current_balance - tx.amount : debtor.current_balance + tx.amount;
-      await supabase.from('debtors').update({ current_balance: newBalance }).eq('id', debtor.id);
-      await supabase.from('debtor_transactions').delete().eq('id', tx.id);
+      // 1. Eliminar la transacción primero
+      const { error: deleteError } = await supabase
+        .from('debtor_transactions')
+        .delete()
+        .eq('id', tx.id);
+
+      if (deleteError) throw deleteError;
+
+      // 2. Recalcular el saldo basado en las transacciones restantes
+      const { data: txs, error: fetchError } = await supabase
+        .from('debtor_transactions')
+        .select('type, amount')
+        .eq('debtor_id', debtor.id);
+      
+      if (fetchError) throw fetchError;
+
+      const totalCharges = (txs || [])
+        .filter(t => t.type === 'charge')
+        .reduce((sum, t) => sum + Number(t.amount), 0);
+
+      const totalPayments = (txs || [])
+        .filter(t => t.type === 'payment')
+        .reduce((sum, t) => sum + Number(t.amount), 0);
+
+      const newBalance = debtor.initial_balance + totalCharges - totalPayments;
+
+      const { error: updateError } = await supabase
+        .from('debtors')
+        .update({ current_balance: newBalance })
+        .eq('id', debtor.id);
+
+      if (updateError) throw updateError;
+
       showSuccess("Movimiento eliminado");
       fetchData();
     } catch (error: any) {
-      showError('Error al eliminar');
+      showError('Error al eliminar: ' + error.message);
     }
   };
 

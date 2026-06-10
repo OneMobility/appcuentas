@@ -211,48 +211,8 @@ const Debtors = () => {
     const linkedDescription = `Abono de ${selectedDebtor.name}: ${newTransaction.description}`;
 
     try {
-      let newDebtorBalance = selectedDebtor.current_balance;
-
-      if (newTransaction.type === "charge") {
-        newDebtorBalance += amount;
-      } else {
-        if (newDebtorBalance < amount - 0.01) {
-          showError("El abono excede la deuda.");
-          return;
-        }
-        newDebtorBalance -= amount;
-
-        if (!skipLinkedTransaction) {
-          if (newTransaction.destinationAccountId === "cash") {
-            await supabase.from('cash_transactions').insert({
-              user_id: user.id,
-              type: "ingreso",
-              amount,
-              description: linkedDescription,
-              date: transactionDate,
-              income_category_id: newTransaction.selectedIncomeCategoryId || null,
-            });
-          } else {
-            const card = cards.find(c => c.id === newTransaction.destinationAccountId);
-            if (card) {
-              const newCardBalance = card.type === "credit" ? card.current_balance - amount : card.current_balance + amount;
-              await supabase.from('cards').update({ current_balance: newCardBalance }).eq('id', card.id);
-              await supabase.from('card_transactions').insert({
-                user_id: user.id,
-                card_id: card.id,
-                type: "payment",
-                amount,
-                description: linkedDescription,
-                date: transactionDate,
-                income_category_id: newTransaction.selectedIncomeCategoryId || null,
-              });
-            }
-          }
-        }
-      }
-
-      await supabase.from('debtors').update({ current_balance: newDebtorBalance }).eq('id', selectedDebtor.id);
-      await supabase.from('debtor_transactions').insert({
+      // 1. Insertar la transacción primero
+      const { error: insertError } = await supabase.from('debtor_transactions').insert({
         user_id: user.id,
         debtor_id: selectedDebtor.id,
         type: newTransaction.type,
@@ -261,17 +221,72 @@ const Debtors = () => {
         date: transactionDate,
       });
 
+      if (insertError) throw insertError;
+
+      // Manejar transacción vinculada si es un abono y no se omite
+      if (newTransaction.type === "payment" && !skipLinkedTransaction) {
+        if (newTransaction.destinationAccountId === "cash") {
+          await supabase.from('cash_transactions').insert({
+            user_id: user.id,
+            type: "ingreso",
+            amount,
+            description: linkedDescription,
+            date: transactionDate,
+            income_category_id: newTransaction.selectedIncomeCategoryId || null,
+          });
+        } else {
+          const card = cards.find(c => c.id === newTransaction.destinationAccountId);
+          if (card) {
+            const newCardBalance = card.type === "credit" ? card.current_balance - amount : card.current_balance + amount;
+            await supabase.from('cards').update({ current_balance: newCardBalance }).eq('id', card.id);
+            await supabase.from('card_transactions').insert({
+              user_id: user.id,
+              card_id: card.id,
+              type: "payment",
+              amount,
+              description: linkedDescription,
+              date: transactionDate,
+              income_category_id: newTransaction.selectedIncomeCategoryId || null,
+            });
+          }
+        }
+      }
+
+      // 2. Recalcular el saldo basado en todas las transacciones existentes
+      const { data: txs, error: fetchError } = await supabase
+        .from('debtor_transactions')
+        .select('type, amount')
+        .eq('debtor_id', selectedDebtor.id);
+      
+      if (fetchError) throw fetchError;
+
+      const totalCharges = (txs || [])
+        .filter(t => t.type === 'charge')
+        .reduce((sum, t) => sum + Number(t.amount), 0);
+
+      const totalPayments = (txs || [])
+        .filter(t => t.type === 'payment')
+        .reduce((sum, t) => sum + Number(t.amount), 0);
+
+      const newBalance = selectedDebtor.initial_balance + totalCharges - totalPayments;
+
+      const { error: updateError } = await supabase
+        .from('debtors')
+        .update({ current_balance: newBalance })
+        .eq('id', selectedDebtor.id);
+
+      if (updateError) throw updateError;
+
       showSuccess("Transacción registrada.");
       setIsTransactionDialogOpen(false);
       
-      // WhatsApp prompt handled by the details page or custom redirect?
-      // User said "recuerda que al registrar abono o cargo se pide si queremos enviar mensaje de whatsapp"
-      // I'll redirect them to the details page if they want to send WhatsApp, or add a simple check here.
+      // 3. Enviar mensaje de WhatsApp si tiene teléfono
       if (selectedDebtor.phone) {
         if (window.confirm("¿Deseas enviar un comprobante por WhatsApp?")) {
           const typeLabel = newTransaction.type === "charge" ? "Cargo" : "Abono";
-          const msg = `Hola ${selectedDebtor.name}, se ha registrado un ${typeLabel} por $${amount.toFixed(2)}. Tu saldo actual es $${newDebtorBalance.toFixed(2)}.`;
-          window.open(`https://wa.me/${selectedDebtor.phone}?text=${encodeURIComponent(msg)}`, '_blank');
+          const msg = `Hola ${selectedDebtor.name}, se ha registrado un ${typeLabel} por $${amount.toFixed(2)}. Tu saldo actual es $${newBalance.toFixed(2)}.`;
+          const cleanPhone = selectedDebtor.phone.replace(/\D/g, '');
+          window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`, '_blank');
         }
       }
       
@@ -447,8 +462,8 @@ const Debtors = () => {
                 value={newDebtor.phone} 
                 onChange={e => setNewDebtor({...newDebtor, phone: e.target.value})} 
                 placeholder="Ej. 521234567890" 
-              />
-            </div>
+                  />
+                </div>
             <DialogFooter><Button type="submit">Actualizar</Button></DialogFooter>
           </form>
         </DialogContent>
