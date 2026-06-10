@@ -105,24 +105,50 @@ const DebtorDetailsPage: React.FC = () => {
     fetchData();
   }, [debtorId, user, incomeCategories]);
 
-  // Cálculo de Saldo Acumulado corregido (Cálculo inverso para consistencia con current_balance)
+  // Auto-sincronizar el saldo actual en la base de datos si no coincide con la suma de transacciones
+  useEffect(() => {
+    if (!debtor) return;
+    const totalCharges = debtor.debtor_transactions
+      .filter(t => t.type === 'charge')
+      .reduce((sum, t) => sum + Number(t.amount), 0);
+    const totalPayments = debtor.debtor_transactions
+      .filter(t => t.type === 'payment')
+      .reduce((sum, t) => sum + Number(t.amount), 0);
+    const expectedBalance = debtor.initial_balance + totalCharges - totalPayments;
+
+    if (Math.abs(debtor.current_balance - expectedBalance) > 0.01) {
+      const syncBalance = async () => {
+        await supabase
+          .from('debtors')
+          .update({ current_balance: expectedBalance })
+          .eq('id', debtor.id);
+        fetchData();
+      };
+      syncBalance();
+    }
+  }, [debtor]);
+
+  // Cálculo de Saldo Acumulado calculando hacia adelante desde la deuda inicial
   const transactionsWithBalance = useMemo(() => {
     if (!debtor) return [];
     
-    // 1. Ordenar por fecha de creación descendente (lo más nuevo primero)
-    const sortedDesc = [...debtor.debtor_transactions].sort((a, b) => 
-      new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    // Ordenar por fecha de creación ascendente (el más antiguo primero) para calcular hacia adelante
+    const sortedAsc = [...debtor.debtor_transactions].sort((a, b) => 
+      new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
     );
 
-    let current = debtor.current_balance;
-    const computed = sortedDesc.map(tx => {
-      const runningBalance = current;
-      // Para saber el saldo ANTERIOR a este movimiento, hacemos la operación inversa
-      current = tx.type === "charge" ? current - tx.amount : current + tx.amount;
-      return { ...tx, runningBalance };
+    let current = debtor.initial_balance;
+    const computedAsc = sortedAsc.map(tx => {
+      if (tx.type === "charge") {
+        current += tx.amount;
+      } else {
+        current -= tx.amount;
+      }
+      return { ...tx, runningBalance: current };
     });
 
-    return computed;
+    // Devolver en orden descendente (el más nuevo primero) para la tabla
+    return computedAsc.reverse();
   }, [debtor]);
 
   const filteredTransactions = useMemo(() => {
@@ -167,7 +193,6 @@ const DebtorDetailsPage: React.FC = () => {
     if (amount <= 0) { showError("Monto inválido"); return; }
 
     try {
-      // 1. Insertar o actualizar la transacción primero
       if (editingTransaction) {
         const { error: updateTxError } = await supabase
           .from('debtor_transactions')
@@ -224,7 +249,7 @@ const DebtorDetailsPage: React.FC = () => {
         }
       }
 
-      // 2. Recalcular el saldo basado en todas las transacciones existentes
+      // Recalcular el saldo basado en todas las transacciones existentes
       const { data: txs, error: fetchError } = await supabase
         .from('debtor_transactions')
         .select('type, amount')
@@ -252,7 +277,7 @@ const DebtorDetailsPage: React.FC = () => {
       showSuccess(editingTransaction ? "Movimiento actualizado" : "Movimiento registrado");
       setIsTransactionDialogOpen(false);
       
-      // 3. Enviar mensaje de WhatsApp si tiene teléfono
+      // Enviar mensaje de WhatsApp si tiene teléfono
       if (!editingTransaction && debtor.phone) {
         if (window.confirm("¿Enviar comprobante por WhatsApp?")) {
           const typeLabel = transactionForm.type === "charge" ? "Cargo" : "Abono";
@@ -271,7 +296,6 @@ const DebtorDetailsPage: React.FC = () => {
   const handleDeleteTransaction = async (tx: any) => {
     if (!user || !debtor) return;
     try {
-      // 1. Eliminar la transacción primero
       const { error: deleteError } = await supabase
         .from('debtor_transactions')
         .delete()
@@ -279,7 +303,7 @@ const DebtorDetailsPage: React.FC = () => {
 
       if (deleteError) throw deleteError;
 
-      // 2. Recalcular el saldo basado en las transacciones restantes
+      // Recalcular el saldo basado en las transacciones restantes
       const { data: txs, error: fetchError } = await supabase
         .from('debtor_transactions')
         .select('type, amount')

@@ -102,23 +102,50 @@ const CreditorDetailsPage: React.FC = () => {
     fetchData();
   }, [creditorId, user, expenseCategories]);
 
-  // Cálculo de Saldo Acumulado corregido (Cálculo inverso)
+  // Auto-sincronizar el saldo actual en la base de datos si no coincide con la suma de transacciones
+  useEffect(() => {
+    if (!creditor) return;
+    const totalCharges = creditor.creditor_transactions
+      .filter(t => t.type === 'charge')
+      .reduce((sum, t) => sum + Number(t.amount), 0);
+    const totalPayments = creditor.creditor_transactions
+      .filter(t => t.type === 'payment')
+      .reduce((sum, t) => sum + Number(t.amount), 0);
+    const expectedBalance = creditor.initial_balance + totalCharges - totalPayments;
+
+    if (Math.abs(creditor.current_balance - expectedBalance) > 0.01) {
+      const syncBalance = async () => {
+        await supabase
+          .from('creditors')
+          .update({ current_balance: expectedBalance })
+          .eq('id', creditor.id);
+        fetchData();
+      };
+      syncBalance();
+    }
+  }, [creditor]);
+
+  // Cálculo de Saldo Acumulado calculando hacia adelante desde la deuda inicial
   const transactionsWithBalance = useMemo(() => {
     if (!creditor) return [];
     
-    const sortedDesc = [...creditor.creditor_transactions].sort((a, b) => 
-      new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    // Ordenar por fecha de creación ascendente (el más antiguo primero) para calcular hacia adelante
+    const sortedAsc = [...creditor.creditor_transactions].sort((a, b) => 
+      new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
     );
 
-    let current = creditor.current_balance;
-    const computed = sortedDesc.map(tx => {
-      const runningBalance = current;
-      // Para saber el saldo ANTERIOR: cargo resta deuda, pago suma deuda
-      current = tx.type === "charge" ? current - tx.amount : current + tx.amount;
-      return { ...tx, runningBalance };
+    let current = creditor.initial_balance;
+    const computedAsc = sortedAsc.map(tx => {
+      if (tx.type === "charge") {
+        current += tx.amount;
+      } else {
+        current -= tx.amount;
+      }
+      return { ...tx, runningBalance: current };
     });
 
-    return computed;
+    // Devolver en orden descendente (el más nuevo primero) para la tabla
+    return computedAsc.reverse();
   }, [creditor]);
 
   const filteredTransactions = useMemo(() => {
@@ -129,6 +156,32 @@ const CreditorDetailsPage: React.FC = () => {
     });
   }, [transactionsWithBalance, searchTerm, filterType]);
 
+  const handleOpenAdd = () => {
+    setEditingTransaction(null);
+    setTransactionForm({
+      type: (creditor?.current_balance || 0) <= 0 ? "charge" : "payment",
+      amount: "",
+      description: "",
+      sourceAccountId: "cash",
+      selectedExpenseCategoryId: expenseCategories[0]?.id || "",
+    });
+    setSkipLinkedTransaction(false);
+    setIsTransactionDialogOpen(true);
+  };
+
+  const handleOpenEdit = (tx: any) => {
+    setEditingTransaction(tx);
+    setTransactionForm({
+      type: tx.type,
+      amount: tx.amount.toString(),
+      description: tx.description,
+      sourceAccountId: "cash",
+      selectedExpenseCategoryId: expenseCategories[0]?.id || "",
+    });
+    setSkipLinkedTransaction(true);
+    setIsTransactionDialogOpen(true);
+  };
+
   const handleTransactionSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user || !creditor) return;
@@ -137,45 +190,134 @@ const CreditorDetailsPage: React.FC = () => {
     if (amount <= 0) { showError("Monto inválido"); return; }
 
     try {
-      let newCreditorBalance = creditor.current_balance;
-
       if (editingTransaction) {
-        newCreditorBalance = editingTransaction.type === "charge" ? newCreditorBalance - editingTransaction.amount : newCreditorBalance + editingTransaction.amount;
-      }
+        const { error: updateTxError } = await supabase
+          .from('creditor_transactions')
+          .update({ 
+            type: transactionForm.type, 
+            amount, 
+            description: transactionForm.description 
+          })
+          .eq('id', editingTransaction.id);
+        
+        if (updateTxError) throw updateTxError;
+      } else {
+        const { error: insertTxError } = await supabase
+          .from('creditor_transactions')
+          .insert({ 
+            user_id: user.id, 
+            creditor_id: creditor.id, 
+            type: transactionForm.type, 
+            amount, 
+            description: transactionForm.description, 
+            date: getLocalDateString(new Date()) 
+          });
+        
+        if (insertTxError) throw insertTxError;
 
-      if (transactionForm.type === "charge") newCreditorBalance += amount;
-      else {
-        if (newCreditorBalance < amount - 0.01) { showError("El pago excede la deuda."); return; }
-        newCreditorBalance -= amount;
-
-        if (!editingTransaction && !skipLinkedTransaction) {
+        // Manejar transacción vinculada si es un pago y no se omite
+        if (transactionForm.type === "payment" && !skipLinkedTransaction) {
           const linkedDesc = `Pago a ${creditor.name}: ${transactionForm.description}`;
           if (transactionForm.sourceAccountId === "cash") {
-            await supabase.from('cash_transactions').insert({ user_id: user.id, type: "egreso", amount, description: linkedDesc, date: getLocalDateString(new Date()), expense_category_id: transactionForm.selectedExpenseCategoryId || null });
+            await supabase.from('cash_transactions').insert({ 
+              user_id: user.id, 
+              type: "egreso", 
+              amount, 
+              description: linkedDesc, 
+              date: getLocalDateString(new Date()), 
+              expense_category_id: transactionForm.selectedExpenseCategoryId || null 
+            });
           } else {
             const card = cards.find(c => c.id === transactionForm.sourceAccountId);
             if (card) {
               const newCardBalance = card.type === "credit" ? card.current_balance + amount : card.current_balance - amount;
               await supabase.from('cards').update({ current_balance: newCardBalance }).eq('id', card.id);
-              await supabase.from('card_transactions').insert({ user_id: user.id, card_id: card.id, type: "charge", amount, description: linkedDesc, date: getLocalDateString(new Date()), expense_category_id: transactionForm.selectedExpenseCategoryId || null });
+              await supabase.from('card_transactions').insert({ 
+                user_id: user.id, 
+                card_id: card.id, 
+                type: "charge", 
+                amount, 
+                description: linkedDesc, 
+                date: getLocalDateString(new Date()), 
+                expense_category_id: transactionForm.selectedExpenseCategoryId || null 
+              });
             }
           }
         }
       }
 
-      await supabase.from('creditors').update({ current_balance: newCreditorBalance }).eq('id', creditor.id);
+      // Recalcular el saldo basado en todas las transacciones existentes
+      const { data: txs, error: fetchError } = await supabase
+        .from('creditor_transactions')
+        .select('type, amount')
+        .eq('creditor_id', creditor.id);
       
-      if (editingTransaction) {
-        await supabase.from('creditor_transactions').update({ type: transactionForm.type, amount, description: transactionForm.description }).eq('id', editingTransaction.id);
-      } else {
-        await supabase.from('creditor_transactions').insert({ user_id: user.id, creditor_id: creditor.id, type: transactionForm.type, amount, description: transactionForm.description, date: getLocalDateString(new Date()) });
-      }
+      if (fetchError) throw fetchError;
+
+      const totalCharges = (txs || [])
+        .filter(t => t.type === 'charge')
+        .reduce((sum, t) => sum + Number(t.amount), 0);
+
+      const totalPayments = (txs || [])
+        .filter(t => t.type === 'payment')
+        .reduce((sum, t) => sum + Number(t.amount), 0);
+
+      const newBalance = creditor.initial_balance + totalCharges - totalPayments;
+
+      const { error: updateError } = await supabase
+        .from('creditors')
+        .update({ current_balance: newBalance })
+        .eq('id', creditor.id);
+
+      if (updateError) throw updateError;
 
       showSuccess(editingTransaction ? "Movimiento actualizado" : "Movimiento registrado");
       setIsTransactionDialogOpen(false);
       fetchData();
     } catch (error: any) {
       showError('Error: ' + error.message);
+    }
+  };
+
+  const handleDeleteTransaction = async (tx: any) => {
+    if (!user || !creditor) return;
+    try {
+      const { error: deleteError } = await supabase
+        .from('creditor_transactions')
+        .delete()
+        .eq('id', tx.id);
+
+      if (deleteError) throw deleteError;
+
+      // Recalcular el saldo basado en las transacciones restantes
+      const { data: txs, error: fetchError } = await supabase
+        .from('creditor_transactions')
+        .select('type, amount')
+        .eq('creditor_id', creditor.id);
+      
+      if (fetchError) throw fetchError;
+
+      const totalCharges = (txs || [])
+        .filter(t => t.type === 'charge')
+        .reduce((sum, t) => sum + Number(t.amount), 0);
+
+      const totalPayments = (txs || [])
+        .filter(t => t.type === 'payment')
+        .reduce((sum, t) => sum + Number(t.amount), 0);
+
+      const newBalance = creditor.initial_balance + totalCharges - totalPayments;
+
+      const { error: updateError } = await supabase
+        .from('creditors')
+        .update({ current_balance: newBalance })
+        .eq('id', creditor.id);
+
+      if (updateError) throw updateError;
+
+      showSuccess("Movimiento eliminado");
+      fetchData();
+    } catch (error: any) {
+      showError('Error al eliminar: ' + error.message);
     }
   };
 
@@ -210,17 +352,40 @@ const CreditorDetailsPage: React.FC = () => {
         <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Deuda Inicial</CardTitle></CardHeader><CardContent><div className="text-2xl font-semibold">${creditor.initial_balance.toFixed(2)}</div></CardContent></Card>
       </div>
 
-      <Card>
-        <CardHeader className="flex items-center justify-between">
-          <CardTitle>Historial de Movimientos</CardTitle>
-          <div className="flex gap-2">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild><Button variant="outline" size="sm"><FileDown className="h-4 w-4 mr-1" /> Exportar</Button></DropdownMenuTrigger>
-              <DropdownMenuContent><DropdownMenuItem onClick={() => handleExport('csv')}>CSV</DropdownMenuItem><DropdownMenuItem onClick={() => handleExport('pdf')}>PDF</DropdownMenuItem></DropdownMenuContent>
-            </DropdownMenu>
-            <Button size="sm" onClick={() => { setEditingTransaction(null); setIsTransactionDialogOpen(true); }}><DollarSign className="h-4 w-4 mr-1" /> Nuevo</Button>
+      <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
+        <div className="flex flex-col sm:flex-row gap-2 w-full md:max-w-2xl">
+          <div className="relative flex-1">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input placeholder="Buscar descripción..." className="pl-8 h-9" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
           </div>
-        </CardHeader>
+          <Select value={filterType} onValueChange={(v: any) => setFilterType(v)}>
+            <SelectTrigger className="w-full sm:w-[140px] h-9">
+              <Filter className="mr-2 h-3 w-3" />
+              <SelectValue placeholder="Filtrar" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos</SelectItem>
+              <SelectItem value="charge">Cargos</SelectItem>
+              <SelectItem value="payment">Pagos</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex items-center gap-2 w-full md:w-auto">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="icon" className="h-9 w-9" title="Exportar"><FileDown className="h-4 w-4" /></Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => handleExport('csv')}><FileText className="mr-2 h-4 w-4" /> CSV</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleExport('pdf')}><FileText className="mr-2 h-4 w-4" /> PDF</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <Button size="sm" className="h-9 gap-1" onClick={handleOpenAdd}><DollarSign className="h-4 w-4" /> Nuevo</Button>
+        </div>
+      </div>
+
+      <Card>
+        <CardHeader><CardTitle className="flex items-center gap-2"><History className="h-5 w-5" /> Historial</CardTitle></CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
@@ -229,10 +394,11 @@ const CreditorDetailsPage: React.FC = () => {
                 <TableHead>Descripción</TableHead>
                 <TableHead className="text-right">Monto</TableHead>
                 <TableHead className="text-right">Saldo</TableHead>
+                <TableHead className="text-right">Acciones</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredTransactions.map(tx => (
+              {filteredTransactions.map((tx) => (
                 <TableRow key={tx.id}>
                   <TableCell className="text-xs">{format(parseISO(tx.date), "dd/MM/yy")}</TableCell>
                   <TableCell>
@@ -247,14 +413,69 @@ const CreditorDetailsPage: React.FC = () => {
                     {tx.type === "charge" ? "+" : "-"}${tx.amount.toFixed(2)}
                   </TableCell>
                   <TableCell className="text-right font-black text-xs">${tx.runningBalance.toFixed(2)}</TableCell>
+                  <TableCell className="text-right flex gap-1 justify-end">
+                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleOpenEdit(tx)}><Edit className="h-3.5 w-3.5" /></Button>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild><Button variant="ghost" size="icon" className="h-7 w-7 text-destructive"><Trash2 className="h-3.5 w-3.5" /></Button></AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader><AlertDialogTitle>¿Eliminar movimiento?</AlertDialogTitle><AlertDialogDescription>Se ajustará el saldo.</AlertDialogDescription></AlertDialogHeader>
+                        <AlertDialogFooter><AlertDialogCancel>No</AlertDialogCancel><AlertDialogAction onClick={() => handleDeleteTransaction(tx)}>Sí</AlertDialogAction></AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
         </CardContent>
       </Card>
-      
-      {/* Diálogo omitido por brevedad pero sigue funcionando igual */}
+
+      <Dialog open={isTransactionDialogOpen} onOpenChange={setIsTransactionDialogOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>{editingTransaction ? "Editar Movimiento" : "Registrar Movimiento"}</DialogTitle></DialogHeader>
+          <form onSubmit={handleTransactionSubmit} className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label>Tipo</Label>
+              <Select value={transactionForm.type} onValueChange={(v: any) => setTransactionForm({...transactionForm, type: v})}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent><SelectItem value="payment">Pago (Abono a deuda)</SelectItem><SelectItem value="charge">Cargo (Debo más)</SelectItem></SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-2"><Label>Monto</Label><Input value={transactionForm.amount} onChange={e => setTransactionForm({...transactionForm, amount: e.target.value})} required /></div>
+            <div className="grid gap-2"><Label>Descripción</Label><Input value={transactionForm.description} onChange={e => setTransactionForm({...transactionForm, description: e.target.value})} required /></div>
+            {transactionForm.type === "payment" && !editingTransaction && (
+              <>
+                <div className="flex items-center space-x-2 bg-blue-50 p-3 rounded-md border border-blue-100">
+                  <Checkbox id="skip" checked={skipLinkedTransaction} onCheckedChange={(v) => setSkipLinkedTransaction(!!v)} />
+                  <Label htmlFor="skip" className="text-xs">Ya registré este egreso manualmente</Label>
+                </div>
+                {!skipLinkedTransaction && (
+                  <>
+                    <div className="grid gap-2">
+                      <Label>Origen del dinero</Label>
+                      <Select value={transactionForm.sourceAccountId} onValueChange={(v) => setTransactionForm({...transactionForm, sourceAccountId: v})}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="cash">Efectivo (${cashBalance.toFixed(2)})</SelectItem>
+                          {cards.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="grid gap-2">
+                      <Label>Categoría de gasto</Label>
+                      <Select value={transactionForm.selectedExpenseCategoryId} onValueChange={(v) => setTransactionForm({...transactionForm, selectedExpenseCategoryId: v})}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>{expenseCategories.map(cat => <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>)}</SelectContent>
+                      </Select>
+                    </div>
+                  </>
+                )}
+              </>
+            )}
+            <DialogFooter><Button type="submit">Guardar</Button></DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
