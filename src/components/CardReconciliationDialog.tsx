@@ -7,14 +7,19 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
 import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/context/SessionContext";
+import { useCategoryContext } from "@/context/CategoryContext";
 import { showError, showSuccess } from "@/utils/toast";
 import { evaluateExpression } from "@/utils/math-helpers";
 import { getLocalDateString } from "@/utils/date-helpers";
 import { cn } from "@/lib/utils";
-import { AlertCircle, HelpCircle } from "lucide-react";
+import { AlertCircle, HelpCircle, CalendarIcon, Tag } from "lucide-react";
 import { format, addMonths } from "date-fns";
+import { es } from "date-fns/locale";
+import DynamicLucideIcon from "./DynamicLucideIcon";
 
 interface CardDataForReconciliation {
   id: string;
@@ -41,6 +46,7 @@ const CardReconciliationDialog: React.FC<CardReconciliationDialogProps> = ({
   onNoAdjustmentSuccess,
 }) => {
   const { user } = useSession();
+  const { incomeCategories, expenseCategories } = useCategoryContext();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   
@@ -57,12 +63,18 @@ const CardReconciliationDialog: React.FC<CardReconciliationDialogProps> = ({
   // Plazo para diferir la diferencia de meses
   const [adjustmentInstallments, setAdjustmentInstallments] = useState<string>("1");
 
+  // Fecha y categoría del ajuste para afectar al periodo correcto
+  const [adjustmentDate, setAdjustmentDate] = useState<Date>(new Date());
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string>("");
+
   useEffect(() => {
     if (isOpen) {
       setRevolventeInput("");
       setMesesInput("");
       setRealValueInput("");
       setAdjustmentInstallments("1");
+      setAdjustmentDate(new Date());
+      setSelectedCategoryId("");
       setShowHelp(false);
     }
   }, [isOpen]);
@@ -136,6 +148,20 @@ const CardReconciliationDialog: React.FC<CardReconciliationDialogProps> = ({
     return realValueVal - appBalance;
   }, [card, creditMode, revolventeDiff, mesesDiff, realValueVal, appBalance]);
 
+  // Determinar si el ajuste principal es un cargo o un abono para filtrar categorías
+  const isAdjustmentCharge = useMemo(() => {
+    if (card.type === "credit" && creditMode === "detailed") {
+      // Si el ajuste neto de revolvente es positivo, es un cargo (debes más)
+      return revolventeDiff > 0;
+    }
+    // Para débito o crédito por disponible
+    return card.type === "credit" ? calculatedDifference < 0 : calculatedDifference < 0;
+  }, [card.type, creditMode, revolventeDiff, calculatedDifference]);
+
+  const categoriesToDisplay = useMemo(() => {
+    return isAdjustmentCharge ? expenseCategories : incomeCategories;
+  }, [isAdjustmentCharge, expenseCategories, incomeCategories]);
+
   const handleReconcile = async () => {
     if (!user) {
       showError("Debes iniciar sesión.");
@@ -151,8 +177,7 @@ const CardReconciliationDialog: React.FC<CardReconciliationDialogProps> = ({
     }
 
     setIsSubmitting(true);
-    const today = new Date();
-    const transactionDate = getLocalDateString(today);
+    const transactionDate = getLocalDateString(adjustmentDate);
 
     try {
       // MODO DETALLADO (CRÉDITO)
@@ -170,6 +195,8 @@ const CardReconciliationDialog: React.FC<CardReconciliationDialogProps> = ({
               description: "Ajuste de Cuadre (Revolvente)",
               date: transactionDate,
               is_adjustment: true,
+              expense_category_id: txType === "charge" ? (selectedCategoryId || null) : null,
+              income_category_id: txType === "payment" ? (selectedCategoryId || null) : null,
             });
           if (revError) throw revError;
         }
@@ -182,7 +209,7 @@ const CardReconciliationDialog: React.FC<CardReconciliationDialogProps> = ({
 
           const transactionInserts = [];
           for (let i = 0; i < installmentsCount; i++) {
-            const installmentDate = addMonths(today, i);
+            const installmentDate = addMonths(adjustmentDate, i);
             transactionInserts.push({
               user_id: user.id,
               card_id: card.id,
@@ -194,6 +221,8 @@ const CardReconciliationDialog: React.FC<CardReconciliationDialogProps> = ({
               installments_count: installmentsCount,
               installment_number: i + 1,
               is_adjustment: true,
+              expense_category_id: txType === "charge" ? (selectedCategoryId || null) : null,
+              income_category_id: txType === "payment" ? (selectedCategoryId || null) : null,
             });
           }
 
@@ -231,6 +260,8 @@ const CardReconciliationDialog: React.FC<CardReconciliationDialogProps> = ({
             description: `Ajuste de Cuadre (${card.type === 'credit' ? 'Disponible' : 'Saldo'})`,
             date: transactionDate,
             is_adjustment: true,
+            expense_category_id: txType === "charge" ? (selectedCategoryId || null) : null,
+            income_category_id: txType === "payment" ? (selectedCategoryId || null) : null,
           });
         if (transactionError) throw transactionError;
 
@@ -408,6 +439,57 @@ const CardReconciliationDialog: React.FC<CardReconciliationDialogProps> = ({
               </div>
             </>
           )}
+
+          {/* Selector de Fecha del Ajuste */}
+          <div className="grid gap-2 border-t pt-4">
+            <Label className="font-semibold flex items-center gap-1">
+              <CalendarIcon className="h-4 w-4 text-muted-foreground" /> Fecha del Ajuste (Periodo)
+            </Label>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className="w-full justify-start text-left font-normal rounded-xl h-10"
+                >
+                  {format(adjustmentDate, "PPP", { locale: es })}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="center">
+                <Calendar
+                  mode="single"
+                  selected={adjustmentDate}
+                  onSelect={(d) => d && setAdjustmentDate(d)}
+                  locale={es}
+                  initialFocus
+                />
+              </PopoverContent>
+            </Popover>
+            <p className="text-[10px] text-muted-foreground">
+              Selecciona una fecha dentro del periodo de facturación que deseas afectar.
+            </p>
+          </div>
+
+          {/* Selector de Categoría del Ajuste */}
+          <div className="grid gap-2">
+            <Label className="font-semibold flex items-center gap-1">
+              <Tag className="h-4 w-4 text-muted-foreground" /> Categoría del Ajuste (Opcional)
+            </Label>
+            <Select value={selectedCategoryId} onValueChange={setSelectedCategoryId}>
+              <SelectTrigger className="rounded-xl h-10">
+                <SelectValue placeholder="Selecciona una categoría" />
+              </SelectTrigger>
+              <SelectContent>
+                {categoriesToDisplay.map(cat => (
+                  <SelectItem key={cat.id} value={cat.id}>
+                    <div className="flex items-center gap-2">
+                      <DynamicLucideIcon iconName={cat.icon || "Tag"} className="h-4 w-4" />
+                      {cat.name}
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
 
           <div className="grid grid-cols-3 items-center gap-4 border-t pt-2">
             <Label className="text-right col-span-2 font-bold">Diferencia a Ajustar:</Label>
