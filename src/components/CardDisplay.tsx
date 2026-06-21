@@ -71,25 +71,22 @@ const CardDisplay: React.FC<CardDisplayProps> = ({ card, onAddTransaction, onDel
   const bankLogoUrl = useMemo(() => {
     const name = card.bank_name.toLowerCase();
     if (name.includes("nu") || name.includes("nubank")) {
-      return "dyad-media://media/appcuentas2/.dyad/media/9acbab3f6e9cacb800f8a6ee122ef91385b8995f.png";
+      return "dyad-media://media/appcuentas2/.dyad/media/97ec6769a1b8e18c52f8ddfced925ceb4163fb17149e7b167f77324ac11196b1.png";
     }
     if (name.includes("stori")) {
-      return "dyad-media://media/appcuentas2/.dyad/media/stori-seeklogo.png";
+      return "dyad-media://media/appcuentas2/.dyad/media/87a3632f0be04bf1e1865a178608f63a9919586732604f61bc983ef21f1aa434.png";
     }
     if (name.includes("mercado") || name.includes("pago")) {
-      return "dyad-media://media/appcuentas2/.dyad/media/mercado-pago-logo.png";
+      return "dyad-media://media/appcuentas2/.dyad/media/79595b1ae3313cc2db5165d413c5c99e042cdb3129ff6e1d69814d489987b96a.png";
     }
     if (name.includes("didi")) {
-      return "dyad-media://media/appcuentas2/.dyad/media/DiDi-Logo.png";
+      return "dyad-media://media/appcuentas2/.dyad/media/d475efd7a9684af3e1beb06bf0f256578ccffbe5e9e66093dc64b6e90c160e81.png";
     }
     if (name.includes("plata")) {
-      return "dyad-media://media/appcuentas2/.dyad/media/1_5YAZPx_RfP03-TJlwRcdVQ@2x.png";
+      return "dyad-media://media/appcuentas2/.dyad/media/8a612b7fa45260f208cf1ddd45d87454980d4025b07216b3d09ff8fbba1b1aef.png";
     }
     if (name.includes("bbva")) {
-      return "dyad-media://media/appcuentas2/.dyad/media/pngwing.com.png";
-    }
-    if (name.includes("klar")) {
-      return "dyad-media://media/appcuentas2/.dyad/media/8a612b7fa45260f208cf1ddd45d87454980d4025b07216b3d09ff8fbba1b1aef.png";
+      return "dyad-media://media/appcuentas2/.dyad/media/a2a2feb7f1ba2ca79b46f12ca4d740cacb3d1c13e5009686f881a187083cdaac.png";
     }
     return null;
   }, [card.bank_name]);
@@ -136,7 +133,13 @@ const CardDisplay: React.FC<CardDisplayProps> = ({ card, onAddTransaction, onDel
             {/* Encabezado */}
             <div className="flex justify-between items-start">
               <div className="flex items-center gap-2">
-                {card.bank_name && (
+                {bankLogoUrl ? (
+                  <img 
+                    src={bankLogoUrl} 
+                    alt={card.bank_name} 
+                    className="h-7 object-contain max-w-[100px] filter brightness-0 invert drop-shadow-md"
+                  />
+                ) : (
                   <span className="text-sm font-black tracking-wider uppercase drop-shadow-md">
                     {card.bank_name}
                   </span>
@@ -198,17 +201,8 @@ const CardDisplay: React.FC<CardDisplayProps> = ({ card, onAddTransaction, onDel
                   <p className="opacity-60">Vence: {card.expiration_date}</p>
                 </div>
 
-                {/* Logo del Banco o Red de Pago */}
+                {/* Logo de Red de Pago */}
                 <div className="flex items-center gap-3">
-                  {bankLogoUrl ? (
-                    <img 
-                      src={bankLogoUrl} 
-                      alt={card.bank_name} 
-                      className="h-6 object-contain max-w-[60px] filter brightness-0 invert drop-shadow-md"
-                    />
-                  ) : (
-                    <span className="text-[10px] font-black tracking-wider opacity-60">{card.bank_name}</span>
-                  )}
                   <img 
                     src={networkLogoUrl} 
                     alt="Network" 
@@ -315,17 +309,17 @@ const CardDisplay: React.FC<CardDisplayProps> = ({ card, onAddTransaction, onDel
           </div>
 
           {/* Botón para regresar al frente */}
-          <div className="flex justify-center z-10">
+          <div className="absolute bottom-3 right-3 z-20">
             <Button 
-              variant="ghost" 
-              size="sm" 
-              className="text-[10px] text-white/60 hover:text-white h-6 gap-1"
+              variant="secondary" 
+              size="icon" 
+              className="h-8 w-8 rounded-full bg-white/20 hover:bg-white/40 text-white border-none backdrop-blur-md shadow-lg"
               onClick={(e) => {
                 e.stopPropagation();
                 setIsFlipped(false);
               }}
             >
-              <RotateCw className="h-3 w-3" /> Ver Frente
+              <RotateCw className="h-4 w-4" />
             </Button>
           </div>
         </div>
