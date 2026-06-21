@@ -9,10 +9,10 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { DollarSign, ArrowLeft, FileDown, FileText, ChevronLeft, ChevronRight, Scale, Search, Filter, Trash2, Edit, Image as ImageIcon, CalendarDays, Eye } from "lucide-react";
+import { DollarSign, ArrowLeft, FileDown, FileText, ChevronLeft, ChevronRight, Scale, Search, Filter, Trash2, Edit, Image as ImageIcon, CalendarDays, Eye, FastForward } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { cn } from "@/lib/utils";
-import { format, parseISO, isWithinInterval, startOfMonth, endOfMonth, addMonths, subMonths } from "date-fns";
+import { format, parseISO, isWithinInterval, startOfMonth, endOfMonth, addMonths } from "date-fns";
 import { es } from "date-fns/locale";
 import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/context/SessionContext";
@@ -40,6 +40,7 @@ const CardDetailsPage: React.FC = () => {
   const [currentViewDate, setCurrentViewDate] = useState(new Date());
   const [isAddTransactionDialogOpen, setIsAddTransactionDialogOpen] = useState(false);
   const [isReconcileDialogOpen, setIsReconcileDialogOpen] = useState(false);
+  const [isAdvanceDialogOpen, setIsAdvanceDialogOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<any>(null);
   
   const [searchTerm, setSearchTerm] = useState("");
@@ -108,6 +109,14 @@ const CardDetailsPage: React.FC = () => {
       return matchesDate && matchesSearch && matchesType;
     });
   }, [transactionsWithBalance, filterInterval, searchTerm, filterType]);
+
+  // Obtener todas las mensualidades diferidas futuras (que vencen después del periodo actual)
+  const futureInstallments = useMemo(() => {
+    if (!card || card.type !== "credit") return [];
+    return (card.card_transactions || [])
+      .filter((tx: any) => tx.type === "charge" && tx.installments_count && parseISO(tx.date) > filterInterval.end)
+      .sort((a: any, b: any) => parseISO(a.date).getTime() - parseISO(b.date).getTime());
+  }, [card, filterInterval]);
 
   // Calcular la deuda o saldo del periodo seleccionado
   const periodMetrics = useMemo(() => {
@@ -277,6 +286,27 @@ const CardDetailsPage: React.FC = () => {
     }
   };
 
+  // Adelantar una mensualidad futura al periodo actual
+  const handleAdvanceInstallment = async (tx: any) => {
+    if (!user || !card) return;
+    try {
+      const todayStr = getLocalDateString(new Date());
+      
+      // Cambiar la fecha de la transacción a hoy para que caiga en el periodo actual
+      const { error } = await supabase
+        .from('card_transactions')
+        .update({ date: todayStr })
+        .eq('id', tx.id);
+
+      if (error) throw error;
+
+      showSuccess(`Mensualidad "${tx.description}" adelantada al periodo actual.`);
+      fetchCardDetails();
+    } catch (error: any) {
+      showError("Error al adelantar mensualidad: " + error.message);
+    }
+  };
+
   const upcomingCutOffDate = useMemo(() => {
     if (card?.type === "credit" && card?.cut_off_day) {
       return getUpcomingCutOffDate(card.cut_off_day);
@@ -379,6 +409,11 @@ const CardDetailsPage: React.FC = () => {
                   <span className="px-2 text-[10px] font-bold min-w-[80px] text-center capitalize">{format(currentViewDate, "MMM yyyy", { locale: es })}</span>
                   <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setCurrentViewDate(addMonths(currentViewDate, 1))}><ChevronRight className="h-4 w-4" /></Button>
                 </div>
+                {card.type === "credit" && futureInstallments.length > 0 && (
+                  <Button variant="outline" size="sm" className="h-8 gap-1 text-xs font-bold" onClick={() => setIsAdvanceDialogOpen(true)}>
+                    <FastForward className="h-3.5 w-3.5" /> Adelantar ({futureInstallments.length})
+                  </Button>
+                )}
                 <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setIsReconcileDialogOpen(true)}><Scale className="h-4 w-4" /></Button>
                 <Button variant="default" size="icon" className="h-8 w-8" onClick={() => { setEditingTransaction(null); setIsDeferred(false); setTransactionForm({ type: "charge", amount: "", description: "", selectedCategoryId: "", imageUrl: "" }); setIsAddTransactionDialogOpen(true); }}><DollarSign className="h-4 w-4" /></Button>
               </div>
@@ -478,6 +513,67 @@ const CardDetailsPage: React.FC = () => {
         onReconciliationSuccess={fetchCardDetails}
         onNoAdjustmentSuccess={() => showSuccess("El saldo ya está cuadrado.")}
       />
+
+      {/* Diálogo para Adelantar Mensualidades */}
+      <Dialog open={isAdvanceDialogOpen} onOpenChange={setIsAdvanceDialogOpen}>
+        <DialogContent className="w-[90vw] max-w-[500px] rounded-3xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FastForward className="h-5 w-5 text-primary" /> Adelantar Mensualidades
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <p className="text-xs text-muted-foreground mb-4">
+              Selecciona una mensualidad diferida futura para traerla al periodo de facturación actual. Esto sumará el cargo a tu pago de este mes.
+            </p>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Detalle</TableHead>
+                    <TableHead>Fecha Programada</TableHead>
+                    <TableHead className="text-right">Monto</TableHead>
+                    <TableHead className="text-right">Acción</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {futureInstallments.map((tx: any) => (
+                    <TableRow key={tx.id}>
+                      <TableCell>
+                        <div className="flex flex-col">
+                          <span className="font-bold text-xs truncate max-w-[150px]">{tx.description}</span>
+                          <span className="text-[9px] text-primary font-black bg-primary/10 px-1.5 py-0.5 rounded-full w-fit mt-1">
+                            {tx.installment_number}/{tx.installments_count}
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-xs capitalize">
+                        {format(parseISO(tx.date), "MMM yyyy", { locale: es })}
+                      </TableCell>
+                      <TableCell className="text-right font-bold text-xs">
+                        ${tx.amount.toFixed(2)}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button 
+                          size="xs" 
+                          variant="outline" 
+                          className="h-7 text-[10px] font-bold gap-1"
+                          onClick={() => handleAdvanceInstallment(tx)}
+                        >
+                          <FastForward className="h-3 w-3" /> Adelantar
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsAdvanceDialogOpen(false)} className="w-full rounded-xl">Cerrar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={isAddTransactionDialogOpen} onOpenChange={setIsAddTransactionDialogOpen}>
         <DialogContent className="w-[90vw] max-w-[400px] rounded-3xl">
