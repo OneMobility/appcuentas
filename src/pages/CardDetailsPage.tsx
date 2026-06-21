@@ -27,6 +27,7 @@ import { getLocalDateString, getUpcomingCutOffDate, getUpcomingPaymentDueDate, g
 import CardReconciliationDialog from "@/components/CardReconciliationDialog";
 import ImageUpload from "@/components/ImageUpload";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { Checkbox } from "@/components/ui/checkbox";
 
 const CardDetailsPage: React.FC = () => {
   const { cardId } = useParams<{ cardId: string }>();
@@ -51,6 +52,12 @@ const CardDetailsPage: React.FC = () => {
     selectedCategoryId: "",
     imageUrl: "",
   });
+
+  // Estados para diferir compras
+  const [isDeferred, setIsDeferred] = useState(false);
+  const [deferredType, setDeferredType] = useState<"msi" | "interest">("msi");
+  const [installmentsCount, setInstallmentsCount] = useState("3");
+  const [totalWithInterest, setTotalWithInterest] = useState("");
 
   const fetchCardDetails = async () => {
     if (!user || !cardId) return;
@@ -126,24 +133,100 @@ const CardDetailsPage: React.FC = () => {
       selectedCategoryId: tx.income_category_id || tx.expense_category_id || "",
       imageUrl: tx.image_url || "",
     });
+    setIsDeferred(false);
     setIsAddTransactionDialogOpen(true);
   };
 
   const handleTransactionSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const amount = evaluateExpression(transactionForm.amount) || 0;
-    if (amount <= 0) return;
+    if (!user || !card) return;
 
+    const baseAmount = evaluateExpression(transactionForm.amount) || 0;
+    if (baseAmount <= 0) { showError("Monto inválido"); return; }
+
+    const isCreditCard = card.type === "credit";
+    const isCharge = transactionForm.type === "charge";
+
+    // Lógica para diferir compras
+    if (isCreditCard && isCharge && isDeferred && !editingTransaction) {
+      const count = parseInt(installmentsCount);
+      if (isNaN(count) || count < 2) {
+        showError("El número de meses debe ser al menos 2.");
+        return;
+      }
+
+      let totalAmountToCharge = baseAmount;
+      let monthlyInstallmentAmount = baseAmount / count;
+
+      if (deferredType === "interest") {
+        const totalInterestVal = evaluateExpression(totalWithInterest) || 0;
+        if (totalInterestVal <= 0 || totalInterestVal < baseAmount) {
+          showError("El monto total con intereses debe ser mayor al monto original.");
+          return;
+        }
+        totalAmountToCharge = totalInterestVal;
+        monthlyInstallmentAmount = totalInterestVal / count;
+      }
+
+      try {
+        const today = new Date();
+        const transactionInserts = [];
+
+        for (let i = 0; i < count; i++) {
+          const installmentDate = addMonths(today, i);
+          const installmentDateStr = getLocalDateString(installmentDate);
+
+          transactionInserts.push({
+            user_id: user.id,
+            card_id: card.id,
+            type: "charge",
+            amount: monthlyInstallmentAmount,
+            description: `${transactionForm.description} (Mensualidad ${i + 1}/${count})`,
+            date: installmentDateStr,
+            installments_total_amount: totalAmountToCharge,
+            installments_count: count,
+            installment_number: i + 1,
+            expense_category_id: transactionForm.selectedCategoryId || null,
+            image_url: transactionForm.imageUrl || null,
+          });
+        }
+
+        // Insertar todas las mensualidades
+        const { error: txsError } = await supabase
+          .from('card_transactions')
+          .insert(transactionInserts);
+
+        if (txsError) throw txsError;
+
+        // Actualizar el saldo de la tarjeta con la deuda total diferida
+        const newBalance = card.current_balance + totalAmountToCharge;
+        const { error: cardError } = await supabase
+          .from('cards')
+          .update({ current_balance: newBalance })
+          .eq('id', card.id);
+
+        if (cardError) throw cardError;
+
+        showSuccess(`Compra diferida a ${count} meses registrada exitosamente.`);
+        setIsAddTransactionDialogOpen(false);
+        fetchCardDetails();
+      } catch (err: any) {
+        showError("Error al registrar compra diferida: " + err.message);
+      }
+      return;
+    }
+
+    // Lógica normal no diferida (o edición)
     let newBalance = card.current_balance;
     if (editingTransaction) {
       if (card.type === "debit") newBalance = editingTransaction.type === "charge" ? newBalance + editingTransaction.amount : newBalance - editingTransaction.amount;
       else newBalance = editingTransaction.type === "charge" ? newBalance - editingTransaction.amount : newBalance + editingTransaction.amount;
     }
-    if (card.type === "debit") newBalance = transactionForm.type === "charge" ? newBalance - amount : newBalance + amount;
-    else newBalance = transactionForm.type === "charge" ? newBalance + amount : newBalance - amount;
+    if (card.type === "debit") newBalance = transactionForm.type === "charge" ? newBalance - baseAmount : newBalance + baseAmount;
+    else newBalance = transactionForm.type === "charge" ? newBalance + baseAmount : newBalance - baseAmount;
 
     const txData = {
-      user_id: user?.id, card_id: card.id, type: transactionForm.type, amount, description: transactionForm.description,
+      user_id: user?.id, card_id: card.id, type: transactionForm.type, amount: baseAmount, description: transactionForm.description,
       date: editingTransaction ? editingTransaction.date : getLocalDateString(new Date()),
       income_category_id: transactionForm.type === "payment" ? transactionForm.selectedCategoryId : null,
       expense_category_id: transactionForm.type === "charge" ? transactionForm.selectedCategoryId : null,
@@ -297,7 +380,7 @@ const CardDetailsPage: React.FC = () => {
                   <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setCurrentViewDate(addMonths(currentViewDate, 1))}><ChevronRight className="h-4 w-4" /></Button>
                 </div>
                 <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setIsReconcileDialogOpen(true)}><Scale className="h-4 w-4" /></Button>
-                <Button variant="default" size="icon" className="h-8 w-8" onClick={() => { setEditingTransaction(null); setTransactionForm({ type: "charge", amount: "", description: "", selectedCategoryId: "", imageUrl: "" }); setIsAddTransactionDialogOpen(true); }}><DollarSign className="h-4 w-4" /></Button>
+                <Button variant="default" size="icon" className="h-8 w-8" onClick={() => { setEditingTransaction(null); setIsDeferred(false); setTransactionForm({ type: "charge", amount: "", description: "", selectedCategoryId: "", imageUrl: "" }); setIsAddTransactionDialogOpen(true); }}><DollarSign className="h-4 w-4" /></Button>
               </div>
             </CardHeader>
             <CardContent className="p-0">
@@ -322,7 +405,14 @@ const CardDetailsPage: React.FC = () => {
                         <TableCell className="pl-4 text-[10px]">{format(parseISO(tx.date), "dd/MM")}</TableCell>
                         <TableCell>
                           <div className="flex flex-col">
-                            <span className="font-bold text-xs">{tx.description}</span>
+                            <span className="font-bold text-xs">
+                              {tx.description}
+                              {tx.installments_count && (
+                                <span className="ml-1.5 text-[9px] text-primary font-black bg-primary/10 px-1.5 py-0.5 rounded-full">
+                                  {tx.installment_number}/{tx.installments_count}
+                                </span>
+                              )}
+                            </span>
                             <span className="text-[9px] text-muted-foreground">{getCategoryById(tx.income_category_id || tx.expense_category_id)?.name || "Sin cat."}</span>
                           </div>
                         </TableCell>
@@ -350,6 +440,11 @@ const CardDetailsPage: React.FC = () => {
                                   <AlertDialogTitle>¿Eliminar movimiento?</AlertDialogTitle>
                                   <AlertDialogDescription>
                                     Esta acción no se puede deshacer. Se ajustará el saldo de la tarjeta automáticamente.
+                                    {tx.installments_count && (
+                                      <p className="mt-2 text-red-500 font-semibold">
+                                        Nota: Esta es una mensualidad diferida. Eliminarla solo borrará esta mensualidad en particular.
+                                      </p>
+                                    )}
                                   </AlertDialogDescription>
                                 </AlertDialogHeader>
                                 <AlertDialogFooter>
@@ -404,6 +499,88 @@ const CardDetailsPage: React.FC = () => {
                 <SelectContent>{(transactionForm.type === "charge" ? expenseCategories : incomeCategories).map(cat => <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>)}</SelectContent>
               </Select>
             </div>
+
+            {/* Opciones de diferido para tarjetas de crédito en cargos */}
+            {card?.type === "credit" && transactionForm.type === "charge" && !editingTransaction && (
+              <div className="border-t pt-4 mt-2 space-y-4">
+                <div className="flex items-center space-x-2">
+                  <Checkbox 
+                    id="defer-purchase-details" 
+                    checked={isDeferred} 
+                    onCheckedChange={(v) => setIsDeferred(!!v)} 
+                  />
+                  <Label htmlFor="defer-purchase-details" className="font-semibold cursor-pointer">¿Diferir esta compra?</Label>
+                </div>
+
+                {isDeferred && (
+                  <div className="bg-muted/50 p-3 rounded-2xl space-y-3 border">
+                    <div className="grid gap-1.5">
+                      <Label>Tipo de diferido</Label>
+                      <Select value={deferredType} onValueChange={(v: any) => setDeferredType(v)}>
+                        <SelectTrigger className="rounded-xl bg-background"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="msi">Meses sin intereses (MSI)</SelectItem>
+                          <SelectItem value="interest">Con intereses</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {deferredType === "interest" && (
+                      <div className="grid gap-1.5">
+                        <Label>Monto total a pagar (con intereses)</Label>
+                        <Input 
+                          value={totalWithInterest} 
+                          onChange={e => setTotalWithInterest(e.target.value)} 
+                          placeholder="Ej. 630" 
+                          className="rounded-xl bg-background"
+                          required
+                        />
+                      </div>
+                    )}
+
+                    <div className="grid gap-1.5">
+                      <Label>Número de meses</Label>
+                      <Select value={installmentsCount} onValueChange={setInstallmentsCount}>
+                        <SelectTrigger className="rounded-xl bg-background"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="3">3 meses</SelectItem>
+                          <SelectItem value="6">6 meses</SelectItem>
+                          <SelectItem value="9">9 meses</SelectItem>
+                          <SelectItem value="12">12 meses</SelectItem>
+                          <SelectItem value="18">18 meses</SelectItem>
+                          <SelectItem value="24">24 meses</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Vista previa del cálculo */}
+                    <div className="text-xs text-muted-foreground border-t pt-2 mt-1">
+                      {(() => {
+                        const count = parseInt(installmentsCount);
+                        const base = evaluateExpression(transactionForm.amount) || 0;
+                        if (deferredType === "msi") {
+                          const monthly = base / count;
+                          return (
+                            <p className="font-medium text-primary">
+                              Pagarás <span className="font-bold">{count} mensualidades</span> de <span className="font-bold">${monthly.toFixed(2)}</span> cada una (Sin intereses).
+                            </p>
+                          );
+                        } else {
+                          const total = evaluateExpression(totalWithInterest) || 0;
+                          const monthly = total / count;
+                          return (
+                            <p className="font-medium text-primary">
+                              Pagarás <span className="font-bold">{count} mensualidades</span> de <span className="font-bold">${monthly.toFixed(2)}</span> cada una (Total con intereses: ${total.toFixed(2)}).
+                            </p>
+                          );
+                        }
+                      })()}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="grid gap-2">
               <Label>Imagen/Ticket</Label>
               <ImageUpload onUploadSuccess={(url) => setTransactionForm({...transactionForm, imageUrl: url})} initialUrl={transactionForm.imageUrl} onRemove={() => setTransactionForm({...transactionForm, imageUrl: ""})} folder="card_tickets" />
