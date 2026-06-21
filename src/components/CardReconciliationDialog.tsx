@@ -6,13 +6,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/context/SessionContext";
 import { showError, showSuccess } from "@/utils/toast";
-import { format } from "date-fns";
+import { format, addMonths } from "date-fns";
 import { evaluateExpression } from "@/utils/math-helpers";
 import { cn } from "@/lib/utils";
 import { AlertCircle, HelpCircle } from "lucide-react";
+import { getLocalDateString } from "@/utils/date-helpers";
 
 interface CardDataForReconciliation {
   id: string;
@@ -52,29 +54,47 @@ const CardReconciliationDialog: React.FC<CardReconciliationDialogProps> = ({
   // Input para modo disponible (Crédito) o saldo (Débito)
   const [realValueInput, setRealValueInput] = useState<string>("");
 
+  // Plazo para diferir la diferencia de meses
+  const [adjustmentInstallments, setAdjustmentInstallments] = useState<string>("1");
+
   useEffect(() => {
     if (isOpen) {
       setRevolventeInput("");
       setMesesInput("");
       setRealValueInput("");
+      setAdjustmentInstallments("1");
       setShowHelp(false);
     }
   }, [isOpen]);
 
-  // Valores evaluados
+  // Calcular lo que la app "cree" que se debe actualmente a meses y revolvente
+  const appMetrics = useMemo(() => {
+    if (card.type !== "credit") return { meses: 0, revolvente: card.current_balance };
+    
+    const todayStr = format(new Date(), "yyyy-MM-dd");
+    // Sumar cargos diferidos que vencen hoy o en el futuro
+    const meses = card.transactions
+      .filter(tx => tx.type === "charge" && tx.installments_count && tx.date >= todayStr)
+      .reduce((sum, tx) => sum + Number(tx.amount), 0);
+
+    const revolvente = Math.max(0, card.current_balance - meses);
+    return { meses, revolvente };
+  }, [card.transactions, card.current_balance, card.type]);
+
+  // Valores evaluados de los inputs
   const revolventeVal = useMemo(() => {
-    if (!revolventeInput) return 0;
+    if (!revolventeInput) return appMetrics.revolvente;
     return revolventeInput.startsWith('=')
       ? (evaluateExpression(revolventeInput.substring(1)) || 0)
       : (parseFloat(revolventeInput) || 0);
-  }, [revolventeInput]);
+  }, [revolventeInput, appMetrics.revolvente]);
 
   const mesesVal = useMemo(() => {
-    if (!mesesInput) return 0;
+    if (!mesesInput) return appMetrics.meses;
     return mesesInput.startsWith('=')
       ? (evaluateExpression(mesesInput.substring(1)) || 0)
       : (parseFloat(mesesInput) || 0);
-  }, [mesesInput]);
+  }, [mesesInput, appMetrics.meses]);
 
   const realValueVal = useMemo(() => {
     if (!realValueInput) return 0;
@@ -83,7 +103,18 @@ const CardReconciliationDialog: React.FC<CardReconciliationDialogProps> = ({
       : (parseFloat(realValueInput) || 0);
   }, [realValueInput]);
 
-  // Cálculos de balance and diferencia
+  // Diferencias individuales
+  const revolventeDiff = useMemo(() => {
+    if (card.type !== "credit" || creditMode !== "detailed") return 0;
+    return revolventeVal - appMetrics.revolvente;
+  }, [revolventeVal, appMetrics.revolvente, card.type, creditMode]);
+
+  const mesesDiff = useMemo(() => {
+    if (card.type !== "credit" || creditMode !== "detailed") return 0;
+    return mesesVal - appMetrics.meses;
+  }, [mesesVal, appMetrics.meses, card.type, creditMode]);
+
+  // Cálculos de balance y diferencia global
   const appBalance = useMemo(() => {
     if (card.type === "debit") return card.current_balance;
     if (creditMode === "available") {
@@ -94,11 +125,10 @@ const CardReconciliationDialog: React.FC<CardReconciliationDialogProps> = ({
 
   const calculatedDifference = useMemo(() => {
     if (card.type === "credit" && creditMode === "detailed") {
-      const totalRealDebt = revolventeVal + mesesVal;
-      return totalRealDebt - card.current_balance; // Diferencia contra la deuda global de la app
+      return revolventeDiff + mesesDiff;
     }
     return realValueVal - appBalance;
-  }, [card, creditMode, revolventeVal, mesesVal, realValueVal, appBalance]);
+  }, [card, creditMode, revolventeDiff, mesesDiff, realValueVal, appBalance]);
 
   const handleReconcile = async () => {
     if (!user) {
@@ -106,64 +136,110 @@ const CardReconciliationDialog: React.FC<CardReconciliationDialogProps> = ({
       return;
     }
 
-    const difference = calculatedDifference;
+    const totalDiff = calculatedDifference;
 
-    if (Math.abs(difference) < 0.01) {
+    if (Math.abs(totalDiff) < 0.01) {
       onNoAdjustmentSuccess();
       onClose();
       return;
     }
 
     setIsSubmitting(true);
-    const transactionDate = format(new Date(), "yyyy-MM-dd");
-    const adjustmentAmount = Math.abs(difference);
-    
-    let transactionType: "charge" | "payment";
-    let newCurrentBalanceForCard = card.current_balance;
-
-    if (card.type === "credit") {
-      if (creditMode === "detailed") {
-        // Si la deuda real (revolvente + meses) es mayor que la de la app (diff > 0) -> Debo más -> Cargo (gasto)
-        transactionType = difference > 0 ? "charge" : "payment";
-        newCurrentBalanceForCard = card.current_balance + difference;
-      } else {
-        // Modo Disponible: Si disponible real > app (diff > 0) -> Tengo menos deuda -> Pago (abono)
-        transactionType = difference > 0 ? "payment" : "charge";
-        newCurrentBalanceForCard = card.current_balance - difference;
-      }
-    } else {
-      // Débito: Si real > app (diff > 0) -> Tengo más dinero -> Pago (depósito)
-      transactionType = difference > 0 ? "payment" : "charge";
-      newCurrentBalanceForCard = card.current_balance + difference;
-    }
+    const today = new Date();
+    const transactionDate = getLocalDateString(today);
 
     try {
-      const { error: transactionError } = await supabase
-        .from('card_transactions')
-        .insert({
-          user_id: user.id,
-          card_id: card.id,
-          type: transactionType,
-          amount: adjustmentAmount,
-          description: `Ajuste de Cuadre (${card.type === 'credit' ? (creditMode === 'detailed' ? 'Desglosado' : 'Disponible') : 'Saldo'})`,
-          date: transactionDate,
-          is_adjustment: true,
-        });
+      // MODO DETALLADO (CRÉDITO)
+      if (card.type === "credit" && creditMode === "detailed") {
+        // 1. Procesar ajuste de Revolvente (si hay diferencia)
+        if (Math.abs(revolventeDiff) >= 0.01) {
+          const txType = revolventeDiff > 0 ? "charge" : "payment";
+          const { error: revError } = await supabase
+            .from('card_transactions')
+            .insert({
+              user_id: user.id,
+              card_id: card.id,
+              type: txType,
+              amount: Math.abs(revolventeDiff),
+              description: "Ajuste de Cuadre (Revolvente)",
+              date: transactionDate,
+              is_adjustment: true,
+            });
+          if (revError) throw revError;
+        }
 
-      if (transactionError) throw transactionError;
+        // 2. Procesar ajuste de Meses sin Intereses (si hay diferencia)
+        if (Math.abs(mesesDiff) >= 0.01) {
+          const installmentsCount = parseInt(adjustmentInstallments);
+          const txType = mesesDiff > 0 ? "charge" : "payment";
+          const monthlyAmount = Math.abs(mesesDiff) / installmentsCount;
 
-      const { error: cardUpdateError } = await supabase
-        .from('cards')
-        .update({ current_balance: newCurrentBalanceForCard })
-        .eq('id', card.id);
+          const transactionInserts = [];
+          for (let i = 0; i < installmentsCount; i++) {
+            const installmentDate = addMonths(today, i);
+            transactionInserts.push({
+              user_id: user.id,
+              card_id: card.id,
+              type: txType,
+              amount: monthlyAmount,
+              description: `Ajuste de Cuadre (Diferido ${i + 1}/${installmentsCount})`,
+              date: getLocalDateString(installmentDate),
+              installments_total_amount: Math.abs(mesesDiff),
+              installments_count: installmentsCount,
+              installment_number: i + 1,
+              is_adjustment: true,
+            });
+          }
 
-      if (cardUpdateError) throw cardUpdateError;
+          const { error: mesesError } = await supabase
+            .from('card_transactions')
+            .insert(transactionInserts);
+          if (mesesError) throw mesesError;
+        }
 
-      showSuccess("Saldo de tarjeta ajustado correctamente.");
+        // 3. Actualizar saldo global de la tarjeta
+        const newCurrentBalance = card.current_balance + totalDiff;
+        const { error: cardError } = await supabase
+          .from('cards')
+          .update({ current_balance: newCurrentBalance })
+          .eq('id', card.id);
+        if (cardError) throw cardError;
+
+      } else {
+        // MODO DISPONIBLE (CRÉDITO) O SALDO (DÉBITO)
+        const txType = card.type === "credit"
+          ? (totalDiff > 0 ? "payment" : "charge") // Disponible real > app -> menos deuda -> abono
+          : (totalDiff > 0 ? "payment" : "charge"); // Saldo real > app -> más dinero -> depósito
+
+        const newCurrentBalance = card.type === "credit"
+          ? card.current_balance - totalDiff
+          : card.current_balance + totalDiff;
+
+        const { error: transactionError } = await supabase
+          .from('card_transactions')
+          .insert({
+            user_id: user.id,
+            card_id: card.id,
+            type: txType,
+            amount: Math.abs(totalDiff),
+            description: `Ajuste de Cuadre (${card.type === 'credit' ? 'Disponible' : 'Saldo'})`,
+            date: transactionDate,
+            is_adjustment: true,
+          });
+        if (transactionError) throw transactionError;
+
+        const { error: cardUpdateError } = await supabase
+          .from('cards')
+          .update({ current_balance: newCurrentBalance })
+          .eq('id', card.id);
+        if (cardUpdateError) throw cardUpdateError;
+      }
+
+      showSuccess("Tarjeta cuadrada exitosamente.");
       onReconciliationSuccess();
       onClose();
     } catch (error: any) {
-      showError('Error: ' + error.message);
+      showError('Error al cuadrar: ' + error.message);
     } finally {
       setIsSubmitting(false);
     }
@@ -210,6 +286,7 @@ const CardReconciliationDialog: React.FC<CardReconciliationDialogProps> = ({
             setRevolventeInput("");
             setMesesInput("");
             setRealValueInput("");
+            setAdjustmentInstallments("1");
           }} className="w-full">
             <TabsList className="grid w-full grid-cols-2 rounded-xl">
               <TabsTrigger value="detailed" className="rounded-lg">Cuadre Detallado</TabsTrigger>
@@ -221,28 +298,68 @@ const CardReconciliationDialog: React.FC<CardReconciliationDialogProps> = ({
         <div className="grid gap-4 py-4">
           {card.type === "credit" && creditMode === "detailed" ? (
             <>
+              {/* Sección Revolvente */}
               <div className="grid gap-2">
-                <Label htmlFor="revolvente" className="font-semibold">Deuda Actual / Revolvente (Real)</Label>
+                <div className="flex justify-between items-center">
+                  <Label htmlFor="revolvente" className="font-semibold">Deuda Revolvente (Real)</Label>
+                  <span className="text-[10px] text-muted-foreground">En App: ${appMetrics.revolvente.toFixed(2)}</span>
+                </div>
                 <Input
                   id="revolvente"
                   type="text"
                   value={revolventeInput}
                   onChange={e => setRevolventeInput(e.target.value)}
-                  placeholder="Ej. 1500 o =1000+500"
+                  placeholder={`Ej. ${appMetrics.revolvente.toFixed(0)} o =1000+500`}
                   className="rounded-xl"
                 />
+                {Math.abs(revolventeDiff) >= 0.01 && (
+                  <span className={cn("text-[10px] font-bold", revolventeDiff > 0 ? "text-red-600" : "text-green-600")}>
+                    Diferencia revolvente: {revolventeDiff > 0 ? "+" : ""}${revolventeDiff.toFixed(2)}
+                  </span>
+                )}
               </div>
 
+              {/* Sección Meses */}
               <div className="grid gap-2">
-                <Label htmlFor="meses" className="font-semibold">Deuda a Meses / Diferido (Real)</Label>
+                <div className="flex justify-between items-center">
+                  <Label htmlFor="meses" className="font-semibold">Deuda a Meses / Diferido (Real)</Label>
+                  <span className="text-[10px] text-muted-foreground">En App: ${appMetrics.meses.toFixed(2)}</span>
+                </div>
                 <Input
                   id="meses"
                   type="text"
                   value={mesesInput}
                   onChange={e => setMesesInput(e.target.value)}
-                  placeholder="Ej. 3000 o =1000*3"
+                  placeholder={`Ej. ${appMetrics.meses.toFixed(0)} o =1000*3`}
                   className="rounded-xl"
                 />
+                {Math.abs(mesesDiff) >= 0.01 && (
+                  <div className="space-y-2 mt-1">
+                    <span className={cn("text-[10px] font-bold block", mesesDiff > 0 ? "text-red-600" : "text-green-600")}>
+                      Diferencia diferida: {mesesDiff > 0 ? "+" : ""}${mesesDiff.toFixed(2)}
+                    </span>
+                    
+                    {/* Preguntar a cuántos meses diferir la diferencia */}
+                    <div className="bg-muted/40 p-3 rounded-2xl border space-y-1.5">
+                      <Label className="text-xs font-bold">¿A cuántos meses diferir esta diferencia?</Label>
+                      <Select value={adjustmentInstallments} onValueChange={setAdjustmentInstallments}>
+                        <SelectTrigger className="rounded-xl bg-background h-9 text-xs"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {Array.from({ length: 12 }, (_, i) => i + 1).map(num => (
+                            <SelectItem key={num} value={num.toString()} className="text-xs">
+                              {num} {num === 1 ? 'mes (Cargo único)' : 'meses'}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {parseInt(adjustmentInstallments) > 1 && (
+                        <p className="text-[10px] text-primary font-medium">
+                          Se generarán {adjustmentInstallments} mensualidades de ${(Math.abs(mesesDiff) / parseInt(adjustmentInstallments)).toFixed(2)} cada una.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="bg-muted/50 p-4 rounded-2xl space-y-2 border text-sm">
@@ -290,7 +407,6 @@ const CardReconciliationDialog: React.FC<CardReconciliationDialogProps> = ({
             <span className={cn(
               "font-black text-base", 
               calculatedDifference !== 0 && (
-                // En modo deuda desglosada, diferencia positiva es malo (más deuda). En disponible/débito es bueno (más dinero).
                 (card.type === "credit" && creditMode === "detailed")
                   ? (calculatedDifference > 0 ? "text-red-600" : "text-green-600")
                   : (calculatedDifference > 0 ? "text-green-600" : "text-red-600")
@@ -311,7 +427,7 @@ const CardReconciliationDialog: React.FC<CardReconciliationDialogProps> = ({
             {isSubmitting ? "Ajustando..." : "Cuadrar Saldo"}
           </Button>
         </DialogFooter>
-      </DialogContent>
+      </Dialog>
     </Dialog>
   );
 };
