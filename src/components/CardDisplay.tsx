@@ -109,7 +109,8 @@ const CardDisplay: React.FC<CardDisplayProps> = ({ card, onAddTransaction, onDel
       >
         {/* CARA FRONTAL DE LA TARJETA */}
         <div 
-          className="absolute inset-0 w-full h-full rounded-2xl shadow-2xl overflow-hidden transition-all duration-500"
+          className="absolute inset-0 w-full h-full rounded-2xl shadow-2xl overflow-hidden transition-all duration-500 cursor-pointer"
+          onClick={() => setIsFlipped(true)}
           style={{ 
             backgroundColor: card.color,
             backfaceVisibility: "hidden",
@@ -215,8 +216,8 @@ const CardDisplay: React.FC<CardDisplayProps> = ({ card, onAddTransaction, onDel
             </div>
           </div>
 
-          {/* Capa de interacción: Botón flotante para voltear/revelar acciones */}
-          <div className="absolute bottom-3 right-3 z-20">
+          {/* Capa de interacción: Botón flotante para voltear/revelar acciones (Solo visible en Desktop) */}
+          <div className="absolute bottom-3 right-3 z-20 hidden md:block">
             <Button 
               variant="secondary" 
               size="icon" 
@@ -233,7 +234,8 @@ const CardDisplay: React.FC<CardDisplayProps> = ({ card, onAddTransaction, onDel
 
         {/* CARA TRASERA DE LA TARJETA (VOLTEADA) */}
         <div 
-          className="absolute inset-0 w-full h-full rounded-2xl shadow-2xl overflow-hidden flex flex-col justify-between p-4"
+          className="absolute inset-0 w-full h-full rounded-2xl shadow-2xl overflow-hidden flex flex-col justify-between p-4 cursor-pointer"
+          onClick={() => setIsFlipped(false)}
           style={{ 
             backgroundColor: "rgba(15, 23, 42, 0.95)", // Fondo oscuro elegante para el reverso
             backfaceVisibility: "hidden",
@@ -312,8 +314,8 @@ const CardDisplay: React.FC<CardDisplayProps> = ({ card, onAddTransaction, onDel
             </div>
           </div>
 
-          {/* Botón para regresar al frente */}
-          <div className="absolute bottom-3 right-3 z-20">
+          {/* Botón para regresar al frente (Solo visible en Desktop) */}
+          <div className="absolute bottom-3 right-3 z-20 hidden md:block">
             <Button 
               variant="secondary" 
               size="icon" 
