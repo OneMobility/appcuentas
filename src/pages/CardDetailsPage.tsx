@@ -23,7 +23,7 @@ import { useCategoryContext } from "@/context/CategoryContext";
 import { evaluateExpression } from "@/utils/math-helpers";
 import CardPocketsManager from "@/components/CardPocketsManager";
 import DynamicLucideIcon from "@/components/DynamicLucideIcon";
-import { getLocalDateString, getUpcomingCutOffDate, getUpcomingPaymentDueDate } from "@/utils/date-helpers";
+import { getLocalDateString, getUpcomingCutOffDate, getUpcomingPaymentDueDate, getStatementPeriod } from "@/utils/date-helpers";
 import CardReconciliationDialog from "@/components/CardReconciliationDialog";
 import ImageUpload from "@/components/ImageUpload";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
@@ -66,6 +66,19 @@ const CardDetailsPage: React.FC = () => {
     if (user && !isLoadingCategories) fetchCardDetails();
   }, [cardId, user, isLoadingCategories]);
 
+  // Obtener el rango de fechas para filtrar (periodo de facturación para crédito, mes calendario para débito)
+  const filterInterval = useMemo(() => {
+    if (!card) return { start: new Date(), end: new Date() };
+    if (card.type === "credit" && card.cut_off_day) {
+      return getStatementPeriod(card.cut_off_day, currentViewDate);
+    } else {
+      return {
+        start: startOfMonth(currentViewDate),
+        end: endOfMonth(currentViewDate)
+      };
+    }
+  }, [card, currentViewDate]);
+
   const transactionsWithBalance = useMemo(() => {
     if (!card) return [];
     const sortedDesc = [...(card.card_transactions || [])].sort((a, b) => 
@@ -81,15 +94,28 @@ const CardDetailsPage: React.FC = () => {
   }, [card]);
 
   const filteredTransactions = useMemo(() => {
-    const start = startOfMonth(currentViewDate);
-    const end = endOfMonth(currentViewDate);
     return transactionsWithBalance.filter((tx: any) => {
-      const matchesDate = isWithinInterval(parseISO(tx.date), { start, end });
+      const matchesDate = isWithinInterval(parseISO(tx.date), filterInterval);
       const matchesSearch = tx.description.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesType = filterType === "all" || tx.type === filterType;
       return matchesDate && matchesSearch && matchesType;
     });
-  }, [transactionsWithBalance, currentViewDate, searchTerm, filterType]);
+  }, [transactionsWithBalance, filterInterval, searchTerm, filterType]);
+
+  // Calcular la deuda o saldo del periodo seleccionado
+  const periodMetrics = useMemo(() => {
+    if (!card) return { charges: 0, payments: 0, net: 0 };
+    const periodTxs = (card.card_transactions || []).filter((tx: any) => 
+      isWithinInterval(parseISO(tx.date), filterInterval)
+    );
+    const charges = periodTxs.filter((tx: any) => tx.type === "charge").reduce((sum: number, tx: any) => sum + tx.amount, 0);
+    const payments = periodTxs.filter((tx: any) => tx.type === "payment").reduce((sum: number, tx: any) => sum + tx.amount, 0);
+    return {
+      charges,
+      payments,
+      net: card.type === "credit" ? (charges - payments) : (payments - charges)
+    };
+  }, [card, filterInterval]);
 
   const handleOpenEdit = (tx: any) => {
     setEditingTransaction(tx);
@@ -141,12 +167,9 @@ const CardDetailsPage: React.FC = () => {
     try {
       let newBalance = card.current_balance;
       
-      // Ajustar el saldo de la tarjeta al eliminar la transacción
       if (card.type === "debit") {
-        // En débito: eliminar un cargo (gasto) devuelve dinero (+), eliminar un abono (depósito) resta dinero (-)
         newBalance = tx.type === "charge" ? newBalance + tx.amount : newBalance - tx.amount;
       } else {
-        // En crédito: eliminar un cargo (gasto/deuda) resta deuda (-), eliminar un abono (pago) suma deuda (+)
         newBalance = tx.type === "charge" ? newBalance - tx.amount : newBalance + tx.amount;
       }
 
@@ -196,11 +219,17 @@ const CardDetailsPage: React.FC = () => {
 
       <div className="grid gap-4 lg:grid-cols-3">
         <div className={cn("lg:col-span-2 flex flex-col gap-4", card.type !== "debit" && "lg:col-span-3")}>
+          
+          {/* Tarjeta de Información Principal */}
           <Card className="p-4 md:p-6 text-white shadow-xl border-none mx-1" style={{ backgroundColor: card.color }}>
             <div className="flex justify-between items-start">
               <div className="space-y-1">
-                <p className="text-[10px] md:text-sm opacity-80 uppercase font-bold">{card.type === "credit" ? "Crédito Disponible" : "Saldo Disponible"}</p>
-                <p className="text-2xl md:text-3xl font-black">${(card.type === "credit" ? (card.credit_limit - card.current_balance) : card.current_balance).toFixed(2)}</p>
+                <p className="text-[10px] md:text-sm opacity-80 uppercase font-bold">
+                  {card.type === "credit" ? "Crédito Disponible" : "Saldo Disponible"}
+                </p>
+                <p className="text-2xl md:text-3xl font-black">
+                  ${(card.type === "credit" ? (card.credit_limit - card.current_balance) : card.current_balance).toFixed(2)}
+                </p>
               </div>
               <div className="text-right">
                 <p className="text-[10px] md:text-sm font-bold opacity-80">{card.bank_name}</p>
@@ -208,8 +237,26 @@ const CardDetailsPage: React.FC = () => {
               </div>
             </div>
 
+            {/* Deuda Global vs Deuda del Periodo */}
+            <div className="grid grid-cols-2 gap-4 mt-4 pt-4 border-t border-white/20 text-xs">
+              <div>
+                <p className="opacity-75 text-[10px] uppercase font-bold">Deuda Global</p>
+                <p className="text-lg font-black">
+                  ${card.type === "credit" ? card.current_balance.toFixed(2) : "0.00"}
+                </p>
+              </div>
+              <div>
+                <p className="opacity-75 text-[10px] uppercase font-bold">
+                  {card.type === "credit" ? "Deuda del Periodo" : "Flujo del Periodo"}
+                </p>
+                <p className="text-lg font-black">
+                  ${card.type === "credit" ? periodMetrics.net.toFixed(2) : periodMetrics.net.toFixed(2)}
+                </p>
+              </div>
+            </div>
+
             {card.type === "credit" && (
-              <div className="grid grid-cols-2 gap-4 mt-4 pt-4 border-t border-white/20 text-xs opacity-90">
+              <div className="grid grid-cols-2 gap-4 mt-4 pt-4 border-t border-white/10 text-xs opacity-90">
                 {upcomingCutOffDate && (
                   <div className="flex items-center gap-2">
                     <CalendarDays className="h-4 w-4" />
@@ -232,10 +279,23 @@ const CardDetailsPage: React.FC = () => {
             )}
           </Card>
 
+          {/* Tabla de Movimientos con Filtro de Periodo */}
           <Card className="border-none shadow-sm mx-1 overflow-hidden">
-            <CardHeader className="p-4 flex flex-row items-center justify-between bg-muted/10">
-              <CardTitle className="text-sm">Movimientos</CardTitle>
-              <div className="flex items-center gap-1">
+            <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-muted/10 gap-2">
+              <div className="flex flex-col">
+                <CardTitle className="text-sm font-bold">Movimientos del Periodo</CardTitle>
+                <span className="text-[10px] text-muted-foreground font-medium">
+                  {format(filterInterval.start, "dd 'de' MMM", { locale: es })} - {format(filterInterval.end, "dd 'de' MMM, yyyy", { locale: es })}
+                </span>
+              </div>
+              
+              {/* Navegación de Periodos */}
+              <div className="flex items-center gap-2">
+                <div className="flex items-center bg-background rounded-lg p-0.5 border">
+                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setCurrentViewDate(subMonths(currentViewDate, 1))}><ChevronLeft className="h-4 w-4" /></Button>
+                  <span className="px-2 text-[10px] font-bold min-w-[80px] text-center capitalize">{format(currentViewDate, "MMM yyyy", { locale: es })}</span>
+                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setCurrentViewDate(addMonths(currentViewDate, 1))}><ChevronRight className="h-4 w-4" /></Button>
+                </div>
                 <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setIsReconcileDialogOpen(true)}><Scale className="h-4 w-4" /></Button>
                 <Button variant="default" size="icon" className="h-8 w-8" onClick={() => { setEditingTransaction(null); setTransactionForm({ type: "charge", amount: "", description: "", selectedCategoryId: "", imageUrl: "" }); setIsAddTransactionDialogOpen(true); }}><DollarSign className="h-4 w-4" /></Button>
               </div>
@@ -253,7 +313,7 @@ const CardDetailsPage: React.FC = () => {
                   {filteredTransactions.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={3} className="text-center py-8 text-muted-foreground text-xs">
-                        Sin movimientos registrados.
+                        Sin movimientos registrados en este periodo.
                       </TableCell>
                     </TableRow>
                   ) : (

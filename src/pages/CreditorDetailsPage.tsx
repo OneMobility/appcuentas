@@ -10,10 +10,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { DollarSign, Trash2, Edit, ArrowLeft, FileDown, History, Search, Filter, FileText } from "lucide-react";
+import { DollarSign, Trash2, Edit, ArrowLeft, FileDown, History, Search, Filter, FileText, ChevronLeft, ChevronRight } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { cn } from "@/lib/utils";
-import { format, parseISO } from "date-fns";
+import { format, parseISO, isWithinInterval, startOfMonth, endOfMonth, addMonths, subMonths } from "date-fns";
+import { es } from "date-fns/locale";
 import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/context/SessionContext";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
@@ -52,6 +53,7 @@ const CreditorDetailsPage: React.FC = () => {
   const [cards, setCards] = useState<any[]>([]);
   const [cashBalance, setCashBalance] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
+  const [currentViewDate, setCurrentViewDate] = useState(new Date());
   const [searchTerm, setSearchTerm] = useState("");
   const [filterType, setFilterType] = useState<"all" | "charge" | "payment">("all");
 
@@ -129,7 +131,6 @@ const CreditorDetailsPage: React.FC = () => {
   const transactionsWithBalance = useMemo(() => {
     if (!creditor) return [];
     
-    // Ordenar por fecha de creación ascendente (el más antiguo primero) para calcular hacia adelante
     const sortedAsc = [...creditor.creditor_transactions].sort((a, b) => 
       new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
     );
@@ -144,17 +145,40 @@ const CreditorDetailsPage: React.FC = () => {
       return { ...tx, runningBalance: current };
     });
 
-    // Devolver en orden descendente (el más nuevo primero) para la tabla
     return computedAsc.reverse();
   }, [creditor]);
 
+  // Intervalo de filtrado por mes calendario
+  const filterInterval = useMemo(() => {
+    return {
+      start: startOfMonth(currentViewDate),
+      end: endOfMonth(currentViewDate)
+    };
+  }, [currentViewDate]);
+
   const filteredTransactions = useMemo(() => {
     return transactionsWithBalance.filter(tx => {
+      const matchesDate = isWithinInterval(parseISO(tx.date), filterInterval);
       const matchesSearch = tx.description.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesType = filterType === "all" || tx.type === filterType;
-      return matchesSearch && matchesType;
+      return matchesDate && matchesSearch && matchesType;
     });
-  }, [transactionsWithBalance, searchTerm, filterType]);
+  }, [transactionsWithBalance, filterInterval, searchTerm, filterType]);
+
+  // Calcular métricas del mes seleccionado
+  const monthMetrics = useMemo(() => {
+    if (!creditor) return { charges: 0, payments: 0, net: 0 };
+    const monthTxs = creditor.creditor_transactions.filter(tx => 
+      isWithinInterval(parseISO(tx.date), filterInterval)
+    );
+    const charges = monthTxs.filter(tx => tx.type === "charge").reduce((sum, tx) => sum + tx.amount, 0);
+    const payments = monthTxs.filter(tx => tx.type === "payment").reduce((sum, tx) => sum + tx.amount, 0);
+    return {
+      charges,
+      payments,
+      net: charges - payments
+    };
+  }, [creditor, filterInterval]);
 
   const handleOpenAdd = () => {
     setEditingTransaction(null);
@@ -215,7 +239,6 @@ const CreditorDetailsPage: React.FC = () => {
         
         if (insertTxError) throw insertTxError;
 
-        // Manejar transacción vinculada si es un pago y no se omite
         if (transactionForm.type === "payment" && !skipLinkedTransaction) {
           const linkedDesc = `Pago a ${creditor.name}: ${transactionForm.description}`;
           if (transactionForm.sourceAccountId === "cash") {
@@ -246,7 +269,6 @@ const CreditorDetailsPage: React.FC = () => {
         }
       }
 
-      // Recalcular el saldo basado en todas las transacciones existentes
       const { data: txs, error: fetchError } = await supabase
         .from('creditor_transactions')
         .select('type, amount')
@@ -289,7 +311,6 @@ const CreditorDetailsPage: React.FC = () => {
 
       if (deleteError) throw deleteError;
 
-      // Recalcular el saldo basado en las transacciones restantes
       const { data: txs, error: fetchError } = await supabase
         .from('creditor_transactions')
         .select('type, amount')
@@ -346,8 +367,12 @@ const CreditorDetailsPage: React.FC = () => {
 
       <div className="grid gap-4 md:grid-cols-3">
         <Card className="bg-red-50 border-red-200">
-          <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-red-800">Deuda Pendiente</CardTitle></CardHeader>
+          <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-red-800">Deuda Pendiente Global</CardTitle></CardHeader>
           <CardContent><div className="text-3xl font-bold text-red-900">${creditor.current_balance.toFixed(2)}</div></CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Deuda del Mes Seleccionado</CardTitle></CardHeader>
+          <CardContent><div className="text-2xl font-semibold">${monthMetrics.net.toFixed(2)}</div></CardContent>
         </Card>
         <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Deuda Inicial</CardTitle></CardHeader><CardContent><div className="text-2xl font-semibold">${creditor.initial_balance.toFixed(2)}</div></CardContent></Card>
       </div>
@@ -385,7 +410,21 @@ const CreditorDetailsPage: React.FC = () => {
       </div>
 
       <Card>
-        <CardHeader><CardTitle className="flex items-center gap-2"><History className="h-5 w-5" /> Historial</CardTitle></CardHeader>
+        <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-muted/10 gap-2">
+          <div className="flex flex-col">
+            <CardTitle className="text-sm font-bold">Movimientos del Mes</CardTitle>
+            <span className="text-[10px] text-muted-foreground font-medium">
+              {format(filterInterval.start, "dd 'de' MMM", { locale: es })} - {format(filterInterval.end, "dd 'de' MMM, yyyy", { locale: es })}
+            </span>
+          </div>
+          
+          {/* Navegación de Meses */}
+          <div className="flex items-center bg-background rounded-lg p-0.5 border">
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setCurrentViewDate(subMonths(currentViewDate, 1))}><ChevronLeft className="h-4 w-4" /></Button>
+            <span className="px-2 text-[10px] font-bold min-w-[80px] text-center capitalize">{format(currentViewDate, "MMM yyyy", { locale: es })}</span>
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setCurrentViewDate(addMonths(currentViewDate, 1))}><ChevronRight className="h-4 w-4" /></Button>
+          </div>
+        </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
@@ -398,33 +437,41 @@ const CreditorDetailsPage: React.FC = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredTransactions.map((tx) => (
-                <TableRow key={tx.id}>
-                  <TableCell className="text-xs">{format(parseISO(tx.date), "dd/MM/yy")}</TableCell>
-                  <TableCell>
-                    <div className="flex flex-col">
-                      <span className="font-medium text-xs">{tx.description}</span>
-                      <Badge variant="outline" className={cn("w-fit text-[9px] px-1 py-0", tx.type === "charge" ? "text-red-600 border-red-100" : "text-green-600 border-green-100")}>
-                        {tx.type === "charge" ? "Cargo" : "Pago"}
-                      </Badge>
-                    </div>
-                  </TableCell>
-                  <TableCell className={cn("text-right font-bold text-xs", tx.type === "charge" ? "text-red-600" : "text-green-600")}>
-                    {tx.type === "charge" ? "+" : "-"}${tx.amount.toFixed(2)}
-                  </TableCell>
-                  <TableCell className="text-right font-black text-xs">${tx.runningBalance.toFixed(2)}</TableCell>
-                  <TableCell className="text-right flex gap-1 justify-end">
-                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleOpenEdit(tx)}><Edit className="h-3.5 w-3.5" /></Button>
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild><Button variant="ghost" size="icon" className="h-7 w-7 text-destructive"><Trash2 className="h-3.5 w-3.5" /></Button></AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader><AlertDialogTitle>¿Eliminar movimiento?</AlertDialogTitle><AlertDialogDescription>Se ajustará el saldo.</AlertDialogDescription></AlertDialogHeader>
-                        <AlertDialogFooter><AlertDialogCancel>No</AlertDialogCancel><AlertDialogAction onClick={() => handleDeleteTransaction(tx)}>Sí</AlertDialogAction></AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
+              {filteredTransactions.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-center py-8 text-muted-foreground text-xs">
+                    Sin movimientos registrados en este mes.
                   </TableCell>
                 </TableRow>
-              ))}
+              ) : (
+                filteredTransactions.map((tx) => (
+                  <TableRow key={tx.id}>
+                    <TableCell className="text-xs">{format(parseISO(tx.date), "dd/MM/yy")}</TableCell>
+                    <TableCell>
+                      <div className="flex flex-col">
+                        <span className="font-medium text-xs">{tx.description}</span>
+                        <Badge variant="outline" className={cn("w-fit text-[9px] px-1 py-0", tx.type === "charge" ? "text-red-600 border-red-100" : "text-green-600 border-green-100")}>
+                          {tx.type === "charge" ? "Cargo" : "Pago"}
+                        </Badge>
+                      </div>
+                    </TableCell>
+                    <TableCell className={cn("text-right font-bold text-xs", tx.type === "charge" ? "text-red-600" : "text-green-600")}>
+                      {tx.type === "charge" ? "+" : "-"}${tx.amount.toFixed(2)}
+                    </TableCell>
+                    <TableCell className="text-right font-black text-xs">${tx.runningBalance.toFixed(2)}</TableCell>
+                    <TableCell className="text-right flex gap-1 justify-end">
+                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleOpenEdit(tx)}><Edit className="h-3.5 w-3.5" /></Button>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild><Button variant="ghost" size="icon" className="h-7 w-7 text-destructive"><Trash2 className="h-3.5 w-3.5" /></Button></AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader><AlertDialogTitle>¿Eliminar movimiento?</AlertDialogTitle><AlertDialogDescription>Se ajustará el saldo.</AlertDialogDescription></AlertDialogHeader>
+                          <AlertDialogFooter><AlertDialogCancel>No</AlertDialogCancel><AlertDialogAction onClick={() => handleDeleteTransaction(tx)}>Sí</AlertDialogAction></AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
             </TableBody>
           </Table>
         </CardContent>

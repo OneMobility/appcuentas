@@ -5,7 +5,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { PlusCircle, Trash2, ArrowRightLeft, Wallet, Loader2, Info } from "lucide-react";
+import { PlusCircle, Trash2, ArrowRightLeft, Wallet, Loader2, Edit2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/context/SessionContext";
 import { showError, showSuccess } from "@/utils/toast";
@@ -29,11 +29,13 @@ const CardPocketsManager: React.FC<CardPocketsManagerProps> = ({ cardId, cardBal
   const { user } = useSession();
   const [pockets, setPockets] = useState<Pocket[]>([]);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isTransferDialogOpen, setIsTransferDialogOpen] = useState(false);
   const [selectedPocket, setSelectedPocket] = useState<Pocket | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
   const [newPocketName, setNewPocketName] = useState("");
+  const [editPocketName, setEditPocketName] = useState("");
   const [transferAmountInput, setTransferAmountInput] = useState("");
   const [transferType, setTransferType] = useState<"to_pocket" | "from_pocket">("to_pocket");
 
@@ -85,6 +87,30 @@ const CardPocketsManager: React.FC<CardPocketsManagerProps> = ({ cardId, cardBal
     }
   };
 
+  const handleEditPocket = async () => {
+    if (!selectedPocket || !editPocketName.trim() || !user) return;
+
+    setIsSubmitting(true);
+    try {
+      const { error } = await supabase
+        .from('card_pockets')
+        .update({ name: editPocketName.trim() })
+        .eq('id', selectedPocket.id);
+
+      if (error) throw error;
+
+      showSuccess("Nombre de apartado actualizado");
+      setIsEditDialogOpen(false);
+      setSelectedPocket(null);
+      setEditPocketName("");
+      fetchPockets();
+    } catch (e: any) {
+      showError("Error al actualizar apartado.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const handleTransfer = async () => {
     if (!selectedPocket || !user) return;
 
@@ -100,7 +126,6 @@ const CardPocketsManager: React.FC<CardPocketsManagerProps> = ({ cardId, cardBal
       return;
     }
 
-    // Redondear para evitar errores de precisión de punto flotante
     const roundedAmount = Math.round(amount * 100) / 100;
     const roundedCardBalance = Math.round(cardBalance * 100) / 100;
     const roundedPocketAmount = Math.round(selectedPocket.amount * 100) / 100;
@@ -187,7 +212,10 @@ const CardPocketsManager: React.FC<CardPocketsManagerProps> = ({ cardId, cardBal
                 <p className="font-medium">{pocket.name}</p>
                 <p className="text-lg font-bold">${pocket.amount.toFixed(2)}</p>
               </div>
-              <div className="flex gap-2">
+              <div className="flex gap-1">
+                <Button size="sm" variant="ghost" onClick={() => { setSelectedPocket(pocket); setEditPocketName(pocket.name); setIsEditDialogOpen(true); }}>
+                  <Edit2 className="h-4 w-4" />
+                </Button>
                 <Button size="sm" variant="secondary" onClick={() => { setSelectedPocket(pocket); setIsTransferDialogOpen(true); }}>
                   <ArrowRightLeft className="h-4 w-4" />
                 </Button>
@@ -216,6 +244,28 @@ const CardPocketsManager: React.FC<CardPocketsManagerProps> = ({ cardId, cardBal
             <DialogFooter>
               <Button onClick={handleCreatePocket} disabled={isSubmitting}>
                 {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Crear"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+          <DialogContent>
+            <DialogHeader><DialogTitle>Editar Apartado</DialogTitle></DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <Label>Nombre del Apartado</Label>
+                <Input 
+                  value={editPocketName} 
+                  onChange={e => setEditPocketName(e.target.value)} 
+                  placeholder="Ej. Renta, Ahorro..." 
+                  disabled={isSubmitting}
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button onClick={handleEditPocket} disabled={isSubmitting}>
+                {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Guardar"}
               </Button>
             </DialogFooter>
           </DialogContent>

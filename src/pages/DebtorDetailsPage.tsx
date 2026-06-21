@@ -10,10 +10,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { DollarSign, Trash2, Edit, ArrowLeft, FileDown, History, AlertCircle, Search, Filter, FileText, Share2, Copy, MessageSquare } from "lucide-react";
+import { DollarSign, Trash2, Edit, ArrowLeft, FileDown, History, AlertCircle, Search, Filter, FileText, Share2, Copy, MessageSquare, ChevronLeft, ChevronRight } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { cn } from "@/lib/utils";
-import { format, parseISO } from "date-fns";
+import { format, parseISO, isWithinInterval, startOfMonth, endOfMonth, addMonths, subMonths } from "date-fns";
 import { es } from "date-fns/locale";
 import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/context/SessionContext";
@@ -56,6 +56,7 @@ const DebtorDetailsPage: React.FC = () => {
   const [cards, setCards] = useState<any[]>([]);
   const [cashBalance, setCashBalance] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
+  const [currentViewDate, setCurrentViewDate] = useState(new Date());
   const [searchTerm, setSearchTerm] = useState("");
   const [filterType, setFilterType] = useState<"all" | "charge" | "payment">("all");
 
@@ -137,7 +138,6 @@ const DebtorDetailsPage: React.FC = () => {
   const transactionsWithBalance = useMemo(() => {
     if (!debtor) return [];
     
-    // Ordenar por fecha de creación ascendente (el más antiguo primero) para calcular hacia adelante
     const sortedAsc = [...debtor.debtor_transactions].sort((a, b) => 
       new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
     );
@@ -152,17 +152,40 @@ const DebtorDetailsPage: React.FC = () => {
       return { ...tx, runningBalance: current };
     });
 
-    // Devolver en orden descendente (el más nuevo primero) para la tabla
     return computedAsc.reverse();
   }, [debtor]);
 
+  // Intervalo de filtrado por mes calendario
+  const filterInterval = useMemo(() => {
+    return {
+      start: startOfMonth(currentViewDate),
+      end: endOfMonth(currentViewDate)
+    };
+  }, [currentViewDate]);
+
   const filteredTransactions = useMemo(() => {
     return transactionsWithBalance.filter(tx => {
+      const matchesDate = isWithinInterval(parseISO(tx.date), filterInterval);
       const matchesSearch = tx.description.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesType = filterType === "all" || tx.type === filterType;
-      return matchesSearch && matchesType;
+      return matchesDate && matchesSearch && matchesType;
     });
-  }, [transactionsWithBalance, searchTerm, filterType]);
+  }, [transactionsWithBalance, filterInterval, searchTerm, filterType]);
+
+  // Calcular métricas del mes seleccionado
+  const monthMetrics = useMemo(() => {
+    if (!debtor) return { charges: 0, payments: 0, net: 0 };
+    const monthTxs = debtor.debtor_transactions.filter(tx => 
+      isWithinInterval(parseISO(tx.date), filterInterval)
+    );
+    const charges = monthTxs.filter(tx => tx.type === "charge").reduce((sum, tx) => sum + tx.amount, 0);
+    const payments = monthTxs.filter(tx => tx.type === "payment").reduce((sum, tx) => sum + tx.amount, 0);
+    return {
+      charges,
+      payments,
+      net: charges - payments
+    };
+  }, [debtor, filterInterval]);
 
   const handleOpenAdd = () => {
     setEditingTransaction(null);
@@ -223,7 +246,6 @@ const DebtorDetailsPage: React.FC = () => {
         
         if (insertTxError) throw insertTxError;
 
-        // Manejar transacción vinculada si es un abono y no se omite
         if (transactionForm.type === "payment" && !skipLinkedTransaction) {
           const linkedDesc = `Abono de ${debtor.name}: ${transactionForm.description}`;
           if (transactionForm.destinationAccountId === "cash") {
@@ -254,7 +276,6 @@ const DebtorDetailsPage: React.FC = () => {
         }
       }
 
-      // Recalcular el saldo basado en todas las transacciones existentes
       const { data: txs, error: fetchError } = await supabase
         .from('debtor_transactions')
         .select('type, amount')
@@ -282,7 +303,6 @@ const DebtorDetailsPage: React.FC = () => {
       showSuccess(editingTransaction ? "Movimiento actualizado" : "Movimiento registrado");
       setIsTransactionDialogOpen(false);
       
-      // Enviar mensaje de WhatsApp si tiene teléfono
       if (!editingTransaction && debtor.phone) {
         if (window.confirm("¿Enviar comprobante por WhatsApp?")) {
           const typeLabel = transactionForm.type === "charge" ? "Cargo" : "Abono";
@@ -308,7 +328,6 @@ const DebtorDetailsPage: React.FC = () => {
 
       if (deleteError) throw deleteError;
 
-      // Recalcular el saldo basado en las transacciones restantes
       const { data: txs, error: fetchError } = await supabase
         .from('debtor_transactions')
         .select('type, amount')
@@ -353,7 +372,6 @@ const DebtorDetailsPage: React.FC = () => {
     else exportToPdf(`historial_${debtor.name}.pdf`, `Historial: ${debtor.name}`, ["Fecha", "Tipo", "Descripción", "Monto", "Saldo"], data.map(d => Object.values(d)));
   };
 
-  // Generar el texto del estado de cuenta formateado
   const generateStatementText = () => {
     if (!debtor) return "";
 
@@ -377,7 +395,6 @@ const DebtorDetailsPage: React.FC = () => {
     }
     text += `----------------------------------\n\n`;
 
-    // Agregar los últimos 5 movimientos
     const lastTxs = [...debtor.debtor_transactions]
       .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
       .slice(0, 5);
@@ -426,10 +443,13 @@ const DebtorDetailsPage: React.FC = () => {
 
       <div className="grid gap-4 md:grid-cols-3">
         <Card className="bg-yellow-50 border-yellow-200">
-          <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-yellow-800">Saldo Pendiente</CardTitle></CardHeader>
+          <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-yellow-800">Saldo Pendiente Global</CardTitle></CardHeader>
           <CardContent><div className="text-3xl font-bold text-yellow-900">${debtor.current_balance.toFixed(2)}</div></CardContent>
         </Card>
-        <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Deuda Inicial</CardTitle></CardHeader><CardContent><div className="text-2xl font-semibold">${debtor.initial_balance.toFixed(2)}</div></CardContent></Card>
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Saldo del Mes Seleccionado</CardTitle></CardHeader>
+          <CardContent><div className="text-2xl font-semibold">${monthMetrics.net.toFixed(2)}</div></CardContent>
+        </Card>
         <Card>
           <CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Vencimiento</CardTitle></CardHeader>
           <CardContent><div className="text-2xl font-semibold">{debtor.due_date ? format(parseISO(debtor.due_date), "dd/MM/yyyy") : "-"}</div></CardContent>
@@ -472,7 +492,21 @@ const DebtorDetailsPage: React.FC = () => {
       </div>
 
       <Card>
-        <CardHeader><CardTitle className="flex items-center gap-2"><History className="h-5 w-5" /> Historial</CardTitle></CardHeader>
+        <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-muted/10 gap-2">
+          <div className="flex flex-col">
+            <CardTitle className="text-sm font-bold">Movimientos del Mes</CardTitle>
+            <span className="text-[10px] text-muted-foreground font-medium">
+              {format(filterInterval.start, "dd 'de' MMM", { locale: es })} - {format(filterInterval.end, "dd 'de' MMM, yyyy", { locale: es })}
+            </span>
+          </div>
+          
+          {/* Navegación de Meses */}
+          <div className="flex items-center bg-background rounded-lg p-0.5 border">
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setCurrentViewDate(subMonths(currentViewDate, 1))}><ChevronLeft className="h-4 w-4" /></Button>
+            <span className="px-2 text-[10px] font-bold min-w-[80px] text-center capitalize">{format(currentViewDate, "MMM yyyy", { locale: es })}</span>
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setCurrentViewDate(addMonths(currentViewDate, 1))}><ChevronRight className="h-4 w-4" /></Button>
+          </div>
+        </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
@@ -485,33 +519,41 @@ const DebtorDetailsPage: React.FC = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredTransactions.map((tx) => (
-                <TableRow key={tx.id}>
-                  <TableCell className="text-xs">{format(parseISO(tx.date), "dd/MM/yy")}</TableCell>
-                  <TableCell>
-                    <div className="flex flex-col">
-                      <span className="font-medium text-xs">{tx.description}</span>
-                      <Badge variant="outline" className={cn("w-fit text-[9px] px-1 py-0", tx.type === "charge" ? "text-red-600 border-red-100" : "text-green-600 border-green-100")}>
-                        {tx.type === "charge" ? "Cargo" : "Abono"}
-                      </Badge>
-                    </div>
-                  </TableCell>
-                  <TableCell className={cn("text-right font-bold text-xs", tx.type === "charge" ? "text-red-600" : "text-green-600")}>
-                    {tx.type === "charge" ? "+" : "-"}${tx.amount.toFixed(2)}
-                  </TableCell>
-                  <TableCell className="text-right font-black text-xs">${tx.runningBalance.toFixed(2)}</TableCell>
-                  <TableCell className="text-right flex gap-1 justify-end">
-                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleOpenEdit(tx)}><Edit className="h-3.5 w-3.5" /></Button>
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild><Button variant="ghost" size="icon" className="h-7 w-7 text-destructive"><Trash2 className="h-3.5 w-3.5" /></Button></AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader><AlertDialogTitle>¿Eliminar movimiento?</AlertDialogTitle><AlertDialogDescription>Se ajustará el saldo.</AlertDialogDescription></AlertDialogHeader>
-                        <AlertDialogFooter><AlertDialogCancel>No</AlertDialogCancel><AlertDialogAction onClick={() => handleDeleteTransaction(tx)}>Sí</AlertDialogAction></AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
+              {filteredTransactions.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-center py-8 text-muted-foreground text-xs">
+                    Sin movimientos registrados en este mes.
                   </TableCell>
                 </TableRow>
-              ))}
+              ) : (
+                filteredTransactions.map((tx) => (
+                  <TableRow key={tx.id}>
+                    <TableCell className="text-xs">{format(parseISO(tx.date), "dd/MM/yy")}</TableCell>
+                    <TableCell>
+                      <div className="flex flex-col">
+                        <span className="font-medium text-xs">{tx.description}</span>
+                        <Badge variant="outline" className={cn("w-fit text-[9px] px-1 py-0", tx.type === "charge" ? "text-red-600 border-red-100" : "text-green-600 border-green-100")}>
+                          {tx.type === "charge" ? "Cargo" : "Abono"}
+                        </Badge>
+                      </div>
+                    </TableCell>
+                    <TableCell className={cn("text-right font-bold text-xs", tx.type === "charge" ? "text-red-600" : "text-green-600")}>
+                      {tx.type === "charge" ? "+" : "-"}${tx.amount.toFixed(2)}
+                    </TableCell>
+                    <TableCell className="text-right font-black text-xs">${tx.runningBalance.toFixed(2)}</TableCell>
+                    <TableCell className="text-right flex gap-1 justify-end">
+                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleOpenEdit(tx)}><Edit className="h-3.5 w-3.5" /></Button>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild><Button variant="ghost" size="icon" className="h-7 w-7 text-destructive"><Trash2 className="h-3.5 w-3.5" /></Button></AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader><AlertDialogTitle>¿Eliminar movimiento?</AlertDialogTitle><AlertDialogDescription>Se ajustará el saldo.</AlertDialogDescription></AlertDialogHeader>
+                          <AlertDialogFooter><AlertDialogCancel>No</AlertDialogCancel><AlertDialogAction onClick={() => handleDeleteTransaction(tx)}>Sí</AlertDialogAction></AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
             </TableBody>
           </Table>
         </CardContent>
