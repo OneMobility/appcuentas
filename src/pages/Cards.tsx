@@ -42,7 +42,7 @@ const Cards = () => {
 
   const [cardForm, setCardForm] = useState({
     id: "", name: "", bank_name: "", last_four_digits: "", expiration_date: "",
-    type: "debit" as "credit" | "debit", initial_balance: "", credit_limit: "",
+    type: "debit" as "credit" | "debit", initial_balance: "0", credit_limit: "",
     cut_off_day: "" as string, days_to_pay_after_cut_off: "" as string,
     color: "#3B82F6",
   });
@@ -154,8 +154,8 @@ const Cards = () => {
     // Lógica para diferir compras
     if (isCreditCard && isCharge && isDeferred) {
       const count = parseInt(installmentsCount);
-      if (isNaN(count) || count < 2) {
-        showError("El número de meses debe ser al menos 2.");
+      if (isNaN(count) || count < 1) {
+        showError("El número de meses debe ser al menos 1.");
         return;
       }
 
@@ -449,12 +449,9 @@ const Cards = () => {
                       <Select value={installmentsCount} onValueChange={setInstallmentsCount}>
                         <SelectTrigger className="rounded-xl bg-background"><SelectValue /></SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="3">3 meses</SelectItem>
-                          <SelectItem value="6">6 meses</SelectItem>
-                          <SelectItem value="9">9 meses</SelectItem>
-                          <SelectItem value="12">12 meses</SelectItem>
-                          <SelectItem value="18">18 meses</SelectItem>
-                          <SelectItem value="24">24 meses</SelectItem>
+                          {Array.from({ length: 12 }, (_, i) => i + 1).map(num => (
+                            <SelectItem key={num} value={num.toString()}>{num} {num === 1 ? 'mes' : 'meses'}</SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
                     </div>
