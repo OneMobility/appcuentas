@@ -114,6 +114,8 @@ const CardDisplay: React.FC<CardDisplayProps> = ({ card, onAddTransaction, onDel
             backgroundColor: card.color,
             backfaceVisibility: "hidden",
             WebkitBackfaceVisibility: "hidden",
+            pointerEvents: isFlipped ? "none" : "auto",
+            zIndex: isFlipped ? 0 : 2,
           }}
         >
           {/* Brillo de plástico de tarjeta */}
@@ -237,6 +239,8 @@ const CardDisplay: React.FC<CardDisplayProps> = ({ card, onAddTransaction, onDel
             backfaceVisibility: "hidden",
             WebkitBackfaceVisibility: "hidden",
             transform: "rotateY(180deg)",
+            pointerEvents: isFlipped ? "auto" : "none",
+            zIndex: isFlipped ? 2 : 0,
           }}
         >
           {/* Banda magnética simulada */}
