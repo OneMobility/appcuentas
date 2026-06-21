@@ -9,6 +9,7 @@ import { useNavigate } from "react-router-dom";
 import { getUpcomingCutOffDate, getUpcomingPaymentDueDate } from "@/utils/date-helpers";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
+import { cn } from "@/lib/utils";
 
 interface CardPocket {
   id: string;
@@ -109,15 +110,10 @@ const CardDisplay: React.FC<CardDisplayProps> = ({ card, onAddTransaction, onDel
   return (
     <div className="w-full max-w-sm mx-auto h-[240px] perspective-1000">
       <div 
-        className={cn(
-          "relative w-full h-full transition-transform duration-700 transform-style-3d cursor-pointer",
-          isDeferred ? "" : "", // Evitar conflictos de clases
-          isAddTransactionDialogOpen ? "" : ""
-        )}
+        className="relative w-full h-full transition-transform duration-700 transform-style-3d cursor-pointer"
         style={{ 
-          transform: isDeferred ? 'rotateY(180deg)' : 'none',
+          transform: isFlipped ? 'rotateY(180deg)' : 'none',
           transformStyle: 'preserve-3d',
-          transform: `rotateY(${isAdvanceDialogOpen || isReconcileDialogOpen ? '0deg' : (selectedCard ? '0deg' : '0deg')})` // Control de rotación manual si es necesario
         }}
       >
         {/* Contenedor de la Tarjeta Física */}
