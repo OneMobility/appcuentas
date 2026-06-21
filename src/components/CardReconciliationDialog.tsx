@@ -5,6 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/context/SessionContext";
@@ -41,16 +42,20 @@ const CardReconciliationDialog: React.FC<CardReconciliationDialogProps> = ({
   const { user } = useSession();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Inputs para Crédito
+  // Modos de cuadre para crédito: "detailed" (Desglosado), "available" (Disponible)
+  const [creditMode, setCreditMode] = useState<"detailed" | "available">("detailed");
+
+  // Inputs para modo desglosado (Crédito)
   const [revolventeInput, setRevolventeInput] = useState<string>("");
   const [mesesInput, setMesesInput] = useState<string>("");
   const [adjustmentInstallments, setAdjustmentInstallments] = useState<string>("6");
 
-  // Input para Débito
+  // Input para modo disponible (Crédito) o saldo (Débito)
   const [realValueInput, setRealValueInput] = useState<string>("");
 
   useEffect(() => {
     if (isOpen) {
+      setCreditMode("detailed");
       setRevolventeInput("");
       setMesesInput("");
       setRealValueInput("");
@@ -102,22 +107,30 @@ const CardReconciliationDialog: React.FC<CardReconciliationDialogProps> = ({
 
   // Diferencias individuales
   const revolventeDiff = useMemo(() => {
-    if (card.type !== "credit") return 0;
+    if (card.type !== "credit" || creditMode !== "detailed") return 0;
     return revolventeVal - appMetrics.revolvente;
-  }, [revolventeVal, appMetrics.revolvente, card.type]);
+  }, [revolventeVal, appMetrics.revolvente, card.type, creditMode]);
 
   const mesesDiff = useMemo(() => {
-    if (card.type !== "credit") return 0;
+    if (card.type !== "credit" || creditMode !== "detailed") return 0;
     return mesesVal - appMetrics.meses;
-  }, [mesesVal, appMetrics.meses, card.type]);
+  }, [mesesVal, appMetrics.meses, card.type, creditMode]);
 
-  // Diferencia global
+  // Cálculos de balance y diferencia global
+  const appBalance = useMemo(() => {
+    if (card.type === "debit") return card.current_balance;
+    if (creditMode === "available") {
+      return (card.credit_limit || 0) - card.current_balance;
+    }
+    return card.current_balance; // Deuda global en App
+  }, [card, creditMode]);
+
   const calculatedDifference = useMemo(() => {
-    if (card.type === "credit") {
+    if (card.type === "credit" && creditMode === "detailed") {
       return revolventeDiff + mesesDiff;
     }
-    return realValueVal - card.current_balance;
-  }, [card, revolventeDiff, mesesDiff, realValueVal]);
+    return realValueVal - appBalance;
+  }, [card, creditMode, revolventeDiff, mesesDiff, realValueVal, appBalance]);
 
   const handleReconcile = async () => {
     if (!user) {
@@ -138,7 +151,8 @@ const CardReconciliationDialog: React.FC<CardReconciliationDialogProps> = ({
     const todayStr = getLocalDateString(today);
 
     try {
-      if (card.type === "credit") {
+      // MODO DETALLADO (CRÉDITO)
+      if (card.type === "credit" && creditMode === "detailed") {
         // 1. Procesar ajuste de Revolvente (Deuda del periodo)
         if (Math.abs(revolventeDiff) >= 0.01) {
           const txType = revolventeDiff > 0 ? "charge" : "payment";
@@ -195,9 +209,14 @@ const CardReconciliationDialog: React.FC<CardReconciliationDialogProps> = ({
         if (cardError) throw cardError;
 
       } else {
-        // DÉBITO
-        const txType = totalDiff > 0 ? "payment" : "charge"; // + saldo -> depósito, - saldo -> retiro
-        const newCurrentBalance = card.current_balance + totalDiff;
+        // MODO DISPONIBLE (CRÉDITO) O SALDO (DÉBITO)
+        const txType = card.type === "credit"
+          ? (totalDiff > 0 ? "payment" : "charge") // Disponible real > app -> menos deuda -> abono
+          : (totalDiff > 0 ? "payment" : "charge"); // Saldo real > app -> más dinero -> depósito
+
+        const newCurrentBalance = card.type === "credit"
+          ? card.current_balance - totalDiff
+          : card.current_balance + totalDiff;
 
         const { error: transactionError } = await supabase
           .from('card_transactions')
@@ -206,7 +225,7 @@ const CardReconciliationDialog: React.FC<CardReconciliationDialogProps> = ({
             card_id: card.id,
             type: txType,
             amount: Math.abs(totalDiff),
-            description: "Ajuste de Cuadre (Saldo)",
+            description: `Ajuste de Cuadre (${card.type === 'credit' ? 'Disponible' : 'Saldo'})`,
             date: todayStr,
             is_adjustment: true,
           });
@@ -236,8 +255,23 @@ const CardReconciliationDialog: React.FC<CardReconciliationDialogProps> = ({
           <DialogTitle>Cuadre de Tarjeta: {card.name}</DialogTitle>
         </DialogHeader>
 
+        {card.type === "credit" && (
+          <Tabs value={creditMode} onValueChange={(v: any) => {
+            setCreditMode(v);
+            setRevolventeInput("");
+            setMesesInput("");
+            setRealValueInput("");
+            setAdjustmentInstallments("6");
+          }} className="w-full">
+            <TabsList className="grid w-full grid-cols-2 rounded-xl">
+              <TabsTrigger value="detailed" className="rounded-lg">Cuadre Detallado</TabsTrigger>
+              <TabsTrigger value="available" className="rounded-lg">Por Disponible</TabsTrigger>
+            </TabsList>
+          </Tabs>
+        )}
+
         <div className="grid gap-4 py-4">
-          {card.type === "credit" ? (
+          {card.type === "credit" && creditMode === "detailed" ? (
             <>
               {/* Sección Revolvente */}
               <div className="grid gap-2">
@@ -316,12 +350,20 @@ const CardReconciliationDialog: React.FC<CardReconciliationDialogProps> = ({
           ) : (
             <>
               <div className="grid grid-cols-3 items-center gap-4">
-                <Label className="text-right col-span-2">Saldo en App:</Label>
-                <span className="font-bold">${card.current_balance.toFixed(2)}</span>
+                <Label className="text-right col-span-2">
+                  {card.type === "debit" 
+                    ? "Saldo en App:" 
+                    : "Crédito Disponible en App:"}
+                </Label>
+                <span className="font-bold">${appBalance.toFixed(2)}</span>
               </div>
               
               <div className="grid grid-cols-3 items-center gap-4">
-                <Label htmlFor="realValue" className="text-right col-span-2 font-semibold">Saldo Real:</Label>
+                <Label htmlFor="realValue" className="text-right col-span-2 font-semibold">
+                  {card.type === "debit" 
+                    ? "Saldo Real:" 
+                    : "Crédito Disponible Real:"}
+                </Label>
                 <Input
                   id="realValue"
                   type="text"
@@ -339,7 +381,7 @@ const CardReconciliationDialog: React.FC<CardReconciliationDialogProps> = ({
           <Button variant="outline" onClick={onClose} className="rounded-xl">Cancelar</Button>
           <Button 
             onClick={handleReconcile} 
-            disabled={isSubmitting || (card.type === "credit" ? (!revolventeInput && !mesesInput) : !realValueInput)}
+            disabled={isSubmitting || (card.type === "credit" && creditMode === "detailed" ? (!revolventeInput && !mesesInput) : !realValueInput)}
             className="rounded-xl font-bold"
           >
             {isSubmitting ? "Ajustando..." : "Cuadrar Saldo"}
