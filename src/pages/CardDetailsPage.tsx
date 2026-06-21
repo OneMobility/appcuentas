@@ -321,6 +321,52 @@ const CardDetailsPage: React.FC = () => {
     return null;
   }, [card]);
 
+  // Obtener el logo del banco correspondiente usando los archivos exactos subidos por el usuario
+  const bankLogoUrl = useMemo(() => {
+    if (!card) return null;
+    const name = card.bank_name.toLowerCase();
+    if (name.includes("nu") || name.includes("nubank")) {
+      return "dyad-media://media/appcuentas2/.dyad/media/97ec6769a1b8e18c52f8ddfced925ceb4163fb17149e7b167f77324ac11196b1.png";
+    }
+    if (name.includes("stori")) {
+      return "dyad-media://media/appcuentas2/.dyad/media/87a3632f0be04bf1e1865a178608f63a9919586732604f61bc983ef21f1aa434.png";
+    }
+    if (name.includes("mercado") || name.includes("pago")) {
+      return "dyad-media://media/appcuentas2/.dyad/media/79595b1ae3313cc2db5165d413c5c99e042cdb3129ff6e1d69814d489987b96a.png";
+    }
+    if (name.includes("didi")) {
+      return "dyad-media://media/appcuentas2/.dyad/media/d475efd7a9684af3e1beb06bf0f256578ccffbe5e9e66093dc64b6e90c160e81.png";
+    }
+    if (name.includes("plata")) {
+      return "dyad-media://media/appcuentas2/.dyad/media/8a612b7fa45260f208cf1ddd45d87454980d4025b07216b3d09ff8fbba1b1aef.png";
+    }
+    if (name.includes("bbva")) {
+      return "dyad-media://media/appcuentas2/.dyad/media/a2a2feb7f1ba2ca79b46f12ca4d740cacb3d1c13e5009686f881a187083cdaac.png";
+    }
+    return null;
+  }, [card?.bank_name]);
+
+  const isVisa = useMemo(() => {
+    if (!card) return true;
+    return parseInt(card.last_four_digits) % 2 === 0;
+  }, [card?.last_four_digits]);
+
+  const networkLogoUrl = useMemo(() => {
+    return isVisa 
+      ? "dyad-media://media/appcuentas2/.dyad/media/871ca618ef91fce40699c8478faf0f9f0d05a828b899b8e84349ab3e6c0be6a2.png"
+      : "dyad-media://media/appcuentas2/.dyad/media/5f361a174a286c7611adb5860e3f3390a33f3958c2329e451f071a4c5af9962a.png";
+  }, [isVisa]);
+
+  const pocketsBalance = useMemo(() => {
+    if (!card) return 0;
+    return (card.card_pockets || []).reduce((sum: number, p: any) => sum + Number(p.amount), 0);
+  }, [card]);
+
+  const availableCredit = useMemo(() => {
+    if (!card || card.type !== "credit") return 0;
+    return (card.credit_limit || 0) - card.current_balance;
+  }, [card]);
+
   if (isLoading) return <LoadingSpinner />;
 
   return (
@@ -333,64 +379,126 @@ const CardDetailsPage: React.FC = () => {
       <div className="grid gap-4 lg:grid-cols-3">
         <div className={cn("lg:col-span-2 flex flex-col gap-4", card.type !== "debit" && "lg:col-span-3")}>
           
-          {/* Tarjeta de Información Principal */}
-          <Card className="p-4 md:p-6 text-white shadow-xl border-none mx-1" style={{ backgroundColor: card.color }}>
-            <div className="flex justify-between items-start">
-              <div className="space-y-1">
-                <p className="text-[10px] md:text-sm opacity-80 uppercase font-bold">
-                  {card.type === "credit" ? "Crédito Disponible" : "Saldo Disponible"}
-                </p>
-                <p className="text-2xl md:text-3xl font-black">
-                  ${(card.type === "credit" ? (card.credit_limit - card.current_balance) : card.current_balance).toFixed(2)}
-                </p>
-              </div>
-              <div className="text-right">
-                <p className="text-[10px] md:text-sm font-bold opacity-80">{card.bank_name}</p>
-                <p className="text-xs font-black">**** {card.last_four_digits}</p>
+          {/* Tarjeta de Información Principal (Diseño Realista de Tarjeta Física) */}
+          <div className="w-full max-w-sm h-[240px] relative rounded-2xl shadow-2xl overflow-hidden mx-auto md:mx-1" style={{ backgroundColor: card.color }}>
+            {/* Brillo de plástico de tarjeta */}
+            <div className="absolute inset-0 bg-gradient-to-tr from-white/0 via-white/5 to-white/20 pointer-events-none rounded-2xl" />
+            
+            {/* Chip de la tarjeta */}
+            <div className="absolute top-12 left-6 w-10 h-8 bg-gradient-to-r from-yellow-200 via-yellow-400 to-yellow-300 rounded-md opacity-90 shadow-inner flex items-center justify-center overflow-hidden border border-yellow-600/30">
+              <div className="w-full h-full grid grid-cols-3 grid-rows-3 gap-0.5 p-1 opacity-40">
+                {Array.from({ length: 9 }).map((_, i) => (
+                  <div key={i} className="border border-black/30 rounded-sm" />
+                ))}
               </div>
             </div>
 
-            {/* Deuda Global vs Deuda del Periodo */}
-            <div className="grid grid-cols-2 gap-4 mt-4 pt-4 border-t border-white/20 text-xs">
-              <div>
-                <p className="opacity-75 text-[10px] uppercase font-bold">Deuda Global</p>
-                <p className="text-lg font-black">
-                  ${card.type === "credit" ? card.current_balance.toFixed(2) : "0.00"}
-                </p>
+            {/* Contenido de la Tarjeta */}
+            <div className="p-5 flex flex-col h-full justify-between relative z-10 text-white">
+              {/* Encabezado */}
+              <div className="flex justify-between items-start">
+                <div className="flex items-center gap-2">
+                  {bankLogoUrl ? (
+                    <img 
+                      src={bankLogoUrl} 
+                      alt={card.bank_name} 
+                      className="h-7 object-contain max-w-[100px] filter brightness-0 invert drop-shadow-md"
+                    />
+                  ) : (
+                    <span className="text-sm font-black tracking-wider uppercase drop-shadow-md">
+                      {card.bank_name}
+                    </span>
+                  )}
+                </div>
+                <span className="text-[9px] font-black tracking-widest opacity-90 bg-white/20 px-2.5 py-0.5 rounded-full backdrop-blur-sm">
+                  {card.type === "credit" ? "CRÉDITO" : "DÉBITO"}
+                </span>
               </div>
-              <div>
-                <p className="opacity-75 text-[10px] uppercase font-bold">
-                  {card.type === "credit" ? "Deuda del Periodo" : "Flujo del Periodo"}
-                </p>
-                <p className="text-lg font-black">
-                  ${card.type === "credit" ? periodMetrics.net.toFixed(2) : periodMetrics.net.toFixed(2)}
-                </p>
+
+              {/* Saldo / Crédito */}
+              <div className="space-y-1 mt-2">
+                {card.type === "credit" ? (
+                  <>
+                    <div className="flex justify-between items-baseline">
+                      <span className="text-[10px] opacity-80 uppercase tracking-wider font-medium">Crédito Disp.</span>
+                      <span className="text-2xl font-black tracking-tight drop-shadow-md">
+                        ${availableCredit.toFixed(2)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center text-[10px] opacity-75 border-t border-white/10 pt-1">
+                      <span>Deuda Actual:</span>
+                      <span className="font-bold">${card.current_balance.toFixed(2)}</span>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex justify-between items-baseline">
+                      <span className="text-[10px] opacity-80 uppercase tracking-wider font-medium">Saldo Disp.</span>
+                      <span className="text-2xl font-black tracking-tight drop-shadow-md">
+                        ${card.current_balance.toFixed(2)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center text-[10px] opacity-75 border-t border-white/10 pt-1">
+                      <span>Saldo en Apartados:</span>
+                      <span className="font-bold">${pocketsBalance.toFixed(2)}</span>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Número de Tarjeta y Fechas */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="font-mono text-sm tracking-widest drop-shadow-md opacity-90">
+                    ••••  ••••  ••••  {card.last_four_digits}
+                  </p>
+                  <svg className="h-4 w-4 text-white/80 fill-current" viewBox="0 0 24 24">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.53c-.26-.81-1-1.4-1.9-1.4h-1v-3c0-.55-.45-1-1-1h-6v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.4z"/>
+                  </svg>
+                </div>
+
+                {/* Fila Inferior: Nombre, Expiración y Red de Pago */}
+                <div className="flex justify-between items-end border-t border-white/10 pt-2">
+                  <div className="text-[9px] uppercase tracking-wider opacity-80">
+                    <p className="font-bold truncate max-w-[120px]">{card.name || "Oinkash Member"}</p>
+                    <p className="opacity-60">Vence: {card.expiration_date}</p>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <img 
+                      src={networkLogoUrl} 
+                      alt="Network" 
+                      className="h-6 object-contain max-w-[45px] filter brightness-0 invert drop-shadow-md"
+                    />
+                  </div>
+                </div>
               </div>
             </div>
+          </div>
 
-            {card.type === "credit" && (
-              <div className="grid grid-cols-2 gap-4 mt-4 pt-4 border-t border-white/10 text-xs opacity-90">
-                {upcomingCutOffDate && (
-                  <div className="flex items-center gap-2">
-                    <CalendarDays className="h-4 w-4" />
-                    <div>
-                      <p className="opacity-75 text-[10px] uppercase">Próximo Corte</p>
-                      <p className="font-bold">{format(upcomingCutOffDate, "dd 'de' MMM", { locale: es })}</p>
-                    </div>
+          {/* Fechas de Corte y Pago (Solo para Crédito) */}
+          {card.type === "credit" && (
+            <div className="grid grid-cols-2 gap-4 mx-1 p-4 bg-muted/30 rounded-2xl border text-xs">
+              {upcomingCutOffDate && (
+                <div className="flex items-center gap-2">
+                  <CalendarDays className="h-5 w-5 text-primary" />
+                  <div>
+                    <p className="text-muted-foreground text-[10px] uppercase font-bold">Próximo Corte</p>
+                    <p className="font-black text-sm">{format(upcomingCutOffDate, "dd 'de' MMM", { locale: es })}</p>
                   </div>
-                )}
-                {upcomingPaymentDueDate && (
-                  <div className="flex items-center gap-2">
-                    <Eye className="h-4 w-4" />
-                    <div>
-                      <p className="opacity-75 text-[10px] uppercase">Límite de Pago</p>
-                      <p className="font-bold">{format(upcomingPaymentDueDate, "dd 'de' MMM", { locale: es })}</p>
-                    </div>
+                </div>
+              )}
+              {upcomingPaymentDueDate && (
+                <div className="flex items-center gap-2">
+                  <Eye className="h-5 w-5 text-primary" />
+                  <div>
+                    <p className="text-muted-foreground text-[10px] uppercase font-bold">Límite de Pago</p>
+                    <p className="font-black text-sm">{format(upcomingPaymentDueDate, "dd 'de' MMM", { locale: es })}</p>
                   </div>
-                )}
-              </div>
-            )}
-          </Card>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Tabla de Movimientos con Filtro de Periodo */}
           <Card className="border-none shadow-sm mx-1 overflow-hidden">
@@ -590,7 +698,7 @@ const CardDetailsPage: React.FC = () => {
             <div className="grid gap-2"><Label>Descripción</Label><Input value={transactionForm.description} onChange={e => setTransactionForm({...transactionForm, description: e.target.value})} required /></div>
             <div className="grid gap-2">
               <Label>Categoría</Label>
-              <Select value={transactionForm.selectedCategoryId} onValueChange={(v) => setTransactionForm({...transactionForm, selectedCategoryId: v})}>
+              <Select value={transactionForm.selectedCategoryId} onValueChange={(v) => setNewTransaction({...newTransaction, selectedCategoryId: v})}>
                 <SelectTrigger><SelectValue placeholder="Selecciona" /></SelectTrigger>
                 <SelectContent>{(transactionForm.type === "charge" ? expenseCategories : incomeCategories).map(cat => <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>)}</SelectContent>
               </Select>
