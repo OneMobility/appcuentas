@@ -21,12 +21,14 @@ import { evaluateExpression } from "@/utils/math-helpers";
 import DynamicLucideIcon from "@/components/DynamicLucideIcon";
 import { getLocalDateString } from "@/utils/date-helpers";
 import { Checkbox } from "@/components/ui/checkbox";
-import { addMonths, parseISO } from "date-fns";
+import { addMonths, parseISO, startOfMonth, endOfMonth, isWithinInterval } from "date-fns";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const Cards = () => {
   const { user } = useSession();
   const { incomeCategories, expenseCategories, isLoadingCategories } = useCategoryContext();
   
+  const [viewMode, setViewMode] = useState<"global" | "month">("global");
   const [cards, setCards] = useState<any[]>([]);
   const [cashBalance, setCashBalance] = useState(0);
   
@@ -302,31 +304,83 @@ const Cards = () => {
     (c.bank_name || "").toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const totalDebitBalance = cards.filter(c => c.type === "debit").reduce((s, c) => s + c.current_balance, 0);
-  const totalCreditDebt = cards.filter(c => c.type === "credit").reduce((s, c) => s + c.current_balance, 0);
-  const totalAvailableCredit = cards.filter(c => c.type === "credit").reduce((s, c) => s + ((c.credit_limit || 0) - c.current_balance), 0);
-  const netCardBalance = totalDebitBalance - totalCreditDebt;
+  const totals = useMemo(() => {
+    const now = new Date();
+    const start = startOfMonth(now);
+    const end = endOfMonth(now);
+
+    if (viewMode === "month") {
+      let monthlyDebit = 0;
+      let monthlyCreditDebt = 0;
+      let monthlyAvailable = 0;
+
+      cards.forEach(card => {
+        const txs = card.card_transactions || [];
+        const monthlyTxs = txs.filter((t: any) => {
+          const d = parseISO(t.date);
+          return isWithinInterval(d, { start, end });
+        });
+
+        const charges = monthlyTxs.filter((t: any) => t.type === "charge").reduce((sum: number, t: any) => sum + Number(t.amount), 0);
+        const payments = monthlyTxs.filter((t: any) => t.type === "payment").reduce((sum: number, t: any) => sum + Number(t.amount), 0);
+
+        if (card.type === "debit") {
+          monthlyDebit += (payments - charges);
+        } else {
+          const debtChange = charges - payments;
+          monthlyCreditDebt += debtChange;
+          monthlyAvailable += ((card.credit_limit || 0) - debtChange);
+        }
+      });
+
+      return {
+        debit: monthlyDebit,
+        creditDebt: monthlyCreditDebt,
+        available: monthlyAvailable,
+        net: monthlyDebit - monthlyCreditDebt
+      };
+    }
+
+    // Global
+    const debit = cards.filter(c => c.type === "debit").reduce((s, c) => s + c.current_balance, 0);
+    const creditDebt = cards.filter(c => c.type === "credit").reduce((s, c) => s + c.current_balance, 0);
+    const available = cards.filter(c => c.type === "credit").reduce((s, c) => s + ((c.credit_limit || 0) - c.current_balance), 0);
+    return {
+      debit,
+      creditDebt,
+      available,
+      net: debit - creditDebt
+    };
+  }, [cards, viewMode]);
 
   return (
     <div className="flex flex-col gap-6 p-4">
-      <h1 className="text-3xl font-bold">Tus Tarjetas</h1>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <h1 className="text-3xl font-bold">Tus Tarjetas</h1>
+        <Tabs value={viewMode} onValueChange={(v: any) => setViewMode(v)} className="w-full max-w-[260px]">
+          <TabsList className="grid w-full grid-cols-2 rounded-xl h-9">
+            <TabsTrigger value="global" className="rounded-lg text-xs font-bold">Global</TabsTrigger>
+            <TabsTrigger value="month" className="rounded-lg text-xs font-bold">Del Mes</TabsTrigger>
+          </TabsList>
+        </Tabs>
+      </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card className="border-l-4 border-green-600 bg-green-50 text-green-800">
           <CardHeader className="pb-2"><CardTitle className="text-xs font-medium flex items-center gap-2"><Wallet className="h-3 w-3" /> SALDO EN DÉBITO</CardTitle></CardHeader>
-          <CardContent><div className="text-xl font-bold">${totalDebitBalance.toFixed(2)}</div></CardContent>
+          <CardContent><div className="text-xl font-bold">${totals.debit.toFixed(2)}</div></CardContent>
         </Card>
         <Card className="border-l-4 border-yellow-500 bg-yellow-50 text-yellow-800">
           <CardHeader className="pb-2"><CardTitle className="text-xs font-medium flex items-center gap-2"><CreditCard className="h-3 w-3" /> CRÉDITO DISPONIBLE</CardTitle></CardHeader>
-          <CardContent><div className="text-xl font-bold">${totalAvailableCredit.toFixed(2)}</div></CardContent>
+          <CardContent><div className="text-xl font-bold">${totals.available.toFixed(2)}</div></CardContent>
         </Card>
         <Card className="border-l-4 border-red-600 bg-red-50 text-red-800">
           <CardHeader className="pb-2"><CardTitle className="text-xs font-medium flex items-center gap-2"><AlertCircle className="h-3 w-3" /> DEUDA DE CRÉDITO</CardTitle></CardHeader>
-          <CardContent><div className="text-xl font-bold">${totalCreditDebt.toFixed(2)}</div></CardContent>
+          <CardContent><div className="text-xl font-bold">${totals.creditDebt.toFixed(2)}</div></CardContent>
         </Card>
         <Card className="border-l-4 border-blue-600 bg-blue-50 text-blue-800">
           <CardHeader className="pb-2"><CardTitle className="text-xs font-medium flex items-center gap-2"><PiggyBank className="h-3 w-3" /> BALANCE NETO</CardTitle></CardHeader>
-          <CardContent><div className="text-xl font-bold">${netCardBalance.toFixed(2)}</div></CardContent>
+          <CardContent><div className="text-xl font-bold">${totals.net.toFixed(2)}</div></CardContent>
         </Card>
       </div>
 
