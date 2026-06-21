@@ -61,7 +61,7 @@ const CardReconciliationDialog: React.FC<CardReconciliationDialogProps> = ({
   const [realValueInput, setRealValueInput] = useState<string>("");
 
   // Plazo para diferir la diferencia de meses
-  const [adjustmentInstallments, setAdjustmentInstallments] = useState<string>("1");
+  const [adjustmentInstallments, setAdjustmentInstallments] = useState<string>("6");
 
   // Fecha y categoría del ajuste para afectar al periodo correcto
   const [adjustmentDate, setAdjustmentDate] = useState<Date>(new Date());
@@ -72,7 +72,7 @@ const CardReconciliationDialog: React.FC<CardReconciliationDialogProps> = ({
       setRevolventeInput("");
       setMesesInput("");
       setRealValueInput("");
-      setAdjustmentInstallments("1");
+      setAdjustmentInstallments("6"); // Por defecto a 6 meses como solicita el usuario
       setAdjustmentDate(new Date());
       setSelectedCategoryId("");
       setShowHelp(false);
@@ -151,10 +151,8 @@ const CardReconciliationDialog: React.FC<CardReconciliationDialogProps> = ({
   // Determinar si el ajuste principal es un cargo o un abono para filtrar categorías
   const isAdjustmentCharge = useMemo(() => {
     if (card.type === "credit" && creditMode === "detailed") {
-      // Si el ajuste neto de revolvente es positivo, es un cargo (debes más)
       return revolventeDiff > 0;
     }
-    // Para débito o crédito por disponible
     return card.type === "credit" ? calculatedDifference < 0 : calculatedDifference < 0;
   }, [card.type, creditMode, revolventeDiff, calculatedDifference]);
 
@@ -209,7 +207,9 @@ const CardReconciliationDialog: React.FC<CardReconciliationDialogProps> = ({
 
           const transactionInserts = [];
           for (let i = 0; i < installmentsCount; i++) {
-            const installmentDate = addMonths(adjustmentDate, i);
+            // IMPORTANTE: Las mensualidades diferidas comienzan a partir del mes siguiente (i + 1)
+            // para que el mes actual (junio) solo conserve la deuda revolvente declarada.
+            const installmentDate = addMonths(adjustmentDate, i + 1);
             transactionInserts.push({
               user_id: user.id,
               card_id: card.id,
@@ -243,8 +243,8 @@ const CardReconciliationDialog: React.FC<CardReconciliationDialogProps> = ({
       } else {
         // MODO DISPONIBLE (CRÉDITO) O SALDO (DÉBITO)
         const txType = card.type === "credit"
-          ? (totalDiff > 0 ? "payment" : "charge") // Disponible real > app -> menos deuda -> abono
-          : (totalDiff > 0 ? "payment" : "charge"); // Saldo real > app -> más dinero -> depósito
+          ? (totalDiff > 0 ? "payment" : "charge")
+          : (totalDiff > 0 ? "payment" : "charge");
 
         const newCurrentBalance = card.type === "credit"
           ? card.current_balance - totalDiff
@@ -324,7 +324,7 @@ const CardReconciliationDialog: React.FC<CardReconciliationDialogProps> = ({
             setRevolventeInput("");
             setMesesInput("");
             setRealValueInput("");
-            setAdjustmentInstallments("1");
+            setAdjustmentInstallments("6");
           }} className="w-full">
             <TabsList className="grid w-full grid-cols-2 rounded-xl">
               <TabsTrigger value="detailed" className="rounded-lg">Cuadre Detallado</TabsTrigger>
