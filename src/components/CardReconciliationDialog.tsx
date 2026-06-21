@@ -63,7 +63,7 @@ const CardReconciliationDialog: React.FC<CardReconciliationDialogProps> = ({
     }
   }, [isOpen]);
 
-  // Calcular lo que la app "cree" que se debe actualmente a meses y revolvente basándose en el periodo de facturación real
+  // Calcular lo que la app "cree" que se debe actualmente a meses y revolvente
   const appMetrics = useMemo(() => {
     if (card.type !== "credit") return { meses: 0, revolvente: card.current_balance };
     
@@ -74,17 +74,7 @@ const CardReconciliationDialog: React.FC<CardReconciliationDialogProps> = ({
       ? getStatementPeriod(card.cut_off_day, today)
       : { start: startOfMonth(today), end: endOfMonth(today) };
 
-    // Calcular la deuda del periodo actual (revolvente real en la app)
-    const periodTxs = card.transactions.filter(tx => {
-      const txDate = parseISO(tx.date);
-      return txDate >= statementPeriod.start && txDate <= statementPeriod.end;
-    });
-    
-    const charges = periodTxs.filter(tx => tx.type === "charge").reduce((sum, tx) => sum + Number(tx.amount), 0);
-    const payments = periodTxs.filter(tx => tx.type === "payment").reduce((sum, tx) => sum + Number(tx.amount), 0);
-    const revolvente = Math.max(0, charges - payments);
-
-    // Calcular la deuda a meses (cargos diferidos futuros que vencen después del periodo actual)
+    // La deuda a meses (diferido) son estrictamente las transacciones futuras (después del periodo actual)
     const mesesCharges = card.transactions
       .filter(tx => tx.type === "charge" && tx.installments_count && parseISO(tx.date) > statementPeriod.end)
       .reduce((sum, tx) => sum + Number(tx.amount), 0);
@@ -94,6 +84,10 @@ const CardReconciliationDialog: React.FC<CardReconciliationDialogProps> = ({
       .reduce((sum, tx) => sum + Number(tx.amount), 0);
 
     const meses = Math.max(0, mesesCharges - mesesPayments);
+    
+    // La deuda revolvente (actual) es el resto de la deuda global actual de la tarjeta
+    // Esto garantiza que revolvente + meses = card.current_balance en todo momento
+    const revolvente = Math.max(0, card.current_balance - meses);
 
     return { meses, revolvente };
   }, [card.transactions, card.current_balance, card.type, card.cut_off_day]);
