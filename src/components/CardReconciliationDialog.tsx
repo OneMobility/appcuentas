@@ -11,9 +11,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/context/SessionContext";
 import { showError, showSuccess } from "@/utils/toast";
 import { evaluateExpression } from "@/utils/math-helpers";
-import { getLocalDateString } from "@/utils/date-helpers";
+import { getLocalDateString, getStatementPeriod } from "@/utils/date-helpers";
 import { cn } from "@/lib/utils";
-import { format, addMonths } from "date-fns";
+import { format, addMonths, startOfMonth, endOfMonth, parseISO } from "date-fns";
 
 interface CardDataForReconciliation {
   id: string;
@@ -63,25 +63,40 @@ const CardReconciliationDialog: React.FC<CardReconciliationDialogProps> = ({
     }
   }, [isOpen]);
 
-  // Calcular lo que la app "cree" que se debe actualmente a meses y revolvente
+  // Calcular lo que la app "cree" que se debe actualmente a meses y revolvente basándose en el periodo de facturación real
   const appMetrics = useMemo(() => {
     if (card.type !== "credit") return { meses: 0, revolvente: card.current_balance };
     
-    const todayStr = format(new Date(), "yyyy-MM-dd");
-    // Sumar cargos diferidos que vencen hoy o en el futuro
+    const today = new Date();
+    
+    // Obtener el periodo de facturación actual de la tarjeta
+    const statementPeriod = card.cut_off_day 
+      ? getStatementPeriod(card.cut_off_day, today)
+      : { start: startOfMonth(today), end: endOfMonth(today) };
+
+    // Calcular la deuda del periodo actual (revolvente real en la app)
+    const periodTxs = card.transactions.filter(tx => {
+      const txDate = parseISO(tx.date);
+      return txDate >= statementPeriod.start && txDate <= statementPeriod.end;
+    });
+    
+    const charges = periodTxs.filter(tx => tx.type === "charge").reduce((sum, tx) => sum + Number(tx.amount), 0);
+    const payments = periodTxs.filter(tx => tx.type === "payment").reduce((sum, tx) => sum + Number(tx.amount), 0);
+    const revolvente = Math.max(0, charges - payments);
+
+    // Calcular la deuda a meses (cargos diferidos futuros que vencen después del periodo actual)
     const mesesCharges = card.transactions
-      .filter(tx => tx.type === "charge" && tx.installments_count && tx.date >= todayStr)
+      .filter(tx => tx.type === "charge" && tx.installments_count && parseISO(tx.date) > statementPeriod.end)
       .reduce((sum, tx) => sum + Number(tx.amount), 0);
     
-    // Restar abonos diferidos que vencen hoy o en el futuro para que el cálculo sea exacto
     const mesesPayments = card.transactions
-      .filter(tx => tx.type === "payment" && tx.installments_count && tx.date >= todayStr)
+      .filter(tx => tx.type === "payment" && tx.installments_count && parseISO(tx.date) > statementPeriod.end)
       .reduce((sum, tx) => sum + Number(tx.amount), 0);
 
     const meses = Math.max(0, mesesCharges - mesesPayments);
-    const revolvente = Math.max(0, card.current_balance - meses);
+
     return { meses, revolvente };
-  }, [card.transactions, card.current_balance, card.type]);
+  }, [card.transactions, card.current_balance, card.type, card.cut_off_day]);
 
   // Valores evaluados de los inputs
   const revolventeVal = useMemo(() => {
