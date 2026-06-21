@@ -12,6 +12,7 @@ import { showError, showSuccess } from "@/utils/toast";
 import { format } from "date-fns";
 import { evaluateExpression } from "@/utils/math-helpers";
 import { cn } from "@/lib/utils";
+import { AlertCircle, HelpCircle } from "lucide-react";
 
 interface CardDataForReconciliation {
   id: string;
@@ -39,6 +40,7 @@ const CardReconciliationDialog: React.FC<CardReconciliationDialogProps> = ({
 }) => {
   const { user } = useSession();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
   
   // Modos de cuadre para crédito: "detailed" (Desglosado), "available" (Disponible)
   const [creditMode, setCreditMode] = useState<"detailed" | "available">("detailed");
@@ -55,6 +57,7 @@ const CardReconciliationDialog: React.FC<CardReconciliationDialogProps> = ({
       setRevolventeInput("");
       setMesesInput("");
       setRealValueInput("");
+      setShowHelp(false);
     }
   }, [isOpen]);
 
@@ -80,7 +83,7 @@ const CardReconciliationDialog: React.FC<CardReconciliationDialogProps> = ({
       : (parseFloat(realValueInput) || 0);
   }, [realValueInput]);
 
-  // Cálculos de balance y diferencia
+  // Cálculos de balance and diferencia
   const appBalance = useMemo(() => {
     if (card.type === "debit") return card.current_balance;
     if (creditMode === "available") {
@@ -168,10 +171,38 @@ const CardReconciliationDialog: React.FC<CardReconciliationDialogProps> = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[425px] rounded-3xl">
+      <DialogContent className="sm:max-w-[425px] rounded-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Cuadre de Tarjeta: {card.name}</DialogTitle>
+          <div className="flex items-center justify-between pr-6">
+            <DialogTitle>Cuadre de Tarjeta: {card.name}</DialogTitle>
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="h-8 w-8 rounded-full" 
+              onClick={() => setShowHelp(!showHelp)}
+              title="¿Cómo funciona?"
+            >
+              <HelpCircle className="h-5 w-5 text-primary" />
+            </Button>
+          </div>
         </DialogHeader>
+
+        {showHelp && (
+          <div className="bg-blue-50 p-4 rounded-2xl border border-blue-100 text-xs text-blue-800 space-y-2 animate-in fade-in duration-200">
+            <p className="font-bold flex items-center gap-1">
+              <AlertCircle className="h-4 w-4" /> ¿Cómo organizar tus montos?
+            </p>
+            <p>
+              • <b>Deuda Revolvente:</b> Es lo que debes de tus compras normales del mes (las que pagas completas en tu fecha límite).
+            </p>
+            <p>
+              • <b>Deuda a Meses (MSI):</b> Es la suma total de lo que te falta por pagar de tus compras diferidas. <i>No necesitas desglosar los meses aquí</i>, ya que la app los distribuye automáticamente mes a mes según la fecha de cada mensualidad.
+            </p>
+            <p>
+              • El cuadre creará un movimiento de ajuste para que tu saldo global en la app coincida perfectamente con tu estado de cuenta real.
+            </p>
+          </div>
+        )}
 
         {card.type === "credit" && (
           <Tabs value={creditMode} onValueChange={(v: any) => {
