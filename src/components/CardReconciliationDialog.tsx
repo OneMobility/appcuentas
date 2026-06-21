@@ -10,11 +10,246 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/context/SessionContext";
 import { showError, showSuccess } from "@/utils/toast";
-import { format, addMonths } from "date-fns";
 import { evaluateExpression } from "@/utils/math-helpers";
+import { getLocalDateString, getUpcomingCutOffDate, getUpcomingPaymentDueDate, getStatementPeriod } from "@/utils/date-helpers";
 import { cn } from "@/lib/utils";
 import { AlertCircle, HelpCircle } from "lucide-react";
+import { format, addMonths } from "date-fns";
+
+interface CardDataForReconciliation {
+  id: string;
+  name: string;
+  current_balance: number;
+  type: "credit" | "debit";
+  credit_limit?: number;
+  transactions: any[];
+}
+
+interface CardReconciliationDialogProps {
+  isOpen: boolean;
+  onClose: () => void;
+  card: CardDataForReconciliation;
+  onReconciliationSuccess: () => void;
+  onNoAdjustmentSuccess: () => void;
+}
+
+const CardReconciliationDialog: React.FC<CardReconciliationDialogProps> = ({
+  isOpen,
+  onClose,
+  card,
+  onReconciliationSuccess,
+  onNoAdjustmentSuccess,
+}) => {
+  const { user } = useSession();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
+  
+  // Modos de cuadre para crédito: "detailed" (Desglosado), "available" (Disponible)
+  const [creditMode, setCreditMode] = useState<"detailed" | "available">("detailed");
+
+  // Inputs para modo desglosado (Crédito)
+  const [revolventeInput, setRevolventeInput] = useState<string>("");
+  const [mesesInput, setMesesInput] = useState<string>("");
+
+  // Input para modo disponible (Crédito) o saldo (Débito)
+  const [realValueInput, setRealValueInput] = useState<string>("");
+
+  // Plazo para diferir la diferencia de meses
+  const [adjustmentInstallments, setAdjustmentInstallments] = useState<string>("1");
+
+  useEffect(() => {
+    if (isOpen) {
+      setRevolventeInput("");
+      setMesesInput("");
+      setRealValueInput("");
+      setAdjustmentInstallments("1");
+      setShowHelp(false);
+    }
+  }, [isOpen]);
+
+  // Calcular lo que la app "cree" que se debe actualmente a meses y revolvente
+  const appMetrics = useMemo(() => {
+    if (card.type !== "credit") return { meses: 0, revolvente: card.current_balance };
+    
+    const todayStr = format(new Date(), "yyyy-MM-dd");
+    // Sumar cargos diferidos que vencen hoy o en el futuro
+    const meses = card.transactions
+      .filter(tx => tx.type === "charge" && tx.installments_count && tx.date >= todayStr)
+      .reduce((sum, tx) => sum + Number(tx.amount), 0);
+
+    const revolvente = Math.max(0, card.current_balance - meses);
+    return { meses, revolvente };
+  }, [card.transactions, card.current_balance, card.type]);
+
+  // Valores evaluados de los inputs
+  const revolventeVal = useMemo(() => {
+    if (!revolventeInput) return appMetrics.revolvente;
+    return revolventeInput.startsWith('=')
+      ? (evaluateExpression(revolventeInput.substring(1)) || 0)
+      : (parseFloat(revolventeInput) || 0);
+  }, [revolventeInput, appMetrics.revolvente]);
+
+  const mesesVal = useMemo(() => {
+    if (!mesesInput) return appMetrics.meses;
+    return mesesInput.startsWith('=')
+      ? (evaluateExpression(mesesInput.substring(1)) || 0)
+      : (parseFloat(mesesInput) || 0);
+  }, [mesesInput, appMetrics.meses]);
+
+  const realValueVal = useMemo(() => {
+    if (!realValueInput) return 0;
+    return realValueInput.startsWith('=')
+      ? (evaluateExpression(realValueInput.substring(1)) || 0)
+      : (parseFloat(realValueInput) || 0);
+  }, [realValueInput]);
+
+  // Diferencias individuales
+  const revolventeDiff = useMemo(() => {
+    if (card.type !== "credit" || creditMode !== "detailed") return 0;
+    return revolventeVal - appMetrics.revolvente;
+  }, [revolventeVal, appMetrics.revolvente, card.type, creditMode]);
+
+  const mesesDiff = useMemo(() => {
+    if (card.type !== "credit" || creditMode !== "detailed") return 0;
+    return mesesVal - appMetrics.meses;
+  }, [mesesVal, appMetrics.meses, card.type, creditMode]);
+
+  // Cálculos de balance y diferencia global
+  const appBalance = useMemo(() => {
+    if (card.type === "debit") return card.current_balance;
+    if (creditMode === "available") {
+      return (card.credit_limit || 0) - card.current_balance;
+    }
+    return card.current_balance; // Deuda global en App
+  }, [card, creditMode]);
+
+  const calculatedDifference = useMemo(() => {
+    if (card.type === "credit" && creditMode === "detailed") {
+      return revolventeDiff + mesesDiff;
+    }
+    return realValueVal - appBalance;
+  }, [card, creditMode, revolventeDiff, mesesDiff, realValueVal, appBalance]);
+
+  const handleReconcile = async () => {
+    if (!user) {
+      showError("Debes iniciar sesión.");
+      return;
+    }
+
+    const totalDiff = calculatedDifference;
+
+    if (Math.abs(totalDiff) < 0.01) {
+      onNoAdjustmentSuccess();
+      onClose();
+      return;
+    }
+
+    setIsSubmitting(true);
+    const today = new Date();
+    const transactionDate = getLocalDateString(today);
+
+    try {
+      // MODO DETALLADO (CRÉDITO)
+      if (card.type === "credit" && creditMode === "detailed") {
+        // 1. Procesar ajuste de Revolvente (si hay diferencia)
+        if (Math.abs(revolventeDiff) >= 0.01) {
+          const txType = revolventeDiff > 0 ? "charge" : "payment";
+          const { error: revError } = await supabase
+            .from('card_transactions')
+            .insert({
+              user_id: user.id,
+              card_id: card.id,
+              type: txType,
+              amount: Math.abs(revolventeDiff),
+              description: "Ajuste de Cuadre (Revolvente)",
+              date: transactionDate,
+              is_adjustment: true,
+            });
+          if (revError) throw revError;
+        }
+
+        // 2. Procesar ajuste de Meses sin Intereses (si hay diferencia)
+        if (Math.abs(mesesDiff) >= 0.01) {
+          const installmentsCount = parseInt(adjustmentInstallments);
+          const txType = mesesDiff > 0 ? "charge" : "payment";
+          const monthlyAmount = Math.abs(mesesDiff) / installmentsCount;
+
+          const transactionInserts = [];
+          for (let i = 0; i < installmentsCount; i++) {
+            const installmentDate = addMonths(today, i);
+            transactionInserts.push({
+              user_id: user.id,
+              card_id: card.id,
+              type: txType,
+              amount: monthlyAmount,
+              description: `Ajuste de Cuadre (Diferido ${i + 1}/${installmentsCount})`,
+              date: getLocalDateString(installmentDate),
+              installments_total_amount: Math.abs(mesesDiff),
+              installments_count: installmentsCount,
+              installment_number: i + 1,
+              is_adjustment: true,
+            });
+          }
+
+          const { error: mesesError } = await supabase
+            .from('card_transactions')
+            .insert(transactionInserts);
+          if (mesesError) throw mesesError;
+        }
+
+        // 3. Actualizar saldo global de la tarjeta
+        const newCurrentBalance = card.current_balance + totalDiff;
+        const { error: cardError } = await supabase
+          .from('cards')
+          .update({ current_balance: newCurrentBalance })
+          .eq('id', card.id);
+        if (cardError) throw cardError;
+
+      } else {
+        // MODO DISPONIBLE (CRÉDITO) O SALDO (DÉBITO)
+        const txType = card.type === "credit"
+          ? (totalDiff > 0 ? "payment" : "charge") // Disponible real > app -> menos deuda -> abono
+          : (totalDiff > 0 ? "payment" : "charge"); // Saldo real > app -> más dinero -> depósito
+
+        const newCurrentBalance = card.type === "credit"
+          ? card.current_balance - totalDiff
+          : card.current_balance + totalDiff;
+
+        const { error: transactionError } = await supabase
+          .from('card_transactions')
+          .insert({
+            user_id: user.id,
+            card_id: card.id,
+            type: txType,
+            amount: Math.abs(totalDiff),
+            description: `Ajuste de Cuadre (${card.type === 'credit' ? 'Disponible' : 'Saldo'})`,
+            date: transactionDate,
+            is_adjustment: true,
+          });
+        if (transactionError) throw transactionError;
+
+        const { error: cardUpdateError } = await supabase
+          .from('cards')
+          .update({ current_balance: newCurrentBalance })
+          .eq('id', card.id);
+        if<dyad-write path="src/components/CardReconciliationDialog.tsx" description="Completar y corregir el archivo CardReconciliationDialog.tsx con la lógica de cuadre y diferido">
+"use client";
+
+import React, { useState, useEffect, useMemo } from "react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { supabase } from "@/integrations/supabase/client";
+import { useSession } from "@/context/SessionContext";
+import { showError, showSuccess } from "@/utils/toast";
+import { evaluateExpression } from "@/utils/math-helpers";
 import { getLocalDateString } from "@/utils/date-helpers";
+import { cn } from "@/lib/utils";
+import { AlertCircle, HelpCircle } from "lucide-react";
+import { format, addMonths } from "date-fns";
 
 interface CardDataForReconciliation {
   id: string;
@@ -257,6 +492,7 @@ const CardReconciliationDialog: React.FC<CardReconciliationDialogProps> = ({
               className="h-8 w-8 rounded-full" 
               onClick={() => setShowHelp(!showHelp)}
               title="¿Cómo funciona?"
+              type="button"
             >
               <HelpCircle className="h-5 w-5 text-primary" />
             </Button>
@@ -427,7 +663,7 @@ const CardReconciliationDialog: React.FC<CardReconciliationDialogProps> = ({
             {isSubmitting ? "Ajustando..." : "Cuadrar Saldo"}
           </Button>
         </DialogFooter>
-      </Dialog>
+      </DialogContent>
     </Dialog>
   );
 };
