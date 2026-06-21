@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { PlusCircle, Trash2, ShoppingCart, CheckCircle2, DollarSign, ArrowRightLeft, FileText, Share2, Copy, MessageSquare, Filter, Search, AlertCircle, ListPlus, History, TrendingUp, TrendingDown, Minus, Calendar } from "lucide-react";
+import { PlusCircle, Trash2, ShoppingCart, CheckCircle2, DollarSign, ArrowRightLeft, FileText, Share2, Copy, MessageSquare, Filter, Search, AlertCircle, ListPlus, History, TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
@@ -487,8 +487,7 @@ const ShoppingList: React.FC = () => {
   // Filtrar artículos
   const filteredItems = useMemo(() => {
     return items.filter(item => {
-      const matchesSearch = item.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                            (item.notes && item.notes.toLowerCase().includes(searchTerm.toLowerCase()));
+      const matchesSearch = item.name.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesCategory = filterCategory === "all" || item.category_id === filterCategory;
       const matchesStatus = filterStatus === "all" || 
                             (filterStatus === "pending" && !item.is_completed) || 
@@ -888,7 +887,7 @@ const ShoppingList: React.FC = () => {
       <Dialog open={isExpenseDialogOpen} onOpenChange={setIsExpenseDialogOpen}>
         <DialogContent className="w-[90vw] max-w-[400px] rounded-3xl">
           <DialogHeader>
-            <DialogTitle>Registrar Compra</DialogTitle>
+            <DialogTitle>Registrar Gasto de Compra</DialogTitle>
             <DialogDescription>
               Ingresa la cantidad y el precio unitario real para calcular el total.
             </DialogDescription>
@@ -938,7 +937,7 @@ const ShoppingList: React.FC = () => {
               <Label>Método de Pago</Label>
               <Select 
                 value={expenseForm.paymentMethod} 
-                onValueChange={v => setTransactionForm({...expenseForm, paymentMethod: v})}
+                onValueChange={v => setExpenseForm({...expenseForm, paymentMethod: v})}
               >
                 <SelectTrigger className="rounded-xl h-10">
                   <SelectValue />
@@ -958,7 +957,7 @@ const ShoppingList: React.FC = () => {
               <Label>Descripción del Gasto</Label>
               <Input 
                 value={expenseForm.description} 
-                onChange={e => setTransactionForm({...expenseForm, description: e.target.value})} 
+                onChange={e => setExpenseForm({...expenseForm, description: e.target.value})} 
                 required
                 className="rounded-xl h-10"
               />
@@ -1000,9 +999,9 @@ const ShoppingList: React.FC = () => {
                   <TableBody>
                     {priceHistory.map((hist, idx) => (
                       <TableRow key={idx}>
-                        <TableCell className="text-xs">{format(parseISO(hist.date), "dd/MM/yyyy")}</TableCell>
-                        <TableCell className="text-xs font-medium">{hist.description || "Compra súper"}</TableCell>
-                        <TableCell className="text-right font-bold text-xs">${hist.amount.toFixed(2)}</TableCell>
+                        <TableCell className="text-xs">{format(parseISO(hist.created_at), "dd/MM/yyyy")}</TableCell>
+                        <TableCell className="text-xs font-medium">{hist.list_name}</TableCell>
+                        <TableCell className="text-right font-bold text-xs">${hist.actual_unit_price.toFixed(2)}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -1028,7 +1027,27 @@ const ShoppingList: React.FC = () => {
             <div className="border rounded-2xl p-4 bg-muted/50 max-h-[200px] overflow-y-auto text-xs font-mono whitespace-pre-wrap">
               {generateShareText()}
             </div>
-            <Button onClick={handleCopyList} className="w-full gap-2 rounded-xl h-11 font-bold">
+            <form onSubmit={handleSendWhatsApp} className="grid gap-3">
+              <div className="grid gap-1.5">
+                <Label htmlFor="sharePhone">Número de WhatsApp</Label>
+                <Input
+                  id="sharePhone"
+                  placeholder="Ej. 521234567890"
+                  value={sharePhone}
+                  onChange={(e) => setSharePhone(e.target.value)}
+                  className="rounded-xl h-10"
+                />
+              </div>
+              <Button type="submit" className="w-full gap-2 rounded-xl h-11 font-bold">
+                <MessageSquare className="h-4 w-4" /> Enviar por WhatsApp
+              </Button>
+            </form>
+            <div className="relative flex py-1 items-center">
+              <div className="flex-grow border-t border-muted"></div>
+              <span className="flex-shrink mx-4 text-muted-foreground text-xs">O</span>
+              <div className="flex-grow border-t border-muted"></div>
+            </div>
+            <Button variant="outline" onClick={handleCopyList} className="w-full gap-2 rounded-xl h-11">
               <Copy className="h-4 w-4" /> Copiar al Portapapeles
             </Button>
           </div>
