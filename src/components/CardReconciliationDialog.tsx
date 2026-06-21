@@ -73,10 +73,16 @@ const CardReconciliationDialog: React.FC<CardReconciliationDialogProps> = ({
     
     const todayStr = format(new Date(), "yyyy-MM-dd");
     // Sumar cargos diferidos que vencen hoy o en el futuro
-    const meses = card.transactions
+    const mesesCharges = card.transactions
       .filter(tx => tx.type === "charge" && tx.installments_count && tx.date >= todayStr)
       .reduce((sum, tx) => sum + Number(tx.amount), 0);
+    
+    // Restar abonos diferidos que vencen hoy o en el futuro para que el cálculo sea exacto
+    const mesesPayments = card.transactions
+      .filter(tx => tx.type === "payment" && tx.installments_count && tx.date >= todayStr)
+      .reduce((sum, tx) => sum + Number(tx.amount), 0);
 
+    const meses = Math.max(0, mesesCharges - mesesPayments);
     const revolvente = Math.max(0, card.current_balance - meses);
     return { meses, revolvente };
   }, [card.transactions, card.current_balance, card.type]);
@@ -197,8 +203,8 @@ const CardReconciliationDialog: React.FC<CardReconciliationDialogProps> = ({
           if (mesesError) throw mesesError;
         }
 
-        // 3. Actualizar saldo global de la tarjeta
-        const newCurrentBalance = card.current_balance + totalDiff;
+        // 3. Actualizar saldo global de la tarjeta directamente a la suma declarada
+        const newCurrentBalance = revolventeVal + mesesVal;
         const { error: cardError } = await supabase
           .from('cards')
           .update({ current_balance: newCurrentBalance })
@@ -265,7 +271,7 @@ const CardReconciliationDialog: React.FC<CardReconciliationDialogProps> = ({
         </DialogHeader>
 
         {showHelp && (
-          <div className="bg-blue-50 p-4 rounded-2xl border border-blue-100 text-xs text-blue-800 space-y-2 animate-in fade-in duration-200">
+          <div className="bg-blue-50 p-4 rounded-2xl text-xs text-blue-800 space-y-2 animate-in fade-in duration-200">
             <p className="font-bold flex items-center gap-1">
               <AlertCircle className="h-4 w-4" /> ¿Cómo organizar tus montos?
             </p>
