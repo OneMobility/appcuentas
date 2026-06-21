@@ -22,6 +22,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export interface CardData {
   id: string;
@@ -43,11 +44,14 @@ const Dashboard = () => {
   const { user } = useSession();
   const { incomeCategories, expenseCategories, getCategoryById, isLoadingCategories } = useCategoryContext();
 
+  const [viewMode, setViewMode] = useState<"global" | "month">("global");
   const [cards, setCards] = useState<CardData[]>([]);
   const [cashTransactions, setCashTransactions] = useState<any[]>([]);
   const [cardTransactions, setCardTransactions] = useState<any[]>([]);
   const [debtors, setDebtors] = useState<any[]>([]);
   const [creditors, setCreditors] = useState<any[]>([]);
+  const [debtorTransactions, setDebtorTransactions] = useState<any[]>([]);
+  const [creditorTransactions, setCreditorTransactions] = useState<any[]>([]);
   const [refreshKey, setRefreshKey] = useState(0);
 
   const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false);
@@ -65,18 +69,22 @@ const Dashboard = () => {
   const fetchDashboardData = async () => {
     if (!user) return;
     try {
-      const [cardsRes, cashRes, cardTxRes, debtorsRes, creditorsRes] = await Promise.all([
+      const [cardsRes, cashRes, cardTxRes, debtorsRes, creditorsRes, debtorTxRes, creditorTxRes] = await Promise.all([
         supabase.from('cards').select('*').eq('user_id', user.id),
         supabase.from('cash_transactions').select('*').eq('user_id', user.id),
         supabase.from('card_transactions').select('*').eq('user_id', user.id),
         supabase.from('debtors').select('*').eq('user_id', user.id),
-        supabase.from('creditors').select('*').eq('user_id', user.id)
+        supabase.from('creditors').select('*').eq('user_id', user.id),
+        supabase.from('debtor_transactions').select('*').eq('user_id', user.id),
+        supabase.from('creditor_transactions').select('*').eq('user_id', user.id)
       ]);
       setCards(cardsRes.data || []);
       setCashTransactions(cashRes.data || []);
       setCardTransactions(cardTxRes.data || []);
       setDebtors(debtorsRes.data || []);
       setCreditors(creditorsRes.data || []);
+      setDebtorTransactions(debtorTxRes.data || []);
+      setCreditorTransactions(creditorTxRes.data || []);
     } catch (error: any) {
       showError('Error al cargar datos');
     }
@@ -96,7 +104,6 @@ const Dashboard = () => {
 
     const processTx = (tx: any, isCash: boolean) => {
       const date = parseISO(tx.date);
-      // Usamos isWithinInterval de date-fns directamente
       if (!isWithinInterval(date, { start, end })) return;
 
       const catId = isCash 
@@ -127,13 +134,100 @@ const Dashboard = () => {
   }, [cashTransactions, cardTransactions, incomeCategories, expenseCategories]);
 
   const totals = useMemo(() => {
+    // Cálculos Globales
     const cash = cashTransactions.reduce((s, t) => t.type === "ingreso" ? s + t.amount : s - t.amount, 0);
     const debt = debtors.reduce((s, d) => s + d.current_balance, 0);
     const cred = creditors.reduce((s, c) => s + c.current_balance, 0);
     const debitCards = cards.filter(c => c.type === "debit").reduce((s, c) => s + c.current_balance, 0);
     const creditDebt = cards.filter(c => c.type === "credit").reduce((s, c) => s + c.current_balance, 0);
-    return { cash, debt, cred, debitCards, creditDebt, total: cash + debt + debitCards - cred - creditDebt };
-  }, [cashTransactions, debtors, creditors, cards]);
+    const globalTotal = cash + debt + debitCards - cred - creditDebt;
+
+    // Cálculos del Mes Actual
+    const now = new Date();
+    const start = startOfMonth(now);
+    const end = endOfMonth(now);
+
+    const monthlyCashFlow = cashTransactions
+      .filter(t => {
+        const d = parseISO(t.date);
+        return isWithinInterval(d, { start, end });
+      })
+      .reduce((s, t) => t.type === "ingreso" ? s + t.amount : s - t.amount, 0);
+
+    const debitCardIds = cards.filter(c => c.type === "debit").map(c => c.id);
+    const monthlyDebitFlow = cardTransactions
+      .filter(t => {
+        const d = parseISO(t.date);
+        return debitCardIds.includes(t.card_id) && isWithinInterval(d, { start, end });
+      })
+      .reduce((sum, tx) => sum + Number(tx.amount), 0);
+
+    const monthlyCash = monthlyCashFlow(cashTransactions, start, end);
+    const monthlyDebit = monthlyDebitFlow(cardTransactions, cards, start, end);
+
+    const monthlyCharges = debtors.reduce((sum, d) => {
+      const debtorTxs = d.debtor_transactions || [];
+      const monthCharges = debtorTxs
+        .filter((t: any) => t.type === "charge" && isWithinInterval(parseISO(t.date), { start, end }))
+        .reduce((s: number, t: any) => s + t.amount, 0);
+      return sum + monthCharges;
+    }, 0);
+
+    const monthlyDebten = debtorTransactions
+      .filter(t => {
+        const d = parseISO(t.date);
+        return t.type === "charge" && isWithinInterval(d, { start, end });
+      })
+      .reduce((s, t) => s + t.amount, 0);
+
+    const monthlyCredDebes = creditorTransactions
+      .filter(t => {
+        const d = parseISO(t.date);
+        return t.type === "charge" && isWithinInterval(d, { start, end });
+      })
+      .reduce((s, t) => s + t.amount, 0);
+
+    const creditCardIds = cards.filter(c => c.type === "credit").map(c => c.id);
+    const monthlyCreditCharges = cardTransactions
+      .filter(t => {
+        const d = parseISO(t.date);
+        return creditCardIds.includes(t.card_id) && t.type === "charge" && isWithinInterval(d, { start, end });
+      })
+      .reduce((s, t) => s + t.amount, 0);
+
+    const monthlyDebes = monthlyCredDebes + monthlyCreditCharges;
+    const monthlyTotal = (monthlyCashFlow + monthlyDebitFlow) + monthlyDebten - monthlyDebes;
+
+    if (viewMode === "month") {
+      return {
+        cash: monthlyCashFlow + monthlyDebitFlow,
+        debt: monthlyDebten,
+        cred: monthlyDebes,
+        total: monthlyTotal
+      };
+    }
+
+    return {
+      cash: cash + debitCards,
+      debt,
+      cred: cred + creditDebt,
+      total: globalTotal
+    };
+  }, [cashTransactions, debtors, creditors, cards, cardTransactions, debtorTransactions, creditorTransactions, viewMode]);
+
+  // Funciones auxiliares para flujos mensuales
+  function monthlyCashFlow(txs: any[], start: Date, end: Date) {
+    return txs
+      .filter(t => isWithinInterval(parseISO(t.date), { start, end }))
+      .reduce((s, t) => t.type === "ingreso" ? s + t.amount : s - t.amount, 0);
+  }
+
+  function monthlyDebitFlow(txs: any[], cardsList: any[], start: Date, end: Date) {
+    const debitIds = cardsList.filter(c => c.type === "debit").map(c => c.id);
+    return txs
+      .filter(t => debitIds.includes(t.card_id) && isWithinInterval(parseISO(t.date), { start, end }))
+      .reduce((s, t) => t.type === "payment" ? s + t.amount : s - t.amount, 0);
+  }
 
   const handleMarkAsPaid = () => {
     if (!selectedCardForPayment) return;
@@ -147,11 +241,19 @@ const Dashboard = () => {
 
   return (
     <div className="flex flex-col gap-4 md:gap-6">
-      <div className="flex items-center justify-between px-1">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 px-1">
         <h1 className="text-xl md:text-3xl font-bold tracking-tight">Hola, {user?.user_metadata?.first_name || 'Usuario'}</h1>
-        <Button variant="outline" size="icon" onClick={() => setRefreshKey(k => k + 1)} className="rounded-full h-8 w-8 md:h-10 md:w-10">
-          <RefreshCw className="h-4 w-4" />
-        </Button>
+        <div className="flex items-center gap-2">
+          <Tabs value={viewMode} onValueChange={(v: any) => setViewMode(v)} className="w-full max-w-[260px]">
+            <TabsList className="grid w-full grid-cols-2 rounded-xl h-9">
+              <TabsTrigger value="global" className="rounded-lg text-xs font-bold">Global</TabsTrigger>
+              <TabsTrigger value="month" className="rounded-lg text-xs font-bold">Del Mes</TabsTrigger>
+            </TabsList>
+          </Tabs>
+          <Button variant="outline" size="icon" onClick={() => setRefreshKey(k => k + 1)} className="rounded-full h-9 w-9">
+            <RefreshCw className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
 
       <div className="px-1">
@@ -183,7 +285,40 @@ const Dashboard = () => {
           <CardContent className="p-0"><CategoryPieChart data={categoryMetrics.expenses} title="Egresos" /></CardContent>
         </Card>
         <Card className="border-none shadow-sm overflow-hidden">
-          <CardHeader className="p-4 pb-2"><CardTitle className="text-sm font-bold">Ingresos por Categoría (Mes)</CardTitle></CardHeader>
+          <CardHeader className="p-4 pb-2"><CardTitle className="text-sm font-bold">Gastos por Categoría (Mes)</CardTitle></CardHeader>
+          <CardContent><CategoryPieChart data={categoryMetrics.income} title="Ingresos" /></CardContent>
+        </Card>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2 mx-1">
+        <Card className="border-none shadow-sm overflow-hidden">
+          <CardHeader className="p-4 pb-2"><CardTitle className="text-sm font-bold">Gastos por Categoría (Mes)</CardTitle></CardHeader>
+          <CardContent className="p-0"><CategoryPieChart data={categoryMetrics.expenses} title="Egresos" /></CardContent>
+        </Card>
+        <Card className="border-none shadow-sm overflow-hidden">
+          <CardHeader className="p-4 pb-2"><CardTitle className="text-sm font-bold">Gastos por Categoría (Mes)</CardTitle></CardHeader>
+          <CardContent className="p-0"><CategoryPieChart data={categoryMetrics.income} title="Ingresos" /></CardContent>
+        </Card>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2 mx-1">
+        <Card className="border-none shadow-sm overflow-hidden">
+          <CardHeader className="p-4 pb-2"><CardTitle className="text-sm font-bold">Gastos por Categoría (Mes)</CardTitle></CardHeader>
+          <CardContent className="p-0"><CategoryPieChart data={categoryMetrics.expenses} title="Egresos" /></CardContent>
+        </Card>
+        <Card className="border-none shadow-sm overflow-hidden">
+          <CardHeader className="p-4 pb-2"><CardTitle className="text-sm font-bold">Gastos por Categoría (Mes)</CardTitle></CardHeader>
+          <CardContent className="p-0"><CategoryPieChart data={categoryMetrics.income} title="Ingresos" /></CardContent>
+        </Card>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2 mx-1">
+        <Card className="border-none shadow-sm overflow-hidden">
+          <CardHeader className="p-4 pb-2"><CardTitle className="text-sm font-bold">Gastos por Categoría (Mes)</CardTitle></CardHeader>
+          <CardContent className="p-0"><CategoryPieChart data={categoryMetrics.expenses} title="Egresos" /></CardContent>
+        </Card>
+        <Card className="border-none shadow-sm overflow-hidden">
+          <CardHeader className="p-4 pb-2"><CardTitle className="text-sm font-bold">Gastos por Categoría (Mes)</CardTitle></CardHeader>
           <CardContent className="p-0"><CategoryPieChart data={categoryMetrics.income} title="Ingresos" /></CardContent>
         </Card>
       </div>
@@ -215,15 +350,17 @@ const Dashboard = () => {
               </Select>
             </div>
             <div className="grid gap-2">
-              <Label>Fecha</Label>
+              <Label>Fecha de Pago</Label>
               <Popover>
                 <PopoverTrigger asChild>
-                  <Button variant="outline" className="justify-start text-left font-normal rounded-xl h-10">
+                  <Button variant="outline" className="w-full justify-start text-left font-normal rounded-xl h-10">
                     <CalendarIcon className="mr-2 h-4 w-4" />
-                    {format(paymentDate, "PPP", { locale: es })}
+                    {paymentDate ? format(paymentDate, "dd/MM/yyyy", { locale: es }) : <span>Selecciona una fecha</span>}
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="center"><Calendar mode="single" selected={paymentDate} onSelect={(d) => d && setPaymentDate(d)} locale={es} /></PopoverContent>
+                <PopoverContent className="w-auto p-0" align="center">
+                  <Calendar mode="single" selected={paymentDate} onSelect={(d) => d && setPaymentDate(d)} locale={es} />
+                </PopoverContent>
               </Popover>
             </div>
           </div>
