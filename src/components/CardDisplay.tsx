@@ -40,22 +40,6 @@ interface CardDisplayProps {
   onTransfer: () => void;
 }
 
-// Componente para renderizar el logo de Visa en alta calidad
-const VisaLogo: React.FC = () => (
-  <svg className="h-4 w-12 text-white fill-current opacity-90" viewBox="0 0 24 8">
-    <path d="M0 0h24v8H0z" fill="none"/>
-    <path d="M3.6 1.2L2.4 6.8H1L2.2 1.2h1.4zm5.4 0L7.8 5.2 7.2 1.8C7.1 1.4 6.8 1.2 6.4 1.2H4.2l-.1.4c.8.2 1.6.5 2.1.9l1.5 4.3h1.5l2.2-5.6H9zm5.6 2.4c0-1.5-2.1-1.6-2.1-2.3 0-.2.2-.4.7-.4.4 0 1.1.1 1.5.3l.2-.9c-.4-.1-1-.2-1.6-.2-1.4 0-2.4.7-2.4 1.8 0 1.4 2 1.5 2 2.2 0 .3-.3.5-.8.5-.6 0-1.2-.2-1.6-.5l-.2.9c.5.2 1.2.3 1.8.3 1.5 0 2.5-.7 2.5-1.8zm4.8-2.4h-1.3c-.4 0-.7.2-.9.6l-2.5 5h1.5l.5-1.3h1.8l.2 1.3h1.3l-1.1-5.6zm-1.9 3.3l.6-1.7.3 1.7h-.9z" fill="#ffffff"/>
-  </svg>
-);
-
-// Componente para renderizar el logo de Mastercard en alta calidad
-const MastercardLogo: React.FC = () => (
-  <div className="flex items-center -space-x-2 opacity-90">
-    <div className="w-5 h-5 rounded-full bg-red-500" />
-    <div className="w-5 h-5 rounded-full bg-amber-500 mix-blend-screen" />
-  </div>
-);
-
 const CardDisplay: React.FC<CardDisplayProps> = ({ card, onAddTransaction, onDeleteCard, onEditCard, onTransfer }) => {
   const navigate = useNavigate();
   const [isFlipped, setIsFlipped] = useState(false);
@@ -98,8 +82,14 @@ const CardDisplay: React.FC<CardDisplayProps> = ({ card, onAddTransaction, onDel
     if (name.includes("didi")) {
       return "dyad-media://media/appcuentas2/.dyad/media/d475efd7a9684af3e1beb06bf0f256578ccffbe5e9e66093dc64b6e90c160e81.png";
     }
-    if (name.includes("clar") || name.includes("stemon")) {
-      return "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Logo%20App.png";
+    if (name.includes("klar")) {
+      return "dyad-media://media/appcuentas2/.dyad/media/8a612b7fa45260f208cf1ddd45d87454980d4025b07216b3d09ff8fbba1b1aef.png";
+    }
+    if (name.includes("bbva")) {
+      return "dyad-media://media/appcuentas2/.dyad/media/a2a2feb7f1ba2ca79b46f12ca4d740cacb3d1c13e5009686f881a187083cdaac.png";
+    }
+    if (name.includes("plata")) {
+      return "dyad-media://media/appcuentas2/.dyad/media/a2a2feb7f1ba2ca79b46f12ca4d740cacb3d1c13e5009686f881a187083cdaac.png"; // Usar el logo de Plata/BBVA correspondiente
     }
     return null;
   }, [card.bank_name]);
@@ -107,21 +97,26 @@ const CardDisplay: React.FC<CardDisplayProps> = ({ card, onAddTransaction, onDel
   // Determinar si mostramos Mastercard o Visa de forma aleatoria/estética basada en los últimos dígitos
   const isVisa = parseInt(card.last_four_digits) % 2 === 0;
 
+  const networkLogoUrl = isVisa 
+    ? "dyad-media://media/appcuentas2/.dyad/media/871ca618ef91fce40699c8478faf0f9f0d05a828b899b8e84349ab3e6c0be6a2.png" // Visa real
+    : "dyad-media://media/appcuentas2/.dyad/media/5f361a174a286c7611adb5860e3f3390a33f3958c2329e451f071a4c5af9962a.png"; // Mastercard real
+
   return (
     <div className="w-full max-w-sm mx-auto h-[240px] perspective-1000">
       <div 
-        className="relative w-full h-full transition-transform duration-700 transform-style-3d cursor-pointer"
+        className="relative w-full h-full transition-transform duration-700 transform-style-3d"
         style={{ 
           transform: isFlipped ? 'rotateY(180deg)' : 'none',
           transformStyle: 'preserve-3d',
         }}
       >
-        {/* Contenedor de la Tarjeta Física */}
+        {/* CARA FRONTAL DE LA TARJETA */}
         <div 
-          className="relative w-full h-full rounded-2xl shadow-2xl overflow-hidden transition-all duration-500"
+          className="absolute inset-0 w-full h-full rounded-2xl shadow-2xl overflow-hidden transition-all duration-500"
           style={{ 
             backgroundColor: card.color,
-            transformStyle: "preserve-3d"
+            backfaceVisibility: "hidden",
+            WebkitBackfaceVisibility: "hidden",
           }}
         >
           {/* Brillo de plástico de tarjeta */}
@@ -214,7 +209,11 @@ const CardDisplay: React.FC<CardDisplayProps> = ({ card, onAddTransaction, onDel
                   ) : (
                     <span className="text-[10px] font-black tracking-wider opacity-60">{card.bank_name}</span>
                   )}
-                  {isVisa ? <VisaLogo /> : <MastercardLogo />}
+                  <img 
+                    src={networkLogoUrl} 
+                    alt="Network" 
+                    className="h-6 object-contain max-w-[45px] filter brightness-0 invert drop-shadow-md"
+                  />
                 </div>
               </div>
             </div>
@@ -228,107 +227,106 @@ const CardDisplay: React.FC<CardDisplayProps> = ({ card, onAddTransaction, onDel
               className="h-8 w-8 rounded-full bg-white/20 hover:bg-white/40 text-white border-none backdrop-blur-md shadow-lg"
               onClick={(e) => {
                 e.stopPropagation();
-                setIsFlipped(!isFlipped);
+                setIsFlipped(true);
               }}
             >
               <RotateCw className="h-4 w-4" />
             </Button>
           </div>
+        </div>
 
-          {/* Reverso de la Tarjeta (Revelado de Acciones) */}
-          <div 
-            className={cn(
-              "absolute inset-0 w-full h-full rounded-2xl transition-all duration-500 flex flex-col justify-between p-4 z-30",
-              isFlipped ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
-            )}
-            style={{ 
-              backgroundColor: "rgba(15, 23, 42, 0.95)", // Fondo oscuro elegante para el reverso
-              backdropFilter: "blur(10px)"
-            }}
-          >
-            {/* Banda magnética simulada */}
-            <div className="absolute top-4 left-0 right-0 h-8 bg-black/80" />
+        {/* CARA TRASERA DE LA TARJETA (VOLTEADA) */}
+        <div 
+          className="absolute inset-0 w-full h-full rounded-2xl shadow-2xl overflow-hidden flex flex-col justify-between p-4"
+          style={{ 
+            backgroundColor: "rgba(15, 23, 42, 0.95)", // Fondo oscuro elegante para el reverso
+            backfaceVisibility: "hidden",
+            WebkitBackfaceVisibility: "hidden",
+            transform: "rotateY(180deg)",
+          }}
+        >
+          {/* Banda magnética simulada */}
+          <div className="absolute top-4 left-0 right-0 h-8 bg-black/80" />
 
-            <div className="mt-10 space-y-3">
-              <p className="text-xs font-bold text-white/90 text-center uppercase tracking-wider">Acciones de Tarjeta</p>
-              
-              {/* Botones de Acción Principales */}
-              <div className="grid grid-cols-2 gap-2">
-                <Button 
-                  variant="secondary" 
-                  size="sm" 
-                  onClick={(e) => { e.stopPropagation(); onAddTransaction(card.id); }} 
-                  className="bg-white/10 hover:bg-white/20 text-white border-none h-9 text-[10px] font-bold rounded-xl"
-                >
-                  <DollarSign className="h-3.5 w-3.5 mr-1" /> Movimiento
-                </Button>
-                <Button 
-                  variant="secondary" 
-                  size="sm" 
-                  onClick={(e) => { e.stopPropagation(); handleViewDetails(); }} 
-                  className="bg-white/10 hover:bg-white/20 text-white border-none h-9 text-[10px] font-bold rounded-xl"
-                >
-                  <History className="h-3.5 w-3.5 mr-1" /> Detalles
-                </Button>
-              </div>
-
-              {/* Botones de Configuración */}
-              <div className="flex gap-2 justify-center pt-1">
-                <Button 
-                  variant="secondary" 
-                  size="sm" 
-                  onClick={(e) => { e.stopPropagation(); onTransfer(); }} 
-                  className="flex-1 h-9 bg-white/10 hover:bg-white/20 text-white border-none rounded-xl text-[10px] font-bold"
-                >
-                  <ArrowRightLeft className="h-3.5 w-3.5 mr-1" /> Transferir
-                </Button>
-                <Button 
-                  variant="secondary" 
-                  size="sm" 
-                  onClick={(e) => { e.stopPropagation(); onEditCard(card); }} 
-                  className="h-9 w-9 p-0 bg-white/10 hover:bg-white/20 text-white border-none rounded-xl"
-                >
-                  <Edit className="h-3.5 w-3.5" />
-                </Button>
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <Button 
-                      variant="destructive" 
-                      size="sm" 
-                      className="h-9 w-9 p-0 bg-red-500/20 hover:bg-red-600 text-white border-none rounded-xl"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent className="w-[90vw] rounded-2xl">
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>¿Eliminar tarjeta?</AlertDialogTitle>
-                      <AlertDialogDescription>Se borrarán todos los registros y apartados asociados.</AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel className="rounded-xl">Cancelar</AlertDialogCancel>
-                      <AlertDialogAction className="rounded-xl" onClick={() => onDeleteCard(card.id)}>Eliminar</AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
-              </div>
-            </div>
-
-            {/* Botón para regresar al frente */}
-            <div className="flex justify-center">
+          <div className="mt-10 space-y-3 z-10">
+            <p className="text-xs font-bold text-white/90 text-center uppercase tracking-wider">Acciones de Tarjeta</p>
+            
+            {/* Botones de Acción Principales */}
+            <div className="grid grid-cols-2 gap-2">
               <Button 
-                variant="ghost" 
+                variant="secondary" 
                 size="sm" 
-                className="text-[10px] text-white/60 hover:text-white h-6 gap-1"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setIsFlipped(false);
-                }}
+                onClick={(e) => { e.stopPropagation(); onAddTransaction(card.id); }} 
+                className="bg-white/10 hover:bg-white/20 text-white border-none h-9 text-[10px] font-bold rounded-xl"
               >
-                <RotateCw className="h-3 w-3" /> Ver Frente
+                <DollarSign className="h-3.5 w-3.5 mr-1" /> Movimiento
+              </Button>
+              <Button 
+                variant="secondary" 
+                size="sm" 
+                onClick={(e) => { e.stopPropagation(); handleViewDetails(); }} 
+                className="bg-white/10 hover:bg-white/20 text-white border-none h-9 text-[10px] font-bold rounded-xl"
+              >
+                <History className="h-3.5 w-3.5 mr-1" /> Detalles
               </Button>
             </div>
+
+            {/* Botones de Configuración */}
+            <div className="flex gap-2 justify-center pt-1">
+              <Button 
+                variant="secondary" 
+                size="sm" 
+                onClick={(e) => { e.stopPropagation(); onTransfer(); }} 
+                className="flex-1 h-9 bg-white/10 hover:bg-white/20 text-white border-none rounded-xl text-[10px] font-bold"
+              >
+                <ArrowRightLeft className="h-3.5 w-3.5 mr-1" /> Transferir
+              </Button>
+              <Button 
+                variant="secondary" 
+                size="sm" 
+                onClick={(e) => { e.stopPropagation(); onEditCard(card); }} 
+                className="h-9 w-9 p-0 bg-white/10 hover:bg-white/20 text-white border-none rounded-xl"
+              >
+                <Edit className="h-3.5 w-3.5" />
+              </Button>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button 
+                    variant="destructive" 
+                    size="sm" 
+                    className="h-9 w-9 p-0 bg-red-500/20 hover:bg-red-600 text-white border-none rounded-xl"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent className="w-[90vw] rounded-2xl">
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>¿Eliminar tarjeta?</AlertDialogTitle>
+                    <AlertDialogDescription>Se borrarán todos los registros y apartados asociados.</AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel className="rounded-xl">Cancelar</AlertDialogCancel>
+                    <AlertDialogAction className="rounded-xl" onClick={() => onDeleteCard(card.id)}>Eliminar</AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
+          </div>
+
+          {/* Botón para regresar al frente */}
+          <div className="flex justify-center z-10">
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              className="text-[10px] text-white/60 hover:text-white h-6 gap-1"
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsFlipped(false);
+              }}
+            >
+              <RotateCw className="h-3 w-3" /> Ver Frente
+            </Button>
           </div>
         </div>
       </div>
