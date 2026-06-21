@@ -16,6 +16,7 @@ import {
   LogOut,
   Wallet,
   BarChart,
+  ShoppingCart,
 } from "lucide-react";
 import MobileNavbar from "./MobileNavbar";
 import { useSession } from "@/context/SessionContext";
@@ -27,6 +28,7 @@ const navItems = [
   { name: "Te deben", path: "/debtors", icon: ThumbsUp },
   { name: "Debes", path: "/creditors", icon: ThumbsDown },
   { name: "Tus Tarjetas", path: "/cards", icon: CreditCard },
+  { name: "Lista de Compras", path: "/shopping-list", icon: ShoppingCart },
   { name: "Tus Metas", path: "/savings", icon: Wallet },
   { name: "Presupuestos", path: "/shared-budgets", icon: BarChart },
   { name: "Categorías", path: "/categories", icon: Tag },
