@@ -67,29 +67,29 @@ const CardDisplay: React.FC<CardDisplayProps> = ({ card, onAddTransaction, onDel
     return null;
   }, [isCredit, card.cut_off_day, card.days_to_pay_after_cut_off]);
 
-  // Obtener el logo del banco correspondiente
+  // Obtener el logo del banco correspondiente usando los archivos exactos subidos por el usuario
   const bankLogoUrl = useMemo(() => {
     const name = card.bank_name.toLowerCase();
-    if (name.includes("nu")) {
-      return "dyad-media://media/appcuentas2/.dyad/media/97ec6769a1b8e18c52f8ddfced925ceb4163fb17149e7b167f77324ac11196b1.png";
+    if (name.includes("nu") || name.includes("nubank")) {
+      return "dyad-media://media/appcuentas2/.dyad/media/9acbab3f6e9cacb800f8a6ee122ef91385b8995f.png";
     }
     if (name.includes("stori")) {
-      return "dyad-media://media/appcuentas2/.dyad/media/87a3632f0be04bf1e1865a178608f63a9919586732604f61bc983ef21f1aa434.png";
+      return "dyad-media://media/appcuentas2/.dyad/media/stori-seeklogo.png";
     }
     if (name.includes("mercado") || name.includes("pago")) {
-      return "dyad-media://media/appcuentas2/.dyad/media/79595b1ae3313cc2db5165d413c5c99e042cdb3129ff6e1d69814d489987b96a.png";
+      return "dyad-media://media/appcuentas2/.dyad/media/mercado-pago-logo.png";
     }
     if (name.includes("didi")) {
-      return "dyad-media://media/appcuentas2/.dyad/media/d475efd7a9684af3e1beb06bf0f256578ccffbe5e9e66093dc64b6e90c160e81.png";
+      return "dyad-media://media/appcuentas2/.dyad/media/DiDi-Logo.png";
+    }
+    if (name.includes("plata")) {
+      return "dyad-media://media/appcuentas2/.dyad/media/1_5YAZPx_RfP03-TJlwRcdVQ@2x.png";
+    }
+    if (name.includes("bbva")) {
+      return "dyad-media://media/appcuentas2/.dyad/media/pngwing.com.png";
     }
     if (name.includes("klar")) {
       return "dyad-media://media/appcuentas2/.dyad/media/8a612b7fa45260f208cf1ddd45d87454980d4025b07216b3d09ff8fbba1b1aef.png";
-    }
-    if (name.includes("bbva")) {
-      return "dyad-media://media/appcuentas2/.dyad/media/a2a2feb7f1ba2ca79b46f12ca4d740cacb3d1c13e5009686f881a187083cdaac.png";
-    }
-    if (name.includes("plata")) {
-      return "dyad-media://media/appcuentas2/.dyad/media/a2a2feb7f1ba2ca79b46f12ca4d740cacb3d1c13e5009686f881a187083cdaac.png"; // Usar el logo de Plata/BBVA correspondiente
     }
     return null;
   }, [card.bank_name]);
