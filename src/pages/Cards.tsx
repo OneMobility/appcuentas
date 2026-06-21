@@ -141,6 +141,38 @@ const Cards = () => {
     }
   };
 
+  const handleDeleteCard = async (cardId: string) => {
+    if (!user) return;
+    try {
+      // Eliminar transacciones asociadas primero para evitar violaciones de clave foránea
+      const { error: txError } = await supabase
+        .from('card_transactions')
+        .delete()
+        .eq('card_id', cardId);
+      if (txError) throw txError;
+
+      // Eliminar apartados asociados
+      const { error: pocketError } = await supabase
+        .from('card_pockets')
+        .delete()
+        .eq('card_id', cardId);
+      if (pocketError) throw pocketError;
+
+      // Eliminar la tarjeta
+      const { error: cardError } = await supabase
+        .from('cards')
+        .delete()
+        .eq('id', cardId)
+        .eq('user_id', user.id);
+      if (cardError) throw cardError;
+
+      showSuccess("Tarjeta eliminada exitosamente.");
+      fetchAllData();
+    } catch (error: any) {
+      showError("Error al eliminar la tarjeta: " + error.message);
+    }
+  };
+
   const handleTransactionSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedCard || !user) return;
@@ -321,7 +353,7 @@ const Cards = () => {
               setNewTransaction({ type: "charge", amount: "", description: "", selectedCategoryId: "" });
               setIsAddTransactionDialogOpen(true); 
             }}
-            onDeleteCard={fetchAllData}
+            onDeleteCard={handleDeleteCard}
             onEditCard={handleOpenEditCard}
             onTransfer={() => setIsTransferDialogOpen(true)}
           />
