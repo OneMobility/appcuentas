@@ -7,6 +7,7 @@ import { CreditCard, DollarSign, History, Trash2, Edit, ArrowRightLeft, Calendar
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { useNavigate } from "react-router-dom";
 import { getUpcomingCutOffDate, getUpcomingPaymentDueDate } from "@/utils/date-helpers";
+import { getContrastColor } from "@/utils/color-helpers";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { cn } from "@/lib/utils";
@@ -98,6 +99,14 @@ const CardDisplay: React.FC<CardDisplayProps> = ({ card, onAddTransaction, onDel
     ? "dyad-media://media/appcuentas2/.dyad/media/871ca618ef91fce40699c8478faf0f9f0d05a828b899b8e84349ab3e6c0be6a2.png" // Visa real
     : "dyad-media://media/appcuentas2/.dyad/media/5f361a174a286c7611adb5860e3f3390a33f3958c2329e451f071a4c5af9962a.png"; // Mastercard real
 
+  // Calcular colores de contraste dinámicos
+  const textColor = useMemo(() => getContrastColor(card.color), [card.color]);
+  const isDarkText = textColor === "#0F172A";
+  const badgeBg = isDarkText ? "bg-black/10" : "bg-white/20";
+  const borderStyle = isDarkText ? "border-black/10" : "border-white/10";
+  const opacityClass = isDarkText ? "opacity-80" : "opacity-90";
+  const subOpacityClass = isDarkText ? "opacity-60" : "opacity-75";
+
   return (
     <div className="w-full max-w-sm mx-auto h-[240px] perspective-1000">
       <div 
@@ -113,6 +122,7 @@ const CardDisplay: React.FC<CardDisplayProps> = ({ card, onAddTransaction, onDel
           onClick={() => setIsFlipped(true)}
           style={{ 
             backgroundColor: card.color,
+            color: textColor,
             backfaceVisibility: "hidden",
             WebkitBackfaceVisibility: "hidden",
             pointerEvents: isFlipped ? "none" : "auto",
@@ -140,7 +150,10 @@ const CardDisplay: React.FC<CardDisplayProps> = ({ card, onAddTransaction, onDel
                   <img 
                     src={bankLogoUrl} 
                     alt={card.bank_name} 
-                    className="h-7 object-contain max-w-[100px] filter brightness-0 invert drop-shadow-md"
+                    className={cn(
+                      "h-7 object-contain max-w-[100px] drop-shadow-md",
+                      isDarkText ? "brightness-0" : "brightness-0 invert"
+                    )}
                   />
                 ) : (
                   <span className="text-sm font-black tracking-wider uppercase drop-shadow-md">
@@ -148,7 +161,7 @@ const CardDisplay: React.FC<CardDisplayProps> = ({ card, onAddTransaction, onDel
                   </span>
                 )}
               </div>
-              <span className="text-[9px] font-black tracking-widest opacity-90 bg-white/20 px-2.5 py-0.5 rounded-full backdrop-blur-sm">
+              <span className={cn("text-[9px] font-black tracking-widest px-2.5 py-0.5 rounded-full backdrop-blur-sm", badgeBg)}>
                 {isCredit ? "CRÉDITO" : "DÉBITO"}
               </span>
             </div>
@@ -158,12 +171,12 @@ const CardDisplay: React.FC<CardDisplayProps> = ({ card, onAddTransaction, onDel
               {isCredit ? (
                 <>
                   <div className="flex justify-between items-baseline">
-                    <span className="text-[10px] opacity-80 uppercase tracking-wider font-medium">Crédito Disp.</span>
+                    <span className={cn("text-[10px] uppercase tracking-wider font-medium", subOpacityClass)}>Crédito Disp.</span>
                     <span className="text-2xl font-black tracking-tight drop-shadow-md">
                       ${availableCredit.toFixed(2)}
                     </span>
                   </div>
-                  <div className="flex justify-between items-center text-[10px] opacity-75 border-t border-white/10 pt-1">
+                  <div className={cn("flex justify-between items-center text-[10px] border-t pt-1", borderStyle, subOpacityClass)}>
                     <span>Deuda Actual:</span>
                     <span className="font-bold">${card.current_balance.toFixed(2)}</span>
                   </div>
@@ -171,12 +184,12 @@ const CardDisplay: React.FC<CardDisplayProps> = ({ card, onAddTransaction, onDel
               ) : (
                 <>
                   <div className="flex justify-between items-baseline">
-                    <span className="text-[10px] opacity-80 uppercase tracking-wider font-medium">Saldo Disp.</span>
+                    <span className={cn("text-[10px] uppercase tracking-wider font-medium", subOpacityClass)}>Saldo Disp.</span>
                     <span className="text-2xl font-black tracking-tight drop-shadow-md">
                       ${card.current_balance.toFixed(2)}
                     </span>
                   </div>
-                  <div className="flex justify-between items-center text-[10px] opacity-75 border-t border-white/10 pt-1">
+                  <div className={cn("flex justify-between items-center text-[10px] border-t pt-1", borderStyle, subOpacityClass)}>
                     <span>Total (con apartados):</span>
                     <span className="font-bold">${totalBalance.toFixed(2)}</span>
                   </div>
@@ -188,18 +201,18 @@ const CardDisplay: React.FC<CardDisplayProps> = ({ card, onAddTransaction, onDel
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 {/* Número de tarjeta simulado */}
-                <p className="font-mono text-sm tracking-widest drop-shadow-md opacity-90">
+                <p className={cn("font-mono text-sm tracking-widest drop-shadow-md", opacityClass)}>
                   ••••  ••••  ••••  {card.last_four_digits}
                 </p>
                 {/* Icono Contactless */}
-                <svg className="h-4 w-4 text-white/80 fill-current" viewBox="0 0 24 24">
+                <svg className={cn("h-4 w-4 fill-current", opacityClass)} viewBox="0 0 24 24">
                   <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.53c-.26-.81-1-1.4-1.9-1.4h-1v-3c0-.55-.45-1-1-1h-6v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.4z"/>
                 </svg>
               </div>
 
               {/* Fila Inferior: Nombre, Expiración y Red de Pago */}
-              <div className="flex justify-between items-end border-t border-white/10 pt-2">
-                <div className="text-[9px] uppercase tracking-wider opacity-80">
+              <div className={cn("flex justify-between items-end border-t pt-2", borderStyle)}>
+                <div className={cn("text-[9px] uppercase tracking-wider", subOpacityClass)}>
                   <p className="font-bold truncate max-w-[120px]">{card.name || "Oinkash Member"}</p>
                   <p className="opacity-60">Vence: {card.expiration_date}</p>
                 </div>
@@ -209,7 +222,10 @@ const CardDisplay: React.FC<CardDisplayProps> = ({ card, onAddTransaction, onDel
                   <img 
                     src={networkLogoUrl} 
                     alt="Network" 
-                    className="h-6 object-contain max-w-[45px] filter brightness-0 invert drop-shadow-md"
+                    className={cn(
+                      "h-6 object-contain max-w-[45px] drop-shadow-md",
+                      isDarkText ? "brightness-0" : "brightness-0 invert"
+                    )}
                   />
                 </div>
               </div>
@@ -221,7 +237,10 @@ const CardDisplay: React.FC<CardDisplayProps> = ({ card, onAddTransaction, onDel
             <Button 
               variant="secondary" 
               size="icon" 
-              className="h-8 w-8 rounded-full bg-white/20 hover:bg-white/40 text-white border-none backdrop-blur-md shadow-lg"
+              className={cn(
+                "h-8 w-8 rounded-full border-none backdrop-blur-md shadow-lg",
+                isDarkText ? "bg-black/10 hover:bg-black/20 text-slate-900" : "bg-white/20 hover:bg-white/40 text-white"
+              )}
               onClick={(e) => {
                 e.stopPropagation();
                 setIsFlipped(true);

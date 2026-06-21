@@ -24,6 +24,7 @@ import { evaluateExpression } from "@/utils/math-helpers";
 import CardPocketsManager from "@/components/CardPocketsManager";
 import DynamicLucideIcon from "@/components/DynamicLucideIcon";
 import { getLocalDateString, getUpcomingCutOffDate, getUpcomingPaymentDueDate, getStatementPeriod } from "@/utils/date-helpers";
+import { getContrastColor } from "@/utils/color-helpers";
 import CardReconciliationDialog from "@/components/CardReconciliationDialog";
 import ImageUpload from "@/components/ImageUpload";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
@@ -367,6 +368,14 @@ const CardDetailsPage: React.FC = () => {
     return (card.credit_limit || 0) - card.current_balance;
   }, [card]);
 
+  // Calcular colores de contraste dinámicos
+  const textColor = useMemo(() => card ? getContrastColor(card.color) : "#FFFFFF", [card?.color]);
+  const isDarkText = textColor === "#0F172A";
+  const badgeBg = isDarkText ? "bg-black/10" : "bg-white/20";
+  const borderStyle = isDarkText ? "border-black/10" : "border-white/10";
+  const opacityClass = isDarkText ? "opacity-80" : "opacity-90";
+  const subOpacityClass = isDarkText ? "opacity-60" : "opacity-75";
+
   if (isLoading) return <LoadingSpinner />;
 
   return (
@@ -394,7 +403,7 @@ const CardDetailsPage: React.FC = () => {
             </div>
 
             {/* Contenido de la Tarjeta */}
-            <div className="p-5 flex flex-col h-full justify-between relative z-10 text-white">
+            <div className="p-5 flex flex-col h-full justify-between relative z-10" style={{ color: textColor }}>
               {/* Encabezado */}
               <div className="flex justify-between items-start">
                 <div className="flex items-center gap-2">
@@ -402,7 +411,10 @@ const CardDetailsPage: React.FC = () => {
                     <img 
                       src={bankLogoUrl} 
                       alt={card.bank_name} 
-                      className="h-7 object-contain max-w-[100px] filter brightness-0 invert drop-shadow-md"
+                      className={cn(
+                        "h-7 object-contain max-w-[100px] drop-shadow-md",
+                        isDarkText ? "brightness-0" : "brightness-0 invert"
+                      )}
                     />
                   ) : (
                     <span className="text-sm font-black tracking-wider uppercase drop-shadow-md">
@@ -410,7 +422,7 @@ const CardDetailsPage: React.FC = () => {
                     </span>
                   )}
                 </div>
-                <span className="text-[9px] font-black tracking-widest opacity-90 bg-white/20 px-2.5 py-0.5 rounded-full backdrop-blur-sm">
+                <span className={cn("text-[9px] font-black tracking-widest px-2.5 py-0.5 rounded-full backdrop-blur-sm", badgeBg)}>
                   {card.type === "credit" ? "CRÉDITO" : "DÉBITO"}
                 </span>
               </div>
@@ -420,12 +432,12 @@ const CardDetailsPage: React.FC = () => {
                 {card.type === "credit" ? (
                   <>
                     <div className="flex justify-between items-baseline">
-                      <span className="text-[10px] opacity-80 uppercase tracking-wider font-medium">Crédito Disp.</span>
+                      <span className={cn("text-[10px] uppercase tracking-wider font-medium", subOpacityClass)}>Crédito Disp.</span>
                       <span className="text-2xl font-black tracking-tight drop-shadow-md">
                         ${availableCredit.toFixed(2)}
                       </span>
                     </div>
-                    <div className="flex justify-between items-center text-[10px] opacity-75 border-t border-white/10 pt-1">
+                    <div className={cn("flex justify-between items-center text-[10px] border-t pt-1", borderStyle, subOpacityClass)}>
                       <span>Deuda Actual:</span>
                       <span className="font-bold">${card.current_balance.toFixed(2)}</span>
                     </div>
@@ -433,12 +445,12 @@ const CardDetailsPage: React.FC = () => {
                 ) : (
                   <>
                     <div className="flex justify-between items-baseline">
-                      <span className="text-[10px] opacity-80 uppercase tracking-wider font-medium">Saldo Disp.</span>
+                      <span className={cn("text-[10px] uppercase tracking-wider font-medium", subOpacityClass)}>Saldo Disp.</span>
                       <span className="text-2xl font-black tracking-tight drop-shadow-md">
                         ${card.current_balance.toFixed(2)}
                       </span>
                     </div>
-                    <div className="flex justify-between items-center text-[10px] opacity-75 border-t border-white/10 pt-1">
+                    <div className={cn("flex justify-between items-center text-[10px] border-t pt-1", borderStyle, subOpacityClass)}>
                       <span>Saldo en Apartados:</span>
                       <span className="font-bold">${pocketsBalance.toFixed(2)}</span>
                     </div>
