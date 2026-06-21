@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { PlusCircle, Trash2, ShoppingCart, CheckCircle2, DollarSign, ArrowRightLeft, FileText, Share2, Copy, MessageSquare, Filter, Search, AlertCircle, ListPlus, History, TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { PlusCircle, Trash2, ShoppingCart, CheckCircle2, DollarSign, FileText, Share2, Copy, MessageSquare, Filter, Search, AlertCircle, ListPlus, History, TrendingUp, TrendingDown, Minus, Scale } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
@@ -18,7 +18,6 @@ import { useSession } from "@/context/SessionContext";
 import { useCategoryContext } from "@/context/CategoryContext";
 import { evaluateExpression } from "@/utils/math-helpers";
 import { getLocalDateString } from "@/utils/date-helpers";
-import DynamicLucideIcon from "@/components/DynamicLucideIcon";
 import { format, parseISO } from "date-fns";
 import { es } from "date-fns/locale";
 
@@ -35,7 +34,7 @@ interface ShoppingItem {
   name: string;
   quantity: number;
   estimated_unit_price: number;
-  actual_unit_price?: number;
+  actual_unit_price?: number | null;
   is_completed: boolean;
   category_id?: string;
 }
@@ -60,7 +59,7 @@ const ShoppingList: React.FC = () => {
   // Diálogos
   const [isAddListDialogOpen, setIsAddListDialogOpen] = useState(false);
   const [isBulkAddDialogOpen, setIsBulkAddDialogOpen] = useState(false);
-  const [isExpenseDialogOpen, setIsExpenseDialogOpen] = useState(false);
+  const [isFinalizeDialogOpen, setIsFinalizeDialogOpen] = useState(false);
   const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
   const [isHistoryDialogOpen, setIsHistoryDialogOpen] = useState(false);
 
@@ -76,12 +75,11 @@ const ShoppingList: React.FC = () => {
     category_id: "",
   });
 
-  const [selectedItemForExpense, setSelectedItemForExpense] = useState<ShoppingItem | null>(null);
-  const [expenseForm, setExpenseForm] = useState({
-    quantity: "1",
-    unitPrice: "",
-    totalPrice: "",
+  // Formulario de Cierre de Compra
+  const [finalizeForm, setExpenseForm] = useState({
+    totalChargedByStore: "",
     paymentMethod: "cash",
+    selectedCategoryId: "",
     description: "",
   });
 
@@ -91,8 +89,8 @@ const ShoppingList: React.FC = () => {
 
   const [searchTerm, setSearchTerm] = useState("");
   const [filterCategory, setFilterCategory] = useState("all");
-  const [filterStatus, setFilterStatus] = useState<"all" | "pending" | "completed">("all");
   const [sharePhone, setSharePhone] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Cargar listas de compras
   const fetchLists = async () => {
@@ -130,7 +128,6 @@ const ShoppingList: React.FC = () => {
       showError("Error al cargar artículos: " + error.message);
     } else {
       setItems(data || []);
-      // Cargar históricos de precios para los artículos de esta lista
       if (data && data.length > 0) {
         fetchGlobalPriceHistories(data.map(i => i.name));
       }
@@ -150,12 +147,9 @@ const ShoppingList: React.FC = () => {
     ));
   };
 
-  // Cargar históricos de precios de forma masiva para comparar
+  // Cargar históricos de precios de forma masiva para comparar tendencias
   const fetchGlobalPriceHistories = async (itemNames: string[]) => {
     if (!user || itemNames.length === 0) return;
-    
-    // Eliminar duplicados
-    const uniqueNames = Array.from(new Set(itemNames.map(n => n.trim().toLowerCase())));
 
     const { data, error } = await supabase
       .from('shopping_items')
@@ -311,84 +305,100 @@ const ShoppingList: React.FC = () => {
     }
   };
 
-  // Iniciar proceso de marcar como completado (abre calculadora de compra)
-  const handleToggleComplete = (item: ShoppingItem) => {
-    if (!item.is_completed) {
-      setSelectedItemForExpense(item);
-      setExpenseForm({
-        quantity: item.quantity.toString(),
-        unitPrice: item.estimated_unit_price > 0 ? item.estimated_unit_price.toString() : "",
-        totalPrice: item.estimated_unit_price > 0 ? (item.quantity * item.estimated_unit_price).toString() : "",
-        paymentMethod: "cash",
-        description: `Compra: ${item.name}`,
-      });
-      setIsExpenseDialogOpen(true);
-    } else {
-      // Desmarcar
-      supabase.from('shopping_items')
-        .update({ is_completed: false, actual_unit_price: null })
-        .eq('id', item.id)
-        .then(({ error }) => {
-          if (error) showError("Error al actualizar.");
-          else {
-            fetchItems();
-            showSuccess("Artículo marcado como pendiente.");
-          }
-        });
-    }
+  // Actualizar cantidad o precio de un artículo directamente en la tabla
+  const handleUpdateItemInline = async (itemId: string, field: 'quantity' | 'actual_unit_price', value: string) => {
+    const parsedValue = parseFloat(value);
+    const updateData = { [field]: isNaN(parsedValue) ? null : parsedValue };
+
+    // Actualizar localmente primero para rapidez visual
+    setItems(prev => prev.map(item => item.id === itemId ? { ...item, ...updateData } : item));
+
+    // Guardar en Supabase
+    await supabase
+      .from('shopping_items')
+      .update(updateData)
+      .eq('id', itemId);
   };
 
-  // Sincronizar cálculos en el formulario de compra
-  const handleExpenseFormChange = (field: 'quantity' | 'unitPrice' | 'totalPrice', value: string) => {
-    setExpenseForm(prev => {
-      const updated = { ...prev, [field]: value };
-      const qty = parseFloat(updated.quantity) || 0;
-      
-      if (field === 'quantity' || field === 'unitPrice') {
-        const unit = parseFloat(updated.unitPrice) || 0;
-        updated.totalPrice = (qty * unit).toFixed(2);
-      } else if (field === 'totalPrice') {
-        const total = parseFloat(updated.totalPrice) || 0;
-        updated.unitPrice = qty > 0 ? (total / qty).toFixed(2) : "0";
+  // Marcar/Desmarcar artículo como "En el carrito"
+  const handleToggleCart = async (itemId: string, isChecked: boolean) => {
+    // Actualizar localmente
+    setItems(prev => prev.map(item => {
+      if (item.id === itemId) {
+        // Si se marca y no tiene precio real, sugerimos el estimado
+        const actual_unit_price = isChecked && !item.actual_unit_price ? item.estimated_unit_price : item.actual_unit_price;
+        return { ...item, is_completed: isChecked, actual_unit_price };
       }
-      return updated;
-    });
+      return item;
+    }));
+
+    const targetItem = items.find(i => i.id === itemId);
+    const actual_unit_price = isChecked && targetItem && !targetItem.actual_unit_price ? targetItem.estimated_unit_price : (targetItem?.actual_unit_price || null);
+
+    await supabase
+      .from('shopping_items')
+      .update({ is_completed: isChecked, actual_unit_price })
+      .eq('id', itemId);
   };
 
-  // Confirmar compra y registrar gasto financiero
-  const handleConfirmExpense = async (e: React.FormEvent) => {
+  // Suma total de los artículos que están marcados (en el carrito)
+  const totalInCart = useMemo(() => {
+    return items
+      .filter(i => i.is_completed)
+      .reduce((sum, i) => sum + (i.quantity * (i.actual_unit_price || 0)), 0);
+  }, [items]);
+
+  // Abrir diálogo de finalización de compra
+  const handleOpenFinalize = () => {
+    const currentList = lists.find(l => l.id === selectedListId);
+    setExpenseForm({
+      totalChargedByStore: totalInCart.toFixed(2),
+      paymentMethod: "cash",
+      selectedCategoryId: expenseCategories[0]?.id || "",
+      description: `Compra Súper: ${currentList?.name || "Despensa"}`,
+    });
+    setIsFinalizeDialogOpen(true);
+  };
+
+  // Confirmar compra y registrar un único gasto consolidado
+  const handleFinalizePurchase = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user || !selectedItemForExpense) return;
+    if (!user || !selectedListId) return;
 
-    const qty = parseFloat(expenseForm.quantity) || 1;
-    const unitPrice = parseFloat(expenseForm.unitPrice) || 0;
-    const total = qty * unitPrice;
-
-    if (total <= 0) {
-      showError("El monto total debe ser mayor a cero.");
+    const totalCharged = parseFloat(finalizeForm.totalChargedByStore) || 0;
+    if (totalCharged <= 0) {
+      showError("El total cobrado debe ser mayor a cero.");
       return;
     }
 
+    setIsSubmitting(true);
     const transactionDate = getLocalDateString(new Date());
+    const difference = totalCharged - totalInCart;
+    
+    // Nota de diferencia si existe
+    let finalDescription = finalizeForm.description;
+    if (Math.abs(difference) >= 0.01) {
+      finalDescription += ` (Diferencia de cuadre: ${difference > 0 ? "+" : ""}${difference.toFixed(2)})`;
+    }
 
     try {
-      // 1. Registrar transacción en Supabase
-      if (expenseForm.paymentMethod === "cash") {
+      // 1. Registrar un único gasto consolidado en Efectivo o Tarjeta
+      if (finalizeForm.paymentMethod === "cash") {
         const { error } = await supabase.from('cash_transactions').insert({
           user_id: user.id,
           type: "egreso",
-          amount: total,
-          description: expenseForm.description,
+          amount: totalCharged,
+          description: finalDescription,
           date: transactionDate,
-          expense_category_id: selectedItemForExpense.category_id || null,
+          expense_category_id: finalizeForm.selectedCategoryId || null,
         });
         if (error) throw error;
       } else {
-        const card = cards.find(c => c.id === expenseForm.paymentMethod);
+        const card = cards.find(c => c.id === finalizeForm.paymentMethod);
         if (card) {
           const newCardBalance = card.type === "credit" 
-            ? card.current_balance + total 
-            : card.current_balance - total;
+            ? card.current_balance + totalCharged 
+            : card.current_balance - totalCharged;
 
           const { error: cardUpdateError } = await supabase
             .from('cards')
@@ -400,59 +410,31 @@ const ShoppingList: React.FC = () => {
             user_id: user.id,
             card_id: card.id,
             type: "charge",
-            amount: total,
-            description: expenseForm.description,
+            amount: totalCharged,
+            description: finalDescription,
             date: transactionDate,
-            expense_category_id: selectedItemForExpense.category_id || null,
+            expense_category_id: finalizeForm.selectedCategoryId || null,
           });
           if (txError) throw txError;
         }
       }
 
-      // 2. Actualizar artículo en la lista de compras
-      const { error: itemError } = await supabase
-        .from('shopping_items')
-        .update({
-          is_completed: true,
-          quantity: qty,
-          actual_unit_price: unitPrice
-        })
-        .eq('id', selectedItemForExpense.id);
+      // 2. Marcar la lista de compras como completada
+      const { error: listError } = await supabase
+        .from('shopping_lists')
+        .update({ status: 'completed' })
+        .eq('id', selectedListId);
+      if (listError) throw listError;
 
-      if (itemError) throw itemError;
-
-      showSuccess("¡Compra registrada y gasto guardado!");
-      setIsExpenseDialogOpen(false);
-      setSelectedItemForExpense(null);
-      fetchItems();
+      showSuccess("¡Compra finalizada! Se registró un único gasto consolidado.");
+      setIsFinalizeDialogOpen(false);
+      setSelectedListId("");
+      fetchLists();
       fetchFinancialData();
     } catch (error: any) {
-      showError("Error al procesar compra: " + error.message);
-    }
-  };
-
-  // Marcar como comprado sin registrar gasto financiero
-  const handleSkipExpense = async () => {
-    if (!selectedItemForExpense) return;
-    const qty = parseFloat(expenseForm.quantity) || 1;
-    const unitPrice = parseFloat(expenseForm.unitPrice) || 0;
-
-    const { error } = await supabase
-      .from('shopping_items')
-      .update({
-        is_completed: true,
-        quantity: qty,
-        actual_unit_price: unitPrice > 0 ? unitPrice : null
-      })
-      .eq('id', selectedItemForExpense.id);
-
-    if (error) {
-      showError("Error al actualizar artículo.");
-    } else {
-      showSuccess("Artículo marcado como comprado.");
-      setIsExpenseDialogOpen(false);
-      setSelectedItemForExpense(null);
-      fetchItems();
+      showError("Error al finalizar compra: " + error.message);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -465,23 +447,27 @@ const ShoppingList: React.FC = () => {
     setIsHistoryDialogOpen(true);
   };
 
-  // Comparar precio actual con el último registrado
-  const getPriceComparison = (itemName: string, currentPrice: number) => {
+  // Analizar tendencia de precios basada en las últimas 3 compras
+  const getPriceTrend = (itemName: string, currentPrice: number) => {
     const key = itemName.trim().toLowerCase();
     const history = globalPriceHistories[key];
     if (!history || history.length === 0) return null;
 
-    const lastPrice = history[0].actual_unit_price;
-    if (currentPrice === 0) return { lastPrice, diff: 0, status: 'none' as const };
-
-    const diffPercent = ((currentPrice - lastPrice) / lastPrice) * 100;
+    // Tomar los últimos 3 precios históricos (excluyendo el actual)
+    const prices = history.slice(0, 3).map(h => h.actual_unit_price);
     
-    if (diffPercent > 1) {
-      return { lastPrice, diff: diffPercent, status: 'up' as const };
-    } else if (diffPercent < -1) {
-      return { lastPrice, diff: Math.abs(diffPercent), status: 'down' as const };
+    if (prices.length < 1) return null;
+
+    const lastPrice = prices[0];
+    if (currentPrice === 0) return { lastPrice, status: 'stable' as const, label: "Estable" };
+
+    // Comparación simple con la última compra
+    if (currentPrice > lastPrice + 0.05) {
+      return { lastPrice, status: 'up' as const, label: "Subió" };
+    } else if (currentPrice < lastPrice - 0.05) {
+      return { lastPrice, status: 'down' as const, label: "Bajó" };
     }
-    return { lastPrice, diff: 0, status: 'equal' as const };
+    return { lastPrice, status: 'stable' as const, label: "Estable" };
   };
 
   // Filtrar artículos
@@ -489,73 +475,9 @@ const ShoppingList: React.FC = () => {
     return items.filter(item => {
       const matchesSearch = item.name.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesCategory = filterCategory === "all" || item.category_id === filterCategory;
-      const matchesStatus = filterStatus === "all" || 
-                            (filterStatus === "pending" && !item.is_completed) || 
-                            (filterStatus === "completed" && item.is_completed);
-      return matchesSearch && matchesCategory && matchesStatus;
+      return matchesSearch && matchesCategory;
     });
-  }, [items, searchTerm, filterCategory, filterStatus]);
-
-  // Métricas de la lista seleccionada
-  const metrics = useMemo(() => {
-    const pending = items.filter(i => !i.is_completed);
-    const completed = items.filter(i => i.is_completed);
-    
-    const estimatedPendingTotal = pending.reduce((sum, i) => sum + (i.quantity * i.estimated_unit_price), 0);
-    const actualCompletedTotal = completed.reduce((sum, i) => sum + (i.quantity * (i.actual_unit_price || i.estimated_unit_price)), 0);
-
-    return {
-      pendingCount: pending.length,
-      completedCount: completed.length,
-      estimatedPendingTotal,
-      actualCompletedTotal,
-    };
-  }, [items]);
-
-  // Generar texto para compartir
-  const generateShareText = () => {
-    const currentList = lists.find(l => l.id === selectedListId);
-    let text = `🛒 *LISTA DE COMPRAS: ${currentList?.name.toUpperCase() || "OINKASH"}*\n\n`;
-    const pending = items.filter(i => !i.is_completed);
-    const completed = items.filter(i => i.is_completed);
-
-    if (pending.length > 0) {
-      text += `📝 *Pendientes por comprar:*\n`;
-      pending.forEach(i => {
-        text += `☐ ${i.quantity}x ${i.name} ${i.estimated_unit_price > 0 ? `(~ $${(i.quantity * i.estimated_unit_price).toFixed(2)})` : ""}\n`;
-      });
-      text += `\n💰 *Presupuesto estimado:* $${metrics.estimatedPendingTotal.toFixed(2)}\n`;
-    } else {
-      text += `🎉 ¡No hay artículos pendientes!\n`;
-    }
-
-    if (completed.length > 0) {
-      text += `\n✅ *Ya comprados:*\n`;
-      completed.slice(0, 10).forEach(i => {
-        text += `✓ ~${i.name}~ ${i.actual_unit_price ? `($${(i.quantity * i.actual_unit_price).toFixed(2)})` : ""}\n`;
-      });
-    }
-
-    text += `\nOrganizado con Oinkash 🐷`;
-    return text;
-  };
-
-  const handleCopyList = () => {
-    navigator.clipboard.writeText(generateShareText());
-    showSuccess("Lista copiada al portapapeles.");
-    setIsShareDialogOpen(false);
-  };
-
-  const handleSendWhatsApp = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!sharePhone.trim()) {
-      showError("Ingresa un número de teléfono.");
-      return;
-    }
-    const cleanPhone = sharePhone.replace(/\D/g, '');
-    window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(generateShareText())}`, '_blank');
-    setIsShareDialogOpen(false);
-  };
+  }, [items, searchTerm, filterCategory]);
 
   return (
     <div className="flex flex-col gap-6 p-4">
@@ -572,7 +494,9 @@ const ShoppingList: React.FC = () => {
             </SelectTrigger>
             <SelectContent>
               {lists.map(l => (
-                <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>
+                <SelectItem key={l.id} value={l.id}>
+                  {l.name} {l.status === 'completed' ? '(Completada)' : ''}
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -589,25 +513,34 @@ const ShoppingList: React.FC = () => {
 
       {selectedListId ? (
         <>
-          {/* Tarjetas de Resumen */}
+          {/* Barra de Progreso y Suma en Carrito */}
           <div className="grid gap-4 md:grid-cols-2">
-            <Card className="border-l-4 border-yellow-500 bg-yellow-50 text-yellow-800">
+            <Card className="border-l-4 border-primary bg-primary/10 text-primary-foreground">
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">Por Comprar ({metrics.pendingCount} artículos)</CardTitle>
+                <CardTitle className="text-sm font-medium">Total en Carrito (Marcados)</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-3xl font-bold">${metrics.estimatedPendingTotal.toFixed(2)}</div>
-                <p className="text-xs text-yellow-700 mt-1">Presupuesto estimado pendiente</p>
+                <div className="text-4xl font-black">${totalInCart.toFixed(2)}</div>
+                <p className="text-xs opacity-80 mt-1">Suma acumulada de lo que llevas marcado</p>
               </CardContent>
             </Card>
 
-            <Card className="border-l-4 border-green-500 bg-green-50 text-green-800">
+            <Card className="border-l-4 border-yellow-500 bg-yellow-50 text-yellow-800 flex flex-col justify-between">
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">Gasto Real en esta Lista</CardTitle>
+                <CardTitle className="text-sm font-medium">Progreso de Compra</CardTitle>
               </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-bold">${metrics.actualCompletedTotal.toFixed(2)}</div>
-                <p className="text-xs text-green-700 mt-1">Total invertido en artículos comprados</p>
+              <CardContent className="flex items-center justify-between gap-4">
+                <div>
+                  <div className="text-2xl font-bold">
+                    {items.filter(i => i.is_completed).length} / {items.length}
+                  </div>
+                  <p className="text-xs text-yellow-700">Artículos en el carrito</p>
+                </div>
+                {items.filter(i => i.is_completed).length > 0 && (
+                  <Button onClick={handleOpenAdd} className="rounded-xl font-bold bg-yellow-600 hover:bg-yellow-700 text-white">
+                    <CheckCircle2 className="h-4 w-4 mr-1" /> Finalizar Compra
+                  </Button>
+                )}
               </CardContent>
             </Card>
           </div>
@@ -624,17 +557,6 @@ const ShoppingList: React.FC = () => {
                   onChange={e => setSearchTerm(e.target.value)} 
                 />
               </div>
-              <Select value={filterStatus} onValueChange={(v: any) => setFilterStatus(v)}>
-                <SelectTrigger className="w-full sm:w-[150px] h-10 rounded-xl">
-                  <Filter className="mr-2 h-3.5 w-3.5" />
-                  <SelectValue placeholder="Estado" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos</SelectItem>
-                  <SelectItem value="pending">Pendientes</SelectItem>
-                  <SelectItem value="completed">Comprados</SelectItem>
-                </SelectContent>
-              </Select>
             </div>
             <div className="flex gap-2 w-full md:w-auto">
               <Button variant="outline" className="flex-1 md:flex-none h-10 rounded-xl font-bold" onClick={() => setIsBulkAddDialogOpen(true)}>
@@ -661,7 +583,7 @@ const ShoppingList: React.FC = () => {
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div className="grid gap-1.5">
-                  <Label>Cant.</Label>
+                  <Label>Cant. Planeada</Label>
                   <Input 
                     type="number" 
                     step="0.1" 
@@ -672,7 +594,7 @@ const ShoppingList: React.FC = () => {
                   />
                 </div>
                 <div className="grid gap-1.5">
-                  <Label>Precio Est.</Label>
+                  <Label>Precio Est. (Opcional)</Label>
                   <Input 
                     placeholder="Ej. 25" 
                     value={newItem.estimated_unit_price} 
@@ -700,17 +622,17 @@ const ShoppingList: React.FC = () => {
             </form>
           </Card>
 
-          {/* Tabla de Artículos */}
+          {/* Tabla de Artículos Interactiva para Tienda */}
           <Card className="shadow-sm overflow-hidden">
             <CardContent className="p-0">
               <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="w-[50px] pl-4">Estado</TableHead>
+                      <TableHead className="w-[60px] pl-4">Llevo</TableHead>
                       <TableHead>Artículo</TableHead>
-                      <TableHead>Categoría</TableHead>
-                      <TableHead className="text-right">Precio Unitario</TableHead>
+                      <TableHead className="w-[100px]">Cant. Real</TableHead>
+                      <TableHead className="w-[120px] text-right">Precio Unitario</TableHead>
                       <TableHead className="text-right">Total</TableHead>
                       <TableHead className="text-right pr-4">Acciones</TableHead>
                     </TableRow>
@@ -724,41 +646,40 @@ const ShoppingList: React.FC = () => {
                       </TableRow>
                     ) : (
                       filteredItems.map(item => {
-                        const category = getCategoryById(item.category_id);
-                        const currentPrice = item.is_completed ? (item.actual_unit_price || 0) : item.estimated_unit_price;
-                        const comparison = getPriceComparison(item.name, currentPrice);
+                        const currentPrice = item.actual_unit_price || 0;
+                        const trend = getPriceTrend(item.name, currentPrice);
 
                         return (
-                          <TableRow key={item.id} className={cn(item.is_completed && "bg-muted/30 opacity-70")}>
+                          <TableRow key={item.id} className={cn(item.is_completed && "bg-primary/5")}>
                             <TableCell className="pl-4">
                               <Checkbox 
                                 checked={item.is_completed} 
-                                onCheckedChange={() => handleToggleComplete(item)}
-                                className="h-5 w-5 rounded-md"
+                                onCheckedChange={(checked) => handleToggleCart(item.id, !!checked)}
+                                className="h-6 w-6 rounded-md"
                               />
                             </TableCell>
                             <TableCell>
                               <div className="flex flex-col">
                                 <span className={cn("font-bold text-sm", item.is_completed && "line-through text-muted-foreground")}>
-                                  {item.quantity}x {item.name}
+                                  {item.name}
                                 </span>
                                 
-                                {/* Indicador de Comparación de Precios */}
-                                {comparison && (
+                                {/* Indicador de Tendencia Histórica */}
+                                {trend && (
                                   <div className="flex items-center gap-1 mt-1 text-[10px] font-semibold">
-                                    {comparison.status === 'up' && (
+                                    {trend.status === 'up' && (
                                       <span className="text-red-600 flex items-center gap-0.5">
-                                        <TrendingUp className="h-3 w-3" /> Subió {comparison.diff.toFixed(0)}% (Antes: ${comparison.lastPrice.toFixed(2)})
+                                        <TrendingUp className="h-3 w-3" /> Subió (Antes: ${trend.lastPrice.toFixed(2)})
                                       </span>
                                     )}
-                                    {comparison.status === 'down' && (
+                                    {trend.status === 'down' && (
                                       <span className="text-green-600 flex items-center gap-0.5">
-                                        <TrendingDown className="h-3 w-3" /> Bajó {comparison.diff.toFixed(0)}% (Antes: ${comparison.lastPrice.toFixed(2)})
+                                        <TrendingDown className="h-3 w-3" /> Bajó (Antes: ${trend.lastPrice.toFixed(2)})
                                       </span>
                                     )}
-                                    {comparison.status === 'equal' && (
+                                    {trend.status === 'stable' && (
                                       <span className="text-muted-foreground flex items-center gap-0.5">
-                                        <Minus className="h-3 w-3" /> Mismo precio (${comparison.lastPrice.toFixed(2)})
+                                        <Minus className="h-3 w-3" /> Estable (${trend.lastPrice.toFixed(2)})
                                       </span>
                                     )}
                                   </div>
@@ -766,18 +687,29 @@ const ShoppingList: React.FC = () => {
                               </div>
                             </TableCell>
                             <TableCell>
-                              {category ? (
-                                <div className="flex items-center gap-1.5 text-xs">
-                                  <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: category.color }} />
-                                  <span>{category.name}</span>
-                                </div>
-                              ) : "-"}
+                              <Input
+                                type="number"
+                                step="0.1"
+                                value={item.quantity}
+                                onChange={(e) => handleUpdateItemInline(item.id, 'quantity', e.target.value)}
+                                className="h-8 w-16 rounded-lg text-center p-1"
+                              />
                             </TableCell>
-                            <TableCell className="text-right font-semibold text-sm">
-                              ${currentPrice.toFixed(2)}
+                            <TableCell className="text-right">
+                              <div className="flex items-center justify-end gap-1">
+                                <span className="text-xs text-muted-foreground">$</span>
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  value={item.actual_unit_price !== null && item.actual_unit_price !== undefined ? item.actual_unit_price : ""}
+                                  placeholder={item.estimated_unit_price > 0 ? item.estimated_unit_price.toString() : "0.00"}
+                                  onChange={(e) => handleUpdateItemInline(item.id, 'actual_unit_price', e.target.value)}
+                                  className="h-8 w-20 rounded-lg text-right p-1"
+                                />
+                              </div>
                             </TableCell>
                             <TableCell className="text-right font-bold text-sm">
-                              ${(item.quantity * currentPrice).toFixed(2)}
+                              ${(item.quantity * (item.actual_unit_price || 0)).toFixed(2)}
                             </TableCell>
                             <TableCell className="text-right pr-4 flex gap-1 justify-end">
                               <Button 
@@ -883,61 +815,55 @@ const ShoppingList: React.FC = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Diálogo para Registrar Gasto al Comprar */}
-      <Dialog open={isExpenseDialogOpen} onOpenChange={setIsExpenseDialogOpen}>
+      {/* Diálogo para Finalizar Compra (Cierre de Caja) */}
+      <Dialog open={isFinalizeDialogOpen} onOpenChange={setIsFinalizeDialogOpen}>
         <DialogContent className="w-[90vw] max-w-[400px] rounded-3xl">
           <DialogHeader>
-            <DialogTitle>Registrar Gasto de Compra</DialogTitle>
+            <DialogTitle>Finalizar Compra y Cuadrar Ticket</DialogTitle>
             <DialogDescription>
-              Ingresa la cantidad y el precio unitario real para calcular el total.
+              Ingresa el total cobrado por el supermercado. Calcularemos la diferencia automáticamente.
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleConfirmExpense} className="grid gap-4 py-4">
+          <form onSubmit={handleFinalizePurchase} className="grid gap-4 py-4">
             <div className="bg-primary/10 p-4 rounded-2xl text-center">
-              <p className="text-xs text-muted-foreground uppercase font-bold">Artículo comprado</p>
-              <p className="text-lg font-black text-primary-foreground">{selectedItemForExpense?.name}</p>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div className="grid gap-2">
-                <Label>Cantidad Real</Label>
-                <Input 
-                  type="number"
-                  step="0.1"
-                  value={expenseForm.quantity} 
-                  onChange={e => handleExpenseFormChange('quantity', e.target.value)} 
-                  required
-                  className="rounded-xl h-10"
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label>Precio Unitario</Label>
-                <Input 
-                  value={expenseForm.unitPrice} 
-                  onChange={e => handleExpenseFormChange('unitPrice', e.target.value)} 
-                  placeholder="0.00"
-                  required
-                  className="rounded-xl h-10"
-                />
-              </div>
+              <p className="text-xs text-muted-foreground uppercase font-bold">Suma de Artículos Marcados</p>
+              <p className="text-2xl font-black text-primary-foreground">${totalInCart.toFixed(2)}</p>
             </div>
 
             <div className="grid gap-2">
-              <Label>Total Calculado</Label>
+              <Label>Total Cobrado en Caja (Ticket Real)</Label>
               <Input 
-                value={expenseForm.totalPrice} 
-                onChange={e => handleExpenseFormChange('totalPrice', e.target.value)} 
-                placeholder="0.00"
+                type="number"
+                step="0.01"
+                value={finalizeForm.totalChargedByStore} 
+                onChange={e => setExpenseForm({...finalizeForm, totalChargedByStore: e.target.value})} 
                 required
-                className="rounded-xl h-10 font-bold text-primary-foreground"
+                className="rounded-xl h-10 font-bold text-lg"
               />
             </div>
+
+            {/* Mostrar diferencia en tiempo real */}
+            {(() => {
+              const charged = parseFloat(finalizeForm.totalChargedByStore) || 0;
+              const diff = charged - totalInCart;
+              if (Math.abs(diff) >= 0.01) {
+                return (
+                  <div className="flex items-center gap-2 text-xs bg-yellow-50 border border-yellow-200 p-3 rounded-xl text-yellow-800">
+                    <AlertCircle className="h-4 w-4 text-yellow-600" />
+                    <span>
+                      Diferencia detectada: <b>${diff > 0 ? "+" : ""}{diff.toFixed(2)}</b>. Se guardará en la nota del gasto.
+                    </span>
+                  </div>
+                );
+              }
+              return null;
+            })()}
 
             <div className="grid gap-2">
               <Label>Método de Pago</Label>
               <Select 
-                value={expenseForm.paymentMethod} 
-                onValueChange={v => setExpenseForm({...expenseForm, paymentMethod: v})}
+                value={finalizeForm.paymentMethod} 
+                onValueChange={v => setExpenseForm({...finalizeForm, paymentMethod: v})}
               >
                 <SelectTrigger className="rounded-xl h-10">
                   <SelectValue />
@@ -954,21 +880,35 @@ const ShoppingList: React.FC = () => {
             </div>
 
             <div className="grid gap-2">
+              <Label>Categoría de Gasto</Label>
+              <Select 
+                value={finalizeForm.selectedCategoryId} 
+                onValueChange={v => setExpenseForm({...finalizeForm, selectedCategoryId: v})}
+              >
+                <SelectTrigger className="rounded-xl h-10">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {expenseCategories.map(cat => (
+                    <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="grid gap-2">
               <Label>Descripción del Gasto</Label>
               <Input 
-                value={expenseForm.description} 
-                onChange={e => setExpenseForm({...expenseForm, description: e.target.value})} 
+                value={finalizeForm.description} 
+                onChange={e => setExpenseForm({...finalizeForm, description: e.target.value})} 
                 required
                 className="rounded-xl h-10"
               />
             </div>
 
-            <DialogFooter className="flex flex-col gap-2">
-              <Button type="submit" className="w-full rounded-xl h-11 font-bold">
-                Registrar Gasto y Marcar Comprado
-              </Button>
-              <Button type="button" variant="outline" className="w-full rounded-xl h-11" onClick={handleSkipExpense}>
-                Solo Marcar Comprado (Sin Gasto)
+            <DialogFooter>
+              <Button type="submit" className="w-full rounded-xl h-11 font-bold" disabled={isSubmitting}>
+                {isSubmitting ? "Procesando..." : "Confirmar y Registrar Gasto Único"}
               </Button>
             </DialogFooter>
           </form>
