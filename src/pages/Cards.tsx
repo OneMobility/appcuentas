@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { PlusCircle, DollarSign, Search, Scale, ArrowRightLeft, Wallet, CreditCard, AlertCircle, PiggyBank } from "lucide-react";
+import { PlusCircle, DollarSign, Search, Scale, ArrowRightLeft, Wallet, CreditCard, AlertCircle, PiggyBank, CalendarDays } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { cn } from "@/lib/utils";
 import CardDisplay from "@/components/CardDisplay";
@@ -19,9 +19,9 @@ import CardReconciliationDialog from "@/components/CardReconciliationDialog";
 import { useCategoryContext } from "@/context/CategoryContext";
 import { evaluateExpression } from "@/utils/math-helpers";
 import DynamicLucideIcon from "@/components/DynamicLucideIcon";
-import { getLocalDateString } from "@/utils/date-helpers";
+import { getLocalDateString, getStatementPeriod } from "@/utils/date-helpers";
 import { Checkbox } from "@/components/ui/checkbox";
-import { addMonths, parseISO } from "date-fns";
+import { addMonths, parseISO, isWithinInterval, startOfMonth, endOfMonth } from "date-fns";
 
 const Cards = () => {
   const { user } = useSession();
@@ -302,16 +302,43 @@ const Cards = () => {
     (c.bank_name || "").toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const totalDebitBalance = cards.filter(c => c.type === "debit").reduce((s, c) => s + c.current_balance, 0);
-  const totalCreditDebt = cards.filter(c => c.type === "credit").reduce((s, c) => s + c.current_balance, 0);
-  const totalAvailableCredit = cards.filter(c => c.type === "credit").reduce((s, c) => s + ((c.credit_limit || 0) - c.current_balance), 0);
-  const netCardBalance = totalDebitBalance - totalCreditDebt;
+  // Agrupar tarjetas por tipo
+  const debitCards = useMemo(() => filteredCards.filter(c => c.type === "debit"), [filteredCards]);
+  const creditCards = useMemo(() => filteredCards.filter(c => c.type === "credit"), [filteredCards]);
+
+  // Calcular métricas de resumen
+  const totalDebitBalance = useMemo(() => cards.filter(c => c.type === "debit").reduce((s, c) => s + c.current_balance, 0), [cards]);
+  const totalAvailableCredit = useMemo(() => cards.filter(c => c.type === "credit").reduce((s, c) => s + ((c.credit_limit || 0) - c.current_balance), 0), [cards]);
+  const totalCreditDebtGlobal = useMemo(() => cards.filter(c => c.type === "credit").reduce((s, c) => s + c.current_balance, 0), [cards]);
+
+  // Calcular la deuda de crédito del mes actual (basado en el periodo de facturación de cada tarjeta)
+  const totalCreditDebtMonth = useMemo(() => {
+    const today = new Date();
+    return cards
+      .filter(c => c.type === "credit")
+      .reduce((sum, card) => {
+        const period = card.cut_off_day 
+          ? getStatementPeriod(card.cut_off_day, today)
+          : { start: startOfMonth(today), end: endOfMonth(today) };
+
+        const periodTxs = (card.card_transactions || []).filter((tx: any) => 
+          isWithinInterval(parseISO(tx.date), period)
+        );
+
+        const charges = periodTxs.filter((tx: any) => tx.type === "charge").reduce((s: number, tx: any) => s + tx.amount, 0);
+        const payments = periodTxs.filter((tx: any) => tx.type === "payment").reduce((s: number, tx: any) => s + tx.amount, 0);
+        
+        return sum + Math.max(0, charges - payments);
+      }, 0);
+  }, [cards]);
+
+  const netCardBalance = totalDebitBalance - totalCreditDebtGlobal;
 
   return (
     <div className="flex flex-col gap-6 p-4">
       <h1 className="text-3xl font-bold">Tus Tarjetas</h1>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
         <Card className="border-l-4 border-green-600 bg-green-50 text-green-800">
           <CardHeader className="pb-2"><CardTitle className="text-xs font-medium flex items-center gap-2"><Wallet className="h-3 w-3" /> SALDO EN DÉBITO</CardTitle></CardHeader>
           <CardContent><div className="text-xl font-bold">${totalDebitBalance.toFixed(2)}</div></CardContent>
@@ -320,9 +347,13 @@ const Cards = () => {
           <CardHeader className="pb-2"><CardTitle className="text-xs font-medium flex items-center gap-2"><CreditCard className="h-3 w-3" /> CRÉDITO DISPONIBLE</CardTitle></CardHeader>
           <CardContent><div className="text-xl font-bold">${totalAvailableCredit.toFixed(2)}</div></CardContent>
         </Card>
+        <Card className="border-l-4 border-orange-600 bg-orange-50 text-orange-800">
+          <CardHeader className="pb-2"><CardTitle className="text-xs font-medium flex items-center gap-2"><CalendarDays className="h-3 w-3" /> DEUDA CRÉDITO (MES)</CardTitle></CardHeader>
+          <CardContent><div className="text-xl font-bold">${totalCreditDebtMonth.toFixed(2)}</div></CardContent>
+        </Card>
         <Card className="border-l-4 border-red-600 bg-red-50 text-red-800">
-          <CardHeader className="pb-2"><CardTitle className="text-xs font-medium flex items-center gap-2"><AlertCircle className="h-3 w-3" /> DEUDA DE CRÉDITO</CardTitle></CardHeader>
-          <CardContent><div className="text-xl font-bold">${totalCreditDebt.toFixed(2)}</div></CardContent>
+          <CardHeader className="pb-2"><CardTitle className="text-xs font-medium flex items-center gap-2"><AlertCircle className="h-3 w-3" /> DEUDA CRÉDITO (GLOBAL)</CardTitle></CardHeader>
+          <CardContent><div className="text-xl font-bold">${totalCreditDebtGlobal.toFixed(2)}</div></CardContent>
         </Card>
         <Card className="border-l-4 border-blue-600 bg-blue-50 text-blue-800">
           <CardHeader className="pb-2"><CardTitle className="text-xs font-medium flex items-center gap-2"><PiggyBank className="h-3 w-3" /> BALANCE NETO</CardTitle></CardHeader>
@@ -342,22 +373,60 @@ const Cards = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {filteredCards.map(card => (
-          <CardDisplay
-            key={card.id}
-            card={card}
-            onAddTransaction={() => { 
-              setSelectedCard(card); 
-              setIsDeferred(false);
-              setNewTransaction({ type: "charge", amount: "", description: "", selectedCategoryId: "" });
-              setIsAddTransactionDialogOpen(true); 
-            }}
-            onDeleteCard={handleDeleteCard}
-            onEditCard={handleOpenEditCard}
-            onTransfer={() => setIsTransferDialogOpen(true)}
-          />
-        ))}
+      {/* Sección de Tarjetas de Débito */}
+      <div className="space-y-4">
+        <h2 className="text-xl font-bold flex items-center gap-2 text-green-700">
+          <Wallet className="h-5 w-5" /> Tarjetas de Débito ({totalDebitBalance > 0 ? `$${totalDebitBalance.toFixed(2)}` : "$0.00"})
+        </h2>
+        {cards.filter(c => c.type === "debit").length === 0 ? (
+          <p className="text-sm text-muted-foreground pl-1">No tienes tarjetas de débito registradas.</p>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filteredCards.filter(c => c.type === "debit").map(card => (
+              <CardDisplay
+                key={card.id}
+                card={card}
+                onAddTransaction={() => { 
+                  setSelectedCard(card); 
+                  setIsDeferred(false);
+                  setNewTransaction({ type: "charge", amount: "", description: "", selectedCategoryId: "" });
+                  setIsAddTransactionDialogOpen(true); 
+                }}
+                onDeleteCard={handleDeleteCard}
+                onEditCard={handleOpenEditCard}
+                onTransfer={() => setIsTransferDialogOpen(true)}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Sección de Tarjetas de Crédito */}
+      <div className="space-y-4 mt-4">
+        <h2 className="text-xl font-bold flex items-center gap-2 text-red-600">
+          <CreditCard className="h-5 w-5" /> Tarjetas de Crédito (Deuda del Mes: ${totalCreditDebtMonth.toFixed(2)})
+        </h2>
+        {cards.filter(c => c.type === "credit").length === 0 ? (
+          <p className="text-sm text-muted-foreground pl-1">No tienes tarjetas de crédito registradas.</p>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filteredCards.filter(c => c.type === "credit").map(card => (
+              <CardDisplay
+                key={card.id}
+                card={card}
+                onAddTransaction={() => { 
+                  setSelectedCard(card); 
+                  setIsDeferred(false);
+                  setNewTransaction({ type: "charge", amount: "", description: "", selectedCategoryId: "" });
+                  setIsAddTransactionDialogOpen(true); 
+                }}
+                onDeleteCard={handleDeleteCard}
+                onEditCard={handleOpenEditCard}
+                onTransfer={() => setIsTransferDialogOpen(true)}
+              />
+            ))}
+          </div>
+        )}
       </div>
 
       <CardTransferDialog
