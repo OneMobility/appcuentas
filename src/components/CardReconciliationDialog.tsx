@@ -5,21 +5,14 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Calendar } from "@/components/ui/calendar";
 import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/context/SessionContext";
-import { useCategoryContext } from "@/context/CategoryContext";
 import { showError, showSuccess } from "@/utils/toast";
 import { evaluateExpression } from "@/utils/math-helpers";
 import { getLocalDateString } from "@/utils/date-helpers";
 import { cn } from "@/lib/utils";
-import { AlertCircle, HelpCircle, CalendarIcon, Tag } from "lucide-react";
 import { format, addMonths } from "date-fns";
-import { es } from "date-fns/locale";
-import DynamicLucideIcon from "./DynamicLucideIcon";
 
 interface CardDataForReconciliation {
   id: string;
@@ -46,36 +39,22 @@ const CardReconciliationDialog: React.FC<CardReconciliationDialogProps> = ({
   onNoAdjustmentSuccess,
 }) => {
   const { user } = useSession();
-  const { incomeCategories, expenseCategories } = useCategoryContext();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showHelp, setShowHelp] = useState(false);
-  
-  // Modos de cuadre para crédito: "detailed" (Desglosado), "available" (Disponible)
-  const [creditMode, setCreditMode] = useState<"detailed" | "available">("detailed");
 
-  // Inputs para modo desglosado (Crédito)
+  // Inputs para Crédito
   const [revolventeInput, setRevolventeInput] = useState<string>("");
   const [mesesInput, setMesesInput] = useState<string>("");
-
-  // Input para modo disponible (Crédito) o saldo (Débito)
-  const [realValueInput, setRealValueInput] = useState<string>("");
-
-  // Plazo para diferir la diferencia de meses
   const [adjustmentInstallments, setAdjustmentInstallments] = useState<string>("6");
 
-  // Fecha y categoría del ajuste para afectar al periodo correcto
-  const [adjustmentDate, setAdjustmentDate] = useState<Date>(new Date());
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string>("");
+  // Input para Débito
+  const [realValueInput, setRealValueInput] = useState<string>("");
 
   useEffect(() => {
     if (isOpen) {
       setRevolventeInput("");
       setMesesInput("");
       setRealValueInput("");
-      setAdjustmentInstallments("6"); // Por defecto a 6 meses como solicita el usuario
-      setAdjustmentDate(new Date());
-      setSelectedCategoryId("");
-      setShowHelp(false);
+      setAdjustmentInstallments("6");
     }
   }, [isOpen]);
 
@@ -123,42 +102,22 @@ const CardReconciliationDialog: React.FC<CardReconciliationDialogProps> = ({
 
   // Diferencias individuales
   const revolventeDiff = useMemo(() => {
-    if (card.type !== "credit" || creditMode !== "detailed") return 0;
+    if (card.type !== "credit") return 0;
     return revolventeVal - appMetrics.revolvente;
-  }, [revolventeVal, appMetrics.revolvente, card.type, creditMode]);
+  }, [revolventeVal, appMetrics.revolvente, card.type]);
 
   const mesesDiff = useMemo(() => {
-    if (card.type !== "credit" || creditMode !== "detailed") return 0;
+    if (card.type !== "credit") return 0;
     return mesesVal - appMetrics.meses;
-  }, [mesesVal, appMetrics.meses, card.type, creditMode]);
+  }, [mesesVal, appMetrics.meses, card.type]);
 
-  // Cálculos de balance y diferencia global
-  const appBalance = useMemo(() => {
-    if (card.type === "debit") return card.current_balance;
-    if (creditMode === "available") {
-      return (card.credit_limit || 0) - card.current_balance;
-    }
-    return card.current_balance; // Deuda global en App
-  }, [card, creditMode]);
-
+  // Diferencia global
   const calculatedDifference = useMemo(() => {
-    if (card.type === "credit" && creditMode === "detailed") {
+    if (card.type === "credit") {
       return revolventeDiff + mesesDiff;
     }
-    return realValueVal - appBalance;
-  }, [card, creditMode, revolventeDiff, mesesDiff, realValueVal, appBalance]);
-
-  // Determinar si el ajuste principal es un cargo o un abono para filtrar categorías
-  const isAdjustmentCharge = useMemo(() => {
-    if (card.type === "credit" && creditMode === "detailed") {
-      return revolventeDiff > 0;
-    }
-    return card.type === "credit" ? calculatedDifference < 0 : calculatedDifference < 0;
-  }, [card.type, creditMode, revolventeDiff, calculatedDifference]);
-
-  const categoriesToDisplay = useMemo(() => {
-    return isAdjustmentCharge ? expenseCategories : incomeCategories;
-  }, [isAdjustmentCharge, expenseCategories, incomeCategories]);
+    return realValueVal - card.current_balance;
+  }, [card, revolventeDiff, mesesDiff, realValueVal]);
 
   const handleReconcile = async () => {
     if (!user) {
@@ -175,12 +134,12 @@ const CardReconciliationDialog: React.FC<CardReconciliationDialogProps> = ({
     }
 
     setIsSubmitting(true);
-    const transactionDate = getLocalDateString(adjustmentDate);
+    const today = new Date();
+    const todayStr = getLocalDateString(today);
 
     try {
-      // MODO DETALLADO (CRÉDITO)
-      if (card.type === "credit" && creditMode === "detailed") {
-        // 1. Procesar ajuste de Revolvente (si hay diferencia)
+      if (card.type === "credit") {
+        // 1. Procesar ajuste de Revolvente (Deuda del periodo)
         if (Math.abs(revolventeDiff) >= 0.01) {
           const txType = revolventeDiff > 0 ? "charge" : "payment";
           const { error: revError } = await supabase
@@ -191,15 +150,13 @@ const CardReconciliationDialog: React.FC<CardReconciliationDialogProps> = ({
               type: txType,
               amount: Math.abs(revolventeDiff),
               description: "Ajuste de Cuadre (Revolvente)",
-              date: transactionDate,
+              date: todayStr,
               is_adjustment: true,
-              expense_category_id: txType === "charge" ? (selectedCategoryId || null) : null,
-              income_category_id: txType === "payment" ? (selectedCategoryId || null) : null,
             });
           if (revError) throw revError;
         }
 
-        // 2. Procesar ajuste de Meses sin Intereses (si hay diferencia)
+        // 2. Procesar ajuste de Meses sin Intereses (Diferido)
         if (Math.abs(mesesDiff) >= 0.01) {
           const installmentsCount = parseInt(adjustmentInstallments);
           const txType = mesesDiff > 0 ? "charge" : "payment";
@@ -207,9 +164,8 @@ const CardReconciliationDialog: React.FC<CardReconciliationDialogProps> = ({
 
           const transactionInserts = [];
           for (let i = 0; i < installmentsCount; i++) {
-            // IMPORTANTE: Las mensualidades diferidas comienzan a partir del mes siguiente (i + 1)
-            // para que el mes actual (junio) solo conserve la deuda revolvente declarada.
-            const installmentDate = addMonths(adjustmentDate, i + 1);
+            // Las mensualidades diferidas comienzan a partir del mes siguiente (i + 1)
+            const installmentDate = addMonths(today, i + 1);
             transactionInserts.push({
               user_id: user.id,
               card_id: card.id,
@@ -221,8 +177,6 @@ const CardReconciliationDialog: React.FC<CardReconciliationDialogProps> = ({
               installments_count: installmentsCount,
               installment_number: i + 1,
               is_adjustment: true,
-              expense_category_id: txType === "charge" ? (selectedCategoryId || null) : null,
-              income_category_id: txType === "payment" ? (selectedCategoryId || null) : null,
             });
           }
 
@@ -241,14 +195,9 @@ const CardReconciliationDialog: React.FC<CardReconciliationDialogProps> = ({
         if (cardError) throw cardError;
 
       } else {
-        // MODO DISPONIBLE (CRÉDITO) O SALDO (DÉBITO)
-        const txType = card.type === "credit"
-          ? (totalDiff > 0 ? "payment" : "charge")
-          : (totalDiff > 0 ? "payment" : "charge");
-
-        const newCurrentBalance = card.type === "credit"
-          ? card.current_balance - totalDiff
-          : card.current_balance + totalDiff;
+        // DÉBITO
+        const txType = totalDiff > 0 ? "payment" : "charge"; // + saldo -> depósito, - saldo -> retiro
+        const newCurrentBalance = card.current_balance + totalDiff;
 
         const { error: transactionError } = await supabase
           .from('card_transactions')
@@ -257,11 +206,9 @@ const CardReconciliationDialog: React.FC<CardReconciliationDialogProps> = ({
             card_id: card.id,
             type: txType,
             amount: Math.abs(totalDiff),
-            description: `Ajuste de Cuadre (${card.type === 'credit' ? 'Disponible' : 'Saldo'})`,
-            date: transactionDate,
+            description: "Ajuste de Cuadre (Saldo)",
+            date: todayStr,
             is_adjustment: true,
-            expense_category_id: txType === "charge" ? (selectedCategoryId || null) : null,
-            income_category_id: txType === "payment" ? (selectedCategoryId || null) : null,
           });
         if (transactionError) throw transactionError;
 
@@ -286,60 +233,16 @@ const CardReconciliationDialog: React.FC<CardReconciliationDialogProps> = ({
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-[425px] rounded-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <div className="flex items-center justify-between pr-6">
-            <DialogTitle>Cuadre de Tarjeta: {card.name}</DialogTitle>
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              className="h-8 w-8 rounded-full" 
-              onClick={() => setShowHelp(!showHelp)}
-              title="¿Cómo funciona?"
-              type="button"
-            >
-              <HelpCircle className="h-5 w-5 text-primary" />
-            </Button>
-          </div>
+          <DialogTitle>Cuadre de Tarjeta: {card.name}</DialogTitle>
         </DialogHeader>
 
-        {showHelp && (
-          <div className="bg-blue-50 p-4 rounded-2xl text-xs text-blue-800 space-y-2 animate-in fade-in duration-200">
-            <p className="font-bold flex items-center gap-1">
-              <AlertCircle className="h-4 w-4" /> ¿Cómo organizar tus montos?
-            </p>
-            <p>
-              • <b>Deuda Revolvente:</b> Es lo que debes de tus compras normales del mes (las que pagas completas en tu fecha límite).
-            </p>
-            <p>
-              • <b>Deuda a Meses (MSI):</b> Es la suma total de lo que te falta por pagar de tus compras diferidas. <i>No necesitas desglosar los meses aquí</i>, ya que la app los distribuye automáticamente mes a mes según la fecha de cada mensualidad.
-            </p>
-            <p>
-              • El cuadre creará un movimiento de ajuste para que tu saldo global en la app coincida perfectamente con tu estado de cuenta real.
-            </p>
-          </div>
-        )}
-
-        {card.type === "credit" && (
-          <Tabs value={creditMode} onValueChange={(v: any) => {
-            setCreditMode(v);
-            setRevolventeInput("");
-            setMesesInput("");
-            setRealValueInput("");
-            setAdjustmentInstallments("6");
-          }} className="w-full">
-            <TabsList className="grid w-full grid-cols-2 rounded-xl">
-              <TabsTrigger value="detailed" className="rounded-lg">Cuadre Detallado</TabsTrigger>
-              <TabsTrigger value="available" className="rounded-lg">Por Disponible</TabsTrigger>
-            </TabsList>
-          </Tabs>
-        )}
-
         <div className="grid gap-4 py-4">
-          {card.type === "credit" && creditMode === "detailed" ? (
+          {card.type === "credit" ? (
             <>
               {/* Sección Revolvente */}
               <div className="grid gap-2">
                 <div className="flex justify-between items-center">
-                  <Label htmlFor="revolvente" className="font-semibold">Deuda Revolvente (Real)</Label>
+                  <Label htmlFor="revolvente" className="font-semibold">Deuda del Periodo (Mes Actual)</Label>
                   <span className="text-[10px] text-muted-foreground">En App: ${appMetrics.revolvente.toFixed(2)}</span>
                 </div>
                 <Input
@@ -352,7 +255,7 @@ const CardReconciliationDialog: React.FC<CardReconciliationDialogProps> = ({
                 />
                 {Math.abs(revolventeDiff) >= 0.01 && (
                   <span className={cn("text-[10px] font-bold", revolventeDiff > 0 ? "text-red-600" : "text-green-600")}>
-                    Diferencia revolvente: {revolventeDiff > 0 ? "+" : ""}${revolventeDiff.toFixed(2)}
+                    Ajuste revolvente: {revolventeDiff > 0 ? "Cargo" : "Abono"} de ${Math.abs(revolventeDiff).toFixed(2)}
                   </span>
                 )}
               </div>
@@ -360,7 +263,7 @@ const CardReconciliationDialog: React.FC<CardReconciliationDialogProps> = ({
               {/* Sección Meses */}
               <div className="grid gap-2">
                 <div className="flex justify-between items-center">
-                  <Label htmlFor="meses" className="font-semibold">Deuda a Meses / Diferido (Real)</Label>
+                  <Label htmlFor="meses" className="font-semibold">Deuda a Meses (Diferido)</Label>
                   <span className="text-[10px] text-muted-foreground">En App: ${appMetrics.meses.toFixed(2)}</span>
                 </div>
                 <Input
@@ -374,25 +277,24 @@ const CardReconciliationDialog: React.FC<CardReconciliationDialogProps> = ({
                 {Math.abs(mesesDiff) >= 0.01 && (
                   <div className="space-y-2 mt-1">
                     <span className={cn("text-[10px] font-bold block", mesesDiff > 0 ? "text-red-600" : "text-green-600")}>
-                      Diferencia diferida: {mesesDiff > 0 ? "+" : ""}${mesesDiff.toFixed(2)}
+                      Ajuste diferido: {mesesDiff > 0 ? "Cargo" : "Abono"} de ${Math.abs(mesesDiff).toFixed(2)}
                     </span>
                     
-                    {/* Preguntar a cuántos meses diferir la diferencia */}
                     <div className="bg-muted/40 p-3 rounded-2xl border space-y-1.5">
-                      <Label className="text-xs font-bold">¿A cuántos meses diferir esta diferencia?</Label>
+                      <Label className="text-xs font-bold">Plazo (Meses)</Label>
                       <Select value={adjustmentInstallments} onValueChange={setAdjustmentInstallments}>
                         <SelectTrigger className="rounded-xl bg-background h-9 text-xs"><SelectValue /></SelectTrigger>
                         <SelectContent>
                           {Array.from({ length: 12 }, (_, i) => i + 1).map(num => (
                             <SelectItem key={num} value={num.toString()} className="text-xs">
-                              {num} {num === 1 ? 'mes (Cargo único)' : 'meses'}
+                              {num} {num === 1 ? 'mes' : 'meses'}
                             </SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
                       {parseInt(adjustmentInstallments) > 1 && (
                         <p className="text-[10px] text-primary font-medium">
-                          Se generarán {adjustmentInstallments} mensualidades de ${(Math.abs(mesesDiff) / parseInt(adjustmentInstallments)).toFixed(2)} cada una.
+                          Se generarán {adjustmentInstallments} mensualidades de ${(Math.abs(mesesDiff) / parseInt(adjustmentInstallments)).toFixed(2)} cada una a partir del próximo mes.
                         </p>
                       )}
                     </div>
@@ -414,20 +316,12 @@ const CardReconciliationDialog: React.FC<CardReconciliationDialogProps> = ({
           ) : (
             <>
               <div className="grid grid-cols-3 items-center gap-4">
-                <Label className="text-right col-span-2">
-                  {card.type === "debit" 
-                    ? "Saldo en App:" 
-                    : "Crédito Disponible en App:"}
-                </Label>
-                <span className="font-bold">${appBalance.toFixed(2)}</span>
+                <Label className="text-right col-span-2">Saldo en App:</Label>
+                <span className="font-bold">${card.current_balance.toFixed(2)}</span>
               </div>
               
               <div className="grid grid-cols-3 items-center gap-4">
-                <Label htmlFor="realValue" className="text-right col-span-2 font-semibold">
-                  {card.type === "debit" 
-                    ? "Saldo Real:" 
-                    : "Crédito Disponible Real:"}
-                </Label>
+                <Label htmlFor="realValue" className="text-right col-span-2 font-semibold">Saldo Real:</Label>
                 <Input
                   id="realValue"
                   type="text"
@@ -439,78 +333,13 @@ const CardReconciliationDialog: React.FC<CardReconciliationDialogProps> = ({
               </div>
             </>
           )}
-
-          {/* Selector de Fecha del Ajuste */}
-          <div className="grid gap-2 border-t pt-4">
-            <Label className="font-semibold flex items-center gap-1">
-              <CalendarIcon className="h-4 w-4 text-muted-foreground" /> Fecha del Ajuste (Periodo)
-            </Label>
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  className="w-full justify-start text-left font-normal rounded-xl h-10"
-                >
-                  {format(adjustmentDate, "PPP", { locale: es })}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="center">
-                <Calendar
-                  mode="single"
-                  selected={adjustmentDate}
-                  onSelect={(d) => d && setAdjustmentDate(d)}
-                  locale={es}
-                  initialFocus
-                />
-              </PopoverContent>
-            </Popover>
-            <p className="text-[10px] text-muted-foreground">
-              Selecciona una fecha dentro del periodo de facturación que deseas afectar.
-            </p>
-          </div>
-
-          {/* Selector de Categoría del Ajuste */}
-          <div className="grid gap-2">
-            <Label className="font-semibold flex items-center gap-1">
-              <Tag className="h-4 w-4 text-muted-foreground" /> Categoría del Ajuste (Opcional)
-            </Label>
-            <Select value={selectedCategoryId} onValueChange={setSelectedCategoryId}>
-              <SelectTrigger className="rounded-xl h-10">
-                <SelectValue placeholder="Selecciona una categoría" />
-              </SelectTrigger>
-              <SelectContent>
-                {categoriesToDisplay.map(cat => (
-                  <SelectItem key={cat.id} value={cat.id}>
-                    <div className="flex items-center gap-2">
-                      <DynamicLucideIcon iconName={cat.icon || "Tag"} className="h-4 w-4" />
-                      {cat.name}
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="grid grid-cols-3 items-center gap-4 border-t pt-2">
-            <Label className="text-right col-span-2 font-bold">Diferencia a Ajustar:</Label>
-            <span className={cn(
-              "font-black text-base", 
-              calculatedDifference !== 0 && (
-                (card.type === "credit" && creditMode === "detailed")
-                  ? (calculatedDifference > 0 ? "text-red-600" : "text-green-600")
-                  : (calculatedDifference > 0 ? "text-green-600" : "text-red-600")
-              )
-            )}>
-              {calculatedDifference > 0 ? "+" : ""}{calculatedDifference.toFixed(2)}
-            </span>
-          </div>
         </div>
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose} className="rounded-xl">Cancelar</Button>
           <Button 
             onClick={handleReconcile} 
-            disabled={isSubmitting || (card.type === "credit" && creditMode === "detailed" ? (!revolventeInput && !mesesInput) : !realValueInput)}
+            disabled={isSubmitting || (card.type === "credit" ? (!revolventeInput && !mesesInput) : !realValueInput)}
             className="rounded-xl font-bold"
           >
             {isSubmitting ? "Ajustando..." : "Cuadrar Saldo"}
