@@ -88,3 +88,41 @@ export const getUpcomingCutOffDate = (cutOffDay: number, referenceDate: Date = n
   }
   return upcomingCutOff;
 };
+
+/**
+ * Calcula el periodo de facturación (ciclo de estado de cuenta) para una tarjeta de crédito
+ * basado en su día de corte y una fecha de referencia.
+ */
+export const getStatementPeriod = (cutOffDay: number, referenceDate: Date = new Date()) => {
+  const ref = new Date(referenceDate);
+  ref.setHours(0, 0, 0, 0);
+  
+  let year = ref.getFullYear();
+  let month = ref.getMonth(); // 0-11
+  
+  // Si el día de hoy es mayor que el día de corte, el ciclo actual termina en el corte del próximo mes
+  let cycleEndMonth = month;
+  let cycleEndYear = year;
+  if (ref.getDate() > cutOffDay) {
+    cycleEndMonth = month + 1;
+    if (cycleEndMonth > 11) {
+      cycleEndMonth = 0;
+      cycleEndYear += 1;
+    }
+  }
+  
+  // Fecha de fin: día de corte del mes/año del fin del ciclo
+  const end = new Date(cycleEndYear, cycleEndMonth, cutOffDay, 23, 59, 59, 999);
+  
+  // Fecha de inicio: el día después del corte del mes anterior
+  let cycleStartMonth = cycleEndMonth - 1;
+  let cycleStartYear = cycleEndYear;
+  if (cycleStartMonth < 0) {
+    cycleStartMonth = 11;
+    cycleStartYear -= 1;
+  }
+  
+  const start = new Date(cycleStartYear, cycleStartMonth, cutOffDay + 1, 0, 0, 0, 0);
+  
+  return { start, end };
+};
