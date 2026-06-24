@@ -349,7 +349,7 @@ const ShoppingList: React.FC = () => {
   }, [items]);
 
   // Abrir diálogo de finalización de compra
-  const handleOpenFinalize = () => {
+  const handleOpenAdd = () => {
     const currentList = lists.find(l => l.id === selectedListId);
     setExpenseForm({
       totalChargedByStore: totalInCart.toFixed(2),
@@ -478,6 +478,67 @@ const ShoppingList: React.FC = () => {
       return matchesSearch && matchesCategory;
     });
   }, [items, searchTerm, filterCategory]);
+
+  // Métricas de la lista seleccionada
+  const metrics = useMemo(() => {
+    const pending = items.filter(i => !i.is_completed);
+    const completed = items.filter(i => i.is_completed);
+    
+    const estimatedPendingTotal = pending.reduce((sum, i) => sum + (i.quantity * i.estimated_unit_price), 0);
+    const actualCompletedTotal = completed.reduce((sum, i) => sum + (i.quantity * (i.actual_unit_price || i.estimated_unit_price)), 0);
+
+    return {
+      pendingCount: pending.length,
+      completedCount: completed.length,
+      estimatedPendingTotal,
+      actualCompletedTotal,
+    };
+  }, [items]);
+
+  // Generar texto para compartir
+  const generateShareText = () => {
+    const currentList = lists.find(l => l.id === selectedListId);
+    let text = `🛒 *LISTA DE COMPRAS: ${currentList?.name.toUpperCase() || "OINKASH"}*\n\n`;
+    const pending = items.filter(i => !i.is_completed);
+    const completed = items.filter(i => i.is_completed);
+
+    if (pending.length > 0) {
+      text += `📝 *Pendientes por comprar:*\n`;
+      pending.forEach(i => {
+        text += `☐ ${i.quantity}x ${i.name} ${i.estimated_unit_price > 0 ? `(~ $${(i.quantity * i.estimated_unit_price).toFixed(2)})` : ""}\n`;
+      });
+      text += `\n💰 *Presupuesto estimado:* $${metrics.estimatedPendingTotal.toFixed(2)}\n`;
+    } else {
+      text += `🎉 ¡No hay artículos pendientes!\n`;
+    }
+
+    if (completed.length > 0) {
+      text += `\n✅ *Ya comprados:*\n`;
+      completed.slice(0, 10).forEach(i => {
+        text += `✓ ~${i.name}~ ${i.actual_unit_price ? `($${(i.quantity * i.actual_unit_price).toFixed(2)})` : ""}\n`;
+      });
+    }
+
+    text += `\nOrganizado con Oinkash 🐷`;
+    return text;
+  };
+
+  const handleCopyList = () => {
+    navigator.clipboard.writeText(generateShareText());
+    showSuccess("Lista copiada al portapapeles.");
+    setIsShareDialogOpen(false);
+  };
+
+  const handleSendWhatsApp = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!sharePhone.trim()) {
+      showError("Ingresa un número de teléfono.");
+      return;
+    }
+    const cleanPhone = sharePhone.replace(/\D/g, '');
+    window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(generateShareText())}`, '_blank');
+    setIsShareDialogOpen(false);
+  };
 
   return (
     <div className="flex flex-col gap-6 p-4">
