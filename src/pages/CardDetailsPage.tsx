@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { DollarSign, ArrowLeft, FileDown, FileText, ChevronLeft, ChevronRight, Scale, Search, Filter, Trash2, Edit, Image as ImageIcon, CalendarDays, Eye, FastForward } from "lucide-react";
+import { DollarSign, ArrowLeft, FileDown, FileText, ChevronLeft, ChevronRight, Scale, Search, Filter, Trash2, Edit, Image as ImageIcon, CalendarDays, Eye, FastForward, PiggyBank, Wallet } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { cn } from "@/lib/utils";
 import { format, parseISO, isWithinInterval, startOfMonth, endOfMonth, addMonths, subMonths } from "date-fns";
@@ -293,19 +293,32 @@ const CardDetailsPage: React.FC = () => {
     try {
       const todayStr = getLocalDateString(new Date());
       
-      // Cambiar la fecha de la transacción a hoy para que caiga en el periodo actual
-      const { error } = await supabase
+      // Cambiar la fecha de la transacción para que caiga en el periodo actual
+      const { error: updateTxError } = await supabase
         .from('card_transactions')
         .update({ date: todayStr })
         .eq('id', tx.id);
 
-      if (error) throw error;
+      if (updateTxError) throw updateTxError;
 
-      showSuccess(`Mensualidad "${tx.description}" adelantada al periodo actual.`);
+      showSuccess("Mensualidad adelantada al periodo actual.");
       fetchCardDetails();
     } catch (error: any) {
-      showError("Error al adelantar mensualidad: " + error.message);
+      showError('Error al adelantar mensualidad: ' + error.message);
     }
+  };
+
+  const handleExport = (formatType: 'csv' | 'pdf') => {
+    if (!card) return;
+    const data = filteredTransactions.map(tx => ({
+      Fecha: format(parseISO(tx.date), "dd/MM/yyyy"),
+      Tipo: tx.type === "charge" ? "Gasto" : "Abono",
+      Descripción: tx.description,
+      Monto: tx.amount.toFixed(2),
+      Saldo: tx.runningBalance.toFixed(2)
+    }));
+    if (formatType === 'csv') exportToCsv(`historial_${card.name}.csv`, data);
+    else exportToPdf(`historial_${card.name}.pdf`, `Historial: ${card.name}`, ["Fecha", "Tipo", "Descripción", "Monto", "Saldo"], data.map(d => Object.values(d)));
   };
 
   const upcomingCutOffDate = useMemo(() => {
@@ -488,29 +501,66 @@ const CardDetailsPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Fechas de Corte y Pago (Solo para Crédito) */}
-          {card.type === "credit" && (
-            <div className="grid grid-cols-2 gap-4 mx-1 p-4 bg-muted/30 rounded-2xl border text-xs">
-              {upcomingCutOffDate && (
-                <div className="flex items-center gap-2">
-                  <CalendarDays className="h-5 w-5 text-primary" />
+          {/* Resumen del Periodo / Fechas (Crédito y Débito) */}
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mx-1 p-4 bg-muted/30 rounded-2xl border text-xs">
+            {card.type === "credit" ? (
+              <>
+                {upcomingCutOffDate && (
+                  <div className="flex items-center gap-2">
+                    <CalendarDays className="h-5 w-5 text-primary" />
+                    <div>
+                      <p className="text-muted-foreground text-[10px] uppercase font-bold">Próximo Corte</p>
+                      <p className="font-black text-sm">{format(upcomingCutOffDate, "dd 'de' MMM", { locale: es })}</p>
+                    </div>
+                  </div>
+                )}
+                {upcomingPaymentDueDate && (
+                  <div className="flex items-center gap-2">
+                    <Eye className="h-5 w-5 text-primary" />
+                    <div>
+                      <p className="text-muted-foreground text-[10px] uppercase font-bold">Límite de Pago</p>
+                      <p className="font-black text-sm">{format(upcomingPaymentDueDate, "dd 'de' MMM", { locale: es })}</p>
+                    </div>
+                  </div>
+                )}
+                <div className="flex items-center gap-2 col-span-2 md:col-span-1">
+                  <DollarSign className="h-5 w-5 text-green-600" />
                   <div>
-                    <p className="text-muted-foreground text-[10px] uppercase font-bold">Próximo Corte</p>
-                    <p className="font-black text-sm">{format(upcomingCutOffDate, "dd 'de' MMM", { locale: es })}</p>
+                    <p className="text-muted-foreground text-[10px] uppercase font-bold">Saldo del Mes (Pago)</p>
+                    <p className="font-black text-sm text-green-600">
+                      ${Math.max(0, periodMetrics.net).toFixed(2)}
+                    </p>
                   </div>
                 </div>
-              )}
-              {upcomingPaymentDueDate && (
+              </>
+            ) : (
+              <>
                 <div className="flex items-center gap-2">
-                  <Eye className="h-5 w-5 text-primary" />
+                  <DollarSign className="h-5 w-5 text-green-600" />
                   <div>
-                    <p className="text-muted-foreground text-[10px] uppercase font-bold">Límite de Pago</p>
-                    <p className="font-black text-sm">{format(upcomingPaymentDueDate, "dd 'de' MMM", { locale: es })}</p>
+                    <p className="text-muted-foreground text-[10px] uppercase font-bold">Ingresos del Mes</p>
+                    <p className="font-black text-sm text-green-600">${periodMetrics.payments.toFixed(2)}</p>
                   </div>
                 </div>
-              )}
-            </div>
-          )}
+                <div className="flex items-center gap-2">
+                  <DollarSign className="h-5 w-5 text-red-600" />
+                  <div>
+                    <p className="text-muted-foreground text-[10px] uppercase font-bold">Gastos del Mes</p>
+                    <p className="font-black text-sm text-red-600">${periodMetrics.charges.toFixed(2)}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 col-span-2 md:col-span-1">
+                  <PiggyBank className="h-5 w-5 text-primary" />
+                  <div>
+                    <p className="text-muted-foreground text-[10px] uppercase font-bold">Flujo Neto del Mes</p>
+                    <p className={cn("font-black text-sm", periodMetrics.net >= 0 ? "text-green-600" : "text-red-600")}>
+                      {periodMetrics.net >= 0 ? "+" : ""}${periodMetrics.net.toFixed(2)}
+                    </p>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
 
           {/* Tabla de Movimientos con Filtro de Periodo */}
           <Card className="border-none shadow-sm mx-1 overflow-hidden">
