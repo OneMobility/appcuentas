@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { DollarSign, ArrowLeft, FileDown, FileText, ChevronLeft, ChevronRight, Scale, Search, Filter, Trash2, Edit, Image as ImageIcon, CalendarDays, Eye, FastForward, PiggyBank, Wallet } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { cn } from "@/lib/utils";
-import { format, parseISO, isWithinInterval, startOfMonth, endOfMonth, addMonths, subMonths, addDays } from "date-fns";
+import { format, parseISO, isWithinInterval, startOfMonth, endOfMonth, addMonths, subMonths } from "date-fns";
 import { es } from "date-fns/locale";
 import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/context/SessionContext";
@@ -122,46 +122,16 @@ const CardDetailsPage: React.FC = () => {
   // Calcular la deuda o saldo del periodo seleccionado
   const periodMetrics = useMemo(() => {
     if (!card) return { charges: 0, payments: 0, net: 0 };
-
-    if (card.type === "credit" && card.cut_off_day && card.days_to_pay_after_cut_off !== undefined) {
-      // Cargos (gastos) estrictamente dentro del periodo de facturación
-      const periodTxs = (card.card_transactions || []).filter((tx: any) => 
-        isWithinInterval(parseISO(tx.date), filterInterval)
-      );
-      const charges = periodTxs
-        .filter((tx: any) => tx.type === "charge")
-        .reduce((sum: number, tx: any) => sum + tx.amount, 0);
-
-      // Los pagos (abonos) válidos para este periodo son los realizados desde el inicio del periodo
-      // hasta la fecha límite de pago de este periodo (corte actual + días para pagar)
-      const paymentDueDate = addDays(filterInterval.end, card.days_to_pay_after_cut_off);
-      const payments = (card.card_transactions || [])
-        .filter((tx: any) => {
-          const txDate = parseISO(tx.date);
-          return tx.type === "payment" && 
-                 txDate >= filterInterval.start && 
-                 txDate <= paymentDueDate;
-        })
-        .reduce((sum: number, tx: any) => sum + tx.amount, 0);
-
-      return {
-        charges,
-        payments,
-        net: Math.max(0, charges - payments)
-      };
-    } else {
-      // Para débito o si no tiene configurado corte
-      const periodTxs = (card.card_transactions || []).filter((tx: any) => 
-        isWithinInterval(parseISO(tx.date), filterInterval)
-      );
-      const charges = periodTxs.filter((tx: any) => tx.type === "charge").reduce((sum: number, tx: any) => sum + tx.amount, 0);
-      const payments = periodTxs.filter((tx: any) => tx.type === "payment").reduce((sum: number, tx: any) => sum + tx.amount, 0);
-      return {
-        charges,
-        payments,
-        net: card.type === "credit" ? (charges - payments) : (payments - charges)
-      };
-    }
+    const periodTxs = (card.card_transactions || []).filter((tx: any) => 
+      isWithinInterval(parseISO(tx.date), filterInterval)
+    );
+    const charges = periodTxs.filter((tx: any) => tx.type === "charge").reduce((sum: number, tx: any) => sum + tx.amount, 0);
+    const payments = periodTxs.filter((tx: any) => tx.type === "payment").reduce((sum: number, tx: any) => sum + tx.amount, 0);
+    return {
+      charges,
+      payments,
+      net: card.type === "credit" ? (charges - payments) : (payments - charges)
+    };
   }, [card, filterInterval]);
 
   const handleOpenEdit = (tx: any) => {
