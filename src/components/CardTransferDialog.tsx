@@ -5,12 +5,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/context/SessionContext";
 import { showError, showSuccess } from "@/utils/toast";
 import { format } from "date-fns";
-import { CreditCard, ArrowRightLeft, Wallet } from "lucide-react"; // Importar Wallet para efectivo
+import { ArrowRightLeft } from "lucide-react";
 import { toast } from "sonner";
 
 interface CardData {
@@ -27,11 +27,19 @@ interface CardTransferDialogProps {
   isOpen: boolean;
   onClose: () => void;
   cards: CardData[];
-  cashBalance: number; // Nuevo: Saldo actual de efectivo
+  cashBalance: number;
   onTransferSuccess: () => void;
+  initialSourceId?: string; // Prop opcional para pre-seleccionar el origen
 }
 
-const CardTransferDialog: React.FC<CardTransferDialogProps> = ({ isOpen, onClose, cards, cashBalance, onTransferSuccess }) => {
+const CardTransferDialog: React.FC<CardTransferDialogProps> = ({ 
+  isOpen, 
+  onClose, 
+  cards, 
+  cashBalance, 
+  onTransferSuccess,
+  initialSourceId 
+}) => {
   const { user } = useSession();
   const [sourceAccountId, setSourceAccountId] = useState<string>("");
   const [destinationAccountId, setDestinationAccountId] = useState<string>("");
@@ -39,32 +47,24 @@ const CardTransferDialog: React.FC<CardTransferDialogProps> = ({ isOpen, onClose
   const [description, setDescription] = useState<string>("");
 
   useEffect(() => {
-    if (!isOpen) {
-      // Reset form when dialog closes
-      setSourceAccountId("");
+    if (isOpen) {
+      setSourceAccountId(initialSourceId || "");
       setDestinationAccountId("");
       setAmount("");
       setDescription("");
     }
-  }, [isOpen]);
+  }, [isOpen, initialSourceId]);
 
-  const allSourceAccounts = [
-    { id: "cash", name: "Efectivo", type: "cash", current_balance: cashBalance, display: `Efectivo (Saldo: $${cashBalance.toFixed(2)})` },
-    ...cards.filter(card => card.type === "debit").map(card => ({
-      ...card,
-      type: "card", // Usar 'card' para diferenciar en la lógica
-      display: `Tarjeta ${card.name} (${card.bank_name} ****${card.last_four_digits}) (Saldo: $${card.current_balance.toFixed(2)})`
-    }))
-  ];
+  // Si el origen seleccionado es igual al destino, limpiamos el destino
+  useEffect(() => {
+    if (sourceAccountId && sourceAccountId === destinationAccountId) {
+      setDestinationAccountId("");
+    }
+  }, [sourceAccountId, destinationAccountId]);
 
-  const allDestinationAccounts = [
-    { id: "cash", name: "Efectivo", type: "cash", current_balance: cashBalance, display: `Efectivo (Saldo: $${cashBalance.toFixed(2)})` },
-    ...cards.map(card => ({
-      ...card,
-      type: card.type, // Mantener 'credit' o 'debit' para tarjetas
-      display: `Tarjeta ${card.name} (${card.bank_name} ****${card.last_four_digits}) (Saldo: $${card.current_balance.toFixed(2)})`
-    }))
-  ];
+  // Separar las tarjetas para agruparlas en el selector de origen
+  const debitCards = cards.filter(card => card.type === "debit");
+  const creditCards = cards.filter(card => card.type === "credit");
 
   const handleTransfer = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -87,122 +87,137 @@ const CardTransferDialog: React.FC<CardTransferDialogProps> = ({ isOpen, onClose
       return;
     }
 
-    const sourceAccount = allSourceAccounts.find(acc => acc.id === sourceAccountId);
-    const destinationAccount = allDestinationAccounts.find(acc => acc.id === destinationAccountId);
+    // Buscar información de las cuentas origen y destino
+    let sourceBalance = 0;
+    let sourceName = "";
 
-    if (!sourceAccount || !destinationAccount) {
-      showError("Cuentas de origen o destino no encontradas.");
-      return;
+    if (sourceAccountId === "cash") {
+      sourceBalance = cashBalance;
+      sourceName = "Efectivo";
+    } else {
+      const sourceCard = cards.find(c => c.id === sourceAccountId);
+      if (!sourceCard) {
+        showError("Cuenta de origen no encontrada.");
+        return;
+      }
+      sourceName = `Tarjeta ${sourceCard.name}`;
+      // Si es crédito, el saldo disponible es límite - deuda.
+      // Si es débito, el saldo disponible es current_balance.
+      sourceBalance = sourceCard.type === "credit" 
+        ? (sourceCard.credit_limit || 0) - sourceCard.current_balance
+        : sourceCard.current_balance;
     }
 
-    // Check source balance
-    if (sourceAccount.current_balance < transferAmount) {
-      showError(`Saldo insuficiente en la cuenta de origen (${sourceAccount.name}).`);
+    let destinationName = "";
+    if (destinationAccountId === "cash") {
+      destinationName = "Efectivo";
+    } else {
+      const destCard = cards.find(c => c.id === destinationAccountId);
+      if (!destCard) {
+        showError("Cuenta de destino no encontrada.");
+        return;
+      }
+      destinationName = `Tarjeta ${destCard.name}`;
+    }
+
+    // Validar saldo suficiente en origen
+    if (sourceBalance < transferAmount) {
+      showError(`Saldo o crédito disponible insuficiente en origen (${sourceName}).`);
       return;
     }
 
     const transactionDate = format(new Date(), "yyyy-MM-dd");
-    const transferDescription = description.trim() || `Transferencia a ${destinationAccount.name}`;
+    const transferDescription = description.trim() || `Transferencia a ${destinationName}`;
 
     try {
-      // Handle Source Account Update and Transaction
-      if (sourceAccount.id === "cash") {
-        const newCashBalance = cashBalance - transferAmount;
-        const { error: cashTxError } = await supabase
-          .from('cash_transactions')
-          .insert({
-            user_id: user.id,
-            type: "egreso",
-            amount: transferAmount,
-            description: `Transferencia a ${destinationAccount.name}: ${transferDescription}`,
-            date: transactionDate,
-            expense_category_id: null, // No category for internal transfers
-            income_category_id: null,
-          });
-        if (cashTxError) throw cashTxError;
-      } else { // Source is a card
-        const sourceCard = cards.find(c => c.id === sourceAccountId);
-        if (!sourceCard) throw new Error("Tarjeta de origen no encontrada.");
-        
-        const newSourceCardBalance = sourceCard.current_balance - transferAmount;
-        const { error: sourceUpdateError } = await supabase
+      // 1. CARGO O RETIRO DE LA CUENTA ORIGEN
+      if (sourceAccountId === "cash") {
+        const { error: cashError } = await supabase.from('cash_transactions').insert({
+          user_id: user.id,
+          type: "egreso",
+          amount: transferAmount,
+          description: `Transferencia a ${destinationName}: ${transferDescription}`,
+          date: transactionDate,
+        });
+        if (cashError) throw cashError;
+      } else {
+        const sourceCard = cards.find(c => c.id === sourceAccountId)!;
+        let newSourceCardBalance = sourceCard.current_balance;
+
+        if (sourceCard.type === "credit") {
+          // Transferir desde tarjeta de crédito aumenta la deuda de la tarjeta de crédito (disposición de fondos)
+          newSourceCardBalance += transferAmount;
+        } else {
+          // Transferir desde tarjeta de débito disminuye su saldo
+          newSourceCardBalance -= transferAmount;
+        }
+
+        const { error: sourceCardError } = await supabase
           .from('cards')
           .update({ current_balance: newSourceCardBalance })
-          .eq('id', sourceCard.id)
-          .eq('user_id', user.id);
-        if (sourceUpdateError) throw sourceUpdateError;
+          .eq('id', sourceCard.id);
+        
+        if (sourceCardError) throw sourceCardError;
 
-        const { error: sourceTxError } = await supabase
-          .from('card_transactions')
-          .insert({
-            user_id: user.id,
-            card_id: sourceCard.id,
-            type: "charge",
-            amount: transferAmount,
-            description: `Transferencia a ${destinationAccount.name}: ${transferDescription}`,
-            date: transactionDate,
-            expense_category_id: null, // No category for internal transfers
-            income_category_id: null,
-          });
+        const { error: sourceTxError } = await supabase.from('card_transactions').insert({
+          user_id: user.id,
+          card_id: sourceCard.id,
+          type: "charge", // Se registra como un cargo/gasto en la tarjeta origen
+          amount: transferAmount,
+          description: `Transferencia a ${destinationName}: ${transferDescription}`,
+          date: transactionDate,
+        });
         if (sourceTxError) throw sourceTxError;
       }
 
-      // Handle Destination Account Update and Transaction
-      if (destinationAccount.id === "cash") {
-        const newCashBalance = cashBalance + transferAmount;
-        const { error: cashTxError } = await supabase
-          .from('cash_transactions')
-          .insert({
-            user_id: user.id,
-            type: "ingreso",
-            amount: transferAmount,
-            description: `Transferencia desde ${sourceAccount.name}: ${transferDescription}`,
-            date: transactionDate,
-            income_category_id: null, // No category for internal transfers
-            expense_category_id: null,
-          });
-        if (cashTxError) throw cashTxError;
-      } else { // Destination is a card
-        const destinationCard = cards.find(c => c.id === destinationAccountId);
-        if (!destinationCard) throw new Error("Tarjeta de destino no encontrada.");
-
+      // 2. DEPÓSITO O ABONO A LA CUENTA DESTINO
+      if (destinationAccountId === "cash") {
+        const { error: cashDestError } = await supabase.from('cash_transactions').insert({
+          user_id: user.id,
+          type: "ingreso",
+          amount: transferAmount,
+          description: `Transferencia desde ${sourceName}: ${transferDescription}`,
+          date: transactionDate,
+        });
+        if (cashDestError) throw cashDestError;
+      } else {
+        const destinationCard = cards.find(c => c.id === destinationAccountId)!;
         let newDestinationCardBalance = destinationCard.current_balance;
+
         if (destinationCard.type === "credit") {
-          newDestinationCardBalance -= transferAmount; // Payment to credit card reduces debt
+          // Depositar a tarjeta de crédito reduce su deuda (pago)
+          newDestinationCardBalance -= transferAmount;
           if (newDestinationCardBalance < 0) {
             toast.info(`Has sobrepagado tu tarjeta ${destinationCard.name}. Tu saldo actual es de $${newDestinationCardBalance.toFixed(2)} (a tu favor).`, {
               style: { backgroundColor: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))' },
               duration: 10000
             });
           }
-        } else { // Debit card
-          newDestinationCardBalance += transferAmount; // Deposit to debit card increases balance
+        } else {
+          // Depositar a tarjeta de débito aumenta su saldo
+          newDestinationCardBalance += transferAmount;
         }
 
-        const { error: destUpdateError } = await supabase
+        const { error: destCardError } = await supabase
           .from('cards')
           .update({ current_balance: newDestinationCardBalance })
-          .eq('id', destinationCard.id)
-          .eq('user_id', user.id);
-        if (destUpdateError) throw destUpdateError;
+          .eq('id', destinationCard.id);
+        
+        if (destCardError) throw destCardError;
 
-        const { error: destTxError } = await supabase
-          .from('card_transactions')
-          .insert({
-            user_id: user.id,
-            card_id: destinationCard.id,
-            type: "payment",
-            amount: transferAmount,
-            description: `Transferencia desde ${sourceAccount.name}: ${transferDescription}`,
-            date: transactionDate,
-            income_category_id: null, // No category for internal transfers
-            expense_category_id: null,
-          });
+        const { error: destTxError } = await supabase.from('card_transactions').insert({
+          user_id: user.id,
+          card_id: destinationCard.id,
+          type: "payment", // Se registra como un abono/pago en la tarjeta destino
+          amount: transferAmount,
+          description: `Transferencia desde ${sourceName}: ${transferDescription}`,
+          date: transactionDate,
+        });
         if (destTxError) throw destTxError;
       }
 
       showSuccess("Transferencia realizada exitosamente.");
-      onTransferSuccess(); // Refresh data in parent component
+      onTransferSuccess();
       onClose();
     } catch (error: any) {
       showError('Error al realizar la transferencia: ' + error.message);
@@ -211,7 +226,7 @@ const CardTransferDialog: React.FC<CardTransferDialogProps> = ({ isOpen, onClose
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="w-[90vw] max-w-[425px] rounded-3xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <ArrowRightLeft className="h-5 w-5" /> Realizar Transferencia
@@ -223,35 +238,82 @@ const CardTransferDialog: React.FC<CardTransferDialogProps> = ({ isOpen, onClose
               Origen
             </Label>
             <Select value={sourceAccountId} onValueChange={setSourceAccountId}>
-              <SelectTrigger id="sourceAccount" className="col-span-3">
-                <SelectValue placeholder="Selecciona cuenta de origen" />
+              <SelectTrigger id="sourceAccount" className="col-span-3 rounded-xl">
+                <SelectValue placeholder="Selecciona origen" />
               </SelectTrigger>
               <SelectContent>
-                {allSourceAccounts.map((account) => (
-                  <SelectItem key={account.id} value={account.id}>
-                    {account.display}
-                  </SelectItem>
-                ))}
+                <SelectGroup>
+                  <SelectLabel>Efectivo</SelectLabel>
+                  <SelectItem value="cash">Efectivo (Saldo: ${cashBalance.toFixed(2)})</SelectItem>
+                </SelectGroup>
+                
+                {debitCards.length > 0 && (
+                  <SelectGroup>
+                    <SelectLabel>Tarjetas de Débito</SelectLabel>
+                    {debitCards.map(c => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.name} ({c.bank_name} ****{c.last_four_digits}) - Saldo: ${c.current_balance.toFixed(2)}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                )}
+
+                {creditCards.length > 0 && (
+                  <SelectGroup>
+                    <SelectLabel>Tarjetas de Crédito</SelectLabel>
+                    {creditCards.map(c => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.name} ({c.bank_name} ****{c.last_four_digits}) - Disp: ${((c.credit_limit || 0) - c.current_balance).toFixed(2)}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                )}
               </SelectContent>
             </Select>
           </div>
+          
           <div className="grid grid-cols-4 items-center gap-4">
             <Label htmlFor="destinationAccount" className="text-right">
               Destino
             </Label>
             <Select value={destinationAccountId} onValueChange={setDestinationAccountId}>
-              <SelectTrigger id="destinationAccount" className="col-span-3">
-                <SelectValue placeholder="Selecciona cuenta de destino" />
+              <SelectTrigger id="destinationAccount" className="col-span-3 rounded-xl">
+                <SelectValue placeholder="Selecciona destino" />
               </SelectTrigger>
               <SelectContent>
-                {allDestinationAccounts.map((account) => (
-                  <SelectItem key={account.id} value={account.id}>
-                    {account.display}
-                  </SelectItem>
-                ))}
+                {/* Excluimos el origen seleccionado de las opciones de destino */}
+                {sourceAccountId !== "cash" && (
+                  <SelectGroup>
+                    <SelectLabel>Efectivo</SelectLabel>
+                    <SelectItem value="cash">Efectivo (Saldo: ${cashBalance.toFixed(2)})</SelectItem>
+                  </SelectGroup>
+                )}
+                
+                {debitCards.filter(c => c.id !== sourceAccountId).length > 0 && (
+                  <SelectGroup>
+                    <SelectLabel>Tarjetas de Débito</SelectLabel>
+                    {debitCards.filter(c => c.id !== sourceAccountId).map(c => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.name} ({c.bank_name} ****{c.last_four_digits}) - Saldo: ${c.current_balance.toFixed(2)}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                )}
+
+                {creditCards.filter(c => c.id !== sourceAccountId).length > 0 && (
+                  <SelectGroup>
+                    <SelectLabel>Tarjetas de Crédito</SelectLabel>
+                    {creditCards.filter(c => c.id !== sourceAccountId).map(c => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.name} ({c.bank_name} ****{c.last_four_digits}) - Disp: ${((c.credit_limit || 0) - c.current_balance).toFixed(2)}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                )}
               </SelectContent>
             </Select>
           </div>
+
           <div className="grid grid-cols-4 items-center gap-4">
             <Label htmlFor="amount" className="text-right">
               Monto
@@ -259,28 +321,30 @@ const CardTransferDialog: React.FC<CardTransferDialogProps> = ({ isOpen, onClose
             <Input
               id="amount"
               name="amount"
-              type="number"
-              step="0.01"
+              type="text"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
-              className="col-span-3"
+              className="col-span-3 rounded-xl h-10"
+              placeholder="Ej. 100 o =50+50"
               required
             />
           </div>
+
           <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="description" className="text-right">
-              Descripción (Opcional)
+            <Label htmlFor="description" className="text-right text-xs">
+              Nota (Opcional)
             </Label>
             <Input
               id="description"
               name="description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              className="col-span-3"
+              className="col-span-3 rounded-xl h-10"
+              placeholder="Ej. Pago de cena..."
             />
           </div>
           <DialogFooter>
-            <Button type="submit">Confirmar Transferencia</Button>
+            <Button type="submit" className="w-full rounded-xl h-11 font-bold">Confirmar Transferencia</Button>
           </DialogFooter>
         </form>
       </DialogContent>
