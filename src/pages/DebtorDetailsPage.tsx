@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { DollarSign, Trash2, Edit, ArrowLeft, FileDown, History, AlertCircle, Search, Filter, FileText, Share2, Copy, MessageSquare, ChevronLeft, ChevronRight } from "lucide-react";
+import { DollarSign, Trash2, Edit, ArrowLeft, FileDown, History, AlertCircle, Search, Filter, FileText, Share2, Copy, MessageSquare, ChevronLeft, ChevronRight, Coins } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { cn } from "@/lib/utils";
 import { format, parseISO, isWithinInterval, startOfMonth, endOfMonth, addMonths, subMonths } from "date-fns";
@@ -26,6 +26,7 @@ import DynamicLucideIcon from "@/components/DynamicLucideIcon";
 import { evaluateExpression } from "@/utils/math-helpers";
 import { getLocalDateString } from "@/utils/date-helpers";
 import { Badge } from "@/components/ui/badge";
+import { fetchUsdToMxnRate } from "@/utils/currency-helper";
 
 interface DebtorTransaction {
   id: string;
@@ -74,6 +75,22 @@ const DebtorDetailsPage: React.FC = () => {
     destinationAccountId: "cash",
     selectedIncomeCategoryId: "",
   });
+
+  // Monedas y conversión
+  const [currency, setCurrency] = useState<"MXN" | "USD">("MXN");
+  const [usdToMxnRate, setUsdToMxnRate] = useState<number>(20.00);
+
+  useEffect(() => {
+    const fetchRate = async () => {
+      try {
+        const rate = await fetchUsdToMxnRate();
+        setUsdToMxnRate(rate);
+      } catch (e) {
+        console.error("No se pudo obtener la tasa en detalles de deudor:", e);
+      }
+    };
+    fetchRate();
+  }, [isTransactionDialogOpen]);
 
   const fetchData = async () => {
     if (!user || !debtorId) return;
@@ -196,6 +213,7 @@ const DebtorDetailsPage: React.FC = () => {
       destinationAccountId: "cash",
       selectedIncomeCategoryId: incomeCategories[0]?.id || "",
     });
+    setCurrency("MXN");
     setSkipLinkedTransaction(false);
     setIsTransactionDialogOpen(true);
   };
@@ -209,6 +227,7 @@ const DebtorDetailsPage: React.FC = () => {
       destinationAccountId: "cash",
       selectedIncomeCategoryId: incomeCategories[0]?.id || "",
     });
+    setCurrency("MXN");
     setSkipLinkedTransaction(true);
     setIsTransactionDialogOpen(true);
   };
@@ -217,8 +236,16 @@ const DebtorDetailsPage: React.FC = () => {
     e.preventDefault();
     if (!user || !debtor) return;
 
-    const amount = evaluateExpression(transactionForm.amount) || 0;
-    if (amount <= 0) { showError("Monto inválido"); return; }
+    let baseAmount = evaluateExpression(transactionForm.amount) || 0;
+    if (baseAmount <= 0) { showError("Monto inválido"); return; }
+
+    // Convertir de USD a MXN si es necesario
+    let finalAmount = baseAmount;
+    let finalDescription = transactionForm.description;
+    if (currency === "USD" && !editingTransaction) {
+      finalAmount = baseAmount * usdToMxnRate;
+      finalDescription += ` (Reg: $${baseAmount.toFixed(2)} USD a tasa $${usdToMxnRate.toFixed(2)} MXN)`;
+    }
 
     try {
       if (editingTransaction) {
@@ -226,8 +253,8 @@ const DebtorDetailsPage: React.FC = () => {
           .from('debtor_transactions')
           .update({ 
             type: transactionForm.type, 
-            amount, 
-            description: transactionForm.description 
+            amount: finalAmount, 
+            description: finalDescription 
           })
           .eq('id', editingTransaction.id);
         
@@ -239,20 +266,20 @@ const DebtorDetailsPage: React.FC = () => {
             user_id: user.id, 
             debtor_id: debtor.id, 
             type: transactionForm.type, 
-            amount, 
-            description: transactionForm.description, 
+            amount: finalAmount, 
+            description: finalDescription, 
             date: getLocalDateString(new Date()) 
           });
         
         if (insertTxError) throw insertTxError;
 
         if (transactionForm.type === "payment" && !skipLinkedTransaction) {
-          const linkedDesc = `Abono de ${debtor.name}: ${transactionForm.description}`;
+          const linkedDesc = `Abono de ${debtor.name}: ${finalDescription}`;
           if (transactionForm.destinationAccountId === "cash") {
             await supabase.from('cash_transactions').insert({ 
               user_id: user.id, 
               type: "ingreso", 
-              amount, 
+              amount: finalAmount, 
               description: linkedDesc, 
               date: getLocalDateString(new Date()), 
               income_category_id: transactionForm.selectedIncomeCategoryId || null 
@@ -260,13 +287,13 @@ const DebtorDetailsPage: React.FC = () => {
           } else {
             const card = cards.find(c => c.id === transactionForm.destinationAccountId);
             if (card) {
-              const newCardBalance = card.type === "credit" ? card.current_balance - amount : card.current_balance + amount;
+              const newCardBalance = card.type === "credit" ? card.current_balance - finalAmount : card.current_balance + finalAmount;
               await supabase.from('cards').update({ current_balance: newCardBalance }).eq('id', card.id);
               await supabase.from('card_transactions').insert({ 
                 user_id: user.id, 
                 card_id: card.id, 
                 type: "payment", 
-                amount, 
+                amount: finalAmount, 
                 description: linkedDesc, 
                 date: getLocalDateString(new Date()), 
                 income_category_id: transactionForm.selectedIncomeCategoryId || null 
@@ -306,7 +333,7 @@ const DebtorDetailsPage: React.FC = () => {
       if (!editingTransaction && debtor.phone) {
         if (window.confirm("¿Enviar comprobante por WhatsApp?")) {
           const typeLabel = transactionForm.type === "charge" ? "Cargo" : "Abono";
-          const msg = `Hola ${debtor.name}, se registró un ${typeLabel} por $${amount.toFixed(2)}. Saldo actual: $${newBalance.toFixed(2)}.`;
+          const msg = `Hola ${debtor.name}, se registró un ${typeLabel} por $${finalAmount.toFixed(2)}. Saldo actual: $${newBalance.toFixed(2)}.`;
           const cleanPhone = debtor.phone.replace(/\D/g, '');
           window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`, '_blank');
         }
@@ -532,7 +559,7 @@ const DebtorDetailsPage: React.FC = () => {
                     <TableCell>
                       <div className="flex flex-col">
                         <span className="font-medium text-xs">{tx.description}</span>
-                        <Badge variant="outline" className={cn("w-fit text-[9px] px-1 py-0", tx.type === "charge" ? "text-red-600 border-red-100" : "text-green-600 border-green-100")}>
+                        <Badge variant="outline" className={cn("w-fit text-[9px] px-1 py-0", tx.type === "charge" ? "text-red-600" : "text-green-600")}>
                           {tx.type === "charge" ? "Cargo" : "Abono"}
                         </Badge>
                       </div>
@@ -571,7 +598,26 @@ const DebtorDetailsPage: React.FC = () => {
                 <SelectContent><SelectItem value="payment">Abono (Me paga)</SelectItem><SelectItem value="charge">Cargo (Me debe más)</SelectItem></SelectContent>
               </Select>
             </div>
-            <div className="grid gap-2"><Label>Monto</Label><Input value={transactionForm.amount} onChange={e => setTransactionForm({...transactionForm, amount: e.target.value})} required /></div>
+            
+            <div className="grid gap-2">
+              <div className="flex justify-between items-center">
+                <Label>Monto</Label>
+                <div className="flex bg-muted p-0.5 rounded-lg text-xs gap-1">
+                  <button type="button" onClick={() => setCurrency("MXN")} className={cn("px-2 py-1 rounded-md font-bold transition-all", currency === "MXN" ? "bg-white text-indigo-900 shadow-sm" : "text-muted-foreground")}>MXN</button>
+                  <button type="button" onClick={() => setCurrency("USD")} className={cn("px-2 py-1 rounded-md font-bold transition-all", currency === "USD" ? "bg-white text-indigo-900 shadow-sm" : "text-muted-foreground")}>USD</button>
+                </div>
+              </div>
+              <div className="relative">
+                <Input value={transactionForm.amount} onChange={e => setTransactionForm({...transactionForm, amount: e.target.value})} className="rounded-xl pr-12" placeholder="0.00" required />
+                <span className="absolute right-3.5 top-2.5 text-xs text-muted-foreground font-black">{currency}</span>
+              </div>
+              {currency === "USD" && transactionForm.amount && (
+                <p className="text-[10px] text-indigo-700 font-bold flex items-center gap-1">
+                  <Coins className="h-3 w-3 animate-pulse" /> Equivale a ~ ${(parseFloat(transactionForm.amount) * usdToMxnRate || 0).toFixed(2)} MXN (tasa: ${usdToMxnRate.toFixed(2)})
+                </p>
+              )}
+            </div>
+
             <div className="grid gap-2"><Label>Descripción</Label><Input value={transactionForm.description} onChange={e => setTransactionForm({...transactionForm, description: e.target.value})} required /></div>
             {transactionForm.type === "payment" && !editingTransaction && (
               <>

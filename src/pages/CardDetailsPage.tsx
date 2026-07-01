@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { DollarSign, ArrowLeft, FileDown, FileText, ChevronLeft, ChevronRight, Scale, Search, Filter, Trash2, Edit, Image as ImageIcon, CalendarDays, Eye, FastForward, PiggyBank, Wallet } from "lucide-react";
+import { DollarSign, ArrowLeft, FileDown, FileText, ChevronLeft, ChevronRight, Scale, Search, Filter, Trash2, Edit, Image as ImageIcon, CalendarDays, Eye, FastForward, PiggyBank, Wallet, Coins } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { cn } from "@/lib/utils";
 import { format, parseISO, isWithinInterval, startOfMonth, endOfMonth, addMonths, subMonths } from "date-fns";
@@ -29,6 +29,7 @@ import CardReconciliationDialog from "@/components/CardReconciliationDialog";
 import ImageUpload from "@/components/ImageUpload";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Checkbox } from "@/components/ui/checkbox";
+import { fetchUsdToMxnRate } from "@/utils/currency-helper";
 
 const CardDetailsPage: React.FC = () => {
   const { cardId } = useParams<{ cardId: string }>();
@@ -60,6 +61,22 @@ const CardDetailsPage: React.FC = () => {
   const [deferredType, setDeferredType] = useState<"msi" | "interest">("msi");
   const [installmentsCount, setInstallmentsCount] = useState("3");
   const [totalWithInterest, setTotalWithInterest] = useState("");
+
+  // Monedas y conversión
+  const [currency, setCurrency] = useState<"MXN" | "USD">("MXN");
+  const [usdToMxnRate, setUsdToMxnRate] = useState<number>(20.00);
+
+  useEffect(() => {
+    const fetchRate = async () => {
+      try {
+        const rate = await fetchUsdToMxnRate();
+        setUsdToMxnRate(rate);
+      } catch (e) {
+        console.error("No se pudo obtener la tasa en detalles de tarjeta:", e);
+      }
+    };
+    fetchRate();
+  }, [isAddTransactionDialogOpen]);
 
   const fetchCardDetails = async () => {
     if (!user || !cardId) return;
@@ -143,6 +160,7 @@ const CardDetailsPage: React.FC = () => {
       selectedCategoryId: tx.income_category_id || tx.expense_category_id || "",
       imageUrl: tx.image_url || "",
     });
+    setCurrency("MXN");
     setIsDeferred(false);
     setIsAddTransactionDialogOpen(true);
   };
@@ -151,8 +169,16 @@ const CardDetailsPage: React.FC = () => {
     e.preventDefault();
     if (!user || !card) return;
 
-    const baseAmount = evaluateExpression(transactionForm.amount) || 0;
+    let baseAmount = evaluateExpression(transactionForm.amount) || 0;
     if (baseAmount <= 0) { showError("Monto inválido"); return; }
+
+    // Convertir de USD a MXN si es necesario
+    let finalAmount = baseAmount;
+    let finalDescription = transactionForm.description;
+    if (currency === "USD" && !editingTransaction) {
+      finalAmount = baseAmount * usdToMxnRate;
+      finalDescription += ` (Reg: $${baseAmount.toFixed(2)} USD a tasa $${usdToMxnRate.toFixed(2)} MXN)`;
+    }
 
     const isCreditCard = card.type === "credit";
     const isCharge = transactionForm.type === "charge";
@@ -165,17 +191,24 @@ const CardDetailsPage: React.FC = () => {
         return;
       }
 
-      let totalAmountToCharge = baseAmount;
-      let monthlyInstallmentAmount = baseAmount / count;
+      let totalAmountToCharge = finalAmount;
+      let monthlyInstallmentAmount = finalAmount / count;
 
       if (deferredType === "interest") {
-        const totalInterestVal = evaluateExpression(totalWithInterest) || 0;
-        if (totalInterestVal <= 0 || totalInterestVal < baseAmount) {
+        let rawInterest: number;
+        if (totalWithInterest.startsWith('=')) {
+          rawInterest = evaluateExpression(totalWithInterest.substring(1)) || 0;
+        } else {
+          rawInterest = parseFloat(totalWithInterest);
+        }
+        
+        let interestVal = currency === "USD" ? rawInterest * usdToMxnRate : rawInterest;
+        if (interestVal <= 0 || interestVal < finalAmount) {
           showError("El monto total con intereses debe ser mayor al monto original.");
           return;
         }
-        totalAmountToCharge = totalInterestVal;
-        monthlyInstallmentAmount = totalInterestVal / count;
+        totalAmountToCharge = interestVal;
+        monthlyInstallmentAmount = interestVal / count;
       }
 
       try {
@@ -191,7 +224,7 @@ const CardDetailsPage: React.FC = () => {
             card_id: card.id,
             type: "charge",
             amount: monthlyInstallmentAmount,
-            description: `${transactionForm.description} (Mensualidad ${i + 1}/${count})`,
+            description: `${finalDescription} (Mensualidad ${i + 1}/${count})`,
             date: installmentDateStr,
             installments_total_amount: totalAmountToCharge,
             installments_count: count,
@@ -201,14 +234,12 @@ const CardDetailsPage: React.FC = () => {
           });
         }
 
-        // Insertar todas las mensualidades
         const { error: txsError } = await supabase
           .from('card_transactions')
           .insert(transactionInserts);
 
         if (txsError) throw txsError;
 
-        // Actualizar el saldo de la tarjeta con la deuda total diferida
         const newBalance = card.current_balance + totalAmountToCharge;
         const { error: cardError } = await supabase
           .from('cards')
@@ -232,11 +263,11 @@ const CardDetailsPage: React.FC = () => {
       if (card.type === "debit") newBalance = editingTransaction.type === "charge" ? newBalance + editingTransaction.amount : newBalance - editingTransaction.amount;
       else newBalance = editingTransaction.type === "charge" ? newBalance - editingTransaction.amount : newBalance + editingTransaction.amount;
     }
-    if (card.type === "debit") newBalance = transactionForm.type === "charge" ? newBalance - baseAmount : newBalance + baseAmount;
-    else newBalance = transactionForm.type === "charge" ? newBalance + baseAmount : newBalance - baseAmount;
+    if (card.type === "debit") newBalance = transactionForm.type === "charge" ? newBalance - finalAmount : newBalance + finalAmount;
+    else newBalance = transactionForm.type === "charge" ? newBalance + finalAmount : newBalance - finalAmount;
 
     const txData = {
-      user_id: user?.id, card_id: card.id, type: transactionForm.type, amount: baseAmount, description: transactionForm.description,
+      user_id: user?.id, card_id: card.id, type: transactionForm.type, amount: finalAmount, description: finalDescription,
       date: editingTransaction ? editingTransaction.date : getLocalDateString(new Date()),
       income_category_id: transactionForm.type === "payment" ? transactionForm.selectedCategoryId : null,
       expense_category_id: transactionForm.type === "charge" ? transactionForm.selectedCategoryId : null,
@@ -585,7 +616,7 @@ const CardDetailsPage: React.FC = () => {
                   </Button>
                 )}
                 <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setIsReconcileDialogOpen(true)}><Scale className="h-4 w-4" /></Button>
-                <Button variant="default" size="icon" className="h-8 w-8" onClick={() => { setEditingTransaction(null); setIsDeferred(false); setTransactionForm({ type: "charge", amount: "", description: "", selectedCategoryId: "", imageUrl: "" }); setIsAddTransactionDialogOpen(true); }}><DollarSign className="h-4 w-4" /></Button>
+                <Button variant="default" size="icon" className="h-8 w-8" onClick={() => { setEditingTransaction(null); setIsDeferred(false); setCurrency("MXN"); setTransactionForm({ type: "charge", amount: "", description: "", selectedCategoryId: "", imageUrl: "" }); setIsAddTransactionDialogOpen(true); }}><DollarSign className="h-4 w-4" /></Button>
               </div>
             </CardHeader>
             <CardContent className="p-0">
@@ -675,7 +706,7 @@ const CardDetailsPage: React.FC = () => {
 
       <CardReconciliationDialog
         isOpen={isReconcileDialogOpen}
-        onClose={() => setIsReconcileDialogOpen(false)}
+        onClose={() => { setIsReconcileDialogOpen(false); }}
         card={{
           ...card,
           transactions: card?.card_transactions || []
@@ -756,8 +787,30 @@ const CardDetailsPage: React.FC = () => {
                 <SelectContent><SelectItem value="charge">Gasto</SelectItem><SelectItem value="payment">Abono/Pago</SelectItem></SelectContent>
               </Select>
             </div>
-            <div className="grid gap-2"><Label>Monto</Label><Input value={transactionForm.amount} onChange={e => setTransactionForm({...transactionForm, amount: e.target.value})} required /></div>
-            <div className="grid gap-2"><Label>Descripción</Label><Input value={transactionForm.description} onChange={e => setTransactionForm({...transactionForm, description: e.target.value})} required /></div>
+            
+            <div className="grid gap-2">
+              <div className="flex justify-between items-center">
+                <Label>Monto</Label>
+                <div className="flex bg-muted p-0.5 rounded-lg text-xs gap-1">
+                  <button type="button" onClick={() => setCurrency("MXN")} className={cn("px-2 py-1 rounded-md font-bold transition-all", currency === "MXN" ? "bg-white text-indigo-900 shadow-sm" : "text-muted-foreground")}>MXN</button>
+                  <button type="button" onClick={() => setCurrency("USD")} className={cn("px-2 py-1 rounded-md font-bold transition-all", currency === "USD" ? "bg-white text-indigo-900 shadow-sm" : "text-muted-foreground")}>USD</button>
+                </div>
+              </div>
+              <div className="relative">
+                <Input value={transactionForm.amount} onChange={e => setTransactionForm({...transactionForm, amount: e.target.value})} className="rounded-xl pr-12" placeholder="0.00" required />
+                <span className="absolute right-3.5 top-2.5 text-xs text-muted-foreground font-black">{currency}</span>
+              </div>
+              {currency === "USD" && transactionForm.amount && (
+                <p className="text-[10px] text-indigo-700 font-bold flex items-center gap-1">
+                  <Coins className="h-3 w-3 animate-pulse" /> Equivale a ~ ${(parseFloat(transactionForm.amount) * usdToMxnRate || 0).toFixed(2)} MXN (tasa: ${usdToMxnRate.toFixed(2)})
+                </p>
+              )}
+            </div>
+
+            <div className="grid gap-2">
+              <Label>Descripción</Label>
+              <Input value={transactionForm.description} onChange={e => setTransactionForm({...transactionForm, description: e.target.value})} className="rounded-xl" required />
+            </div>
             <div className="grid gap-2">
               <Label>Categoría</Label>
               <Select value={transactionForm.selectedCategoryId} onValueChange={(v) => setTransactionForm({...transactionForm, selectedCategoryId: v})}>
