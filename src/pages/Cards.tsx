@@ -175,7 +175,7 @@ const Cards = () => {
 
   const handleTransactionSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user || !card) return;
+    if (!user || !selectedCard) return;
 
     let baseAmount: number;
     if (newTransaction.amount.startsWith('=')) {
@@ -196,7 +196,7 @@ const Cards = () => {
       finalDescription += ` (Reg: $${baseAmount.toFixed(2)} USD a tasa $${usdToMxnRate.toFixed(2)} MXN)`;
     }
 
-    const isCreditCard = card.type === "credit";
+    const isCreditCard = selectedCard.type === "credit";
     const isCharge = newTransaction.type === "charge";
 
     if (isCreditCard && isCharge && isDeferred) {
@@ -236,7 +236,7 @@ const Cards = () => {
 
           transactionInserts.push({
             user_id: user.id,
-            card_id: card.id,
+            card_id: selectedCard.id,
             type: "charge",
             amount: monthlyInstallmentAmount,
             description: `${finalDescription} (Mensualidad ${i + 1}/${count})`,
@@ -250,8 +250,8 @@ const Cards = () => {
         const { error: txsError } = await supabase.from('card_transactions').insert(transactionInserts);
         if (txsError) throw txsError;
 
-        const newBalance = card.current_balance + totalAmountToCharge;
-        const { error: cardError } = await supabase.from('cards').update({ current_balance: newBalance }).eq('id', card.id);
+        const newBalance = selectedCard.current_balance + totalAmountToCharge;
+        const { error: cardError } = await supabase.from('cards').update({ current_balance: newBalance }).eq('id', selectedCard.id);
         if (cardError) throw cardError;
 
         showSuccess(`Compra diferida a ${count} meses registrada exitosamente.`);
@@ -263,8 +263,8 @@ const Cards = () => {
       return;
     }
 
-    let newBalance = card.current_balance;
-    if (card.type === "debit") {
+    let newBalance = selectedCard.current_balance;
+    if (selectedCard.type === "debit") {
       newBalance = isCharge ? newBalance - finalAmount : newBalance + finalAmount;
     } else {
       newBalance = isCharge ? newBalance + finalAmount : newBalance - finalAmount;
@@ -272,7 +272,7 @@ const Cards = () => {
 
     const { error } = await supabase.from('card_transactions').insert({
       user_id: user.id,
-      card_id: card.id,
+      card_id: selectedCard.id,
       type: newTransaction.type,
       amount: finalAmount,
       description: finalDescription,
@@ -282,7 +282,7 @@ const Cards = () => {
     });
 
     if (!error) {
-      await supabase.from('cards').update({ current_balance: newBalance }).eq('id', card.id);
+      await supabase.from('cards').update({ current_balance: newBalance }).eq('id', selectedCard.id);
       showSuccess("Movimiento registrado");
       setIsAddTransactionDialogOpen(false);
       fetchAllData();
@@ -363,21 +363,32 @@ const Cards = () => {
           <CardHeader className="pb-2"><CardTitle className="text-xs font-medium flex items-center gap-2"><CalendarDays className="h-3 w-3" /> DEUDA CRÉDITO (GLOBAL)</CardTitle></CardHeader>
           <CardContent><div className="text-xl font-bold">${totalCreditDebtGlobal.toFixed(2)}</div></CardContent>
         </Card>
-        <Card className="border-l-4 border-blue-600 bg-blue-50 text-blue-800">
+        <Card className="border-l-4 border-pink-500 bg-pink-50 text-pink-800">
           <CardHeader className="pb-2"><CardTitle className="text-xs font-medium flex items-center gap-2"><PiggyBank className="h-3 w-3" /> BALANCE NETO</CardTitle></CardHeader>
           <CardContent><div className="text-xl font-bold">${netCardBalance.toFixed(2)}</div></CardContent>
         </Card>
       </div>
 
       <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
-        <div className="relative w-full md:max-w-sm">
+        <div className="relative flex-1 max-w-md">
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Buscar tarjeta..." className="pl-8 h-9" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+          <Input
+            placeholder="Buscar por nombre o banco..."
+            className="pl-8 h-10 rounded-xl"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
         </div>
         <div className="flex items-center gap-2 w-full md:w-auto">
-          <Button variant="outline" size="icon" className="h-9 w-9" onClick={() => { setTransferSourceId(""); setIsTransferDialogOpen(true); }} title="Transferir"><ArrowRightLeft className="h-4 w-4" /></Button>
-          <Button variant="outline" size="icon" className="h-9 w-9" onClick={handleOpenReconcile} title="Cuadrar Saldo"><Scale className="h-4 w-4" /></Button>
-          <Button variant="default" size="icon" className="h-9 w-9" onClick={handleOpenAddCard} title="Añadir Tarjeta"><PlusCircle className="h-4 w-4" /></Button>
+          <Button variant="outline" className="flex-1 md:flex-none h-10 rounded-xl font-bold" onClick={handleOpenReconcile}>
+            <Scale className="h-4 w-4 mr-1" /> Cuadrar Tarjeta
+          </Button>
+          <Button variant="outline" className="flex-1 md:flex-none h-10 rounded-xl font-bold" onClick={() => setIsTransferDialogOpen(true)}>
+            <ArrowRightLeft className="h-4 w-4 mr-1" /> Transferir
+          </Button>
+          <Button className="flex-1 md:flex-none h-10 rounded-xl font-bold" onClick={handleOpenAddCard}>
+            <PlusCircle className="h-4 w-4 mr-1" /> Nueva Tarjeta
+          </Button>
         </div>
       </div>
 
