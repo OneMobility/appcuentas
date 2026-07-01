@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { PlusCircle, ChevronLeft, ChevronRight, Trash2, Edit, Search, Filter, FileDown, FileText, Scale, ArrowRightLeft, Image as ImageIcon } from "lucide-react";
+import { PlusCircle, ChevronLeft, ChevronRight, Trash2, Edit, Search, Filter, FileDown, ArrowRightLeft, Image as ImageIcon, Coins } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { cn } from "@/lib/utils";
 import { format, parseISO, startOfMonth, endOfMonth, isWithinInterval, addMonths, subMonths } from "date-fns";
@@ -21,10 +21,10 @@ import { getLocalDateString } from "@/utils/date-helpers";
 import DynamicLucideIcon from "@/components/DynamicLucideIcon";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { exportToCsv, exportToPdf } from "@/utils/export";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import CashReconciliationDialog from "@/components/CashReconciliationDialog";
 import CardTransferDialog from "@/components/CardTransferDialog";
 import ImageUpload from "@/components/ImageUpload";
+import { fetchUsdToMxnRate } from "@/utils/currency-helper";
 
 const Cash = () => {
   const { user } = useSession();
@@ -44,6 +44,10 @@ const Cash = () => {
   const [isTransferDialogOpen, setIsTransferDialogOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<any>(null);
 
+  // Monedas y conversión
+  const [currency, setCurrency] = useState<"MXN" | "USD">("MXN");
+  const [usdToMxnRate, setUsdToMxnRate] = useState<number>(20.00);
+
   const [transactionForm, setTransactionForm] = useState({
     type: "ingreso" as "ingreso" | "egreso",
     amount: "",
@@ -51,6 +55,19 @@ const Cash = () => {
     selectedCategoryId: "",
     imageUrl: "",
   });
+
+  // Cargar tasa de cambio al abrir
+  useEffect(() => {
+    const fetchRate = async () => {
+      try {
+        const rate = await fetchUsdToMxnRate();
+        setUsdToMxnRate(rate);
+      } catch (e) {
+        console.error("No se pudo obtener la tasa en efectivo:", e);
+      }
+    };
+    fetchRate();
+  }, [isAddDialogOpen, isEditDialogOpen]);
 
   const fetchData = async () => {
     if (!user) return;
@@ -94,6 +111,7 @@ const Cash = () => {
   }, [transactions, currentViewDate, searchTerm, filterType]);
 
   const handleOpenAdd = () => {
+    setCurrency("MXN");
     setTransactionForm({
       type: "egreso",
       amount: "",
@@ -105,6 +123,7 @@ const Cash = () => {
   };
 
   const handleOpenEdit = (tx: any) => {
+    setCurrency("MXN");
     setEditingTransaction(tx);
     setTransactionForm({
       type: tx.type,
@@ -120,24 +139,32 @@ const Cash = () => {
     e.preventDefault();
     if (!user) return;
 
-    let amount: number;
+    let baseAmount: number;
     if (transactionForm.amount.startsWith('=')) {
-      amount = evaluateExpression(transactionForm.amount.substring(1)) || 0;
+      baseAmount = evaluateExpression(transactionForm.amount.substring(1)) || 0;
     } else {
-      amount = parseFloat(transactionForm.amount);
+      baseAmount = parseFloat(transactionForm.amount);
     }
 
-    if (isNaN(amount) || amount <= 0) {
+    if (isNaN(baseAmount) || baseAmount <= 0) {
       showError("Monto inválido");
       return;
+    }
+
+    // Convertir de USD a MXN si es necesario
+    let finalAmount = baseAmount;
+    let finalDescription = transactionForm.description;
+    if (currency === "USD") {
+      finalAmount = baseAmount * usdToMxnRate;
+      finalDescription += ` (Reg: $${baseAmount.toFixed(2)} USD a tasa $${usdToMxnRate.toFixed(2)} MXN)`;
     }
 
     setIsSubmitting(true);
     const txData = {
       user_id: user.id,
       type: transactionForm.type,
-      amount,
-      description: transactionForm.description,
+      amount: finalAmount,
+      description: finalDescription,
       date: editingTransaction ? editingTransaction.date : getLocalDateString(new Date()),
       income_category_id: transactionForm.type === "ingreso" ? transactionForm.selectedCategoryId : null,
       expense_category_id: transactionForm.type === "egreso" ? transactionForm.selectedCategoryId : null,
@@ -315,10 +342,26 @@ const Cash = () => {
                 <SelectContent><SelectItem value="ingreso">Ingreso</SelectItem><SelectItem value="egreso">Egreso</SelectItem></SelectContent>
               </Select>
             </div>
+            
             <div className="grid gap-2">
-              <Label>Monto</Label>
-              <Input value={transactionForm.amount} onChange={e => setTransactionForm({...transactionForm, amount: e.target.value})} className="rounded-xl h-10" placeholder="0.00" required />
+              <div className="flex justify-between items-center">
+                <Label>Monto</Label>
+                <div className="flex bg-muted p-0.5 rounded-lg text-xs gap-1">
+                  <button type="button" onClick={() => setCurrency("MXN")} className={cn("px-2 py-1 rounded-md font-bold transition-all", currency === "MXN" ? "bg-white text-indigo-900 shadow-sm" : "text-muted-foreground")}>MXN</button>
+                  <button type="button" onClick={() => setCurrency("USD")} className={cn("px-2 py-1 rounded-md font-bold transition-all", currency === "USD" ? "bg-white text-indigo-900 shadow-sm" : "text-muted-foreground")}>USD</button>
+                </div>
+              </div>
+              <div className="relative">
+                <Input value={transactionForm.amount} onChange={e => setTransactionForm({...transactionForm, amount: e.target.value})} className="rounded-xl h-10 pr-12" placeholder="0.00" required />
+                <span className="absolute right-3.5 top-2.5 text-xs text-muted-foreground font-black">{currency}</span>
+              </div>
+              {currency === "USD" && transactionForm.amount && (
+                <p className="text-[10px] text-indigo-700 font-bold flex items-center gap-1">
+                  <Coins className="h-3 w-3 animate-pulse" /> Equivale a ~ ${(parseFloat(transactionForm.amount) * usdToMxnRate || 0).toFixed(2)} MXN (tasa: ${usdToMxnRate.toFixed(2)})
+                </p>
+              )}
             </div>
+
             <div className="grid gap-2">
               <Label>Descripción</Label>
               <Input value={transactionForm.description} onChange={e => setTransactionForm({...transactionForm, description: e.target.value})} className="rounded-xl h-10" placeholder="Detalle..." required />

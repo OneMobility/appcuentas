@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { PlusCircle, DollarSign, Search, Scale, ArrowRightLeft, Wallet, CreditCard, AlertCircle, PiggyBank, CalendarDays } from "lucide-react";
+import { PlusCircle, DollarSign, Search, Scale, ArrowRightLeft, Wallet, CreditCard, AlertCircle, PiggyBank, CalendarDays, Coins } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { cn } from "@/lib/utils";
 import CardDisplay from "@/components/CardDisplay";
@@ -22,6 +22,7 @@ import DynamicLucideIcon from "@/components/DynamicLucideIcon";
 import { getLocalDateString, getStatementPeriod } from "@/utils/date-helpers";
 import { Checkbox } from "@/components/ui/checkbox";
 import { addMonths, parseISO, isWithinInterval, startOfMonth, endOfMonth } from "date-fns";
+import { fetchUsdToMxnRate } from "@/utils/currency-helper";
 
 const Cards = () => {
   const { user } = useSession();
@@ -54,11 +55,28 @@ const Cards = () => {
     selectedCategoryId: "",
   });
 
+  // Monedas y conversión
+  const [currency, setCurrency] = useState<"MXN" | "USD">("MXN");
+  const [usdToMxnRate, setUsdToMxnRate] = useState<number>(20.00);
+
   // Estados para diferir compras
   const [isDeferred, setIsDeferred] = useState(false);
   const [deferredType, setDeferredType] = useState<"msi" | "interest">("msi");
   const [installmentsCount, setInstallmentsCount] = useState("3");
   const [totalWithInterest, setTotalWithInterest] = useState("");
+
+  // Cargar tasa de cambio al abrir diálogo
+  useEffect(() => {
+    const fetchRate = async () => {
+      try {
+        const rate = await fetchUsdToMxnRate();
+        setUsdToMxnRate(rate);
+      } catch (e) {
+        console.error(e);
+      }
+    };
+    fetchRate();
+  }, [isAddTransactionDialogOpen]);
 
   const fetchAllData = async () => {
     if (!user) return;
@@ -144,28 +162,12 @@ const Cards = () => {
   const handleDeleteCard = async (cardId: string) => {
     if (!user) return;
     try {
-      // Eliminar transacciones asociadas primero para evitar violaciones de clave foránea
-      const { error: txError } = await supabase
-        .from('card_transactions')
-        .delete()
-        .eq('card_id', cardId);
+      const { error: txError } = await supabase.from('card_transactions').delete().eq('card_id', cardId);
       if (txError) throw txError;
-
-      // Eliminar apartados asociados
-      const { error: pocketError } = await supabase
-        .from('card_pockets')
-        .delete()
-        .eq('card_id', cardId);
+      const { error: pocketError } = await supabase.from('card_pockets').delete().eq('card_id', cardId);
       if (pocketError) throw pocketError;
-
-      // Eliminar la tarjeta
-      const { error: cardError } = await supabase
-        .from('cards')
-        .delete()
-        .eq('id', cardId)
-        .eq('user_id', user.id);
+      const { error: cardError } = await supabase.from('cards').delete().eq('id', cardId).eq('user_id', user.id);
       if (cardError) throw cardError;
-
       showSuccess("Tarjeta eliminada exitosamente.");
       fetchAllData();
     } catch (error: any) {
@@ -175,12 +177,29 @@ const Cards = () => {
 
   const handleTransactionSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedCard || !user) return;
-    
-    const baseAmount = evaluateExpression(newTransaction.amount) || 0;
-    if (baseAmount <= 0) { showError("Monto inválido"); return; }
+    if (!user || !card) return;
 
-    const isCreditCard = selectedCard.type === "credit";
+    let baseAmount: number;
+    if (newTransaction.amount.startsWith('=')) {
+      baseAmount = evaluateExpression(newTransaction.amount.substring(1)) || 0;
+    } else {
+      baseAmount = parseFloat(newTransaction.amount);
+    }
+
+    if (isNaN(baseAmount) || baseAmount <= 0) {
+      showError("Monto inválido");
+      return;
+    }
+
+    // Convertir de USD a MXN si se registra en dólares
+    let finalAmount = baseAmount;
+    let finalDescription = newTransaction.description;
+    if (currency === "USD") {
+      finalAmount = baseAmount * usdToMxnRate;
+      finalDescription += ` (Reg: $${baseAmount.toFixed(2)} USD a tasa $${usdToMxnRate.toFixed(2)} MXN)`;
+    }
+
+    const isCreditCard = card.type === "credit";
     const isCharge = newTransaction.type === "charge";
 
     // Lógica para diferir compras
@@ -191,17 +210,24 @@ const Cards = () => {
         return;
       }
 
-      let totalAmountToCharge = baseAmount;
-      let monthlyInstallmentAmount = baseAmount / count;
+      let totalAmountToCharge = finalAmount;
+      let monthlyInstallmentAmount = finalAmount / count;
 
       if (deferredType === "interest") {
-        const totalInterestVal = evaluateExpression(totalWithInterest) || 0;
-        if (totalInterestVal <= 0 || totalInterestVal < baseAmount) {
+        let rawInterest: number;
+        if (totalWithInterest.startsWith('=')) {
+          rawInterest = evaluateExpression(totalWithInterest.substring(1)) || 0;
+        } else {
+          rawInterest = parseFloat(totalWithInterest);
+        }
+        
+        let interestVal = currency === "USD" ? rawInterest * usdToMxnRate : rawInterest;
+        if (interestVal <= 0 || interestVal < finalAmount) {
           showError("El monto total con intereses debe ser mayor al monto original.");
           return;
         }
-        totalAmountToCharge = totalInterestVal;
-        monthlyInstallmentAmount = totalInterestVal / count;
+        totalAmountToCharge = interestVal;
+        monthlyInstallmentAmount = interestVal / count;
       }
 
       try {
@@ -214,10 +240,10 @@ const Cards = () => {
 
           transactionInserts.push({
             user_id: user.id,
-            card_id: selectedCard.id,
+            card_id: card.id,
             type: "charge",
             amount: monthlyInstallmentAmount,
-            description: `${newTransaction.description} (Mensualidad ${i + 1}/${count})`,
+            description: `${finalDescription} (Mensualidad ${i + 1}/${count})`,
             date: installmentDateStr,
             installments_total_amount: totalAmountToCharge,
             installments_count: count,
@@ -226,20 +252,11 @@ const Cards = () => {
           });
         }
 
-        // Insertar todas las mensualidades
-        const { error: txsError } = await supabase
-          .from('card_transactions')
-          .insert(transactionInserts);
-
+        const { error: txsError } = await supabase.from('card_transactions').insert(transactionInserts);
         if (txsError) throw txsError;
 
-        // Actualizar el saldo de la tarjeta con la deuda total diferida
-        const newBalance = selectedCard.current_balance + totalAmountToCharge;
-        const { error: cardError } = await supabase
-          .from('cards')
-          .update({ current_balance: newBalance })
-          .eq('id', selectedCard.id);
-
+        const newBalance = card.current_balance + totalAmountToCharge;
+        const { error: cardError } = await supabase.from('cards').update({ current_balance: newBalance }).eq('id', card.id);
         if (cardError) throw cardError;
 
         showSuccess(`Compra diferida a ${count} meses registrada exitosamente.`);
@@ -252,26 +269,26 @@ const Cards = () => {
     }
 
     // Lógica normal no diferida
-    let newBalance = selectedCard.current_balance;
-    if (selectedCard.type === "debit") {
-      newBalance = isCharge ? newBalance - baseAmount : newBalance + baseAmount;
+    let newBalance = card.current_balance;
+    if (card.type === "debit") {
+      newBalance = isCharge ? newBalance - finalAmount : newBalance + finalAmount;
     } else {
-      newBalance = isCharge ? newBalance + baseAmount : newBalance - baseAmount;
+      newBalance = isCharge ? newBalance + finalAmount : newBalance - finalAmount;
     }
 
     const { error } = await supabase.from('card_transactions').insert({
       user_id: user.id,
-      card_id: selectedCard.id,
+      card_id: card.id,
       type: newTransaction.type,
-      amount: baseAmount,
-      description: newTransaction.description,
+      amount: finalAmount,
+      description: finalDescription,
       date: getLocalDateString(new Date()),
       income_category_id: newTransaction.type === "payment" ? newTransaction.selectedCategoryId : null,
       expense_category_id: newTransaction.type === "charge" ? newTransaction.selectedCategoryId : null,
     });
 
     if (!error) {
-      await supabase.from('cards').update({ current_balance: newBalance }).eq('id', selectedCard.id);
+      await supabase.from('cards').update({ current_balance: newBalance }).eq('id', card.id);
       showSuccess("Movimiento registrado");
       setIsAddTransactionDialogOpen(false);
       fetchAllData();
@@ -302,16 +319,13 @@ const Cards = () => {
     (c.bank_name || "").toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  // Agrupar tarjetas por tipo
   const debitCards = useMemo(() => filteredCards.filter(c => c.type === "debit"), [filteredCards]);
   const creditCards = useMemo(() => filteredCards.filter(c => c.type === "credit"), [filteredCards]);
 
-  // Calcular métricas de resumen
   const totalDebitBalance = useMemo(() => cards.filter(c => c.type === "debit").reduce((s, c) => s + c.current_balance, 0), [cards]);
   const totalAvailableCredit = useMemo(() => cards.filter(c => c.type === "credit").reduce((s, c) => s + ((c.credit_limit || 0) - c.current_balance), 0), [cards]);
   const totalCreditDebtGlobal = useMemo(() => cards.filter(c => c.type === "credit").reduce((s, c) => s + c.current_balance, 0), [cards]);
 
-  // Calcular la deuda de crédito del mes actual (basado en el periodo de facturación de cada tarjeta)
   const totalCreditDebtMonth = useMemo(() => {
     const today = new Date();
     return cards
@@ -352,7 +366,7 @@ const Cards = () => {
           <CardContent><div className="text-xl font-bold">${totalCreditDebtMonth.toFixed(2)}</div></CardContent>
         </Card>
         <Card className="border-l-4 border-red-600 bg-red-50 text-red-800">
-          <CardHeader className="pb-2"><CardTitle className="text-xs font-medium flex items-center gap-2"><AlertCircle className="h-3 w-3" /> DEUDA CRÉDITO (GLOBAL)</CardTitle></CardHeader>
+          <CardHeader className="pb-2"><CardTitle className="text-xs font-medium flex items-center gap-2"><CalendarDays className="h-3 w-3" /> DEUDA CRÉDITO (GLOBAL)</CardTitle></CardHeader>
           <CardContent><div className="text-xl font-bold">${totalCreditDebtGlobal.toFixed(2)}</div></CardContent>
         </Card>
         <Card className="border-l-4 border-blue-600 bg-blue-50 text-blue-800">
@@ -389,6 +403,7 @@ const Cards = () => {
                 onAddTransaction={() => { 
                   setSelectedCard(card); 
                   setIsDeferred(false);
+                  setCurrency("MXN");
                   setNewTransaction({ type: "charge", amount: "", description: "", selectedCategoryId: "" });
                   setIsAddTransactionDialogOpen(true); 
                 }}
@@ -417,6 +432,7 @@ const Cards = () => {
                 onAddTransaction={() => { 
                   setSelectedCard(card); 
                   setIsDeferred(false);
+                  setCurrency("MXN");
                   setNewTransaction({ type: "charge", amount: "", description: "", selectedCategoryId: "" });
                   setIsAddTransactionDialogOpen(true); 
                 }}
@@ -482,10 +498,26 @@ const Cards = () => {
                 </SelectContent>
               </Select>
             </div>
+            
             <div className="grid gap-2">
-              <Label>Monto</Label>
-              <Input value={newTransaction.amount} onChange={e => setNewTransaction({...newTransaction, amount: e.target.value})} className="rounded-xl" placeholder="0.00" required />
+              <div className="flex justify-between items-center">
+                <Label>Monto</Label>
+                <div className="flex bg-muted p-0.5 rounded-lg text-xs gap-1">
+                  <button type="button" onClick={() => setCurrency("MXN")} className={cn("px-2 py-1 rounded-md font-bold transition-all", currency === "MXN" ? "bg-white text-indigo-900 shadow-sm" : "text-muted-foreground")}>MXN</button>
+                  <button type="button" onClick={() => setCurrency("USD")} className={cn("px-2 py-1 rounded-md font-bold transition-all", currency === "USD" ? "bg-white text-indigo-900 shadow-sm" : "text-muted-foreground")}>USD</button>
+                </div>
+              </div>
+              <div className="relative">
+                <Input value={newTransaction.amount} onChange={e => setNewTransaction({...newTransaction, amount: e.target.value})} className="rounded-xl pr-12" placeholder="0.00" required />
+                <span className="absolute right-3.5 top-2.5 text-xs text-muted-foreground font-black">{currency}</span>
+              </div>
+              {currency === "USD" && newTransaction.amount && (
+                <p className="text-[10px] text-indigo-700 font-bold flex items-center gap-1">
+                  <Coins className="h-3 w-3 animate-pulse" /> Equivale a ~ ${(parseFloat(newTransaction.amount) * usdToMxnRate || 0).toFixed(2)} MXN (tasa: ${usdToMxnRate.toFixed(2)})
+                </p>
+              )}
             </div>
+
             <div className="grid gap-2">
               <Label>Descripción</Label>
               <Input value={newTransaction.description} onChange={e => setNewTransaction({...newTransaction, description: e.target.value})} className="rounded-xl" required />

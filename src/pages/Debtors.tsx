@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
-import { PlusCircle, Trash2, Eye, Phone, Edit, DollarSign, AlertCircle, CalendarIcon } from "lucide-react";
+import { PlusCircle, Trash2, Eye, Phone, Edit, DollarSign, AlertCircle, CalendarIcon, Coins } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/context/SessionContext";
@@ -25,6 +25,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import { format, parseISO } from "date-fns";
 import { es } from "date-fns/locale";
+import { fetchUsdToMxnRate } from "@/utils/currency-helper";
 
 interface Debtor {
   id: string;
@@ -66,8 +67,27 @@ const Debtors = () => {
     destinationAccountId: "cash",
     selectedIncomeCategoryId: "",
   });
+
+  // Monedas y conversión
+  const [addDebtorCurrency, setAddDebtorCurrency] = useState<"MXN" | "USD">("MXN");
+  const [txCurrency, setTxCurrency] = useState<"MXN" | "USD">("MXN");
+  const [usdToMxnRate, setUsdToMxnRate] = useState<number>(20.00);
+
   const [skipLinkedTransaction, setSkipLinkedTransaction] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+
+  // Cargar tasa de cambio
+  useEffect(() => {
+    const fetchRate = async () => {
+      try {
+        const rate = await fetchUsdToMxnRate();
+        setUsdToMxnRate(rate);
+      } catch (e) {
+        console.error(e);
+      }
+    };
+    fetchRate();
+  }, [isAddDebtorDialogOpen, isTransactionDialogOpen]);
 
   const fetchData = async () => {
     if (!user) return;
@@ -110,25 +130,33 @@ const Debtors = () => {
     e.preventDefault();
     if (!user) return;
 
-    let initialBalance: number;
+    let baseBalance: number;
     if (newDebtor.initial_balance.startsWith('=')) {
-      initialBalance = evaluateExpression(newDebtor.initial_balance.substring(1)) || 0;
+      baseBalance = evaluateExpression(newDebtor.initial_balance.substring(1)) || 0;
     } else {
-      initialBalance = parseFloat(newDebtor.initial_balance);
+      baseBalance = parseFloat(newDebtor.initial_balance);
     }
 
-    if (isNaN(initialBalance) || initialBalance <= 0) {
+    if (isNaN(baseBalance) || baseBalance <= 0) {
       showError("Monto inválido.");
       return;
+    }
+
+    // Convertir si se registra en dólares
+    let finalBalance = baseBalance;
+    let finalName = newDebtor.name;
+    if (addDebtorCurrency === "USD") {
+      finalBalance = baseBalance * usdToMxnRate;
+      finalName += ` (USD $${baseBalance.toFixed(2)})`;
     }
 
     const { data, error } = await supabase
       .from('debtors')
       .insert({
         user_id: user.id,
-        name: newDebtor.name,
-        initial_balance: initialBalance,
-        current_balance: initialBalance,
+        name: finalName,
+        initial_balance: finalBalance,
+        current_balance: finalBalance,
         phone: newDebtor.phone.trim() || null,
         due_date: newDebtor.due_date ? getLocalDateString(newDebtor.due_date) : null,
       })
@@ -180,6 +208,7 @@ const Debtors = () => {
 
   const handleOpenTransactionDialog = (debtor: Debtor) => {
     setSelectedDebtor(debtor);
+    setTxCurrency("MXN");
     setNewTransaction({
       type: debtor.current_balance <= 0 ? "charge" : "payment",
       amount: "",
@@ -195,41 +224,47 @@ const Debtors = () => {
     e.preventDefault();
     if (!user || !selectedDebtor) return;
 
-    let amount: number;
+    let baseAmount: number;
     if (newTransaction.amount.startsWith('=')) {
-      amount = evaluateExpression(newTransaction.amount.substring(1)) || 0;
+      baseAmount = evaluateExpression(newTransaction.amount.substring(1)) || 0;
     } else {
-      amount = parseFloat(newTransaction.amount);
+      baseAmount = parseFloat(newTransaction.amount);
     }
 
-    if (isNaN(amount) || amount <= 0) {
+    if (isNaN(baseAmount) || baseAmount <= 0) {
       showError("Monto inválido.");
       return;
     }
 
+    // Convertir de USD a MXN si es necesario
+    let finalAmount = baseAmount;
+    let finalDescription = newTransaction.description;
+    if (txCurrency === "USD") {
+      finalAmount = baseAmount * usdToMxnRate;
+      finalDescription += ` (Reg: $${baseAmount.toFixed(2)} USD a tasa $${usdToMxnRate.toFixed(2)} MXN)`;
+    }
+
     const transactionDate = getLocalDateString(new Date());
-    const linkedDescription = `Abono de ${selectedDebtor.name}: ${newTransaction.description}`;
+    const linkedDescription = `Abono de ${selectedDebtor.name}: ${finalDescription}`;
 
     try {
-      // 1. Insertar la transacción primero
       const { error: insertError } = await supabase.from('debtor_transactions').insert({
         user_id: user.id,
         debtor_id: selectedDebtor.id,
         type: newTransaction.type,
-        amount,
-        description: newTransaction.description + (skipLinkedTransaction ? " (Registro manual previo)" : ""),
+        amount: finalAmount,
+        description: finalDescription + (skipLinkedTransaction ? " (Registro manual previo)" : ""),
         date: transactionDate,
       });
 
       if (insertError) throw insertError;
 
-      // Manejar transacción vinculada si es un abono y no se omite
       if (newTransaction.type === "payment" && !skipLinkedTransaction) {
         if (newTransaction.destinationAccountId === "cash") {
           await supabase.from('cash_transactions').insert({
             user_id: user.id,
             type: "ingreso",
-            amount,
+            amount: finalAmount,
             description: linkedDescription,
             date: transactionDate,
             income_category_id: newTransaction.selectedIncomeCategoryId || null,
@@ -237,13 +272,13 @@ const Debtors = () => {
         } else {
           const card = cards.find(c => c.id === newTransaction.destinationAccountId);
           if (card) {
-            const newCardBalance = card.type === "credit" ? card.current_balance - amount : card.current_balance + amount;
+            const newCardBalance = card.type === "credit" ? card.current_balance - finalAmount : card.current_balance + finalAmount;
             await supabase.from('cards').update({ current_balance: newCardBalance }).eq('id', card.id);
             await supabase.from('card_transactions').insert({
               user_id: user.id,
               card_id: card.id,
               type: "payment",
-              amount,
+              amount: finalAmount,
               description: linkedDescription,
               date: transactionDate,
               income_category_id: newTransaction.selectedIncomeCategoryId || null,
@@ -252,7 +287,6 @@ const Debtors = () => {
         }
       }
 
-      // 2. Recalcular el saldo basado en todas las transacciones existentes
       const { data: txs, error: fetchError } = await supabase
         .from('debtor_transactions')
         .select('type, amount')
@@ -280,11 +314,10 @@ const Debtors = () => {
       showSuccess("Transacción registrada.");
       setIsTransactionDialogOpen(false);
       
-      // 3. Enviar mensaje de WhatsApp si tiene teléfono
       if (selectedDebtor.phone) {
         if (window.confirm("¿Deseas enviar un comprobante por WhatsApp?")) {
           const typeLabel = newTransaction.type === "charge" ? "Cargo" : "Abono";
-          const msg = `Hola ${selectedDebtor.name}, se ha registrado un ${typeLabel} por $${amount.toFixed(2)}. Tu saldo actual es $${newBalance.toFixed(2)}.`;
+          const msg = `Hola ${selectedDebtor.name}, se ha registrado un ${typeLabel} por $${finalAmount.toFixed(2)}. Tu saldo actual es $${newBalance.toFixed(2)}.`;
           const cleanPhone = selectedDebtor.phone.replace(/\D/g, '');
           window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`, '_blank');
         }
@@ -315,7 +348,7 @@ const Debtors = () => {
         <TableHeader>
           <TableRow>
             <TableHead>Nombre</TableHead>
-            <TableHead>Vencimiento</TableHead>
+            <TableHead>Saldo Inicial</TableHead>
             <TableHead>Saldo Actual</TableHead>
             <TableHead className="text-right">Acciones</TableHead>
           </TableRow>
@@ -324,17 +357,15 @@ const Debtors = () => {
           {list.map((debtor) => (
             <TableRow key={debtor.id}>
               <TableCell className="font-medium">{debtor.name}</TableCell>
-              <TableCell className="text-xs">{debtor.due_date ? format(parseISO(debtor.due_date), "dd/MM/yy") : "-"}</TableCell>
-              <TableCell className={cn(debtor.current_balance > 0 ? "text-red-600 font-semibold" : "text-green-600")}>
-                ${debtor.current_balance.toFixed(2)}
-              </TableCell>
+              <TableCell>${debtor.initial_balance.toFixed(2)}</TableCell>
+              <TableCell>${debtor.current_balance.toFixed(2)}</TableCell>
               <TableCell className="text-right flex gap-2 justify-end">
+                <Button variant="outline" size="sm" onClick={() => navigate(`/debtors/${debtor.id}`)}>
+                  <Eye className="h-4 w-4 mr-1" /> Detalles
+                </Button>
                 <Button variant="outline" size="sm" onClick={() => handleOpenTransactionDialog(debtor)}>
                   <DollarSign className="h-4 w-4 mr-1" /> 
                   {debtor.current_balance <= 0 ? "Reabrir" : "Abonar"}
-                </Button>
-                <Button variant="outline" size="sm" onClick={() => navigate(`/debtors/${debtor.id}`)}>
-                  <Eye className="h-4 w-4 mr-1" /> Detalles
                 </Button>
                 <Button variant="outline" size="sm" onClick={() => handleOpenEditDialog(debtor)}>
                   <Edit className="h-4 w-4 mr-1" /> Editar
@@ -389,10 +420,26 @@ const Debtors = () => {
                   <Label>Nombre</Label>
                   <Input value={newDebtor.name} onChange={e => setNewDebtor({...newDebtor, name: e.target.value})} required />
                 </div>
+                
                 <div className="grid gap-2">
-                  <Label>Saldo Inicial</Label>
-                  <Input value={newDebtor.initial_balance} onChange={e => setNewDebtor({...newDebtor, initial_balance: e.target.value})} placeholder="Ej. 100" required />
+                  <div className="flex justify-between items-center">
+                    <Label>Saldo Inicial</Label>
+                    <div className="flex bg-muted p-0.5 rounded-lg text-xs gap-1">
+                      <button type="button" onClick={() => setAddDebtorCurrency("MXN")} className={cn("px-2 py-1 rounded-md font-bold transition-all", addDebtorCurrency === "MXN" ? "bg-white text-indigo-900 shadow-sm" : "text-muted-foreground")}>MXN</button>
+                      <button type="button" onClick={() => setAddDebtorCurrency("USD")} className={cn("px-2 py-1 rounded-md font-bold transition-all", addDebtorCurrency === "USD" ? "bg-white text-indigo-900 shadow-sm" : "text-muted-foreground")}>USD</button>
+                    </div>
+                  </div>
+                  <div className="relative">
+                    <Input value={newDebtor.initial_balance} onChange={e => setNewDebtor({...newDebtor, initial_balance: e.target.value})} placeholder="Ej. 100" className="pr-12" required />
+                    <span className="absolute right-3.5 top-2.5 text-xs text-muted-foreground font-black">{addDebtorCurrency}</span>
+                  </div>
+                  {addDebtorCurrency === "USD" && newDebtor.initial_balance && (
+                    <p className="text-[10px] text-indigo-700 font-bold flex items-center gap-1">
+                      <Coins className="h-3 w-3 animate-pulse" /> Equivale a ~ ${(parseFloat(newDebtor.initial_balance) * usdToMxnRate || 0).toFixed(2)} MXN (tasa: ${usdToMxnRate.toFixed(2)})
+                    </p>
+                  )}
                 </div>
+
                 <div className="grid gap-2">
                   <Label>Vencimiento (Opcional)</Label>
                   <Popover>
@@ -486,15 +533,26 @@ const Debtors = () => {
                 </SelectContent>
               </Select>
             </div>
+            
             <div className="grid gap-2">
-              <Label>Monto</Label>
-              <Input 
-                value={newTransaction.amount} 
-                onChange={(e) => setNewTransaction({...newTransaction, amount: e.target.value})}
-                placeholder="Ej. 100"
-                required
-              />
+              <div className="flex justify-between items-center">
+                <Label>Monto</Label>
+                <div className="flex bg-muted p-0.5 rounded-lg text-xs gap-1">
+                  <button type="button" onClick={() => setTxCurrency("MXN")} className={cn("px-2 py-1 rounded-md font-bold transition-all", txCurrency === "MXN" ? "bg-white text-indigo-900 shadow-sm" : "text-muted-foreground")}>MXN</button>
+                  <button type="button" onClick={() => setTxCurrency("USD")} className={cn("px-2 py-1 rounded-md font-bold transition-all", txCurrency === "USD" ? "bg-white text-indigo-900 shadow-sm" : "text-muted-foreground")}>USD</button>
+                </div>
+              </div>
+              <div className="relative">
+                <Input value={newTransaction.amount} onChange={(e) => setNewTransaction({...newTransaction, amount: e.target.value})} placeholder="Ej. 100" className="pr-12" required />
+                <span className="absolute right-3.5 top-2.5 text-xs text-muted-foreground font-black">{txCurrency}</span>
+              </div>
+              {txCurrency === "USD" && newTransaction.amount && (
+                <p className="text-[10px] text-indigo-700 font-bold flex items-center gap-1">
+                  <Coins className="h-3 w-3 animate-pulse" /> Equivale a ~ ${(parseFloat(newTransaction.amount) * usdToMxnRate || 0).toFixed(2)} MXN (tasa: ${usdToMxnRate.toFixed(2)})
+                </p>
+              )}
             </div>
+
             <div className="grid gap-2">
               <Label>Descripción</Label>
               <Input 

@@ -2,16 +2,16 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Home, Users, DollarSign, RefreshCw, PiggyBank, CheckCircle2, CalendarIcon, AlertCircle } from "lucide-react";
+import { Home, Users, DollarSign, RefreshCw, PiggyBank, CalendarIcon, ArrowRightLeft, Coins } from "lucide-react";
 import { useCategoryContext } from "@/context/CategoryContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/context/SessionContext";
 import { showError, showSuccess } from "@/utils/toast";
-import { format, isBefore, isSameDay, addDays, startOfMonth, endOfMonth, parseISO, isWithinInterval } from "date-fns";
+import { format, startOfMonth, endOfMonth, parseISO, isWithinInterval } from "date-fns";
 import { es } from "date-fns/locale";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { getUpcomingPaymentDueDate, isPaymentDoneForCurrentStatement, getLocalDateString } from "@/utils/date-helpers";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import GroupedPaymentDueDatesCard from "@/components/GroupedPaymentDueDatesCard";
 import { cn } from "@/lib/utils";
 import CreditCardsChart from "@/components/CreditCardsChart";
@@ -19,9 +19,9 @@ import CategoryPieChart from "@/components/CategoryPieChart";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { fetchUsdToMxnRate } from "@/utils/currency-helper";
 
 export interface CardData {
   id: string;
@@ -55,12 +55,64 @@ const Dashboard = () => {
   const [paymentDate, setPaymentDate] = useState<Date>(new Date());
   const [manualPayments, setManualPayments] = useState<Record<string, string>>({});
 
+  // Estados del conversor de divisas
+  const [exchangeRate, setExchangeRate] = useState<number>(20.00);
+  const [usdInput, setUsdInput] = useState<string>("1");
+  const [mxnInput, setMxnInput] = useState<string>("20.00");
+  const [isRateLoading, setIsRateLoading] = useState(false);
+
   useEffect(() => {
     const saved = localStorage.getItem('oinkash_manual_payments');
     if (saved) {
       try { setManualPayments(JSON.parse(saved)); } catch (e) { setManualPayments({}); }
     }
   }, [refreshKey]);
+
+  // Cargar tasa de cambio
+  const loadExchangeRate = async () => {
+    setIsRateLoading(true);
+    try {
+      const rate = await getUpcomingPaymentDueDate ? await getUpcomingPaymentDueDate(1, 1) : null; // check if helper works
+      const cleanRate = await getUpcomingCutOffDate ? await getUpcomingCutOffDate(1) : null; 
+      
+      const val = await supabase.functions.invoke ? 1 : 1; // dummy check
+      
+      // Llamamos a nuestro helper de Supabase/tipo cambio
+      const rateVal = await getExchangeRateValue();
+      setExchangeRate(rateVal);
+      // Actualizar el valor MXN en base a la tasa
+      const usdNum = parseFloat(usdInput) || 0;
+      setMxnInput((usdNum * rateVal).toFixed(2));
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsRateLoading(false);
+    }
+  };
+
+  const getExchangeRateValue = async () => {
+    try {
+      return await fetchUsdToMxnRate();
+    } catch {
+      return 20.00;
+    }
+  };
+
+  useEffect(() => {
+    loadExchangeRate();
+  }, [refreshKey]);
+
+  const handleUsdChange = (val: string) => {
+    setUsdInput(val);
+    const usdNum = parseFloat(val) || 0;
+    setMxnInput((usdNum * exchangeRate).toFixed(2));
+  };
+
+  const handleMxnChange = (val: string) => {
+    setMxnInput(val);
+    const mxnNum = parseFloat(val) || 0;
+    setUsdInput((mxnNum / exchangeRate).toFixed(2));
+  };
 
   const fetchDashboardData = async () => {
     if (!user) return;
@@ -96,7 +148,6 @@ const Dashboard = () => {
 
     const processTx = (tx: any, isCash: boolean) => {
       const date = parseISO(tx.date);
-      // Usamos isWithinInterval de date-fns directamente
       if (!isWithinInterval(date, { start, end })) return;
 
       const catId = isCash 
@@ -154,8 +205,55 @@ const Dashboard = () => {
         </Button>
       </div>
 
-      <div className="px-1">
-        <GroupedPaymentDueDatesCard cards={cards} />
+      <div className="grid gap-4 lg:grid-cols-3 px-1">
+        <div className="lg:col-span-2">
+          <GroupedPaymentDueDatesCard cards={cards} />
+        </div>
+        
+        {/* Widget del Convertidor de Divisas */}
+        <Card className="border-none shadow-sm bg-indigo-50/50">
+          <CardHeader className="p-4 pb-2 flex flex-row items-center justify-between">
+            <CardTitle className="text-sm font-bold flex items-center gap-1.5 text-indigo-900">
+              <Coins className="h-4 w-4 text-indigo-600" /> Conversor de Divisas
+            </CardTitle>
+            <span className="text-[10px] bg-indigo-100 text-indigo-800 font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+              USD/MXN: ${exchangeRate.toFixed(4)}
+              {isRateLoading && <RefreshCw className="h-2.5 w-2.5 animate-spin" />}
+            </span>
+          </CardHeader>
+          <CardContent className="p-4 pt-1 space-y-3">
+            <div className="flex items-center gap-2">
+              <div className="grid gap-1.5 flex-1">
+                <Label htmlFor="usdInput" className="text-[10px] font-bold text-indigo-950">USD ($)</Label>
+                <div className="relative">
+                  <Input 
+                    id="usdInput"
+                    type="number"
+                    value={usdInput}
+                    onChange={(e) => handleUsdChange(e.target.value)}
+                    className="rounded-xl h-9 text-xs pl-6 bg-white border-indigo-200 focus-visible:ring-indigo-400"
+                  />
+                  <span className="absolute left-2.5 top-2 text-xs text-muted-foreground">$</span>
+                </div>
+              </div>
+              <ArrowRightLeft className="h-4 w-4 text-indigo-400 mt-5" />
+              <div className="grid gap-1.5 flex-1">
+                <Label htmlFor="mxnInput" className="text-[10px] font-bold text-indigo-950">MXN ($)</Label>
+                <div className="relative">
+                  <Input 
+                    id="mxnInput"
+                    type="number"
+                    value={mxnInput}
+                    onChange={(e) => handleMxnChange(e.target.value)}
+                    className="rounded-xl h-9 text-xs pl-6 bg-white border-indigo-200 focus-visible:ring-indigo-400"
+                  />
+                  <span className="absolute left-2.5 top-2 text-xs text-muted-foreground">$</span>
+                </div>
+              </div>
+            </div>
+            <p className="text-[9px] text-indigo-700 italic text-center">Tasa obtenida en tiempo real de Open Exchange Rates.</p>
+          </CardContent>
+        </Card>
       </div>
 
       <div className="grid gap-3 grid-cols-2 lg:grid-cols-4 px-1">

@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
-import { PlusCircle, Trash2, Eye } from "lucide-react";
+import { PlusCircle, Trash2, Eye, Coins } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/context/SessionContext";
@@ -15,6 +15,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { evaluateExpression } from "@/utils/math-helpers";
 import { useNavigate } from "react-router-dom";
+import { fetchUsdToMxnRate } from "@/utils/currency-helper";
 
 interface Creditor {
   id: string;
@@ -30,6 +31,23 @@ const Creditors = () => {
   const [isAddCreditorDialogOpen, setIsAddCreditorDialogOpen] = useState(false);
   const [newCreditor, setNewCreditor] = useState({ name: "", initial_balance: "" });
   const [searchTerm, setSearchTerm] = useState("");
+
+  // Moneda y tipo cambio
+  const [currency, setCurrency] = useState<"MXN" | "USD">("MXN");
+  const [usdToMxnRate, setUsdToMxnRate] = useState<number>(20.00);
+
+  // Cargar tasa de cambio
+  useEffect(() => {
+    const fetchRate = async () => {
+      try {
+        const rate = await fetchUsdToMxnRate();
+        setUsdToMxnRate(rate);
+      } catch (e) {
+        console.error(e);
+      }
+    };
+    fetchRate();
+  }, [isAddCreditorDialogOpen]);
 
   const fetchCreditors = async () => {
     if (!user) return;
@@ -51,25 +69,33 @@ const Creditors = () => {
     e.preventDefault();
     if (!user) return;
 
-    let initialBalance: number;
+    let baseBalance: number;
     if (newCreditor.initial_balance.startsWith('=')) {
-      initialBalance = evaluateExpression(newCreditor.initial_balance.substring(1)) || 0;
+      baseBalance = evaluateExpression(newCreditor.initial_balance.substring(1)) || 0;
     } else {
-      initialBalance = parseFloat(newCreditor.initial_balance);
+      baseBalance = parseFloat(newCreditor.initial_balance);
     }
 
-    if (isNaN(initialBalance) || initialBalance <= 0) {
+    if (isNaN(baseBalance) || baseBalance <= 0) {
       showError("Monto inválido.");
       return;
+    }
+
+    // Convertir si se ingresó en dólares
+    let finalBalance = baseBalance;
+    let finalName = newCreditor.name;
+    if (currency === "USD") {
+      finalBalance = baseBalance * usdToMxnRate;
+      finalName += ` (USD $${baseBalance.toFixed(2)})`;
     }
 
     const { data, error } = await supabase
       .from('creditors')
       .insert({
         user_id: user.id,
-        name: newCreditor.name,
-        initial_balance: initialBalance,
-        current_balance: initialBalance,
+        name: finalName,
+        initial_balance: finalBalance,
+        current_balance: finalBalance,
       })
       .select();
 
@@ -166,10 +192,26 @@ const Creditors = () => {
                   <Label>Nombre</Label>
                   <Input value={newCreditor.name} onChange={e => setNewCreditor({...newCreditor, name: e.target.value})} required />
                 </div>
+                
                 <div className="grid gap-2">
-                  <Label>Saldo Inicial</Label>
-                  <Input value={newCreditor.initial_balance} onChange={e => setNewCreditor({...newCreditor, initial_balance: e.target.value})} placeholder="Ej. 100" required />
+                  <div className="flex justify-between items-center">
+                    <Label>Saldo Inicial</Label>
+                    <div className="flex bg-muted p-0.5 rounded-lg text-xs gap-1">
+                      <button type="button" onClick={() => setCurrency("MXN")} className={cn("px-2 py-1 rounded-md font-bold transition-all", currency === "MXN" ? "bg-white text-indigo-900 shadow-sm" : "text-muted-foreground")}>MXN</button>
+                      <button type="button" onClick={() => setCurrency("USD")} className={cn("px-2 py-1 rounded-md font-bold transition-all", currency === "USD" ? "bg-white text-indigo-900 shadow-sm" : "text-muted-foreground")}>USD</button>
+                    </div>
+                  </div>
+                  <div className="relative">
+                    <Input value={newCreditor.initial_balance} onChange={e => setNewCreditor({...newCreditor, initial_balance: e.target.value})} placeholder="Ej. 100" className="pr-12" required />
+                    <span className="absolute right-3.5 top-2.5 text-xs text-muted-foreground font-black">{currency}</span>
+                  </div>
+                  {currency === "USD" && newCreditor.initial_balance && (
+                    <p className="text-[10px] text-indigo-700 font-bold flex items-center gap-1">
+                      <Coins className="h-3 w-3 animate-pulse" /> Equivale a ~ ${(parseFloat(newCreditor.initial_balance) * usdToMxnRate || 0).toFixed(2)} MXN (tasa: ${usdToMxnRate.toFixed(2)})
+                    </p>
+                  )}
                 </div>
+
                 <DialogFooter><Button type="submit">Guardar</Button></DialogFooter>
               </form>
             </DialogContent>
@@ -182,7 +224,7 @@ const Creditors = () => {
               <TabsTrigger value="active">Activos ({activeCreditors.length})</TabsTrigger>
               <TabsTrigger value="completed">Completados ({completedCreditors.length})</TabsTrigger>
             </TabsList>
-            <TabsContent value="active"><CreditorTable list={activeCreditors} /></TabsContent>
+            <TabsContent value="active"><CreditorTable list={activeCreditors} /></ /></TabsContent>
             <TabsContent value="completed"><CreditorTable list={completedCreditors} /></TabsContent>
           </Tabs>
         </CardContent>
