@@ -224,8 +224,12 @@ const Creditors = () => {
               <TabsTrigger value="active">Activos ({activeCreditors.length})</TabsTrigger>
               <TabsTrigger value="completed">Completados ({completedCreditors.length})</TabsTrigger>
             </TabsList>
-            <TabsContent value="active"><CreditorTable list={activeCreditors} /></ /></TabsContent>
-            <TabsContent value="completed"><CreditorTable list={completedCreditors} /></TabsContent>
+            <TabsContent value="active">
+              <CreditorTable list={activeCreditors} />
+            </TabsContent>
+            <TabsContent value="completed">
+              <CreditorTable list={completedCreditors} />
+            </TabsContent>
           </Tabs>
         </CardContent>
       </Card>
