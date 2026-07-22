@@ -15,6 +15,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import IconPicker from "@/components/IconPicker"; // Importar IconPicker
 import * as LucideIcons from "lucide-react"; // Importar todos los iconos de Lucide
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"; // Importar componentes de Tabs
+import { getContrastColor } from "@/utils/color-helpers";
 
 const Categories = () => {
   const { incomeCategories, expenseCategories, addCategory, updateCategory, deleteCategory, isLoadingCategories } = useCategoryContext();
@@ -239,7 +240,17 @@ const Categories = () => {
                         const IconComponent = getIconComponent(cat.icon);
                         return (
                           <TableRow key={cat.id}>
-                            <TableCell><IconComponent className="h-4 w-4" /></TableCell>
+                            <TableCell>
+                              <div 
+                                className="h-8 w-8 rounded-full flex items-center justify-center shadow-sm" 
+                                style={{ 
+                                  backgroundColor: cat.color || '#cbd5e1', 
+                                  color: getContrastColor(cat.color || '#cbd5e1') 
+                                }}
+                              >
+                                <IconComponent className="h-4 w-4" />
+                              </div>
+                            </TableCell>
                             <TableCell>{cat.name}</TableCell>
                             <TableCell>
                               <div
@@ -315,7 +326,17 @@ const Categories = () => {
                         const IconComponent = getIconComponent(cat.icon);
                         return (
                           <TableRow key={cat.id}>
-                            <TableCell><IconComponent className="h-4 w-4" /></TableCell>
+                            <TableCell>
+                              <div 
+                                className="h-8 w-8 rounded-full flex items-center justify-center shadow-sm" 
+                                style={{ 
+                                  backgroundColor: cat.color || '#cbd5e1', 
+                                  color: getContrastColor(cat.color || '#cbd5e1') 
+                                }}
+                              >
+                                <IconComponent className="h-4 w-4" />
+                              </div>
+                            </TableCell>
                             <TableCell>{cat.name}</TableCell>
                             <TableCell>
                               <div

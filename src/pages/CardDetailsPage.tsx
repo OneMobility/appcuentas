@@ -740,7 +740,10 @@ const CardDetailsPage: React.FC = () => {
                                 <TableCell className="pl-4 py-2.5">
                                   <div 
                                     className="h-7 w-7 rounded-full flex items-center justify-center shadow-sm" 
-                                    style={{ backgroundColor: `${category?.color || '#cbd5e1'}20`, color: category?.color || '#64748b' }}
+                                    style={{ 
+                                      backgroundColor: category?.color || '#cbd5e1', 
+                                      color: getContrastColor(category?.color || '#cbd5e1') 
+                                    }}
                                   >
                                     <DynamicLucideIcon iconName={category?.icon || "Tag"} className="h-3.5 w-3.5" />
                                   </div>
