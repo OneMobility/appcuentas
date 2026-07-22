@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { CheckCircle2, CalendarIcon, ChevronDown, ChevronUp } from "lucide-react";
+import { CheckCircle2, CalendarIcon, ChevronDown, ChevronUp, AlertCircle } from "lucide-react";
 import { format, differenceInDays } from "date-fns";
 import { es } from "date-fns/locale";
 import { cn } from "@/lib/utils";
@@ -31,6 +31,7 @@ const GroupedPaymentDueDatesCard: React.FC<GroupedPaymentDueDatesCardProps> = ({
   today.setHours(0, 0, 0, 0);
 
   const [manualPayments, setManualPayments] = useState<Record<string, string>>({});
+  const [isExpanded, setIsExpanded] = useState(false);
   const [showCompleted, setShowCompleted] = useState(false);
 
   useEffect(() => {
@@ -88,18 +89,15 @@ const GroupedPaymentDueDatesCard: React.FC<GroupedPaymentDueDatesCardProps> = ({
   const pendingTasks = paymentTasks.filter(t => !t.isPaid);
   const completedTasks = paymentTasks.filter(t => t.isPaid);
 
-  const cardBaseClasses = "relative p-4 shadow-sm border-none bg-blue-50/50 text-blue-900";
+  const cardBaseClasses = "relative p-3 shadow-sm border-none bg-blue-50/50 text-blue-900 transition-all duration-200";
 
   if (paymentTasks.length === 0) {
     return (
       <Card className={cardBaseClasses}>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-lg font-bold text-blue-900">Lista de Pagos</CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-col items-center pr-4 md:block md:pr-48">
-          <img src="https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Cochinito%20Calendario.png" alt="Calendario" className="h-[180px] w-[180px] mb-4 md:absolute md:top-[-10px] md:right-4 md:z-10" />
-          <div className="text-lg font-bold text-center md:text-left">
-            No tienes tarjetas de crédito<br />configuradas para pagos.
+        <CardContent className="p-2 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="h-5 w-5 text-blue-600 shrink-0" />
+            <span className="text-xs font-bold text-blue-950">No tienes tarjetas de crédito configuradas para pagos.</span>
           </div>
         </CardContent>
       </Card>
@@ -171,33 +169,59 @@ const GroupedPaymentDueDatesCard: React.FC<GroupedPaymentDueDatesCardProps> = ({
 
   return (
     <Card className={cardBaseClasses}>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-base font-bold text-blue-900">Lista de Pagos</CardTitle>
-      </CardHeader>
-      <CardContent className="flex flex-col items-center pr-4 md:block md:pr-48">
-        <img src="https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Cochinito%20Calendario.png" alt="Calendario" className="h-[140px] w-[180px] mb-2 md:absolute md:top-[-10px] md:right-4 md:z-10 object-contain" />
-        
-        <div className="w-full space-y-2 mt-1">
+      {/* Cabecera Desplegable Compacta */}
+      <div 
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="flex items-center justify-between cursor-pointer p-1 select-none"
+      >
+        <div className="flex items-center gap-2">
+          <div className={cn(
+            "p-1.5 rounded-lg transition-colors",
+            pendingTasks.length > 0 ? "bg-amber-100 text-amber-800" : "bg-green-100 text-green-800"
+          )}>
+            <CheckCircle2 className="h-4 w-4" />
+          </div>
+          <div>
+            <h3 className="text-sm font-bold text-blue-950">Lista de Pagos</h3>
+            <p className="text-[11px] text-blue-700 font-medium">
+              {pendingTasks.length > 0 
+                ? `Tienes ${pendingTasks.length} pago${pendingTasks.length > 1 ? 's' : ''} pendiente${pendingTasks.length > 1 ? 's' : ''}`
+                : "¡Al corriente! Sin pagos pendientes"
+              }
+            </p>
+          </div>
+        </div>
+        <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-900 hover:bg-blue-100/50 rounded-full">
+          {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+        </Button>
+      </div>
+
+      {/* Contenido Desplegable */}
+      {isExpanded && (
+        <CardContent className="p-1 pt-3 flex flex-col gap-2 border-t border-blue-100/50 mt-2">
           {/* Sección de Pendientes */}
           {pendingTasks.length > 0 ? (
             <div className="space-y-1.5">
               {pendingTasks.map(renderTaskRow)}
             </div>
           ) : (
-            <div className="text-center md:text-left py-2">
-              <p className="text-xs text-green-700 font-bold flex items-center gap-1 justify-center md:justify-start">
-                <CheckCircle2 className="h-4 w-4 text-green-600" /> ¡Al corriente! No tienes pagos pendientes.
+            <div className="text-center py-2 bg-white/40 rounded-xl border border-dashed border-blue-100">
+              <p className="text-xs text-green-700 font-bold flex items-center gap-1 justify-center">
+                <CheckCircle2 className="h-3.5 w-3.5 text-green-600" /> ¡Todo pagado por ahora!
               </p>
             </div>
           )}
 
-          {/* Sección de Completados (Colapsable) */}
+          {/* Sección de Completados (Colapsable Interno) */}
           {completedTasks.length > 0 && (
-            <div className="pt-1 border-t border-blue-100/50">
+            <div className="pt-1 border-t border-blue-100/30">
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => setShowCompleted(!showCompleted)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowCompleted(!showCompleted);
+                }}
                 className="h-7 px-2 text-[10px] font-bold text-blue-700 hover:bg-blue-100/30 flex items-center gap-1 w-full justify-between"
               >
                 <span>Pagos completados ({completedTasks.length})</span>
@@ -211,8 +235,8 @@ const GroupedPaymentDueDatesCard: React.FC<GroupedPaymentDueDatesCardProps> = ({
               )}
             </div>
           )}
-        </div>
-      </CardContent>
+        </CardContent>
+      )}
     </Card>
   );
 };
