@@ -101,8 +101,8 @@ const CardDisplay: React.FC<CardDisplayProps> = ({ card, onAddTransaction, onDel
   const isVisa = parseInt(card.last_four_digits) % 2 === 0;
 
   const networkLogoUrl = isVisa 
-    ? "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Visa.png"
-    : "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Mastercard.png";
+    ? "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Iconos/VISA.png"
+    : "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Iconos/MASTERCARD.png";
 
   return (
     <div className="w-full max-w-sm mx-auto h-[240px] perspective-1000">

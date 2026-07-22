@@ -498,8 +498,8 @@ const CardDetailsPage: React.FC = () => {
 
   const networkLogoUrl = useMemo(() => {
     return isVisa 
-      ? "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Visa.png"
-      : "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Mastercard.png";
+      ? "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Iconos/VISA.png"
+      : "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Iconos/MASTERCARD.png";
   }, [isVisa]);
 
   if (isLoading) return <LoadingSpinner />;
