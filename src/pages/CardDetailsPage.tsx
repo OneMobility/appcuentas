@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { DollarSign, ArrowLeft, FileDown, FileText, ChevronLeft, ChevronRight, Scale, Search, Filter, Trash2, Edit, Image as ImageIcon, CalendarDays, Eye, FastForward, PiggyBank, Wallet, Coins } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { cn } from "@/lib/utils";
-import { format, parseISO, isWithinInterval, startOfMonth, endOfMonth, addMonths, subMonths } from "date-fns";
+import { format, parseISO, isWithinInterval, startOfMonth, endOfMonth, addMonths, subMonths, isSameDay } from "date-fns";
 import { es } from "date-fns/locale";
 import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/context/SessionContext";
@@ -127,6 +127,44 @@ const CardDetailsPage: React.FC = () => {
       return matchesDate && matchesSearch && matchesType;
     });
   }, [transactionsWithBalance, filterInterval, searchTerm, filterType]);
+
+  // Agrupar transacciones por día
+  const groupedTransactions = useMemo(() => {
+    const groups: Record<string, any[]> = {};
+    filteredTransactions.forEach(tx => {
+      const dateStr = tx.date; // Formato YYYY-MM-DD
+      if (!groups[dateStr]) {
+        groups[dateStr] = [];
+      }
+      groups[dateStr].push(tx);
+    });
+    return groups;
+  }, [filteredTransactions]);
+
+  // Obtener las fechas ordenadas de forma descendente
+  const sortedDateKeys = useMemo(() => {
+    return Object.keys(groupedTransactions).sort((a, b) => b.localeCompare(a));
+  }, [groupedTransactions]);
+
+  // Formatear el encabezado del grupo de fecha
+  const formatGroupHeader = (dateStr: string) => {
+    const date = parseISO(dateStr);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+
+    const txDate = new Date(date);
+    txDate.setHours(0, 0, 0, 0);
+
+    if (isSameDay(txDate, today)) {
+      return "Hoy";
+    } else if (isSameDay(txDate, yesterday)) {
+      return "Ayer";
+    } else {
+      return format(date, "eeee, d 'de' MMMM", { locale: es });
+    }
+  };
 
   // Obtener todas las mensualidades diferidas futuras (que vencen después del periodo actual)
   const futureInstallments = useMemo(() => {
@@ -421,6 +459,7 @@ const CardDetailsPage: React.FC = () => {
   const subOpacityClass = isDarkText ? "opacity-60" : "opacity-75";
 
   if (isLoading) return <LoadingSpinner />;
+  if (!card) return null;
 
   return (
     <div className="flex flex-col gap-4 p-1 md:p-4">
@@ -623,7 +662,7 @@ const CardDetailsPage: React.FC = () => {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="pl-4">Fecha</TableHead>
+                    <TableHead className="pl-4 w-[50px]"></TableHead>
                     <TableHead>Detalle</TableHead>
                     <TableHead className="text-right pr-4">Monto</TableHead>
                   </TableRow>
@@ -636,65 +675,95 @@ const CardDetailsPage: React.FC = () => {
                       </TableCell>
                     </TableRow>
                   ) : (
-                    filteredTransactions.map((tx: any) => (
-                      <TableRow key={tx.id}>
-                        <TableCell className="pl-4 text-[10px]">{format(parseISO(tx.date), "dd/MM")}</TableCell>
-                        <TableCell>
-                          <div className="flex flex-col">
-                            <span className="font-bold text-xs">
-                              {tx.description}
-                              {tx.installments_count && (
-                                <span className="ml-1.5 text-[9px] text-primary font-black bg-primary/10 px-1.5 py-0.5 rounded-full">
-                                  {tx.installment_number}/{tx.installments_count}
-                                </span>
-                              )}
-                            </span>
-                            <span className="text-[9px] text-muted-foreground">{getCategoryById(tx.income_category_id || tx.expense_category_id)?.name || "Sin cat."}</span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right pr-4">
-                          <div className="flex items-center justify-end gap-2">
-                            <span className={cn("font-black text-xs", tx.type === "charge" ? "text-red-600" : "text-green-600")}>
-                              {tx.type === "charge" ? "-" : "+"}${tx.amount.toFixed(2)}
-                            </span>
-                            {tx.image_url && (
-                              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => window.open(tx.image_url, '_blank')}>
-                                <ImageIcon className="h-3 w-3" />
-                              </Button>
-                            )}
-                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleOpenEdit(tx)}>
-                              <Edit className="h-3 w-3" />
-                            </Button>
-                            <AlertDialog>
-                              <AlertDialogTrigger asChild>
-                                <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive">
-                                  <Trash2 className="h-3 w-3" />
-                                </Button>
-                              </AlertDialogTrigger>
-                              <AlertDialogContent className="w-[90vw] rounded-2xl">
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle>¿Eliminar movimiento?</AlertDialogTitle>
-                                  <AlertDialogDescription>
-                                    Esta acción no se puede deshacer. Se ajustará el saldo de la tarjeta automáticamente.
-                                    {tx.installments_count && (
-                                      <p className="mt-2 text-red-500 font-semibold">
-                                        Nota: Esta es una mensualidad diferida. Eliminarla solo borrará esta mensualidad en particular.
-                                      </p>
+                    sortedDateKeys.map((dateStr) => {
+                      const txs = groupedTransactions[dateStr];
+                      return (
+                        <React.Fragment key={dateStr}>
+                          {/* Encabezado de Día */}
+                          <TableRow className="bg-muted/30 hover:bg-muted/30 border-b border-muted/50">
+                            <TableCell colSpan={3} className="font-bold text-[11px] text-primary py-2 pl-4 capitalize">
+                              {formatGroupHeader(dateStr)}
+                            </TableCell>
+                          </TableRow>
+                          
+                          {/* Transacciones del Día */}
+                          {txs.map((tx: any) => {
+                            const category = getCategoryById(tx.income_category_id || tx.expense_category_id);
+                            return (
+                              <TableRow key={tx.id} className="border-b last:border-none">
+                                {/* Icono de Categoría */}
+                                <TableCell className="pl-4 py-2.5">
+                                  <div 
+                                    className="h-7 w-7 rounded-full flex items-center justify-center shadow-sm" 
+                                    style={{ backgroundColor: `${category?.color || '#cbd5e1'}20`, color: category?.color || '#64748b' }}
+                                  >
+                                    <DynamicLucideIcon iconName={category?.icon || "Tag"} className="h-3.5 w-3.5" />
+                                  </div>
+                                </TableCell>
+                                
+                                {/* Detalle */}
+                                <TableCell className="py-2.5">
+                                  <div className="flex flex-col">
+                                    <span className="font-bold text-xs">
+                                      {tx.description}
+                                      {tx.installments_count && (
+                                        <span className="ml-1.5 text-[9px] text-primary font-black bg-primary/10 px-1.5 py-0.5 rounded-full">
+                                          {tx.installment_number}/{tx.installments_count}
+                                        </span>
+                                      )}
+                                    </span>
+                                    <span className="text-[9px] text-muted-foreground">{category?.name || "Sin categoría"}</span>
+                                  </div>
+                                </TableCell>
+                                
+                                {/* Monto y Acciones */}
+                                <TableCell className="text-right pr-4 py-2.5">
+                                  <div className="flex items-center justify-end gap-2">
+                                    <span className={cn("font-black text-xs", tx.type === "charge" ? "text-red-600" : "text-green-600")}>
+                                      {tx.type === "charge" ? "-" : "+"}${tx.amount.toFixed(2)}
+                                    </span>
+                                    {tx.image_url && (
+                                      <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => window.open(tx.image_url, '_blank')}>
+                                        <ImageIcon className="h-3 w-3" />
+                                      </Button>
                                     )}
-                                  </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                  <AlertDialogCancel className="rounded-xl">Cancelar</AlertDialogCancel>
-                                  <AlertDialogAction className="rounded-xl" onClick={() => handleDeleteTransaction(tx)}>
-                                    Eliminar
-                                  </AlertDialogAction>
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                            </AlertDialog>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))
+                                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleOpenEdit(tx)}>
+                                      <Edit className="h-3 w-3" />
+                                    </Button>
+                                    <AlertDialog>
+                                      <AlertDialogTrigger asChild>
+                                        <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive">
+                                          <Trash2 className="h-3 w-3" />
+                                        </Button>
+                                      </AlertDialogTrigger>
+                                      <AlertDialogContent className="w-[90vw] rounded-2xl">
+                                        <AlertDialogHeader>
+                                          <AlertDialogTitle>¿Eliminar movimiento?</AlertDialogTitle>
+                                          <AlertDialogDescription>
+                                            Esta acción no se puede deshacer. Se ajustará el saldo de la tarjeta automáticamente.
+                                            {tx.installments_count && (
+                                              <p className="mt-2 text-red-500 font-semibold">
+                                                Nota: Esta es una mensualidad diferida. Eliminarla solo borrará esta mensualidad en particular.
+                                              </p>
+                                            )}
+                                          </AlertDialogDescription>
+                                        </AlertDialogHeader>
+                                        <AlertDialogFooter>
+                                          <AlertDialogCancel className="rounded-xl">Cancelar</AlertDialogCancel>
+                                          <AlertDialogAction className="rounded-xl" onClick={() => handleDeleteTransaction(tx)}>
+                                            Eliminar
+                                          </AlertDialogAction>
+                                        </AlertDialogFooter>
+                                      </AlertDialogContent>
+                                    </AlertDialog>
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </React.Fragment>
+                      );
+                    })
                   )}
                 </TableBody>
               </Table>
@@ -800,7 +869,7 @@ const CardDetailsPage: React.FC = () => {
                 <Input value={transactionForm.amount} onChange={e => setTransactionForm({...transactionForm, amount: e.target.value})} className="rounded-xl pr-12" placeholder="0.00" required />
                 <span className="absolute right-3.5 top-2.5 text-xs text-muted-foreground font-black">{currency}</span>
               </div>
-              {currency === "USD" && transactionForm.amount && (
+              {currency === "USD" && newTransaction.amount && (
                 <p className="text-[10px] text-indigo-700 font-bold flex items-center gap-1">
                   <Coins className="h-3 w-3 animate-pulse" /> Equivale a ~ ${(parseFloat(transactionForm.amount) * usdToMxnRate || 0).toFixed(2)} MXN (tasa: ${usdToMxnRate.toFixed(2)})
                 </p>
