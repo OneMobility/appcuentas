@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { CheckCircle2, CalendarIcon, ChevronDown, ChevronUp, AlertCircle } from "lucide-react";
+import { PiggyBank, CalendarIcon, ChevronDown, ChevronUp, AlertCircle } from "lucide-react";
 import { format, differenceInDays } from "date-fns";
 import { es } from "date-fns/locale";
 import { cn } from "@/lib/utils";
@@ -179,7 +179,7 @@ const GroupedPaymentDueDatesCard: React.FC<GroupedPaymentDueDatesCardProps> = ({
             "p-1.5 rounded-lg transition-colors",
             pendingTasks.length > 0 ? "bg-amber-100 text-amber-800" : "bg-green-100 text-green-800"
           )}>
-            <CheckCircle2 className="h-4 w-4" />
+            <PiggyBank className="h-4 w-4" />
           </div>
           <div>
             <h3 className="text-sm font-bold text-blue-950">Lista de Pagos</h3>
@@ -207,7 +207,7 @@ const GroupedPaymentDueDatesCard: React.FC<GroupedPaymentDueDatesCardProps> = ({
           ) : (
             <div className="text-center py-2 bg-white/40 rounded-xl border border-dashed border-blue-100">
               <p className="text-xs text-green-700 font-bold flex items-center gap-1 justify-center">
-                <CheckCircle2 className="h-3.5 w-3.5 text-green-600" /> ¡Todo pagado por ahora!
+                <PiggyBank className="h-3.5 w-3.5 text-green-600" /> ¡Todo pagado por ahora!
               </p>
             </div>
           )}
