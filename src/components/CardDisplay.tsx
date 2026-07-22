@@ -3,7 +3,7 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { CreditCard, DollarSign, History, Trash2, Edit, ArrowRightLeft, CalendarDays, Eye, RotateCw } from "lucide-react";
+import { CreditCard, DollarSign, History, Trash2, Edit, ArrowRightLeft, CalendarDays, Eye } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { useNavigate } from "react-router-dom";
 import { getUpcomingCutOffDate, getUpcomingPaymentDueDate } from "@/utils/date-helpers";
@@ -226,24 +226,6 @@ const CardDisplay: React.FC<CardDisplayProps> = ({ card, onAddTransaction, onDel
               </div>
             </div>
           </div>
-
-          {/* Capa de interacción: Botón flotante para voltear/revelar acciones (Solo visible en Desktop) */}
-          <div className="absolute bottom-3 right-3 z-20 hidden md:block">
-            <Button 
-              variant="secondary" 
-              size="icon" 
-              className={cn(
-                "h-8 w-8 rounded-full border-none backdrop-blur-md shadow-lg",
-                isDarkText ? "bg-black/10 hover:bg-black/20 text-slate-900" : "bg-white/20 hover:bg-white/40 text-white"
-              )}
-              onClick={(e) => {
-                e.stopPropagation();
-                setIsFlipped(true);
-              }}
-            >
-              <RotateCw className="h-4 w-4" />
-            </Button>
-          </div>
         </div>
 
         {/* CARA TRASERA DE LA TARJETA (VOLTEADA) */}
@@ -326,21 +308,6 @@ const CardDisplay: React.FC<CardDisplayProps> = ({ card, onAddTransaction, onDel
                 </AlertDialogContent>
               </AlertDialog>
             </div>
-          </div>
-
-          {/* Botón para regresar al frente (Solo visible en Desktop) */}
-          <div className="absolute bottom-3 right-3 z-20 hidden md:block">
-            <Button 
-              variant="secondary" 
-              size="icon" 
-              className="h-8 w-8 rounded-full bg-white/20 hover:bg-white/40 text-white border-none backdrop-blur-md shadow-lg"
-              onClick={(e) => {
-                e.stopPropagation();
-                setIsFlipped(false);
-              }}
-            >
-              <RotateCw className="h-4 w-4" />
-            </Button>
           </div>
         </div>
       </div>
