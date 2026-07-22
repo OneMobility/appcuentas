@@ -101,8 +101,8 @@ const CardDisplay: React.FC<CardDisplayProps> = ({ card, onAddTransaction, onDel
   const isVisa = parseInt(card.last_four_digits) % 2 === 0;
 
   const networkLogoUrl = isVisa 
-    ? "dyad-media://media/appcuentas2/.dyad/media/871ca618ef91fce40699c8478faf0f9f0d05a828b899b8e84349ab3e6c0be6a2.png" // Visa real
-    : "dyad-media://media/appcuentas2/.dyad/media/5f361a174a286c7611adb5860e3f3390a33f3958c2329e451f071a4c5af9962a.png"; // Mastercard real
+    ? "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Visa.png"
+    : "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Mastercard.png";
 
   return (
     <div className="w-full max-w-sm mx-auto h-[240px] perspective-1000">
