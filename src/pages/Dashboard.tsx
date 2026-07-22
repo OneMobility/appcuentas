@@ -72,12 +72,6 @@ const Dashboard = () => {
   const loadExchangeRate = async () => {
     setIsRateLoading(true);
     try {
-      const rate = await getUpcomingPaymentDueDate ? await getUpcomingPaymentDueDate(1, 1) : null; // check if helper works
-      const cleanRate = await getUpcomingCutOffDate ? await getUpcomingCutOffDate(1) : null; 
-      
-      const val = await supabase.functions.invoke ? 1 : 1; // dummy check
-      
-      // Llamamos a nuestro helper de Supabase/tipo cambio
       const rateVal = await getExchangeRateValue();
       setExchangeRate(rateVal);
       // Actualizar el valor MXN en base a la tasa
@@ -207,7 +201,7 @@ const Dashboard = () => {
 
       <div className="grid gap-4 lg:grid-cols-3 px-1">
         <div className="lg:col-span-2">
-          <GroupedPaymentDueDatesCard cards={cards} />
+          <GroupedPaymentDueDatesCard cards={cards} onUpdate={() => setRefreshKey(prev => prev + 1)} />
         </div>
         
         {/* Widget del Convertidor de Divisas */}

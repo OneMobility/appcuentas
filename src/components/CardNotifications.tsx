@@ -8,7 +8,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/context/SessionContext";
 import { showError, showSuccess } from "@/utils/toast";
 import { Capacitor } from '@capacitor/core';
-import { getUpcomingPaymentDueDate } from "@/utils/date-helpers";
 
 interface CardData {
   id: string;
@@ -18,8 +17,8 @@ interface CardData {
   type: "credit" | "debit";
   cut_off_day?: number;
   days_to_pay_after_cut_off?: number;
-  current_balance: number; // Añadido para la lógica de límite de crédito
-  credit_limit?: number; // Añadido para la lógica de límite de crédito
+  current_balance: number;
+  credit_limit?: number;
 }
 
 const CardNotifications: React.FC = () => {
@@ -35,7 +34,7 @@ const CardNotifications: React.FC = () => {
 
       const { data, error } = await supabase
         .from('cards')
-        .select('id, name, bank_name, expiration_date, type, cut_off_day, days_to_pay_after_cut_off, current_balance, credit_limit') // Incluir current_balance y credit_limit
+        .select('id, name, bank_name, expiration_date, type, cut_off_day, days_to_pay_after_cut_off, current_balance, credit_limit')
         .eq('user_id', user.id);
 
       if (error) {
@@ -80,18 +79,6 @@ const CardNotifications: React.FC = () => {
             if (isBefore(cutOffDate, twoDaysFromNow) || isSameDay(cutOffDate, twoDaysFromNow)) {
               toast.info(
                 `Fecha de corte próxima para ${card.name} (${card.bank_name}): ${format(cutOffDate, "dd 'de' MMMM", { locale: es })}`,
-                { style: { backgroundColor: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))' } }
-              );
-            }
-          }
-
-          // Check Payment Due Day (calculated using the new helper function)
-          if (card.cut_off_day !== undefined && card.days_to_pay_after_cut_off !== undefined) {
-            const paymentDueDate = getUpcomingPaymentDueDate(card.cut_off_day, card.days_to_pay_after_cut_off, today);
-
-            if (isBefore(paymentDueDate, twoDaysFromNow) || isSameDay(paymentDueDate, twoDaysFromNow)) {
-              toast.info(
-                `Fecha límite de pago próxima para ${card.name} (${card.bank_name}): ${format(paymentDueDate, "dd 'de' MMMM", { locale: es })}`,
                 { style: { backgroundColor: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))' } }
               );
             }
