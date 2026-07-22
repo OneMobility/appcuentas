@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { CreditCard, DollarSign, History, Trash2, Edit, ArrowRightLeft, CalendarDays, Eye, RotateCw } from "lucide-react";
@@ -8,6 +8,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { useNavigate } from "react-router-dom";
 import { getUpcomingCutOffDate, getUpcomingPaymentDueDate } from "@/utils/date-helpers";
 import { getContrastColor } from "@/utils/color-helpers";
+import { getBankLogoUrl, getFallbackBankLogoUrl } from "@/utils/logo-helper";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { cn } from "@/lib/utils";
@@ -68,29 +69,33 @@ const CardDisplay: React.FC<CardDisplayProps> = ({ card, onAddTransaction, onDel
     return null;
   }, [isCredit, card.cut_off_day, card.days_to_pay_after_cut_off]);
 
-  // Obtener el logo del banco correspondiente usando los archivos exactos subidos por el usuario
-  const bankLogoUrl = useMemo(() => {
-    const name = card.bank_name.toLowerCase();
-    if (name.includes("nu") || name.includes("nubank")) {
-      return "dyad-media://media/appcuentas2/.dyad/media/97ec6769a1b8e18c52f8ddfced925ceb4163fb17149e7b167f77324ac11196b1.png";
+  // Calcular colores de contraste dinámicos
+  const textColor = useMemo(() => getContrastColor(card.color), [card.color]);
+  const isDarkText = textColor === "#0F172A";
+  const isDarkCard = !isDarkText;
+  const badgeBg = isDarkText ? "bg-black/10" : "bg-white/20";
+  const borderStyle = isDarkText ? "border-black/10" : "border-white/10";
+  const opacityClass = isDarkText ? "opacity-80" : "opacity-90";
+  const subOpacityClass = isDarkText ? "opacity-60" : "opacity-75";
+
+  // Estado para manejar la URL del logo y sus fallbacks
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [logoAttempt, setLogoAttempt] = useState<"primary" | "fallback" | "failed">("primary");
+
+  useEffect(() => {
+    setLogoUrl(getBankLogoUrl(card.bank_name, isDarkCard));
+    setLogoAttempt("primary");
+  }, [card.bank_name, isDarkCard]);
+
+  const handleLogoError = () => {
+    if (logoAttempt === "primary") {
+      setLogoUrl(getFallbackBankLogoUrl(card.bank_name));
+      setLogoAttempt("fallback");
+    } else {
+      setLogoUrl(null);
+      setLogoAttempt("failed");
     }
-    if (name.includes("stori")) {
-      return "dyad-media://media/appcuentas2/.dyad/media/87a3632f0be04bf1e1865a178608f63a9919586732604f61bc983ef21f1aa434.png";
-    }
-    if (name.includes("mercado") || name.includes("pago")) {
-      return "dyad-media://media/appcuentas2/.dyad/media/79595b1ae3313cc2db5165d413c5c99e042cdb3129ff6e1d69814d489987b96a.png";
-    }
-    if (name.includes("didi")) {
-      return "dyad-media://media/appcuentas2/.dyad/media/d475efd7a9684af3e1beb06bf0f256578ccffbe5e9e66093dc64b6e90c160e81.png";
-    }
-    if (name.includes("plata")) {
-      return "dyad-media://media/appcuentas2/.dyad/media/8a612b7fa45260f208cf1ddd45d87454980d4025b07216b3d09ff8fbba1b1aef.png";
-    }
-    if (name.includes("bbva")) {
-      return "dyad-media://media/appcuentas2/.dyad/media/a2a2feb7f1ba2ca79b46f12ca4d740cacb3d1c13e5009686f881a187083cdaac.png";
-    }
-    return null;
-  }, [card.bank_name]);
+  };
 
   // Determinar si mostramos Mastercard o Visa de forma aleatoria/estética basada en los últimos dígitos
   const isVisa = parseInt(card.last_four_digits) % 2 === 0;
@@ -98,14 +103,6 @@ const CardDisplay: React.FC<CardDisplayProps> = ({ card, onAddTransaction, onDel
   const networkLogoUrl = isVisa 
     ? "dyad-media://media/appcuentas2/.dyad/media/871ca618ef91fce40699c8478faf0f9f0d05a828b899b8e84349ab3e6c0be6a2.png" // Visa real
     : "dyad-media://media/appcuentas2/.dyad/media/5f361a174a286c7611adb5860e3f3390a33f3958c2329e451f071a4c5af9962a.png"; // Mastercard real
-
-  // Calcular colores de contraste dinámicos
-  const textColor = useMemo(() => getContrastColor(card.color), [card.color]);
-  const isDarkText = textColor === "#0F172A";
-  const badgeBg = isDarkText ? "bg-black/10" : "bg-white/20";
-  const borderStyle = isDarkText ? "border-black/10" : "border-white/10";
-  const opacityClass = isDarkText ? "opacity-80" : "opacity-90";
-  const subOpacityClass = isDarkText ? "opacity-60" : "opacity-75";
 
   return (
     <div className="w-full max-w-sm mx-auto h-[240px] perspective-1000">
@@ -146,14 +143,12 @@ const CardDisplay: React.FC<CardDisplayProps> = ({ card, onAddTransaction, onDel
             {/* Encabezado */}
             <div className="flex justify-between items-start">
               <div className="flex items-center gap-2">
-                {bankLogoUrl ? (
+                {logoUrl ? (
                   <img 
-                    src={bankLogoUrl} 
+                    src={logoUrl} 
                     alt={card.bank_name} 
-                    className={cn(
-                      "h-7 object-contain max-w-[100px] drop-shadow-md",
-                      isDarkText ? "brightness-0" : "brightness-0 invert"
-                    )}
+                    onError={handleLogoError}
+                    className="h-7 object-contain max-w-[100px] drop-shadow-md"
                   />
                 ) : (
                   <span className="text-sm font-black tracking-wider uppercase drop-shadow-md">
