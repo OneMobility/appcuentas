@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { PiggyBank, CalendarIcon, ChevronDown, ChevronUp, AlertCircle } from "lucide-react";
+import { CalendarIcon, ChevronDown, ChevronUp, AlertCircle } from "lucide-react";
 import { format, differenceInDays } from "date-fns";
 import { es } from "date-fns/locale";
 import { cn } from "@/lib/utils";
@@ -174,13 +174,12 @@ const GroupedPaymentDueDatesCard: React.FC<GroupedPaymentDueDatesCardProps> = ({
         onClick={() => setIsExpanded(!isExpanded)}
         className="flex items-center justify-between cursor-pointer p-1 select-none"
       >
-        <div className="flex items-center gap-2">
-          <div className={cn(
-            "p-1.5 rounded-lg transition-colors",
-            pendingTasks.length > 0 ? "bg-amber-100 text-amber-800" : "bg-green-100 text-green-800"
-          )}>
-            <PiggyBank className="h-4 w-4" />
-          </div>
+        <div className="flex items-center gap-2.5">
+          <img 
+            src="https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Cochinito%20Calendario.png" 
+            alt="Cochinito Calendario" 
+            className="h-9 w-9 object-contain shrink-0"
+          />
           <div>
             <h3 className="text-sm font-bold text-blue-950">Lista de Pagos</h3>
             <p className="text-[11px] text-blue-700 font-medium">
@@ -206,8 +205,13 @@ const GroupedPaymentDueDatesCard: React.FC<GroupedPaymentDueDatesCardProps> = ({
             </div>
           ) : (
             <div className="text-center py-2 bg-white/40 rounded-xl border border-dashed border-blue-100">
-              <p className="text-xs text-green-700 font-bold flex items-center gap-1 justify-center">
-                <PiggyBank className="h-3.5 w-3.5 text-green-600" /> ¡Todo pagado por ahora!
+              <p className="text-xs text-green-700 font-bold flex items-center gap-2 justify-center">
+                <img 
+                  src="https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Cochinito%20Calendario.png" 
+                  alt="Cochinito" 
+                  className="h-5 w-5 object-contain"
+                />
+                ¡Todo pagado por ahora!
               </p>
             </div>
           )}
