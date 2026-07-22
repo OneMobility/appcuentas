@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { CalendarIcon, ChevronDown, ChevronUp, AlertCircle } from "lucide-react";
+import { CheckCircle2, CalendarIcon, ChevronDown, ChevronUp, AlertCircle } from "lucide-react";
 import { format, differenceInDays } from "date-fns";
 import { es } from "date-fns/locale";
 import { cn } from "@/lib/utils";
@@ -31,7 +31,7 @@ const GroupedPaymentDueDatesCard: React.FC<GroupedPaymentDueDatesCardProps> = ({
   today.setHours(0, 0, 0, 0);
 
   const [manualPayments, setManualPayments] = useState<Record<string, string>>({});
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isOpen, setIsOpen] = useState(true); // Controla si todo el panel está desplegado
   const [showCompleted, setShowCompleted] = useState(false);
 
   useEffect(() => {
@@ -89,16 +89,16 @@ const GroupedPaymentDueDatesCard: React.FC<GroupedPaymentDueDatesCardProps> = ({
   const pendingTasks = paymentTasks.filter(t => !t.isPaid);
   const completedTasks = paymentTasks.filter(t => t.isPaid);
 
-  const cardBaseClasses = "relative p-3 shadow-sm border-none bg-blue-50/50 text-blue-900 transition-all duration-200";
+  const cardBaseClasses = "shadow-sm border-none bg-blue-50/50 text-blue-900 transition-all duration-200";
 
   if (paymentTasks.length === 0) {
     return (
-      <Card className={cardBaseClasses}>
-        <CardContent className="p-2 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <AlertCircle className="h-5 w-5 text-blue-600 shrink-0" />
-            <span className="text-xs font-bold text-blue-950">No tienes tarjetas de crédito configuradas para pagos.</span>
-          </div>
+      <Card className={cn(cardBaseClasses, "p-4")}>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-0">
+          <CardTitle className="text-sm font-bold text-blue-900">Lista de Pagos</CardTitle>
+        </CardHeader>
+        <CardContent className="p-0 pt-2 text-xs font-medium text-blue-700">
+          No tienes tarjetas de crédito configuradas para pagos.
         </CardContent>
       </Card>
     );
@@ -168,77 +168,70 @@ const GroupedPaymentDueDatesCard: React.FC<GroupedPaymentDueDatesCardProps> = ({
   };
 
   return (
-    <Card className={cardBaseClasses}>
-      {/* Cabecera Desplegable Compacta */}
+    <Card className={cn(cardBaseClasses, "p-3 md:p-4")}>
+      {/* Cabecera interactiva tipo Desplegable / Accordion */}
       <div 
-        onClick={() => setIsExpanded(!isExpanded)}
-        className="flex items-center justify-between cursor-pointer p-1 select-none"
+        onClick={() => setIsOpen(!isOpen)}
+        className="flex items-center justify-between cursor-pointer select-none"
       >
-        <div className="flex items-center gap-2.5">
-          <img 
-            src="https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Cochinito%20Calendario.png" 
-            alt="Cochinito Calendario" 
-            className="h-9 w-9 object-contain shrink-0"
-          />
-          <div>
-            <h3 className="text-sm font-bold text-blue-950">Lista de Pagos</h3>
-            <p className="text-[11px] text-blue-700 font-medium">
-              {pendingTasks.length > 0 
-                ? `Tienes ${pendingTasks.length} pago${pendingTasks.length > 1 ? 's' : ''} pendiente${pendingTasks.length > 1 ? 's' : ''}`
-                : "¡Al corriente! Sin pagos pendientes"
-              }
-            </p>
-          </div>
+        <div className="flex items-center gap-2">
+          <CardTitle className="text-sm font-bold text-blue-900">Lista de Pagos</CardTitle>
+          {pendingTasks.length > 0 ? (
+            <span className="bg-red-100 text-red-700 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+              <AlertCircle className="h-3 w-3" /> {pendingTasks.length} pendiente{pendingTasks.length > 1 ? 's' : ''}
+            </span>
+          ) : (
+            <span className="bg-green-100 text-green-700 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+              <CheckCircle2 className="h-3 w-3" /> Al corriente
+            </span>
+          )}
         </div>
-        <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-900 hover:bg-blue-100/50 rounded-full">
-          {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+        <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-blue-900 hover:bg-blue-100/50 rounded-full">
+          {isOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
         </Button>
       </div>
 
       {/* Contenido Desplegable */}
-      {isExpanded && (
-        <CardContent className="p-1 pt-3 flex flex-col gap-2 border-t border-blue-100/50 mt-2">
-          {/* Sección de Pendientes */}
-          {pendingTasks.length > 0 ? (
-            <div className="space-y-1.5">
-              {pendingTasks.map(renderTaskRow)}
-            </div>
-          ) : (
-            <div className="text-center py-2 bg-white/40 rounded-xl border border-dashed border-blue-100">
-              <p className="text-xs text-green-700 font-bold flex items-center gap-2 justify-center">
-                <img 
-                  src="https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Cochinito%20Calendario.png" 
-                  alt="Cochinito" 
-                  className="h-5 w-5 object-contain"
-                />
-                ¡Todo pagado por ahora!
-              </p>
-            </div>
-          )}
+      {isOpen && (
+        <CardContent className="p-0 pt-3">
+          <div className="w-full space-y-2">
+            {/* Sección de Pendientes */}
+            {pendingTasks.length > 0 ? (
+              <div className="space-y-1.5">
+                {pendingTasks.map(renderTaskRow)}
+              </div>
+            ) : (
+              <div className="text-left py-1">
+                <p className="text-xs text-green-700 font-medium flex items-center gap-1">
+                  <CheckCircle2 className="h-3.5 w-3.5 text-green-600" /> ¡Excelente! No tienes pagos pendientes por ahora.
+                </p>
+              </div>
+            )}
 
-          {/* Sección de Completados (Colapsable Interno) */}
-          {completedTasks.length > 0 && (
-            <div className="pt-1 border-t border-blue-100/30">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setShowCompleted(!showCompleted);
-                }}
-                className="h-7 px-2 text-[10px] font-bold text-blue-700 hover:bg-blue-100/30 flex items-center gap-1 w-full justify-between"
-              >
-                <span>Pagos completados ({completedTasks.length})</span>
-                {showCompleted ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-              </Button>
-              
-              {showCompleted && (
-                <div className="space-y-1.5 mt-1.5">
-                  {completedTasks.map(renderTaskRow)}
-                </div>
-              )}
-            </div>
-          )}
+            {/* Sección de Completados (Sub-colapsable para ahorrar aún más espacio) */}
+            {completedTasks.length > 0 && (
+              <div className="pt-1 border-t border-blue-100/50">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={(e) => {
+                    e.stopPropagation(); // Evita que se cierre el contenedor principal
+                    setShowCompleted(!showCompleted);
+                  }}
+                  className="h-6 px-1.5 text-[10px] font-bold text-blue-700 hover:bg-blue-100/30 flex items-center gap-1 w-full justify-between"
+                >
+                  <span>Pagos completados ({completedTasks.length})</span>
+                  {showCompleted ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                </Button>
+                
+                {showCompleted && (
+                  <div className="space-y-1.5 mt-1.5">
+                    {completedTasks.map(renderTaskRow)}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </CardContent>
       )}
     </Card>
