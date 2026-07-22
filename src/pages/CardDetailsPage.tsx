@@ -81,7 +81,7 @@ const CardDetailsPage: React.FC = () => {
   const fetchCardDetails = async () => {
     if (!user || !cardId) return;
     setIsLoading(true);
-    const { data, error } = await supabase.from('cards').select('*, card_transactions(*)').eq('id', cardId).single();
+    const { data, error } = await supabase.from('cards').select('*, card_pockets(*), card_transactions(*)').eq('id', cardId).single();
     if (error) { showError('Error al cargar tarjeta'); navigate('/cards'); return; }
     const { data: pockets } = await supabase.from('card_pockets').select('*').eq('card_id', cardId);
     setCard({ ...data, card_pockets: pockets || [] });
@@ -105,28 +105,72 @@ const CardDetailsPage: React.FC = () => {
     }
   }, [card, currentViewDate]);
 
-  const transactionsWithBalance = useMemo(() => {
+  // Filtrar transacciones por periodo primero
+  const periodTransactions = useMemo(() => {
     if (!card) return [];
-    const sortedDesc = [...(card.card_transactions || [])].sort((a, b) => 
-      parseISO(b.date).getTime() - parseISO(a.date).getTime() || 
-      new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    return (card.card_transactions || []).filter((tx: any) => 
+      isWithinInterval(parseISO(tx.date), filterInterval)
     );
-    let currentRunningPoint = card.type === "debit" ? card.current_balance : (card.credit_limit || 0) - card.current_balance;
-    return sortedDesc.map(tx => {
-      const bal = currentRunningPoint;
-      currentRunningPoint = tx.type === "charge" ? currentRunningPoint + tx.amount : currentRunningPoint - tx.amount;
-      return { ...tx, runningBalance: bal };
-    });
-  }, [card]);
+  }, [card, filterInterval]);
 
+  // Calcular transacciones con saldo acumulado relativo al periodo seleccionado
   const filteredTransactions = useMemo(() => {
-    return transactionsWithBalance.filter((tx: any) => {
-      const matchesDate = isWithinInterval(parseISO(tx.date), filterInterval);
+    if (!card) return [];
+
+    // 1. Filtrar por término de búsqueda y tipo
+    const matches = periodTransactions.filter((tx: any) => {
       const matchesSearch = tx.description.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesType = filterType === "all" || tx.type === filterType;
-      return matchesDate && matchesSearch && matchesType;
+      return matchesSearch && matchesType;
     });
-  }, [transactionsWithBalance, filterInterval, searchTerm, filterType]);
+
+    // 2. Ordenar cronológicamente (ascendente) para calcular el saldo acumulado
+    const sortedAsc = [...matches].sort((a, b) => 
+      parseISO(a.date).getTime() - parseISO(b.date).getTime() ||
+      new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    );
+
+    // 3. Calcular el saldo inicial del periodo
+    let runningPoint = 0;
+    if (card.type === "debit") {
+      // Para débito, calculamos el saldo al inicio del periodo revirtiendo transacciones posteriores
+      let bal = card.current_balance;
+      const postPeriodTxs = (card.card_transactions || []).filter((tx: any) => 
+        parseISO(tx.date) > filterInterval.end
+      );
+      postPeriodTxs.forEach((tx: any) => {
+        bal = tx.type === "charge" ? bal + tx.amount : bal - tx.amount;
+      });
+
+      // Ahora 'bal' es el saldo al final del periodo. Revertimos las del periodo para hallar el saldo inicial.
+      const sortedPeriodTxs = [...periodTransactions].sort((a, b) => 
+        parseISO(a.date).getTime() - parseISO(b.date).getTime() ||
+        new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      );
+      let startBal = bal;
+      sortedPeriodTxs.forEach((tx: any) => {
+        startBal = tx.type === "charge" ? startBal + tx.amount : startBal - tx.amount;
+      });
+
+      runningPoint = startBal;
+    } else {
+      // Para crédito, el saldo del periodo representa la deuda acumulada del ciclo (inicia en 0)
+      runningPoint = 0;
+    }
+
+    // 4. Calcular saldo acumulado hacia adelante
+    const computedAsc = sortedAsc.map(tx => {
+      if (card.type === "debit") {
+        runningPoint = tx.type === "charge" ? runningPoint - tx.amount : runningPoint + tx.amount;
+      } else {
+        runningPoint = tx.type === "charge" ? runningPoint + tx.amount : runningPoint - tx.amount;
+      }
+      return { ...tx, runningBalance: runningPoint };
+    });
+
+    // 5. Devolver en orden descendente (más reciente primero) para mostrar en la tabla
+    return computedAsc.reverse();
+  }, [card, periodTransactions, searchTerm, filterType, filterInterval]);
 
   // Agrupar transacciones por día
   const groupedTransactions = useMemo(() => {
@@ -664,13 +708,14 @@ const CardDetailsPage: React.FC = () => {
                   <TableRow>
                     <TableHead className="pl-4 w-[50px]"></TableHead>
                     <TableHead>Detalle</TableHead>
-                    <TableHead className="text-right pr-4">Monto</TableHead>
+                    <TableHead className="text-right">Monto</TableHead>
+                    <TableHead className="text-right pr-4">Saldo</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredTransactions.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={3} className="text-center py-8 text-muted-foreground text-xs">
+                      <TableCell colSpan={4} className="text-center py-8 text-muted-foreground text-xs">
                         Sin movimientos registrados en este periodo.
                       </TableCell>
                     </TableRow>
@@ -681,7 +726,7 @@ const CardDetailsPage: React.FC = () => {
                         <React.Fragment key={dateStr}>
                           {/* Encabezado de Día */}
                           <TableRow className="bg-muted/30 hover:bg-muted/30 border-b border-muted/50">
-                            <TableCell colSpan={3} className="font-bold text-[11px] text-primary py-2 pl-4 capitalize">
+                            <TableCell colSpan={4} className="font-bold text-[11px] text-primary py-2 pl-4 capitalize">
                               {formatGroupHeader(dateStr)}
                             </TableCell>
                           </TableRow>
@@ -716,11 +761,18 @@ const CardDetailsPage: React.FC = () => {
                                   </div>
                                 </TableCell>
                                 
-                                {/* Monto y Acciones */}
+                                {/* Monto */}
+                                <TableCell className="text-right py-2.5">
+                                  <span className={cn("font-black text-xs", tx.type === "charge" ? "text-red-600" : "text-green-600")}>
+                                    {tx.type === "charge" ? "-" : "+"}${tx.amount.toFixed(2)}
+                                  </span>
+                                </TableCell>
+
+                                {/* Saldo Acumulado del Periodo */}
                                 <TableCell className="text-right pr-4 py-2.5">
                                   <div className="flex items-center justify-end gap-2">
-                                    <span className={cn("font-black text-xs", tx.type === "charge" ? "text-red-600" : "text-green-600")}>
-                                      {tx.type === "charge" ? "-" : "+"}${tx.amount.toFixed(2)}
+                                    <span className="font-black text-xs text-muted-foreground">
+                                      ${tx.runningBalance.toFixed(2)}
                                     </span>
                                     {tx.image_url && (
                                       <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => window.open(tx.image_url, '_blank')}>
