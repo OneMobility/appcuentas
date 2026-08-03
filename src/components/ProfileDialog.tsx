@@ -18,7 +18,7 @@ interface ProfileDialogProps {
   forceOpen?: boolean;
 }
 
-// Generar las URLs de los 16 avatares usando el nombre exacto del bucket 'Avatar'
+// Generar las URLs de los 16 avatares predefinidos usando el ID del bucket 'Avatar' (mayúscula exacta)
 const AVATARS = Array.from({ length: 16 }, (_, i) => {
   const id = i + 1;
   return `https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Avatar/${id}.png`;
