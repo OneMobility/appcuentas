@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { DollarSign, RefreshCw, ArrowRightLeft, Coins, Wallet, CreditCard, Users, Heart, TrendingUp, Star } from "lucide-react";
+import { DollarSign, RefreshCw, ArrowRightLeft, Coins, Wallet, CreditCard, Users, Heart, TrendingUp, Star, Sparkles } from "lucide-react";
 import { useCategoryContext } from "@/context/CategoryContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/context/SessionContext";
@@ -100,93 +100,141 @@ const Dashboard = () => {
   }, [cashTransactions, cardTransactions, incomeCategories, expenseCategories]);
 
   return (
-    <div className="flex flex-col gap-8 pb-20 max-w-6xl mx-auto">
-      {/* Header Fluido */}
-      <header className="flex items-center justify-between px-2 pt-4">
-        <div>
-          <h1 className="text-3xl font-black tracking-tight text-slate-900">
-            Resumen General 🐷
-          </h1>
-          <p className="text-sm font-medium text-slate-500">Tus finanzas bajo control de forma sencilla.</p>
+    <div className="flex flex-col gap-10 pb-24 max-w-6xl mx-auto px-4 md:px-6">
+      
+      {/* 1. SECCIÓN DE SALUDO */}
+      <header className="flex flex-col md:flex-row items-center justify-between gap-6 pt-6 text-center md:text-left">
+        <div className="flex flex-col md:flex-row items-center gap-6">
+          <div className="relative">
+            <div className="absolute inset-0 bg-primary/10 rounded-full blur-2xl animate-pulse" />
+            <img 
+              src="https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Cochinito%20Ahorro.png" 
+              alt="Cochinito Oinkash" 
+              className="h-32 w-32 relative z-10 drop-shadow-xl hover:scale-105 transition-transform duration-300"
+            />
+          </div>
+          <div>
+            <h1 className="text-3xl md:text-4xl font-black tracking-tight text-slate-900">
+              ¡Hola, {user?.user_metadata?.first_name || 'Amigo'}! 🐷
+            </h1>
+            <p className="text-lg font-medium text-slate-500 mt-1">Qué bueno verte por aquí. Tu dinero está en buenas manos.</p>
+          </div>
         </div>
         <Button 
           variant="outline" 
           size="icon" 
           onClick={() => setRefreshKey(k => k + 1)} 
-          className="rounded-full h-12 w-12 bg-white shadow-soft border-none hover:rotate-180 transition-transform duration-500"
+          className="rounded-full h-12 w-12 bg-white shadow-soft border-none hover:rotate-180 transition-transform duration-500 hidden md:flex"
         >
           <RefreshCw className="h-5 w-5 text-slate-600" />
         </Button>
       </header>
 
-      {/* Widgets Principales */}
-      <div className="grid gap-6 lg:grid-cols-12 px-2">
-        <div className="lg:col-span-4 space-y-6">
-          <FinancialHealthCard />
-          <SmartTipsCard />
-        </div>
-        
-        <div className="lg:col-span-8 space-y-6">
-          <GroupedPaymentDueDatesCard cards={cards} onUpdate={() => setRefreshKey(prev => prev + 1)} />
-          
-          <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
-            {[
-              { label: "Disponible", val: totals.cash + totals.debitCards, color: "bg-indigo-50 text-indigo-700", icon: Wallet },
-              { label: "Te deben", val: totals.debt, color: "bg-emerald-50 text-emerald-700", icon: Users },
-              { label: "Debes", val: totals.cred + totals.creditDebt, color: "bg-rose-50 text-rose-700", icon: DollarSign },
-              { label: "Balance Neto", val: totals.total, color: "bg-slate-900 text-white", icon: Heart },
-            ].map((item, i) => (
-              <Card key={i} className={cn("rounded-3xl border-none shadow-soft p-5", item.color)}>
-                <div className="flex flex-col h-full justify-between">
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-[10px] font-black uppercase tracking-widest opacity-70">{item.label}</span>
-                    <item.icon className="h-4 w-4 opacity-50" />
-                  </div>
-                  <p className="text-xl md:text-2xl font-black">${item.val.toLocaleString()}</p>
-                </div>
-              </Card>
-            ))}
-          </div>
-
-          <Card className="rounded-[2rem] border-none shadow-soft bg-white p-6">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-sm font-black uppercase tracking-widest text-slate-400">Conversor 🪙</h3>
-              <Badge variant="outline" className="rounded-full">1 USD = ${exchangeRate.toFixed(2)}</Badge>
-            </div>
-            <div className="flex items-center gap-4">
-              <div className="flex-1 space-y-1">
-                <Label className="text-[10px] font-bold text-slate-400 ml-1">Dólares</Label>
-                <Input 
-                  type="number" value={usdInput} 
-                  onChange={(e) => { setUsdInput(e.target.value); setMxnInput((parseFloat(e.target.value) * exchangeRate).toFixed(2)); }}
-                  className="rounded-2xl border-slate-100 bg-slate-50 h-12 font-bold"
-                />
+      {/* 2. TARJETAS DE RESUMEN (Disponible, Te deben, Debes, Balance) */}
+      <section className="grid gap-4 grid-cols-2 md:grid-cols-4">
+        {[
+          { label: "Disponible", val: totals.cash + totals.debitCards, color: "bg-indigo-50 text-indigo-700", icon: Wallet },
+          { label: "Te deben", val: totals.debt, color: "bg-emerald-50 text-emerald-700", icon: Users },
+          { label: "Debes", val: totals.cred + totals.creditDebt, color: "bg-rose-50 text-rose-700", icon: DollarSign },
+          { label: "Balance Neto", val: totals.total, color: "bg-slate-900 text-white", icon: Heart },
+        ].map((item, i) => (
+          <Card key={i} className={cn("rounded-3xl border-none shadow-soft p-5", item.color)}>
+            <div className="flex flex-col h-full justify-between">
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-[10px] font-black uppercase tracking-widest opacity-70">{item.label}</span>
+                <item.icon className="h-4 w-4 opacity-50" />
               </div>
-              <ArrowRightLeft className="h-5 w-5 text-slate-300 mt-6" />
-              <div className="flex-1 space-y-1">
-                <Label className="text-[10px] font-bold text-slate-400 ml-1">Pesos</Label>
-                <Input 
-                  type="number" value={mxnInput} 
-                  onChange={(e) => { setMxnInput(e.target.value); setUsdInput((parseFloat(e.target.value) / exchangeRate).toFixed(2)); }}
-                  className="rounded-2xl border-slate-100 bg-slate-50 h-12 font-bold"
-                />
-              </div>
+              <p className="text-xl md:text-2xl font-black">${item.val.toLocaleString()}</p>
             </div>
           </Card>
-        </div>
-      </div>
+        ))}
+      </section>
 
-      {/* Gráficos Redondeados */}
-      <div className="grid gap-6 md:grid-cols-2 px-2">
-        <Card className="rounded-[2.5rem] border-none shadow-soft bg-white p-6">
-          <CardHeader className="p-0 mb-4"><CardTitle className="text-sm font-black uppercase tracking-widest text-slate-400">Gastos del Mes 🍩</CardTitle></CardHeader>
+      {/* 3. SALUD FINANCIERA Y CONSEJOS */}
+      <section className="grid gap-6 md:grid-cols-2 lg:grid-cols-12">
+        <div className="lg:col-span-7">
+          <FinancialHealthCard />
+        </div>
+        <div className="lg:col-span-5">
+          <SmartTipsCard />
+        </div>
+      </section>
+
+      {/* 4. LISTA DE PAGOS */}
+      <section>
+        <div className="flex items-center gap-2 mb-4">
+          <h3 className="text-sm font-black uppercase tracking-widest text-slate-400 flex items-center gap-2">
+            <Star className="h-4 w-4" /> Pagos Pendientes
+          </h3>
+        </div>
+        <GroupedPaymentDueDatesCard cards={cards} onUpdate={() => setRefreshKey(prev => prev + 1)} />
+      </section>
+
+      {/* 5. CONVERSOR DE DIVISAS */}
+      <section>
+        <Card className="rounded-[2.5rem] border-none shadow-soft bg-white p-6 md:p-8">
+          <div className="flex justify-between items-center mb-8">
+            <h3 className="text-sm font-black uppercase tracking-widest text-slate-400 flex items-center gap-2">
+              <Coins className="h-4 w-4" /> Conversor 🪙
+            </h3>
+            <Badge variant="outline" className="rounded-full border-slate-200 text-slate-600 font-bold px-4 py-1">
+              1 USD = ${exchangeRate.toFixed(2)} MXN
+            </Badge>
+          </div>
+          <div className="flex flex-col md:flex-row items-center gap-6">
+            <div className="flex-1 w-full space-y-2">
+              <Label className="text-[10px] font-bold text-slate-400 ml-2 uppercase">Dólares (USD)</Label>
+              <Input 
+                type="number" value={usdInput} 
+                onChange={(e) => { setUsdInput(e.target.value); setMxnInput((parseFloat(e.target.value) * exchangeRate).toFixed(2)); }}
+                className="rounded-2xl border-slate-100 bg-slate-50 h-14 font-black text-lg focus-visible:ring-primary/20"
+              />
+            </div>
+            <div className="bg-slate-50 p-3 rounded-full shadow-inner mt-4 md:mt-6">
+              <ArrowRightLeft className="h-6 w-6 text-slate-300" />
+            </div>
+            <div className="flex-1 w-full space-y-2">
+              <Label className="text-[10px] font-bold text-slate-400 ml-2 uppercase">Pesos (MXN)</Label>
+              <Input 
+                type="number" value={mxnInput} 
+                onChange={(e) => { setMxnInput(e.target.value); setUsdInput((parseFloat(e.target.value) / exchangeRate).toFixed(2)); }}
+                className="rounded-2xl border-slate-100 bg-slate-50 h-14 font-black text-lg focus-visible:ring-primary/20"
+              />
+            </div>
+          </div>
+        </Card>
+      </section>
+
+      {/* 6. GRÁFICAS DE CATEGORÍAS */}
+      <section className="grid gap-6 md:grid-cols-2">
+        <Card className="rounded-[2.5rem] border-none shadow-soft bg-white p-6 md:p-8">
+          <CardHeader className="p-0 mb-6">
+            <CardTitle className="text-sm font-black uppercase tracking-widest text-slate-400">Gastos del Mes 🍩</CardTitle>
+          </CardHeader>
           <CategoryPieChart data={categoryMetrics.expenses} title="" />
         </Card>
-        <Card className="rounded-[2.5rem] border-none shadow-soft bg-white p-6">
-          <CardHeader className="p-0 mb-4"><CardTitle className="text-sm font-black uppercase tracking-widest text-slate-400">Uso de Tarjetas 💳</CardTitle></CardHeader>
-          <CreditCardsChart cards={cards} />
+        <Card className="rounded-[2.5rem] border-none shadow-soft bg-white p-6 md:p-8">
+          <CardHeader className="p-0 mb-6">
+            <CardTitle className="text-sm font-black uppercase tracking-widest text-slate-400">Ingresos del Mes 🍬</CardTitle>
+          </CardHeader>
+          <CategoryPieChart data={categoryMetrics.income} title="" />
         </Card>
-      </div>
+      </section>
+
+      {/* 7. USO DE TARJETAS */}
+      <section>
+        <Card className="rounded-[2.5rem] border-none shadow-soft bg-white p-6 md:p-8">
+          <CardHeader className="p-0 mb-6">
+            <CardTitle className="text-sm font-black uppercase tracking-widest text-slate-400 flex items-center gap-2">
+              <CreditCard className="h-4 w-4" /> Uso de Tarjetas 💳
+            </CardTitle>
+          </CardHeader>
+          <div className="w-full">
+            <CreditCardsChart cards={cards} />
+          </div>
+        </Card>
+      </section>
+
     </div>
   );
 };
