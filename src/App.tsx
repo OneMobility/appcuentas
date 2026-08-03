@@ -18,13 +18,14 @@ import SharedBudgets from "./pages/SharedBudgets";
 import CreateSharedBudget from "./pages/CreateSharedBudget";
 import EditSharedBudget from "./pages/EditSharedBudget";
 import ShoppingList from "./pages/ShoppingList";
-import RecurringExpenses from "./pages/RecurringExpenses"; // Nuevo
+import RecurringExpenses from "./pages/RecurringExpenses";
 import NotFound from "./pages/NotFound";
 import Login from "./pages/Login";
 import ResetPassword from "./pages/ResetPassword";
 import { CategoryProvider } from "./context/CategoryContext";
 import { SessionProvider, useSession } from "./context/SessionContext";
 import CardNotifications from "./components/CardNotifications";
+import AppUpdater from "./components/AppUpdater"; // Importar el actualizador
 import React from "react";
 
 const queryClient = new QueryClient();
@@ -45,6 +46,7 @@ const App = () => {
         <BrowserRouter>
           <SessionProvider>
             <CategoryProvider>
+              <AppUpdater /> {/* Sistema de detección de nuevas versiones */}
               <CardNotifications />
               <Routes>
                 <Route path="/login" element={<Login />} />
@@ -64,7 +66,7 @@ const App = () => {
                   <Route path="/shared-budgets" element={<SharedBudgets />} />
                   <Route path="/shared-budgets/create" element={<CreateSharedBudget />} />
                   <Route path="/shared-budgets/edit/:budgetId" element={<EditSharedBudget />} />
-                  <Route path="/recurring" element={<RecurringExpenses />} /> {/* Nueva ruta */}
+                  <Route path="/recurring" element={<RecurringExpenses />} />
                   <Route path="/shopping-list" element={<ShoppingList />} />
                 </Route>
                 <Route path="*" element={<NotFound />} />
