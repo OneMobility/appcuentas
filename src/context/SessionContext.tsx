@@ -74,13 +74,16 @@ export const SessionProvider = ({ children }: { children: ReactNode }) => {
         setIsLoading(false);
 
         if (event === 'PASSWORD_RECOVERY') {
-          navigate('/reset-password', { replace: true });
+          if (location.pathname !== '/reset-password') {
+            navigate('/reset-password', { replace: true });
+          }
         } else if (event === 'SIGNED_IN') {
           const isRecovery = window.location.hash.includes('type=recovery') || window.location.search.includes('type=recovery');
           if (isRecovery) {
-            navigate('/reset-password', { replace: true });
-          } else if (location.pathname !== '/reset-password') {
-            // Only redirect to dashboard if we are NOT currently on the reset-password page
+            if (location.pathname !== '/reset-password') {
+              navigate('/reset-password', { replace: true });
+            }
+          } else if (location.pathname !== '/reset-password' && location.pathname !== '/login') {
             const lastVisitedRoute = localStorage.getItem('lastVisitedRoute');
             if (lastVisitedRoute && lastVisitedRoute !== '/login' && lastVisitedRoute !== '/reset-password') {
               navigate(lastVisitedRoute, { replace: true });
@@ -90,7 +93,9 @@ export const SessionProvider = ({ children }: { children: ReactNode }) => {
           }
         } else if (event === 'SIGNED_OUT') {
           localStorage.removeItem('lastVisitedRoute');
-          navigate('/login', { replace: true });
+          if (location.pathname !== '/login') {
+            navigate('/login', { replace: true });
+          }
         }
       }
     );
@@ -108,7 +113,9 @@ export const SessionProvider = ({ children }: { children: ReactNode }) => {
       
       const isRecovery = window.location.hash.includes('type=recovery') || window.location.search.includes('type=recovery');
       if (isRecovery) {
-        navigate('/reset-password', { replace: true });
+        if (location.pathname !== '/reset-password') {
+          navigate('/reset-password', { replace: true });
+        }
       } else if (!currentSession && location.pathname !== '/login' && location.pathname !== '/reset-password') {
         navigate('/login', { replace: true });
       }
@@ -126,9 +133,11 @@ export const SessionProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [location.pathname, session, isLoading]);
 
+  const isPublicPage = location.pathname === '/login' || location.pathname === '/reset-password';
+
   return (
     <SessionContext.Provider value={{ session, user, profile, isLoading, refreshProfile }}>
-      {isLoading && <LoadingSpinner />}
+      {isLoading && !isPublicPage && <LoadingSpinner />}
       {children}
     </SessionContext.Provider>
   );

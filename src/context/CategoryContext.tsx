@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "./SessionContext";
 import { showError, showSuccess } from "@/utils/toast";
 import LoadingSpinner from '@/components/LoadingSpinner';
+import { useLocation } from "react-router-dom";
 
 export interface Category {
   id: string;
@@ -64,6 +65,7 @@ export const CategoryProvider = ({ children }: { children: ReactNode }) => {
   const [incomeCategories, setIncomeCategories] = useState<Category[]>([]);
   const [expenseCategories, setExpenseCategories] = useState<Category[]>([]);
   const [isLoadingCategories, setIsLoadingCategories] = useState(true);
+  const location = useLocation();
 
   const fetchCategories = async () => {
     if (!user) {
@@ -273,6 +275,8 @@ export const CategoryProvider = ({ children }: { children: ReactNode }) => {
     return [...incomeCategories, ...expenseCategories].find(cat => cat.id === id);
   };
 
+  const isPublicPage = location.pathname === '/login' || location.pathname === '/reset-password';
+
   return (
     <CategoryContext.Provider
       value={{
@@ -285,7 +289,7 @@ export const CategoryProvider = ({ children }: { children: ReactNode }) => {
         isLoadingCategories,
       }}
     >
-      {isLoadingCategories && <LoadingSpinner />}
+      {isLoadingCategories && !isPublicPage && <LoadingSpinner />}
       {children}
     </CategoryContext.Provider>
   );
