@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { DollarSign, RefreshCw, ArrowRightLeft, Coins, Wallet, CreditCard, Users, Heart, Star, Sparkles } from "lucide-react";
+import { DollarSign, RefreshCw, ArrowRightLeft, Coins, Wallet, CreditCard, Users, Heart, Star } from "lucide-react";
 import { useCategoryContext } from "@/context/CategoryContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/context/SessionContext";
@@ -61,7 +61,9 @@ const Dashboard = () => {
   };
 
   useEffect(() => {
-    if (user && !isLoadingCategories) fetchDashboardData();
+    if (user && !isLoadingCategories) {
+      fetchDashboardData();
+    }
   }, [user, isLoadingCategories, refreshKey]);
 
   const totals = useMemo(() => {
@@ -155,14 +157,14 @@ const Dashboard = () => {
       <section className="space-y-6">
         <FinancialHealthCard />
         
-        {/* Predicción y Consejos abajo */}
+        {/* 4. Predicción y Consejos compartiendo fila abajo */}
         <div className="grid gap-6 md:grid-cols-2">
           <FinancialPredictionCard />
           <SmartTipsCard />
         </div>
       </section>
 
-      {/* 4. LISTA DE PAGOS */}
+      {/* 5. LISTA DE PAGOS */}
       <section>
         <div className="flex items-center gap-2 mb-4">
           <h3 className="text-sm font-black uppercase tracking-widest text-slate-400 flex items-center gap-2">
@@ -172,7 +174,7 @@ const Dashboard = () => {
         <GroupedPaymentDueDatesCard cards={cards} onUpdate={() => setRefreshKey(prev => prev + 1)} />
       </section>
 
-      {/* 5. CONVERSOR DE DIVISAS */}
+      {/* 6. CONVERSOR DE DIVISAS */}
       <section>
         <Card className="rounded-[2.5rem] border-none shadow-soft bg-white p-6 md:p-8">
           <div className="flex justify-between items-center mb-8">
@@ -207,7 +209,7 @@ const Dashboard = () => {
         </Card>
       </section>
 
-      {/* 6. GRÁFICAS DE CATEGORÍAS */}
+      {/* 7. GRÁFICAS DE CATEGORÍAS */}
       <section className="grid gap-6 md:grid-cols-2">
         <Card className="rounded-[2.5rem] border-none shadow-soft bg-white p-6 md:p-8">
           <CardHeader className="p-0 mb-6">
@@ -223,13 +225,13 @@ const Dashboard = () => {
         </Card>
       </section>
 
-      {/* 7. USO DE TARJETAS */}
+      {/* 8. USO DE TARJETAS */}
       <section>
         <Card className="rounded-[2.5rem] border-none shadow-soft bg-white p-6 md:p-8">
           <CardHeader className="p-0 mb-6">
             <CardTitle className="text-sm font-black uppercase tracking-widest text-slate-400 flex items-center gap-2">
               <CreditCard className="h-4 w-4" /> Uso de Tarjetas 💳
-            </Title>
+            </CardTitle>
           </CardHeader>
           <div className="w-full">
             <CreditCardsChart cards={cards} />
