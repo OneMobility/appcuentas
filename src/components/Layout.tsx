@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Link, Outlet, useLocation } from "react-router-dom";
+import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -34,7 +34,7 @@ const navItems = [
   { name: "Categorías", path: "/categories", icon: Tag },
 ];
 
-const Sidebar = () => {
+const Sidebar = ({ onLogout }: { onLogout: () => void }) => {
   const location = useLocation();
   const { user } = useSession();
 
@@ -62,7 +62,7 @@ const Sidebar = () => {
       {user && (
         <Button
           variant="ghost"
-          onClick={() => supabase.auth.signOut()}
+          onClick={onLogout}
           className="flex items-center gap-3 rounded-xl px-4 py-3 text-sidebar-foreground hover:bg-destructive/20 hover:text-destructive-foreground mt-auto"
         >
           <LogOut className="h-5 w-5" />
@@ -76,7 +76,21 @@ const Sidebar = () => {
 const Layout: React.FC = () => {
   const isMobile = useIsMobile();
   const location = useLocation();
+  const navigate = useNavigate();
+  const { user } = useSession();
   const currentPageName = navItems.find(item => item.path === location.pathname)?.name || "Oinkash";
+
+  const handleLogout = async () => {
+    try {
+      await supabase.auth.signOut();
+      localStorage.removeItem('lastVisitedRoute');
+      navigate('/login', { replace: true });
+    } catch (error) {
+      console.error("Error signing out:", error);
+      // Redirección de respaldo en caso de error
+      navigate('/login', { replace: true });
+    }
+  };
 
   return (
     <div className="flex min-h-screen w-full bg-background">
@@ -87,6 +101,16 @@ const Layout: React.FC = () => {
               <img src="https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Logo%20App.png" alt="Logo" className="h-8 w-8" />
               <h1 className="text-lg font-bold">{currentPageName}</h1>
             </div>
+            {user && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleLogout}
+                className="text-muted-foreground hover:text-destructive rounded-full"
+              >
+                <LogOut className="h-5 w-5" />
+              </Button>
+            )}
           </header>
           <main className="flex-1 overflow-y-auto p-4 pb-24">
             <Outlet />
@@ -96,7 +120,7 @@ const Layout: React.FC = () => {
       ) : (
         <PanelGroup direction="horizontal" className="w-full">
           <Panel defaultSize={20} minSize={15} maxSize={25} className="bg-sidebar text-sidebar-foreground border-r">
-            <Sidebar />
+            <Sidebar onLogout={handleLogout} />
           </Panel>
           <PanelResizeHandle className="w-1 bg-border hover:bg-primary/30 transition-colors" />
           <Panel defaultSize={80}>
