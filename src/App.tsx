@@ -18,9 +18,10 @@ import SharedBudgets from "./pages/SharedBudgets";
 import CreateSharedBudget from "./pages/CreateSharedBudget";
 import EditSharedBudget from "./pages/EditSharedBudget";
 import ShoppingList from "./pages/ShoppingList";
+import RecurringExpenses from "./pages/RecurringExpenses"; // Nuevo
 import NotFound from "./pages/NotFound";
 import Login from "./pages/Login";
-import ResetPassword from "./pages/ResetPassword"; // Importar la nueva página
+import ResetPassword from "./pages/ResetPassword";
 import { CategoryProvider } from "./context/CategoryContext";
 import { SessionProvider, useSession } from "./context/SessionContext";
 import CardNotifications from "./components/CardNotifications";
@@ -30,22 +31,8 @@ const queryClient = new QueryClient();
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { session, isLoading } = useSession();
-
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-100">
-        <div className="text-center">
-          <h1 className="text-4xl font-bold mb-4">Cargando...</h1>
-          <p className="text-xl text-gray-600">Verificando sesión.</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!session) {
-    return <Navigate to="/login" replace />;
-  }
-
+  if (isLoading) return <div className="min-h-screen flex items-center justify-center bg-gray-100">Cargando...</div>;
+  if (!session) return <Navigate to="/login" replace />;
   return <>{children}</>;
 };
 
@@ -61,22 +48,9 @@ const App = () => {
               <CardNotifications />
               <Routes>
                 <Route path="/login" element={<Login />} />
-                <Route
-                  path="/reset-password"
-                  element={
-                    <ProtectedRoute>
-                      <ResetPassword />
-                    </ProtectedRoute>
-                  }
-                />
+                <Route path="/reset-password" element={<ProtectedRoute><ResetPassword /></ProtectedRoute>} />
                 <Route path="/" element={<Navigate to="/dashboard" replace />} />
-                <Route
-                  element={
-                    <ProtectedRoute>
-                      <Layout />
-                    </ProtectedRoute>
-                  }
-                >
+                <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
                   <Route path="/dashboard" element={<Dashboard />} />
                   <Route path="/cash" element={<Cash />} />
                   <Route path="/debtors" element={<Debtors />} />
@@ -90,6 +64,7 @@ const App = () => {
                   <Route path="/shared-budgets" element={<SharedBudgets />} />
                   <Route path="/shared-budgets/create" element={<CreateSharedBudget />} />
                   <Route path="/shared-budgets/edit/:budgetId" element={<EditSharedBudget />} />
+                  <Route path="/recurring" element={<RecurringExpenses />} /> {/* Nueva ruta */}
                   <Route path="/shopping-list" element={<ShoppingList />} />
                 </Route>
                 <Route path="*" element={<NotFound />} />

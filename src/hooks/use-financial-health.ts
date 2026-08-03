@@ -1,24 +1,26 @@
 "use client";
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useSession } from '@/context/SessionContext';
-import { startOfMonth, endOfMonth, isWithinInterval, parseISO, addMonths, format } from 'date-fns';
+import { startOfMonth, endOfMonth, isWithinInterval, parseISO, subMonths, differenceInDays } from 'date-fns';
 
 export interface FinancialHealth {
-  score: number; // 0 - 100
-  status: 'excellent' | 'good' | 'warning' | 'critical';
+  score: number; // 0 - 1000
+  status: 'Excelente' | 'Bueno' | 'Regular' | 'Crítico';
   metrics: {
-    liquidityRatio: number;
-    debtRatio: number;
-    savingsProgress: number;
-    punctualityScore: number;
+    debtImpact: number;      // 300 pts
+    savingsImpact: number;   // 200 pts
+    punctualityImpact: number;// 200 pts
+    flowImpact: number;      // 150 pts
+    liquidityImpact: number; // 150 pts
   };
   prediction: {
-    estimatedEndOfMonthBalance: number;
-    trend: 'up' | 'down' | 'stable';
+    estimatedEndBalance: number;
+    daysUntilRed: number | null; // Días antes de quedarse sin dinero
+    canPayAll: boolean;
   };
-  tips: string[];
+  smartTips: string[];
 }
 
 export function useFinancialHealth() {
@@ -31,93 +33,89 @@ export function useFinancialHealth() {
     setIsLoading(true);
 
     try {
-      // 1. Obtener todos los datos necesarios
-      const [cards, cash, debts, savings, recurring] = await Promise.all([
+      const now = new Date();
+      const start = startOfMonth(now);
+      const end = endOfMonth(now);
+      const startLastMonth = startOfMonth(subMonths(now, 1));
+      const endLastMonth = endOfMonth(subMonths(now, 1));
+
+      const [cards, cash, debtors, creditors, savings, recurring, budgets] = await Promise.all([
         supabase.from('cards').select('*').eq('user_id', user.id),
         supabase.from('cash_transactions').select('*').eq('user_id', user.id),
         supabase.from('debtors').select('*').eq('user_id', user.id),
+        supabase.from('creditors').select('*').eq('user_id', user.id),
         supabase.from('savings').select('*').eq('user_id', user.id),
-        supabase.from('recurring_expenses').select('*').eq('user_id', user.id).eq('is_active', true)
+        supabase.from('recurring_expenses').select('*').eq('user_id', user.id).eq('is_active', true),
+        supabase.from('shared_budgets').select('*, budget_participants(*)').eq('user_id', user.id)
       ]);
 
-      const cardsData = cards.data || [];
-      const cashTxs = cash.data || [];
-      const savingsData = savings.data || [];
-      const recurringData = recurring.data || [];
-
-      // --- CÁLCULOS DE SCORE ---
-
-      // A. Liquidez (Dinero disponible vs Deudas inmediatas)
-      const cashBalance = cashTxs.reduce((s, t) => t.type === "ingreso" ? s + t.amount : s - t.amount, 0);
-      const debitBalance = cardsData.filter(c => c.type === "debit").reduce((s, c) => s + c.current_balance, 0);
-      const creditDebt = cardsData.filter(c => c.type === "credit").reduce((s, c) => s + c.current_balance, 0);
+      // --- CÁLCULO DE PILARES (OinkScore) ---
       
-      const totalAvailable = cashBalance + debitBalance;
-      const liquidityRatio = creditDebt === 0 ? 100 : Math.min(100, (totalAvailable / creditDebt) * 50);
+      // 1. Deuda (300 pts): Deuda vs Límite Total
+      const totalLimit = cards.data?.filter(c => c.type === 'credit').reduce((s, c) => s + (c.credit_limit || 0), 0) || 0;
+      const totalCreditDebt = cards.data?.filter(c => c.type === 'credit').reduce((s, c) => s + c.current_balance, 0) || 0;
+      const debtRatio = totalLimit === 0 ? 1 : Math.max(0, 1 - (totalCreditDebt / totalLimit));
+      const debtImpact = Math.round(debtRatio * 300);
 
-      // B. Uso de Crédito (Deuda vs Límite)
-      const totalCreditLimit = cardsData.filter(c => c.type === "credit").reduce((s, c) => s + (c.credit_limit || 0), 0);
-      const debtRatio = totalCreditLimit === 0 ? 100 : Math.max(0, 100 - (creditDebt / totalCreditLimit * 100));
+      // 2. Ahorro (200 pts): Progreso de metas
+      const totalSaved = savings.data?.reduce((s, sv) => s + sv.current_balance, 0) || 0;
+      const totalTargets = savings.data?.reduce((s, sv) => s + (sv.target_amount || 0), 0) || 0;
+      const savingsRatio = totalTargets === 0 ? 1 : Math.min(1, totalSaved / totalTargets);
+      const savingsImpact = Math.round(savingsRatio * 200);
 
-      // C. Progreso de Ahorro
-      const totalSavings = savingsData.reduce((s, sv) => s + sv.current_balance, 0);
-      const totalTargets = savingsData.reduce((s, sv) => s + (sv.target_amount || 0), 0);
-      const savingsProgress = totalTargets === 0 ? 100 : Math.min(100, (totalSavings / totalTargets) * 100);
+      // 3. Puntualidad (200 pts): Presupuestos y Deudas vencidas
+      const overdueBudgets = budgets.data?.filter(b => b.due_date && parseISO(b.due_date) < now && !b.budget_participants.every((p:any) => p.is_paid)).length || 0;
+      const punctualityImpact = Math.max(0, 200 - (overdueBudgets * 50));
 
-      // D. Puntualidad (Simulado basado en deudas de tarjetas y recurring)
-      const punctualityScore = 90; // Por ahora base 90
+      // 4. Flujo (150 pts): Ingresos vs Gastos del mes
+      const monthIncome = cash.data?.filter(t => t.type === 'ingreso' && isWithinInterval(parseISO(t.date), {start, end})).reduce((s, t) => s + t.amount, 0) || 0;
+      const monthExpense = cash.data?.filter(t => t.type === 'egreso' && isWithinInterval(parseISO(t.date), {start, end})).reduce((s, t) => s + t.amount, 0) || 0;
+      const flowImpact = monthIncome > monthExpense ? 150 : Math.round((monthIncome / (monthExpense || 1)) * 150);
 
-      // Score Final (Promedio ponderado)
-      const finalScore = Math.round(
-        (liquidityRatio * 0.3) + 
-        (debtRatio * 0.3) + 
-        (savingsProgress * 0.2) + 
-        (punctualityScore * 0.2)
-      );
+      // 5. Liquidez (150 pts): Efectivo + Débito vs Deuda Próxima
+      const cashBal = cash.data?.reduce((s, t) => t.type === "ingreso" ? s + t.amount : s - t.amount, 0) || 0;
+      const debitBal = cards.data?.filter(c => c.type === "debit").reduce((s, c) => s + c.current_balance, 0) || 0;
+      const totalLiquidity = cashBal + debitBal;
+      const liquidityImpact = totalCreditDebt === 0 ? 150 : Math.min(150, Math.round((totalLiquidity / totalCreditDebt) * 150));
+
+      const finalScore = debtImpact + savingsImpact + punctualityImpact + flowImpact + liquidityImpact;
 
       // --- PREDICCIONES ---
-      const now = new Date();
-      const endMonth = endOfMonth(now);
-      const daysLeft = endMonth.getDate() - now.getDate();
+      const daysInMonth = differenceInDays(end, start) + 1;
+      const daysPassed = Math.max(1, differenceInDays(now, start));
+      const dailySpend = monthExpense / daysPassed;
+      const daysLeft = differenceInDays(end, now);
       
-      // Gasto promedio diario (últimos 30 días)
-      const thirtyDaysAgo = new Date();
-      thirtyDaysAgo.setDate(now.getDate() - 30);
-      const recentExpenses = cashTxs.filter(t => t.type === 'egreso' && parseISO(t.date) >= thirtyDaysAgo);
-      const dailyAverage = recentExpenses.reduce((s, t) => s + t.amount, 0) / 30;
+      const upcomingRecurring = recurring.data?.reduce((s, r) => s + r.amount, 0) || 0;
+      const estimatedEndBalance = totalLiquidity - (dailySpend * daysLeft) - upcomingRecurring;
       
-      // Gastos recurrentes que faltan en el mes
-      const upcomingRecurring = recurringData.filter(r => {
-        const nextDate = parseISO(r.next_date);
-        return isWithinInterval(nextDate, { start: now, end: endMonth });
-      }).reduce((s, r) => s + r.amount, 0);
+      const daysUntilRed = estimatedEndBalance < 0 ? Math.floor(totalLiquidity / (dailySpend || 1)) : null;
 
-      const estimatedEndOfMonthBalance = totalAvailable - (dailyAverage * daysLeft) - upcomingRecurring;
-
-      // --- CONSEJOS DINÁMICOS ---
+      // --- CONSEJOS INTELIGENTES ---
       const tips = [];
-      if (debtRatio < 50) tips.push("Tu deuda de crédito es alta. Trata de pagar más del mínimo para evitar intereses.");
-      if (savingsProgress < 20) tips.push("¡No olvides tus metas! Un pequeño ahorro hoy hace la diferencia mañana.");
-      if (estimatedEndOfMonthBalance < 0) tips.push("¡Cuidado! A este ritmo podrías terminar el mes en números rojos.");
-      if (finalScore > 80) tips.push("¡Excelente salud financiera! Sigue así.");
+      if (monthExpense > monthIncome) tips.push(`⚠️ Alerta: Estás gastando más de lo que ganas ($${(monthExpense - monthIncome).toFixed(2)} de diferencia).`);
+      
+      // Análisis de categorías "hormiga" (Antojitos, Apps, etc)
+      const antojitosId = (await supabase.from('expense_categories').select('id').eq('name', 'Antojitos').single()).data?.id;
+      const antojoSpend = cash.data?.filter(t => t.expense_category_id === antojitosId && isWithinInterval(parseISO(t.date), {start, end})).reduce((s, t) => s + t.amount, 0) || 0;
+      if (antojoSpend > monthIncome * 0.1) tips.push(`🍦 Ojo: Tus "Antojitos" representan el ${(antojoSpend/monthIncome*100).toFixed(1)}% de tu ingreso. ¡Cuidado ahí!`);
 
-      let status: FinancialHealth['status'] = 'good';
-      if (finalScore > 85) status = 'excellent';
-      else if (finalScore < 60) status = 'warning';
-      if (finalScore < 40) status = 'critical';
+      if (totalCreditDebt > totalLimit * 0.7) tips.push(`💳 Prioridad: Tu uso de crédito es crítico (${(totalCreditDebt/totalLimit*100).toFixed(0)}%). Paga antes del corte.`);
+
+      let status: FinancialHealth['status'] = 'Regular';
+      if (finalScore > 800) status = 'Excelente';
+      else if (finalScore > 600) status = 'Bueno';
+      else if (finalScore < 400) status = 'Crítico';
 
       setData({
         score: finalScore,
         status,
-        metrics: { liquidityRatio, debtRatio, savingsProgress, punctualityScore },
-        prediction: {
-          estimatedEndOfMonthBalance,
-          trend: estimatedEndOfMonthBalance > totalAvailable ? 'up' : 'down'
-        },
-        tips
+        metrics: { debtImpact, savingsImpact, punctualityImpact, flowImpact, liquidityImpact },
+        prediction: { estimatedEndBalance, daysUntilRed, canPayAll: estimatedEndBalance > 0 },
+        smartTips: tips
       });
     } catch (e) {
-      console.error("Health calculation error:", e);
+      console.error(e);
     } finally {
       setIsLoading(false);
     }
