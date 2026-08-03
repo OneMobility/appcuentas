@@ -83,7 +83,8 @@ export const SessionProvider = ({ children }: { children: ReactNode }) => {
             if (location.pathname !== '/reset-password') {
               navigate('/reset-password', { replace: true });
             }
-          } else if (location.pathname !== '/reset-password' && location.pathname !== '/login') {
+          } else {
+            // Redirigir siempre al iniciar sesión con éxito
             const lastVisitedRoute = localStorage.getItem('lastVisitedRoute');
             if (lastVisitedRoute && lastVisitedRoute !== '/login' && lastVisitedRoute !== '/reset-password') {
               navigate(lastVisitedRoute, { replace: true });
