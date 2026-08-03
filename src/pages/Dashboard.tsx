@@ -9,7 +9,7 @@ import { useSession } from "@/context/SessionContext";
 import { showError, showSuccess } from "@/utils/toast";
 import { format, startOfMonth, endOfMonth, parseISO, isWithinInterval } from "date-fns";
 import { es } from "date-fns/locale";
-import { getUpcomingPaymentDueDate, isPaymentDoneForCurrentStatement, getLocalDateString } from "@/utils/date-helpers";
+import { getLocalDateString } from "@/utils/date-helpers";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import GroupedPaymentDueDatesCard from "@/components/GroupedPaymentDueDatesCard";
@@ -22,7 +22,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { fetchUsdToMxnRate } from "@/utils/currency-helper";
-import FinancialHealthCard from "@/components/FinancialHealthCard"; // Nuevo componente
+import FinancialHealthCard from "@/components/FinancialHealthCard";
 
 export interface CardData {
   id: string;
@@ -42,7 +42,7 @@ export interface CardData {
 
 const Dashboard = () => {
   const { user } = useSession();
-  const { incomeCategories, expenseCategories, getCategoryById, isLoadingCategories } = useCategoryContext();
+  const { incomeCategories, expenseCategories, isLoadingCategories } = useCategoryContext();
 
   const [cards, setCards] = useState<CardData[]>([]);
   const [cashTransactions, setCashTransactions] = useState<any[]>([]);
@@ -69,7 +69,6 @@ const Dashboard = () => {
     }
   }, [refreshKey]);
 
-  // Cargar tasa de cambio
   const loadExchangeRate = async () => {
     setIsRateLoading(true);
     try {
@@ -191,7 +190,6 @@ const Dashboard = () => {
         </Button>
       </div>
 
-      {/* Fila de Inteligencia */}
       <div className="grid gap-4 lg:grid-cols-3 px-1">
         <div className="lg:col-span-1">
           <FinancialHealthCard />
@@ -201,7 +199,6 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* Widget del Convertidor de Divisas */}
       <div className="px-1">
         <Card className="border-none shadow-sm bg-indigo-50/50">
           <CardHeader className="p-4 pb-2 flex flex-row items-center justify-between">
@@ -274,7 +271,7 @@ const Dashboard = () => {
         <Card className="border-none shadow-sm overflow-hidden">
           <CardHeader className="p-4 pb-2"><CardTitle className="text-sm font-bold">Ingresos por Categoría (Mes)</CardTitle></CardHeader>
           <CardContent className="p-0"><CategoryPieChart data={categoryMetrics.income} title="Ingresos" /></CardContent>
-        </div>
+        </Card>
       </div>
 
       <Card className="border-none shadow-sm mx-1">
