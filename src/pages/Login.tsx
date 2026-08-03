@@ -8,16 +8,6 @@ import { supabase } from '@/integrations/supabase/client';
 const Login = () => {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-100 p-4">
-      {/* Estilos para ocultar los enlaces de recuperación de contraseña de Supabase Auth UI */}
-      <style>{`
-        .supabase-auth-ui_ui-anchor[href*="forgotten_password"],
-        .supabase-auth-ui_ui-anchor[href*="forgot"],
-        a[href*="forgotten_password"],
-        a[href*="forgot"] {
-          display: none !important;
-        }
-      `}</style>
-
       <div className="w-full max-w-md bg-white p-8 rounded-lg shadow-md">
         <div className="flex flex-col items-center justify-center mb-6">
           <img
@@ -43,7 +33,7 @@ const Login = () => {
             },
           }}
           theme="light"
-          redirectTo={window.location.origin + '/dashboard'}
+          redirectTo={window.location.origin + '/reset-password'}
           localization={{
             variables: {
               sign_in: {
@@ -66,6 +56,13 @@ const Login = () => {
                 social_provider_text: 'Registrarse con {{provider}}',
                 link_text: '¿No tienes una cuenta? Regístrate',
               },
+              forgotten_password: {
+                title: 'Recuperar Contraseña',
+                email_label: 'Correo electrónico',
+                email_input_placeholder: 'Tu correo electrónico',
+                button_label: 'Enviar instrucciones',
+                link_text: '¿Olvidaste tu contraseña?',
+              }
             },
           }}
           signUp={{
