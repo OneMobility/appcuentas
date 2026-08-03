@@ -1,101 +1,106 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { useFinancialHealth } from "@/hooks/use-financial-health";
-import { motion } from "framer-motion";
-import { TrendingUp, TrendingDown, AlertCircle, CheckCircle2, Info, Calendar } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { AlertCircle, CheckCircle2, ChevronDown, ChevronUp, Info, Calendar } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Badge } from "./ui/badge";
+import DynamicLucideIcon from "./DynamicLucideIcon";
 
 const FinancialHealthCard = () => {
   const { data, isLoading } = useFinancialHealth();
+  const [showDetails, setShowDetails] = useState(false);
 
-  if (isLoading || !data) return (
-    <Card className="h-[280px] flex items-center justify-center animate-pulse">
-      <div className="text-center space-y-2">
-        <div className="h-12 w-12 bg-muted rounded-full mx-auto" />
-        <p className="text-xs text-muted-foreground">Calculando OinkScore...</p>
-      </div>
-    </Card>
-  );
+  if (isLoading || !data) return <Card className="h-[200px] animate-pulse bg-muted" />;
 
-  const scoreColors = {
-    Excelente: "text-green-600 bg-green-50 border-green-200",
-    Bueno: "text-blue-600 bg-blue-50 border-blue-200",
-    Regular: "text-orange-600 bg-orange-50 border-orange-200",
-    Crítico: "text-red-600 bg-red-50 border-red-200",
+  const statusColors = {
+    Excelente: "border-green-200 bg-green-50 text-green-700",
+    Bueno: "border-blue-200 bg-blue-50 text-blue-700",
+    Regular: "border-orange-200 bg-orange-50 text-orange-700",
+    Crítico: "border-red-200 bg-red-50 text-red-700",
   };
 
   return (
-    <Card className={cn("overflow-hidden border-2 transition-all shadow-lg", scoreColors[data.status])}>
+    <Card className={cn("overflow-hidden border-2 transition-all shadow-md", statusColors[data.status])}>
       <CardHeader className="pb-2 flex flex-row items-center justify-between">
-        <div>
-          <CardTitle className="text-[10px] font-black uppercase tracking-[0.2em] opacity-60">OinkScore</CardTitle>
-          <div className="text-4xl font-black mt-1 flex items-baseline gap-1">
+        <div className="space-y-1">
+          <CardTitle className="text-[10px] font-black uppercase tracking-[0.2em] opacity-60">Tu OinkScore</CardTitle>
+          <div className="text-4xl font-black flex items-baseline gap-1">
             {data.score}
             <span className="text-xs opacity-50 font-bold">/ 1000</span>
           </div>
-          <Badge className={cn("mt-2 rounded-full px-3 py-0.5 text-[10px] font-bold", 
-            data.status === 'Excelente' ? "bg-green-500 text-white" : 
-            data.status === 'Bueno' ? "bg-blue-500 text-white" :
-            data.status === 'Regular' ? "bg-orange-500 text-white" : "bg-red-500 text-white"
-          )}>
-            Nivel: {data.status}
-          </Badge>
+          <Badge className="rounded-full font-bold">{data.status}</Badge>
         </div>
-        <div className="h-16 w-16 rounded-full border-4 border-current flex items-center justify-center relative overflow-hidden">
+        <div className="h-16 w-16 rounded-full border-4 border-current flex items-center justify-center relative overflow-hidden bg-white/20">
           <motion.div 
             initial={{ height: 0 }}
             animate={{ height: `${data.score / 10}%` }}
             className="absolute bottom-0 w-full bg-current opacity-20"
           />
-          <span className="text-xl">🐷</span>
+          <span className="text-2xl">🐷</span>
         </div>
       </CardHeader>
       
-      <CardContent className="space-y-4 pt-2">
-        {/* Predicción de Fin de Mes */}
-        <div className="bg-white/50 p-3 rounded-2xl border border-white/30 backdrop-blur-sm">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-[10px] font-black uppercase opacity-60 flex items-center gap-1">
+      <CardContent className="space-y-3 pt-0">
+        <div className="bg-white/40 p-3 rounded-2xl border border-white/20">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-[10px] font-bold uppercase opacity-60 flex items-center gap-1">
               <Calendar className="h-3 w-3" /> Cierre Estimado
             </span>
-            {data.prediction.canPayAll ? (
-              <CheckCircle2 className="h-4 w-4 text-green-600" />
-            ) : (
-              <AlertCircle className="h-4 w-4 text-red-600 animate-pulse" />
-            )}
+            {data.prediction.canPayAll ? <CheckCircle2 className="h-3.5 w-3.5 text-green-600" /> : <AlertCircle className="h-3.5 w-3.5 text-red-600 animate-pulse" />}
           </div>
           <div className="flex items-end justify-between">
-            <div className="text-xl font-black">${data.prediction.estimatedEndBalance.toFixed(2)}</div>
-            <div className="text-[10px] font-bold text-right">
-              {data.prediction.canPayAll ? (
-                <span className="text-green-700">¡Libras el mes!</span>
-              ) : (
-                <span className="text-red-700">Faltan ${Math.abs(data.prediction.estimatedEndBalance).toFixed(0)}</span>
-              )}
+            <div className="text-lg font-black">${data.prediction.estimatedEndBalance.toFixed(2)}</div>
+            <div className="text-[9px] font-bold uppercase">
+              {data.prediction.canPayAll ? "A salvo" : `Faltan $${Math.abs(data.prediction.estimatedEndBalance).toFixed(0)}`}
             </div>
           </div>
-          {data.prediction.daysUntilRed && (
-            <p className="text-[9px] mt-2 font-bold text-red-600 uppercase tracking-tighter">
-              ⚠️ Alerta: Te quedarás sin dinero en aprox. {data.prediction.daysUntilRed} días.
-            </p>
-          )}
         </div>
 
-        {/* Consejos/Alertas Dinámicas */}
-        <div className="space-y-2">
-          {data.smartTips.slice(0, 2).map((tip, i) => (
-            <div key={i} className="flex gap-2 items-start bg-white/40 p-2 rounded-xl text-[10px] font-bold border border-white/20">
-              <Info className="h-3 w-3 shrink-0 mt-0.5 text-current" />
-              <p>{tip}</p>
-            </div>
-          ))}
-        </div>
+        <Button 
+          variant="ghost" 
+          size="sm" 
+          onClick={() => setShowDetails(!showDetails)}
+          className="w-full h-7 text-[10px] font-bold uppercase tracking-wider hover:bg-white/20"
+        >
+          {showDetails ? <ChevronUp className="h-3 w-3 mr-1" /> : <ChevronDown className="h-3 w-3 mr-1" />}
+          ¿Por qué este puntaje?
+        </Button>
+
+        <AnimatePresence>
+          {showDetails && (
+            <motion.div 
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              className="space-y-2 overflow-hidden"
+            >
+              <div className="grid grid-cols-1 gap-1.5 pt-2">
+                {data.pillars.map((p, i) => (
+                  <div key={i} className="flex items-center justify-between bg-white/30 p-2 rounded-xl border border-white/10">
+                    <div className="flex items-center gap-2">
+                      <div className="p-1.5 bg-white/50 rounded-lg">
+                        <DynamicLucideIcon iconName={p.icon} className="h-3 w-3" />
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-bold leading-none">{p.name}</p>
+                        <p className="text-[8px] opacity-60">{p.description}</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-[10px] font-black">{p.score} <span className="opacity-40">/ {p.max}</span></p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </CardContent>
     </Card>
   );
 };
 
-import { Badge } from "./ui/badge";
 export default FinancialHealthCard;

@@ -23,6 +23,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { fetchUsdToMxnRate } from "@/utils/currency-helper";
 import FinancialHealthCard from "@/components/FinancialHealthCard";
+import SmartTipsCard from "@/components/SmartTipsCard";
 
 export interface CardData {
   id: string;
@@ -191,11 +192,30 @@ const Dashboard = () => {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3 px-1">
-        <div className="lg:col-span-1">
+        <div className="lg:col-span-1 space-y-4">
           <FinancialHealthCard />
+          <SmartTipsCard />
         </div>
-        <div className="lg:col-span-2">
+        <div className="lg:col-span-2 space-y-4">
           <GroupedPaymentDueDatesCard cards={cards} onUpdate={() => setRefreshKey(prev => prev + 1)} />
+          <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
+            {[
+              { label: "TU DINERITO", val: totals.cash, icon: Home, color: "text-green-600", bg: "bg-green-50" },
+              { label: "TE DEBEN", val: totals.debt, icon: Users, color: "text-blue-600", bg: "bg-blue-50" },
+              { label: "DEBES", val: totals.cred, icon: DollarSign, color: "text-red-600", bg: "bg-red-50" },
+              { label: "BALANCE", val: totals.total, icon: PiggyBank, color: "text-pink-600", bg: "bg-pink-50" },
+            ].map((item, i) => (
+              <Card key={i} className={cn("border-none shadow-sm", item.bg)}>
+                <CardHeader className="p-3 pb-0 flex flex-row items-center justify-between space-y-0">
+                  <CardTitle className="text-[9px] md:text-[10px] font-bold uppercase tracking-wider opacity-70">{item.label}</CardTitle>
+                  <item.icon className={cn("h-3.5 w-3.5", item.color)} />
+                </CardHeader>
+                <CardContent className="p-3 pt-1">
+                  <div className="text-base md:text-xl font-bold">${item.val.toFixed(2)}</div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -242,25 +262,6 @@ const Dashboard = () => {
             </div>
           </CardContent>
         </Card>
-      </div>
-
-      <div className="grid gap-3 grid-cols-2 lg:grid-cols-4 px-1">
-        {[
-          { label: "TU DINERITO", val: totals.cash, icon: Home, color: "text-green-600", bg: "bg-green-50" },
-          { label: "TE DEBEN", val: totals.debt, icon: Users, color: "text-blue-600", bg: "bg-blue-50" },
-          { label: "DEBES", val: totals.cred, icon: DollarSign, color: "text-red-600", bg: "bg-red-50" },
-          { label: "BALANCE", val: totals.total, icon: PiggyBank, color: "text-pink-600", bg: "bg-pink-50" },
-        ].map((item, i) => (
-          <Card key={i} className={cn("border-none shadow-sm", item.bg)}>
-            <CardHeader className="p-3 pb-0 flex flex-row items-center justify-between space-y-0">
-              <CardTitle className="text-[9px] md:text-[10px] font-bold uppercase tracking-wider opacity-70">{item.label}</CardTitle>
-              <item.icon className={cn("h-3.5 w-3.5", item.color)} />
-            </CardHeader>
-            <CardContent className="p-3 pt-1">
-              <div className="text-base md:text-xl font-bold">${item.val.toFixed(2)}</div>
-            </CardContent>
-          </Card>
-        ))}
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 mx-1">
