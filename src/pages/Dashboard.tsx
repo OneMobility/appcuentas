@@ -20,7 +20,7 @@ import FinancialPredictionCard from "@/components/FinancialPredictionCard";
 import SmartTipsCard from "@/components/SmartTipsCard";
 import { cn } from "@/lib/utils";
 
-const APP_LOGO = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/ChatGPT%20Image%203%20ago%202026,%2003_44_08%20p.m..png";
+const COCHINITO_LOGO = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Cochinito%20Ahorro.png";
 
 const Dashboard = () => {
   const { user } = useSession();
@@ -119,9 +119,9 @@ const Dashboard = () => {
           <div className="relative">
             <div className="absolute inset-0 bg-primary/10 rounded-full blur-2xl animate-pulse" />
             <img 
-              src={APP_LOGO} 
+              src={COCHINITO_LOGO} 
               alt="Oinkash" 
-              className="h-32 w-32 relative z-10 drop-shadow-xl hover:scale-105 transition-transform duration-300 rounded-3xl object-cover"
+              className="h-32 w-32 relative z-10 drop-shadow-xl hover:scale-105 transition-transform duration-300 object-contain"
             />
           </div>
           <div>
