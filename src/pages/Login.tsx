@@ -7,10 +7,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Loader2, Mail, Lock, User, ArrowRight } from 'lucide-react';
+import { Loader2, Mail, Lock, User, ArrowRight, ArrowLeft } from 'lucide-react';
 
 const Login = () => {
   const [isSignUp, setIsSignUp] = useState(false);
+  const [isForgotPassword, setIsForgotPassword] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [firstName, setFirstName] = useState('');
@@ -22,7 +23,18 @@ const Login = () => {
     setIsSubmitting(true);
 
     try {
-      if (isSignUp) {
+      if (isForgotPassword) {
+        // Password Recovery Flow
+        const { error } = await supabase.auth.resetPasswordForEmail(email, {
+          redirectTo: window.location.origin + '/reset-password',
+        });
+
+        if (error) throw error;
+
+        showSuccess("Se ha enviado un enlace de recuperación a tu correo electrónico.");
+        setIsForgotPassword(false);
+      } else if (isSignUp) {
+        // Sign Up Flow
         if (!firstName.trim()) {
           showError("El nombre es obligatorio.");
           setIsSubmitting(false);
@@ -49,6 +61,7 @@ const Login = () => {
           showSuccess("¡Registro exitoso! Por favor verifica tu correo electrónico para confirmar tu cuenta.");
         }
       } else {
+        // Sign In Flow
         const { error } = await supabase.auth.signInWithPassword({
           email,
           password,
@@ -74,17 +87,23 @@ const Login = () => {
             className="h-16 w-12 object-contain mb-2"
           />
           <CardTitle className="text-2xl font-black text-center text-foreground">
-            {isSignUp ? "Crea tu Cuenta" : "Bienvenido a Oinkash"}
+            {isForgotPassword 
+              ? "Recuperar Contraseña" 
+              : isSignUp 
+                ? "Crea tu Cuenta" 
+                : "Bienvenido a Oinkash"}
           </CardTitle>
           <CardDescription className="text-center text-xs">
-            {isSignUp 
-              ? "Regístrate para empezar a organizar tus finanzas de forma sencilla." 
-              : "Inicia sesión para continuar organizando tus finanzas."}
+            {isForgotPassword
+              ? "Ingresa tu correo electrónico para recibir un enlace de restablecimiento."
+              : isSignUp 
+                ? "Regístrate para empezar a organizar tus finanzas de forma sencilla." 
+                : "Inicia sesión para continuar organizando tus finanzas."}
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
-            {isSignUp && (
+            {isSignUp && !isForgotPassword && (
               <div className="grid grid-cols-2 gap-3">
                 <div className="grid gap-1.5">
                   <Label htmlFor="firstName">Nombre</Label>
@@ -137,22 +156,36 @@ const Login = () => {
               </div>
             </div>
 
-            <div className="grid gap-1.5">
-              <Label htmlFor="password">Contraseña</Label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                <Input
-                  id="password"
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  required
-                  className="rounded-xl h-10 pl-9"
-                  disabled={isSubmitting}
-                />
+            {!isForgotPassword && (
+              <div className="grid gap-1.5">
+                <div className="flex justify-between items-center">
+                  <Label htmlFor="password">Contraseña</Label>
+                  {!isSignUp && (
+                    <button
+                      type="button"
+                      onClick={() => setIsForgotPassword(true)}
+                      className="text-xs text-primary hover:underline font-semibold"
+                      disabled={isSubmitting}
+                    >
+                      ¿Olvidaste tu contraseña?
+                    </button>
+                  )}
+                </div>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    id="password"
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••"
+                    required
+                    className="rounded-xl h-10 pl-9"
+                    disabled={isSubmitting}
+                  />
+                </div>
               </div>
-            </div>
+            )}
 
             <Button type="submit" className="w-full rounded-xl h-11 font-bold mt-2" disabled={isSubmitting}>
               {isSubmitting ? (
@@ -162,27 +195,42 @@ const Login = () => {
                 </>
               ) : (
                 <>
-                  {isSignUp ? "Registrarse" : "Iniciar Sesión"}
+                  {isForgotPassword 
+                    ? "Enviar Enlace" 
+                    : isSignUp 
+                      ? "Registrarse" 
+                      : "Iniciar Sesión"}
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </>
               )}
             </Button>
 
             <div className="text-center pt-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setIsSignUp(!isSignUp);
-                  setFirstName('');
-                  setLastName('');
-                }}
-                className="text-xs text-primary hover:underline font-semibold"
-                disabled={isSubmitting}
-              >
-                {isSignUp 
-                  ? "¿Ya tienes una cuenta? Inicia sesión" 
-                  : "¿No tienes una cuenta? Regístrate"}
-              </button>
+              {isForgotPassword ? (
+                <button
+                  type="button"
+                  onClick={() => setIsForgotPassword(false)}
+                  className="text-xs text-muted-foreground hover:text-foreground font-semibold flex items-center justify-center gap-1 mx-auto"
+                  disabled={isSubmitting}
+                >
+                  <ArrowLeft className="h-3 w-3" /> Volver al inicio de sesión
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsSignUp(!isSignUp);
+                    setFirstName('');
+                    setLastName('');
+                  }}
+                  className="text-xs text-primary hover:underline font-semibold"
+                  disabled={isSubmitting}
+                >
+                  {isSignUp 
+                    ? "¿Ya tienes una cuenta? Inicia sesión" 
+                    : "¿No tienes una cuenta? Regístrate"}
+                </button>
+              )}
             </div>
           </form>
         </CardContent>
