@@ -18,9 +18,11 @@ interface ProfileDialogProps {
   forceOpen?: boolean;
 }
 
-// Generar las URLs de los 16 avatares usando el helper de Supabase para el bucket 'Avatar'
+// Generar las URLs de los 16 avatares usando el formato avatar_01.png, avatar_02.png...
 const getAvatarUrl = (id: number) => {
-  const { data } = supabase.storage.from('Avatar').getPublicUrl(`${id}.png`);
+  const paddedId = id.toString().padStart(2, '0');
+  const fileName = `avatar_${paddedId}.png`;
+  const { data } = supabase.storage.from('Avatar').getPublicUrl(fileName);
   return data.publicUrl;
 };
 
