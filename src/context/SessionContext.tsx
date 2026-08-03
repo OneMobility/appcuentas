@@ -79,7 +79,8 @@ export const SessionProvider = ({ children }: { children: ReactNode }) => {
           const isRecovery = window.location.hash.includes('type=recovery') || window.location.search.includes('type=recovery');
           if (isRecovery) {
             navigate('/reset-password', { replace: true });
-          } else {
+          } else if (location.pathname !== '/reset-password') {
+            // Only redirect to dashboard if we are NOT currently on the reset-password page
             const lastVisitedRoute = localStorage.getItem('lastVisitedRoute');
             if (lastVisitedRoute && lastVisitedRoute !== '/login' && lastVisitedRoute !== '/reset-password') {
               navigate(lastVisitedRoute, { replace: true });
