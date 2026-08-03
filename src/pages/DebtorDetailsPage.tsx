@@ -28,7 +28,8 @@ import {
   Coins,
   TrendingUp,
   TrendingDown,
-  Calendar
+  Calendar,
+  PlusCircle
 } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { cn } from "@/lib/utils";
