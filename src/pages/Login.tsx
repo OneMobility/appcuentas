@@ -68,12 +68,6 @@ const Login = () => {
               },
             },
           }}
-          signUp={{
-            data: {
-              first_name: '',
-              last_name: '',
-            },
-          }}
         />
       </div>
     </div>
