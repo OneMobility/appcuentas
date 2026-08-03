@@ -10,7 +10,26 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { DollarSign, Trash2, Edit, ArrowLeft, FileDown, History, AlertCircle, Search, Filter, FileText, Share2, Copy, MessageSquare, ChevronLeft, ChevronRight, Coins } from "lucide-react";
+import { 
+  DollarSign, 
+  Trash2, 
+  Edit, 
+  ArrowLeft, 
+  FileDown, 
+  History, 
+  Search, 
+  Filter, 
+  FileText, 
+  Share2, 
+  Copy, 
+  MessageSquare, 
+  ChevronLeft, 
+  ChevronRight, 
+  Coins,
+  TrendingUp,
+  TrendingDown,
+  Calendar
+} from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { cn } from "@/lib/utils";
 import { format, parseISO, isWithinInterval, startOfMonth, endOfMonth, addMonths, subMonths } from "date-fns";
@@ -27,6 +46,7 @@ import { evaluateExpression } from "@/utils/math-helpers";
 import { getLocalDateString } from "@/utils/date-helpers";
 import { Badge } from "@/components/ui/badge";
 import { fetchUsdToMxnRate } from "@/utils/currency-helper";
+import { getContrastColor } from "@/utils/color-helpers";
 
 interface DebtorTransaction {
   id: string;
@@ -76,18 +96,13 @@ const DebtorDetailsPage: React.FC = () => {
     selectedIncomeCategoryId: "",
   });
 
-  // Monedas y conversión
   const [currency, setCurrency] = useState<"MXN" | "USD">("MXN");
   const [usdToMxnRate, setUsdToMxnRate] = useState<number>(20.00);
 
   useEffect(() => {
     const fetchRate = async () => {
-      try {
-        const rate = await fetchUsdToMxnRate();
-        setUsdToMxnRate(rate);
-      } catch (e) {
-        console.error("No se pudo obtener la tasa en detalles de deudor:", e);
-      }
+      const rate = await fetchUsdToMxnRate();
+      setUsdToMxnRate(rate);
     };
     fetchRate();
   }, [isTransactionDialogOpen]);
@@ -113,7 +128,7 @@ const DebtorDetailsPage: React.FC = () => {
       const { data: cashTxData } = await supabase.from('cash_transactions').select('type, amount').eq('user_id', user.id);
       setCashBalance((cashTxData || []).reduce((s, t) => t.type === "ingreso" ? s + t.amount : s - t.amount, 0));
 
-      if (!transactionForm.selectedIncomeCategoryId && incomeCategories.length > 0) {
+      if (incomeCategories.length > 0) {
         setTransactionForm(prev => ({ ...prev, selectedIncomeCategoryId: incomeCategories[0].id }));
       }
     } catch (error: any) {
@@ -124,61 +139,26 @@ const DebtorDetailsPage: React.FC = () => {
     }
   };
 
-  useEffect(() => {
-    fetchData();
-  }, [debtorId, user, incomeCategories]);
+  useEffect(() => { fetchData(); }, [debtorId, user, incomeCategories]);
 
-  // Auto-sincronizar el saldo actual en la base de datos si no coincide con la suma de transacciones
-  useEffect(() => {
-    if (!debtor) return;
-    const totalCharges = debtor.debtor_transactions
-      .filter(t => t.type === 'charge')
-      .reduce((sum, t) => sum + Number(t.amount), 0);
-    const totalPayments = debtor.debtor_transactions
-      .filter(t => t.type === 'payment')
-      .reduce((sum, t) => sum + Number(t.amount), 0);
-    const expectedBalance = debtor.initial_balance + totalCharges - totalPayments;
-
-    if (Math.abs(debtor.current_balance - expectedBalance) > 0.01) {
-      const syncBalance = async () => {
-        await supabase
-          .from('debtors')
-          .update({ current_balance: expectedBalance })
-          .eq('id', debtor.id);
-        fetchData();
-      };
-      syncBalance();
-    }
-  }, [debtor]);
-
-  // Cálculo de Saldo Acumulado calculando hacia adelante desde la deuda inicial
   const transactionsWithBalance = useMemo(() => {
     if (!debtor) return [];
-    
     const sortedAsc = [...debtor.debtor_transactions].sort((a, b) => 
       new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
     );
-
     let current = debtor.initial_balance;
     const computedAsc = sortedAsc.map(tx => {
-      if (tx.type === "charge") {
-        current += tx.amount;
-      } else {
-        current -= tx.amount;
-      }
+      if (tx.type === "charge") current += tx.amount;
+      else current -= tx.amount;
       return { ...tx, runningBalance: current };
     });
-
     return computedAsc.reverse();
   }, [debtor]);
 
-  // Intervalo de filtrado por mes calendario
-  const filterInterval = useMemo(() => {
-    return {
-      start: startOfMonth(currentViewDate),
-      end: endOfMonth(currentViewDate)
-    };
-  }, [currentViewDate]);
+  const filterInterval = useMemo(() => ({
+    start: startOfMonth(currentViewDate),
+    end: endOfMonth(currentViewDate)
+  }), [currentViewDate]);
 
   const filteredTransactions = useMemo(() => {
     return transactionsWithBalance.filter(tx => {
@@ -189,507 +169,234 @@ const DebtorDetailsPage: React.FC = () => {
     });
   }, [transactionsWithBalance, filterInterval, searchTerm, filterType]);
 
-  // Calcular métricas del mes seleccionado
   const monthMetrics = useMemo(() => {
-    if (!debtor) return { charges: 0, payments: 0, net: 0 };
-    const monthTxs = debtor.debtor_transactions.filter(tx => 
-      isWithinInterval(parseISO(tx.date), filterInterval)
-    );
+    const monthTxs = (debtor?.debtor_transactions || []).filter(tx => isWithinInterval(parseISO(tx.date), filterInterval));
     const charges = monthTxs.filter(tx => tx.type === "charge").reduce((sum, tx) => sum + tx.amount, 0);
     const payments = monthTxs.filter(tx => tx.type === "payment").reduce((sum, tx) => sum + tx.amount, 0);
-    return {
-      charges,
-      payments,
-      net: charges - payments
-    };
+    return { charges, payments, net: charges - payments };
   }, [debtor, filterInterval]);
-
-  const handleOpenAdd = () => {
-    setEditingTransaction(null);
-    setTransactionForm({
-      type: (debtor?.current_balance || 0) <= 0 ? "charge" : "payment",
-      amount: "",
-      description: "",
-      destinationAccountId: "cash",
-      selectedIncomeCategoryId: incomeCategories[0]?.id || "",
-    });
-    setCurrency("MXN");
-    setSkipLinkedTransaction(false);
-    setIsTransactionDialogOpen(true);
-  };
-
-  const handleOpenEdit = (tx: any) => {
-    setEditingTransaction(tx);
-    setTransactionForm({
-      type: tx.type,
-      amount: tx.amount.toString(),
-      description: tx.description,
-      destinationAccountId: "cash",
-      selectedIncomeCategoryId: incomeCategories[0]?.id || "",
-    });
-    setCurrency("MXN");
-    setSkipLinkedTransaction(true);
-    setIsTransactionDialogOpen(true);
-  };
 
   const handleTransactionSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user || !debtor) return;
+    let base = evaluateExpression(transactionForm.amount) || 0;
+    if (base <= 0) return showError("Monto inválido");
 
-    let baseAmount = evaluateExpression(transactionForm.amount) || 0;
-    if (baseAmount <= 0) { showError("Monto inválido"); return; }
-
-    // Convertir de USD a MXN si es necesario
-    let finalAmount = baseAmount;
-    let finalDescription = transactionForm.description;
-    if (currency === "USD" && !editingTransaction) {
-      finalAmount = baseAmount * usdToMxnRate;
-      finalDescription += ` (Reg: $${baseAmount.toFixed(2)} USD a tasa $${usdToMxnRate.toFixed(2)} MXN)`;
-    }
+    let finalAmt = currency === "USD" ? base * usdToMxnRate : base;
+    const date = getLocalDateString(new Date());
 
     try {
       if (editingTransaction) {
-        const { error: updateTxError } = await supabase
-          .from('debtor_transactions')
-          .update({ 
-            type: transactionForm.type, 
-            amount: finalAmount, 
-            description: finalDescription 
-          })
-          .eq('id', editingTransaction.id);
-        
-        if (updateTxError) throw updateTxError;
+        await supabase.from('debtor_transactions').update({ type: transactionForm.type, amount: finalAmt, description: transactionForm.description }).eq('id', editingTransaction.id);
       } else {
-        const { error: insertTxError } = await supabase
-          .from('debtor_transactions')
-          .insert({ 
-            user_id: user.id, 
-            debtor_id: debtor.id, 
-            type: transactionForm.type, 
-            amount: finalAmount, 
-            description: finalDescription, 
-            date: getLocalDateString(new Date()) 
-          });
-        
-        if (insertTxError) throw insertTxError;
-
+        await supabase.from('debtor_transactions').insert({ user_id: user.id, debtor_id: debtor.id, type: transactionForm.type, amount: finalAmt, description: transactionForm.description, date });
         if (transactionForm.type === "payment" && !skipLinkedTransaction) {
-          const linkedDesc = `Abono de ${debtor.name}: ${finalDescription}`;
           if (transactionForm.destinationAccountId === "cash") {
-            await supabase.from('cash_transactions').insert({ 
-              user_id: user.id, 
-              type: "ingreso", 
-              amount: finalAmount, 
-              description: linkedDesc, 
-              date: getLocalDateString(new Date()), 
-              income_category_id: transactionForm.selectedIncomeCategoryId || null 
-            });
+            await supabase.from('cash_transactions').insert({ user_id: user.id, type: "ingreso", amount: finalAmt, description: `Abono de ${debtor.name}`, date, income_category_id: transactionForm.selectedIncomeCategoryId || null });
           } else {
             const card = cards.find(c => c.id === transactionForm.destinationAccountId);
             if (card) {
-              const newCardBalance = card.type === "credit" ? card.current_balance - finalAmount : card.current_balance + finalAmount;
-              await supabase.from('cards').update({ current_balance: newCardBalance }).eq('id', card.id);
-              await supabase.from('card_transactions').insert({ 
-                user_id: user.id, 
-                card_id: card.id, 
-                type: "payment", 
-                amount: finalAmount, 
-                description: linkedDesc, 
-                date: getLocalDateString(new Date()), 
-                income_category_id: transactionForm.selectedIncomeCategoryId || null 
-              });
+              const newBal = card.type === "credit" ? card.current_balance - finalAmt : card.current_balance + finalAmt;
+              await supabase.from('cards').update({ current_balance: newBal }).eq('id', card.id);
+              await supabase.from('card_transactions').insert({ user_id: user.id, card_id: card.id, type: "payment", amount: finalAmt, description: `Abono de ${debtor.name}`, date, income_category_id: transactionForm.selectedIncomeCategoryId || null });
             }
           }
         }
       }
-
-      const { data: txs, error: fetchError } = await supabase
-        .from('debtor_transactions')
-        .select('type, amount')
-        .eq('debtor_id', debtor.id);
-      
-      if (fetchError) throw fetchError;
-
-      const totalCharges = (txs || [])
-        .filter(t => t.type === 'charge')
-        .reduce((sum, t) => sum + Number(t.amount), 0);
-
-      const totalPayments = (txs || [])
-        .filter(t => t.type === 'payment')
-        .reduce((sum, t) => sum + Number(t.amount), 0);
-
-      const newBalance = debtor.initial_balance + totalCharges - totalPayments;
-
-      const { error: updateError } = await supabase
-        .from('debtors')
-        .update({ current_balance: newBalance })
-        .eq('id', debtor.id);
-
-      if (updateError) throw updateError;
-
-      showSuccess(editingTransaction ? "Movimiento actualizado" : "Movimiento registrado");
+      showSuccess("Movimiento guardado");
       setIsTransactionDialogOpen(false);
-      
-      if (!editingTransaction && debtor.phone) {
-        if (window.confirm("¿Enviar comprobante por WhatsApp?")) {
-          const typeLabel = transactionForm.type === "charge" ? "Cargo" : "Abono";
-          const msg = `Hola ${debtor.name}, se registró un ${typeLabel} por $${finalAmount.toFixed(2)}. Saldo actual: $${newBalance.toFixed(2)}.`;
-          const cleanPhone = debtor.phone.replace(/\D/g, '');
-          window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`, '_blank');
-        }
-      }
-
       fetchData();
-    } catch (error: any) {
-      showError('Error: ' + error.message);
-    }
+    } catch (err: any) { showError(err.message); }
   };
 
-  const handleDeleteTransaction = async (tx: any) => {
-    if (!user || !debtor) return;
-    try {
-      const { error: deleteError } = await supabase
-        .from('debtor_transactions')
-        .delete()
-        .eq('id', tx.id);
-
-      if (deleteError) throw deleteError;
-
-      const { data: txs, error: fetchError } = await supabase
-        .from('debtor_transactions')
-        .select('type, amount')
-        .eq('debtor_id', debtor.id);
-      
-      if (fetchError) throw fetchError;
-
-      const totalCharges = (txs || [])
-        .filter(t => t.type === 'charge')
-        .reduce((sum, t) => sum + Number(t.amount), 0);
-
-      const totalPayments = (txs || [])
-        .filter(t => t.type === 'payment')
-        .reduce((sum, t) => sum + Number(t.amount), 0);
-
-      const newBalance = debtor.initial_balance + totalCharges - totalPayments;
-
-      const { error: updateError } = await supabase
-        .from('debtors')
-        .update({ current_balance: newBalance })
-        .eq('id', debtor.id);
-
-      if (updateError) throw updateError;
-
-      showSuccess("Movimiento eliminado");
-      fetchData();
-    } catch (error: any) {
-      showError('Error al eliminar: ' + error.message);
-    }
-  };
-
-  const handleExport = (formatType: 'csv' | 'pdf') => {
-    if (!debtor) return;
-    const data = filteredTransactions.map(tx => ({
-      Fecha: format(parseISO(tx.date), "dd/MM/yyyy"),
-      Tipo: tx.type === "charge" ? "Cargo" : "Abono",
-      Descripción: tx.description,
-      Monto: tx.amount.toFixed(2),
-      Saldo: tx.runningBalance.toFixed(2)
-    }));
-    if (formatType === 'csv') exportToCsv(`historial_${debtor.name}.csv`, data);
-    else exportToPdf(`historial_${debtor.name}.pdf`, `Historial: ${debtor.name}`, ["Fecha", "Tipo", "Descripción", "Monto", "Saldo"], data.map(d => Object.values(d)));
+  const handleDeleteTransaction = async (txId: string) => {
+    await supabase.from('debtor_transactions').delete().eq('id', txId);
+    showSuccess("Eliminado");
+    fetchData();
   };
 
   const generateStatementText = () => {
     if (!debtor) return "";
-
-    const totalCharges = debtor.debtor_transactions
-      .filter(t => t.type === 'charge')
-      .reduce((sum, t) => sum + Number(t.amount), 0);
-
-    const totalPayments = debtor.debtor_transactions
-      .filter(t => t.type === 'payment')
-      .reduce((sum, t) => sum + Number(t.amount), 0);
-
-    let text = `📄 *ESTADO DE CUENTA - OINKASH*\n\n`;
-    text += `Hola *${debtor.name}*, aquí tienes el resumen de tu cuenta:\n`;
-    text += `----------------------------------\n`;
-    text += `💰 *Deuda Inicial:* $${debtor.initial_balance.toFixed(2)}\n`;
-    text += `➕ *Cargos Adicionales:* $${totalCharges.toFixed(2)}\n`;
-    text += `➖ *Abonos Realizados:* $${totalPayments.toFixed(2)}\n`;
-    text += `📉 *Saldo Pendiente:* $${debtor.current_balance.toFixed(2)}\n`;
-    if (debtor.due_date) {
-      text += `📅 *Fecha de Vencimiento:* ${format(parseISO(debtor.due_date), "dd 'de' MMMM, yyyy", { locale: es })}\n`;
-    }
-    text += `----------------------------------\n\n`;
-
-    const lastTxs = [...debtor.debtor_transactions]
-      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-      .slice(0, 5);
-
-    if (lastTxs.length > 0) {
-      text += `📝 *Últimos Movimientos:*\n`;
-      lastTxs.forEach(tx => {
-        const sign = tx.type === "charge" ? "+" : "-";
-        text += `• ${format(parseISO(tx.date), "dd/MM")}: ${tx.description} (${sign}$${tx.amount.toFixed(2)})\n`;
-      });
-      text += `\n----------------------------------\n`;
-    }
-
-    text += `¡Gracias por tu puntualidad! 😊`;
+    let text = `📄 *ESTADO DE CUENTA: ${debtor.name.toUpperCase()}*\n\n`;
+    text += `💰 *Saldo Pendiente:* $${debtor.current_balance.toFixed(2)}\n`;
+    text += `📅 *Generado:* ${format(new Date(), "d 'de' MMMM")}\n\n`;
+    text += `*Últimos Movimientos:*\n`;
+    filteredTransactions.slice(0, 5).forEach(tx => {
+      text += `${tx.type === 'charge' ? '➕' : '➖'} $${tx.amount.toFixed(2)} - ${tx.description}\n`;
+    });
+    text += `\nGenerado con Oinkash 🐷`;
     return text;
-  };
-
-  const handleCopyStatement = () => {
-    const text = generateStatementText();
-    navigator.clipboard.writeText(text);
-    showSuccess("Estado de cuenta copiado al portapapeles.");
-    setIsShareDialogOpen(false);
-  };
-
-  const handleSendWhatsAppStatement = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!sharePhone.trim()) {
-      showError("Por favor, ingresa un número de teléfono.");
-      return;
-    }
-    const text = generateStatementText();
-    const cleanPhone = sharePhone.replace(/\D/g, '');
-    window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(text)}`, '_blank');
-    setIsShareDialogOpen(false);
   };
 
   if (isLoading) return <LoadingSpinner />;
   if (!debtor) return null;
 
   return (
-    <div className="flex flex-col gap-6 p-4">
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={() => navigate('/debtors')}><ArrowLeft className="h-5 w-5" /></Button>
-        <h1 className="text-3xl font-bold">Deudor: {debtor.name}</h1>
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card className="bg-yellow-50 border-yellow-200">
-          <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-yellow-800">Saldo Pendiente Global</CardTitle></CardHeader>
-          <CardContent><div className="text-3xl font-bold text-yellow-900">${debtor.current_balance.toFixed(2)}</div></CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Saldo del Mes Seleccionado</CardTitle></CardHeader>
-          <CardContent><div className="text-2xl font-semibold">${monthMetrics.net.toFixed(2)}</div></CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Vencimiento</CardTitle></CardHeader>
-          <CardContent><div className="text-2xl font-semibold">{debtor.due_date ? format(parseISO(debtor.due_date), "dd/MM/yyyy") : "-"}</div></CardContent>
-        </Card>
-      </div>
-
-      <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
-        <div className="flex flex-col sm:flex-row gap-2 w-full md:max-w-2xl">
-          <div className="relative flex-1">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input placeholder="Buscar descripción..." className="pl-8 h-9" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+    <div className="flex flex-col gap-8 p-4 md:p-6 pb-24 max-w-5xl mx-auto">
+      
+      {/* HEADER DETALLE */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <Button variant="ghost" size="icon" className="rounded-full" onClick={() => navigate('/debtors')}><ArrowLeft className="h-5 w-5" /></Button>
+          <div>
+            <h1 className="text-2xl font-black tracking-tight">{debtor.name}</h1>
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Historial de Préstamos</p>
           </div>
-          <Select value={filterType} onValueChange={(v: any) => setFilterType(v)}>
-            <SelectTrigger className="w-full sm:w-[140px] h-9">
-              <Filter className="mr-2 h-3 w-3" />
-              <SelectValue placeholder="Filtrar" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos</SelectItem>
-              <SelectItem value="charge">Cargos</SelectItem>
-              <SelectItem value="payment">Abonos</SelectItem>
-            </SelectContent>
-          </Select>
         </div>
-        <div className="flex items-center gap-2 w-full md:w-auto">
-          <Button variant="outline" size="sm" className="h-9 gap-1" onClick={() => setIsShareDialogOpen(true)}>
-            <Share2 className="h-4 w-4" /> Compartir Estado
-          </Button>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="icon" className="h-9 w-9" title="Exportar"><FileDown className="h-4 w-4" /></Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => handleExport('csv')}><FileText className="mr-2 h-4 w-4" /> CSV</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handleExport('pdf')}><FileText className="mr-2 h-4 w-4" /> PDF</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <Button size="sm" className="h-9 gap-1" onClick={handleOpenAdd}><DollarSign className="h-4 w-4" /> Nuevo</Button>
+        <div className="flex gap-2">
+           <Button variant="outline" size="icon" className="rounded-xl h-10 w-10" onClick={() => setIsShareDialogOpen(true)}><Share2 className="h-4 w-4" /></Button>
+           <Button className="rounded-xl h-10 font-black gap-2" onClick={() => { setEditingTransaction(null); setIsTransactionDialogOpen(true); }}><PlusCircle className="h-4 w-4" /> Nuevo</Button>
         </div>
       </div>
 
-      <Card>
-        <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-muted/10 gap-2">
-          <div className="flex flex-col">
-            <CardTitle className="text-sm font-bold">Movimientos del Mes</CardTitle>
-            <span className="text-[10px] text-muted-foreground font-medium">
-              {format(filterInterval.start, "dd 'de' MMM", { locale: es })} - {format(filterInterval.end, "dd 'de' MMM, yyyy", { locale: es })}
-            </span>
+      {/* DASHBOARD DEUDOR */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <Card className="bg-slate-900 text-white rounded-[2rem] border-none shadow-xl p-6 relative overflow-hidden">
+          <div className="absolute top-0 right-0 p-4 opacity-10"><DollarSign className="h-20 w-20" /></div>
+          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Deuda Pendiente</p>
+          <p className="text-4xl font-black mt-1">${debtor.current_balance.toLocaleString()}</p>
+          <div className="mt-4 flex items-center gap-2 text-[10px] font-bold text-emerald-400 bg-emerald-400/10 w-fit px-3 py-1 rounded-full">
+            <TrendingDown className="h-3 w-3" /> Deuda Inicial: ${debtor.initial_balance.toLocaleString()}
           </div>
-          
-          {/* Navegación de Meses */}
-          <div className="flex items-center bg-background rounded-lg p-0.5 border">
-            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setCurrentViewDate(subMonths(currentViewDate, 1))}><ChevronLeft className="h-4 w-4" /></Button>
-            <span className="px-2 text-[10px] font-bold min-w-[80px] text-center capitalize">{format(currentViewDate, "MMM yyyy", { locale: es })}</span>
-            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setCurrentViewDate(addMonths(currentViewDate, 1))}><ChevronRight className="h-4 w-4" /></Button>
+        </Card>
+
+        <Card className="rounded-[2rem] border-none shadow-sm bg-white p-6">
+          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Flujo este Mes</p>
+          <div className="space-y-4 mt-4">
+            <div className="flex justify-between items-center">
+              <span className="text-xs font-bold text-slate-500">Nuevos Préstamos</span>
+              <span className="text-sm font-black text-rose-500">+${monthMetrics.charges.toLocaleString()}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-xs font-bold text-slate-500">Abonos Recibidos</span>
+              <span className="text-sm font-black text-emerald-500">-${monthMetrics.payments.toLocaleString()}</span>
+            </div>
+            <div className="h-px bg-slate-100" />
+            <div className="flex justify-between items-center">
+              <span className="text-xs font-black uppercase text-slate-400">Balance Neto</span>
+              <span className={cn("text-sm font-black", monthMetrics.net >= 0 ? "text-rose-500" : "text-emerald-500")}>
+                {monthMetrics.net >= 0 ? '+' : ''}${monthMetrics.net.toLocaleString()}
+              </span>
+            </div>
           </div>
-        </CardHeader>
-        <CardContent>
+        </Card>
+
+        <Card className="rounded-[2rem] border-none shadow-sm bg-white p-6 flex flex-col justify-center items-center text-center">
+          <div className="h-12 w-12 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-600 mb-3">
+            <Calendar className="h-6 w-6" />
+          </div>
+          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Vencimiento Próximo</p>
+          <p className="text-lg font-black text-slate-900 mt-1">{debtor.due_date ? format(parseISO(debtor.due_date), "d 'de' MMMM", { locale: es }) : "Sin fecha fija"}</p>
+        </Card>
+      </div>
+
+      {/* HISTORIAL DE MOVIMIENTOS */}
+      <section className="space-y-6">
+        <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+          <div className="flex items-center bg-white p-1 rounded-2xl shadow-sm border">
+            <Button variant="ghost" size="icon" className="rounded-xl h-10 w-10" onClick={() => setCurrentViewDate(subMonths(currentViewDate, 1))}><ChevronLeft className="h-5 w-5" /></Button>
+            <div className="px-6 text-xs font-black uppercase tracking-widest min-w-[140px] text-center">{format(currentViewDate, "MMMM yyyy", { locale: es })}</div>
+            <Button variant="ghost" size="icon" className="rounded-xl h-10 w-10" onClick={() => setCurrentViewDate(addMonths(currentViewDate, 1))}><ChevronRight className="h-5 w-5" /></Button>
+          </div>
+          <div className="relative w-full md:max-w-xs">
+            <Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
+            <Input placeholder="Buscar movimiento..." className="pl-9 rounded-2xl border-none shadow-sm h-11 bg-white" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+          </div>
+        </div>
+
+        <Card className="rounded-[2.5rem] border-none shadow-sm bg-white overflow-hidden">
           <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Fecha</TableHead>
-                <TableHead>Descripción</TableHead>
-                <TableHead className="text-right">Monto</TableHead>
-                <TableHead className="text-right">Saldo</TableHead>
-                <TableHead className="text-right">Acciones</TableHead>
+            <TableHeader className="bg-slate-50/50">
+              <TableRow className="border-none">
+                <TableHead className="pl-8 text-[10px] font-black uppercase tracking-tighter">Fecha</TableHead>
+                <TableHead className="text-[10px] font-black uppercase tracking-tighter">Descripción</TableHead>
+                <TableHead className="text-right text-[10px] font-black uppercase tracking-tighter">Monto</TableHead>
+                <TableHead className="text-right pr-8 text-[10px] font-black uppercase tracking-tighter">Saldo Acum.</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredTransactions.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={5} className="text-center py-8 text-muted-foreground text-xs">
-                    Sin movimientos registrados en este mes.
-                  </TableCell>
-                </TableRow>
+                <TableRow><TableCell colSpan={4} className="text-center py-20 text-slate-400 font-bold italic text-sm">No hay movimientos en este periodo.</TableCell></TableRow>
               ) : (
-                filteredTransactions.map((tx) => (
-                  <TableRow key={tx.id}>
-                    <TableCell className="text-xs">{format(parseISO(tx.date), "dd/MM/yy")}</TableCell>
+                filteredTransactions.map(tx => (
+                  <TableRow key={tx.id} className="group hover:bg-slate-50/50 border-slate-50 transition-colors">
+                    <TableCell className="pl-8 py-5">
+                      <div className="flex flex-col">
+                        <span className="text-sm font-black text-slate-900">{format(parseISO(tx.date), "dd")}</span>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase">{format(parseISO(tx.date), "MMM", { locale: es })}</span>
+                      </div>
+                    </TableCell>
                     <TableCell>
                       <div className="flex flex-col">
-                        <span className="font-medium text-xs">{tx.description}</span>
-                        <Badge variant="outline" className={cn("w-fit text-[9px] px-1 py-0", tx.type === "charge" ? "text-red-600" : "text-green-600")}>
-                          {tx.type === "charge" ? "Cargo" : "Abono"}
+                        <span className="text-sm font-bold text-slate-700">{tx.description}</span>
+                        <Badge variant="outline" className={cn("w-fit text-[9px] font-black uppercase mt-1 border-none px-2", tx.type === 'charge' ? "bg-rose-50 text-rose-600" : "bg-emerald-50 text-emerald-600")}>
+                          {tx.type === 'charge' ? 'Cargo' : 'Abono'}
                         </Badge>
                       </div>
                     </TableCell>
-                    <TableCell className={cn("text-right font-bold text-xs", tx.type === "charge" ? "text-red-600" : "text-green-600")}>
-                      {tx.type === "charge" ? "+" : "-"}${tx.amount.toFixed(2)}
+                    <TableCell className="text-right">
+                      <span className={cn("text-sm font-black", tx.type === 'charge' ? "text-rose-500" : "text-emerald-500")}>
+                        {tx.type === 'charge' ? '+' : '-'}${tx.amount.toLocaleString()}
+                      </span>
                     </TableCell>
-                    <TableCell className="text-right font-black text-xs">${tx.runningBalance.toFixed(2)}</TableCell>
-                    <TableCell className="text-right flex gap-1 justify-end">
-                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleOpenEdit(tx)}><Edit className="h-3.5 w-3.5" /></Button>
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild><Button variant="ghost" size="icon" className="h-7 w-7 text-destructive"><Trash2 className="h-3.5 w-3.5" /></Button></AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader><AlertDialogTitle>¿Eliminar movimiento?</AlertDialogTitle><AlertDialogDescription>Se ajustará el saldo.</AlertDialogDescription></AlertDialogHeader>
-                          <AlertDialogFooter><AlertDialogCancel>No</AlertDialogCancel><AlertDialogAction onClick={() => handleDeleteTransaction(tx)}>Sí</AlertDialogAction></AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
+                    <TableCell className="text-right pr-8">
+                      <div className="flex items-center justify-end gap-3">
+                        <span className="text-sm font-black text-slate-900">${tx.runningBalance.toLocaleString()}</span>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"><Edit className="h-3.5 w-3.5 text-slate-400" /></Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="rounded-xl">
+                             <DropdownMenuItem onClick={() => { setEditingTransaction(tx); setTransactionForm({ type: tx.type, amount: tx.amount.toString(), description: tx.description, destinationAccountId: "cash", selectedIncomeCategoryId: "" }); setIsTransactionDialogOpen(true); }} className="text-xs font-bold gap-2"><Edit className="h-3.5 w-3.5" /> Editar</DropdownMenuItem>
+                             <DropdownMenuItem onClick={() => handleDeleteTransaction(tx.id)} className="text-xs font-bold gap-2 text-rose-500"><Trash2 className="h-3.5 w-3.5" /> Eliminar</DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))
               )}
             </TableBody>
           </Table>
-        </CardContent>
-      </Card>
+        </Card>
+      </section>
 
-      {/* Diálogo de Transacción */}
+      {/* DIÁLOGOS */}
       <Dialog open={isTransactionDialogOpen} onOpenChange={setIsTransactionDialogOpen}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>{editingTransaction ? "Editar Movimiento" : "Registrar Movimiento"}</DialogTitle></DialogHeader>
-          <form onSubmit={handleTransactionSubmit} className="grid gap-4 py-4">
-            <div className="grid gap-2">
-              <Label>Tipo</Label>
-              <Select value={transactionForm.type} onValueChange={(v: any) => setTransactionForm({...transactionForm, type: v})}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent><SelectItem value="payment">Abono (Me paga)</SelectItem><SelectItem value="charge">Cargo (Me debe más)</SelectItem></SelectContent>
-              </Select>
+        <DialogContent className="rounded-[2.5rem] p-8 max-w-[400px]">
+          <DialogHeader><DialogTitle className="text-2xl font-black">{editingTransaction ? 'Editar' : 'Nuevo'} Movimiento</DialogTitle></DialogHeader>
+          <form onSubmit={handleTransactionSubmit} className="grid gap-6 py-4">
+            <div className="grid grid-cols-2 gap-2 bg-slate-100 p-1 rounded-2xl">
+              <Button type="button" variant={transactionForm.type === 'payment' ? 'default' : 'ghost'} className={cn("rounded-xl font-black text-xs uppercase", transactionForm.type === 'payment' && "bg-white text-emerald-600 shadow-sm")} onClick={() => setTransactionForm({...transactionForm, type: 'payment'})}>Abono</Button>
+              <Button type="button" variant={transactionForm.type === 'charge' ? 'default' : 'ghost'} className={cn("rounded-xl font-black text-xs uppercase", transactionForm.type === 'charge' && "bg-white text-rose-600 shadow-sm")} onClick={() => setTransactionForm({...transactionForm, type: 'charge'})}>Préstamo</Button>
             </div>
-            
-            <div className="grid gap-2">
-              <div className="flex justify-between items-center">
-                <Label>Monto</Label>
-                <div className="flex bg-muted p-0.5 rounded-lg text-xs gap-1">
-                  <button type="button" onClick={() => setCurrency("MXN")} className={cn("px-2 py-1 rounded-md font-bold transition-all", currency === "MXN" ? "bg-white text-indigo-900 shadow-sm" : "text-muted-foreground")}>MXN</button>
-                  <button type="button" onClick={() => setCurrency("USD")} className={cn("px-2 py-1 rounded-md font-bold transition-all", currency === "USD" ? "bg-white text-indigo-900 shadow-sm" : "text-muted-foreground")}>USD</button>
-                </div>
-              </div>
+            <div className="space-y-2">
+              <div className="flex justify-between items-center"><Label className="text-[10px] font-black uppercase text-slate-400">Monto</Label></div>
               <div className="relative">
-                <Input value={transactionForm.amount} onChange={e => setTransactionForm({...transactionForm, amount: e.target.value})} className="rounded-xl pr-12" placeholder="0.00" required />
-                <span className="absolute right-3.5 top-2.5 text-xs text-muted-foreground font-black">{currency}</span>
+                <Input value={transactionForm.amount} onChange={e => setTransactionForm({...transactionForm, amount: e.target.value})} className="rounded-2xl h-14 text-xl font-black bg-slate-50 border-none pr-12" required />
+                <span className="absolute right-4 top-4 text-xs font-black text-slate-300">{currency}</span>
               </div>
-              {currency === "USD" && transactionForm.amount && (
-                <p className="text-[10px] text-indigo-700 font-bold flex items-center gap-1">
-                  <Coins className="h-3 w-3 animate-pulse" /> Equivale a ~ ${(parseFloat(transactionForm.amount) * usdToMxnRate || 0).toFixed(2)} MXN (tasa: ${usdToMxnRate.toFixed(2)})
-                </p>
-              )}
             </div>
-
-            <div className="grid gap-2"><Label>Descripción</Label><Input value={transactionForm.description} onChange={e => setTransactionForm({...transactionForm, description: e.target.value})} required /></div>
-            {transactionForm.type === "payment" && !editingTransaction && (
-              <>
-                <div className="flex items-center space-x-2 bg-blue-50 p-3 rounded-md border border-blue-100">
-                  <Checkbox id="skip" checked={skipLinkedTransaction} onCheckedChange={(v) => setSkipLinkedTransaction(!!v)} />
-                  <Label htmlFor="skip" className="text-xs">Ya registré este ingreso manualmente</Label>
-                </div>
-                {!skipLinkedTransaction && (
-                  <>
-                    <div className="grid gap-2">
-                      <Label>Destino</Label>
-                      <Select value={transactionForm.destinationAccountId} onValueChange={(v) => setTransactionForm({...transactionForm, destinationAccountId: v})}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="cash">Efectivo (${cashBalance.toFixed(2)})</SelectItem>
-                          {cards.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="grid gap-2">
-                      <Label>Categoría</Label>
-                      <Select value={transactionForm.selectedIncomeCategoryId} onValueChange={(v) => setTransactionForm({...transactionForm, selectedIncomeCategoryId: v})}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>{incomeCategories.map(cat => <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>)}</SelectContent>
-                      </Select>
-                    </div>
-                  </>
-                )}
-              </>
-            )}
-            <DialogFooter><Button type="submit">Guardar</Button></DialogFooter>
+            <div className="space-y-2">
+              <Label className="text-[10px] font-black uppercase text-slate-400">Descripción</Label>
+              <Input value={transactionForm.description} onChange={e => setTransactionForm({...transactionForm, description: e.target.value})} className="rounded-2xl h-12 bg-slate-50 border-none font-bold" required />
+            </div>
+            <Button type="submit" className="w-full rounded-2xl h-14 font-black text-lg bg-indigo-600 shadow-xl shadow-indigo-100">Confirmar</Button>
           </form>
         </DialogContent>
       </Dialog>
 
-      {/* Diálogo para Compartir Estado de Cuenta */}
       <Dialog open={isShareDialogOpen} onOpenChange={setIsShareDialogOpen}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Share2 className="h-5 w-5" /> Compartir Estado de Cuenta
-            </DialogTitle>
-            <DialogDescription>
-              Envía un resumen detallado de la cuenta por WhatsApp o cópialo para enviarlo por otro medio.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="border rounded-lg p-3 bg-muted/50 max-h-[200px] overflow-y-auto text-xs font-mono whitespace-pre-wrap">
+        <DialogContent className="rounded-[2.5rem] p-8 max-w-[400px]">
+          <DialogHeader><DialogTitle className="text-2xl font-black">Compartir Estado</DialogTitle></DialogHeader>
+          <div className="space-y-6 py-4">
+            <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100 font-mono text-[10px] whitespace-pre-wrap text-slate-600">
               {generateStatementText()}
             </div>
-            <form onSubmit={handleSendWhatsAppStatement} className="grid gap-3">
-              <div className="grid gap-1.5">
-                <Label htmlFor="sharePhone">Número de WhatsApp</Label>
-                <Input
-                  id="sharePhone"
-                  placeholder="Ej. 521234567890"
-                  value={sharePhone}
-                  onChange={(e) => setSharePhone(e.target.value)}
-                />
-              </div>
-              <Button type="submit" className="w-full gap-2">
-                <MessageSquare className="h-4 w-4" /> Enviar por WhatsApp
-              </Button>
-            </form>
-            <div className="relative flex py-1 items-center">
-              <div className="flex-grow border-t border-muted"></div>
-              <span className="flex-shrink mx-4 text-muted-foreground text-xs">O</span>
-              <div className="flex-grow border-t border-muted"></div>
+            <div className="grid grid-cols-1 gap-3">
+              <Button className="rounded-2xl h-14 font-black bg-green-600 gap-3" onClick={() => window.open(`https://wa.me/${sharePhone.replace(/\D/g, '')}?text=${encodeURIComponent(generateStatementText())}`, '_blank')}><MessageSquare className="h-5 w-5" /> Enviar por WhatsApp</Button>
+              <Button variant="outline" className="rounded-2xl h-14 font-black border-slate-200 gap-3" onClick={() => { navigator.clipboard.writeText(generateStatementText()); showSuccess("Copiado"); setIsShareDialogOpen(false); }}><Copy className="h-5 w-5" /> Copiar Texto</Button>
             </div>
-            <Button variant="outline" onClick={handleCopyStatement} className="w-full gap-2">
-              <Copy className="h-4 w-4" /> Copiar al Portapapeles
-            </Button>
           </div>
         </DialogContent>
       </Dialog>
