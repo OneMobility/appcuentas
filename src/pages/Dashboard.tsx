@@ -48,22 +48,28 @@ const Dashboard = () => {
 
   const fetchDashboardData = async () => {
     if (!user) return;
-    const [cardsRes, cashRes, cardTxRes, debtorsRes, creditorsRes] = await Promise.all([
-      supabase.from('cards').select('*').eq('user_id', user.id),
-      supabase.from('cash_transactions').select('*').eq('user_id', user.id),
-      supabase.from('card_transactions').select('*').eq('user_id', user.id),
-      supabase.from('debtors').select('*').eq('user_id', user.id),
-      supabase.from('creditors').select('*').eq('user_id', user.id)
-    ]);
-    setCards(cardsRes.data || []);
-    setCashTransactions(cashRes.data || []);
-    setCardTransactions(cardTxRes.data || []);
-    setDebtors(debtorsRes.data || []);
-    setCreditors(creditorsRes.data || []);
+    try {
+      const [cardsRes, cashRes, cardTxRes, debtorsRes, creditorsRes] = await Promise.all([
+        supabase.from('cards').select('*').eq('user_id', user.id),
+        supabase.from('cash_transactions').select('*').eq('user_id', user.id),
+        supabase.from('card_transactions').select('*').eq('user_id', user.id),
+        supabase.from('debtors').select('*').eq('user_id', user.id),
+        supabase.from('creditors').select('*').eq('user_id', user.id)
+      ]);
+      setCards(cardsRes.data || []);
+      setCashTransactions(cashRes.data || []);
+      setCardTransactions(cardTxRes.data || []);
+      setDebtors(debtorsRes.data || []);
+      setCreditors(creditorsRes.data || []);
+    } catch (err) {
+      console.error("Error fetching dashboard data:", err);
+    }
   };
 
   useEffect(() => {
-    if (user && !isLoadingCategories) fetchDashboardData();
+    if (user && !isLoadingCategories) {
+      fetchDashboardData();
+    }
   }, [user, isLoadingCategories, refreshKey]);
 
   const totals = useMemo(() => {
@@ -80,7 +86,7 @@ const Dashboard = () => {
     const start = startOfMonth(now);
     const end = endOfMonth(now);
 
-    const process = (txs: any[]) => {
+    const processTxs = (txs: any[]) => {
       return txs.filter(tx => {
         const d = parseISO(tx.date);
         return isWithinInterval(d, { start, end });
@@ -91,14 +97,16 @@ const Dashboard = () => {
       }, {});
     };
 
-    const formatData = (map: Record<string, number>, cats: any[]) => Object.entries(map).map(([id, v]) => {
-      const c = cats.find(x => x.id === id);
-      return { name: c?.name || "Otro", value: v, color: c?.color || "#eee" };
-    }).sort((a, b) => b.value - a.value);
+    const formatData = (map: Record<string, number>, cats: any[]) => {
+      return Object.entries(map).map(([id, v]) => {
+        const c = cats.find(x => x.id === id);
+        return { name: c?.name || "Otro", value: v, color: c?.color || "#eee" };
+      }).sort((a, b) => b.value - a.value);
+    };
 
     return {
-      expenses: formatData(process([...cashTransactions.filter(t => t.type === 'egreso'), ...cardTransactions.filter(t => t.type === 'charge')]), expenseCategories),
-      income: formatData(process([...cashTransactions.filter(t => t.type === 'ingreso'), ...cardTransactions.filter(t => t.type === 'payment')]), incomeCategories)
+      expenses: formatData(processTxs([...cashTransactions.filter(t => t.type === 'egreso'), ...cardTransactions.filter(t => t.type === 'charge')]), expenseCategories),
+      income: formatData(processTxs([...cashTransactions.filter(t => t.type === 'ingreso'), ...cardTransactions.filter(t => t.type === 'payment')]), incomeCategories)
     };
   }, [cashTransactions, cardTransactions, incomeCategories, expenseCategories]);
 
@@ -157,7 +165,6 @@ const Dashboard = () => {
       <section className="space-y-6">
         <FinancialHealthCard />
         
-        {/* 4. Predicción y Consejos compartiendo fila abajo */}
         <div className="grid gap-6 md:grid-cols-2">
           <FinancialPredictionCard />
           <SmartTipsCard />
@@ -190,7 +197,10 @@ const Dashboard = () => {
               <Label className="text-[10px] font-bold text-slate-400 ml-2 uppercase">Dólares (USD)</Label>
               <Input 
                 type="number" value={usdInput} 
-                onChange={(e) => { setUsdInput(e.target.value); setMxnInput((parseFloat(e.target.value) * exchangeRate).toFixed(2)); }}
+                onChange={(e) => { 
+                  setUsdInput(e.target.value); 
+                  setMxnInput((parseFloat(e.target.value || "0") * exchangeRate).toFixed(2)); 
+                }}
                 className="rounded-2xl border-slate-100 bg-slate-50 h-14 font-black text-lg focus-visible:ring-primary/20"
               />
             </div>
@@ -201,7 +211,10 @@ const Dashboard = () => {
               <Label className="text-[10px] font-bold text-slate-400 ml-2 uppercase">Pesos (MXN)</Label>
               <Input 
                 type="number" value={mxnInput} 
-                onChange={(e) => { setMxnInput(e.target.value); setUsdInput((parseFloat(e.target.value) / exchangeRate).toFixed(2)); }}
+                onChange={(e) => { 
+                  setMxnInput(e.target.value); 
+                  setUsdInput((parseFloat(e.target.value || "0") / exchangeRate).toFixed(2)); 
+                }}
                 className="rounded-2xl border-slate-100 bg-slate-50 h-14 font-black text-lg focus-visible:ring-primary/20"
               />
             </div>
@@ -231,7 +244,7 @@ const Dashboard = () => {
           <CardHeader className="p-0 mb-6">
             <CardTitle className="text-sm font-black uppercase tracking-widest text-slate-400 flex items-center gap-2">
               <CreditCard className="h-4 w-4" /> Uso de Tarjetas 💳
-            </Title>
+            </CardTitle>
           </CardHeader>
           <div className="w-full">
             <CreditCardsChart cards={cards} />
