@@ -7,19 +7,20 @@ import Layout from "./components/Layout";
 import Dashboard from "./pages/Dashboard";
 import Cash from "./pages/Cash";
 import Debtors from "./pages/Debtors";
-import DebtorDetailsPage from "./pages/DebtorDetailsPage"; // Nueva página
+import DebtorDetailsPage from "./pages/DebtorDetailsPage";
 import Creditors from "./pages/Creditors";
-import CreditorDetailsPage from "./pages/CreditorDetailsPage"; // Nueva página
+import CreditorDetailsPage from "./pages/CreditorDetailsPage";
 import Cards from "./pages/Cards";
 import CardDetailsPage from "./pages/CardDetailsPage";
 import Categories from "./pages/Categories";
 import Savings from "./pages/Savings";
 import SharedBudgets from "./pages/SharedBudgets";
 import CreateSharedBudget from "./pages/CreateSharedBudget";
-import EditSharedBudget from "./pages/EditSharedBudget"; // Nueva página
-import ShoppingList from "./pages/ShoppingList"; // Nueva página de Lista de Compras
+import EditSharedBudget from "./pages/EditSharedBudget";
+import ShoppingList from "./pages/ShoppingList";
 import NotFound from "./pages/NotFound";
 import Login from "./pages/Login";
+import ResetPassword from "./pages/ResetPassword"; // Importar la nueva página
 import { CategoryProvider } from "./context/CategoryContext";
 import { SessionProvider, useSession } from "./context/SessionContext";
 import CardNotifications from "./components/CardNotifications";
@@ -60,6 +61,7 @@ const App = () => {
               <CardNotifications />
               <Routes>
                 <Route path="/login" element={<Login />} />
+                <Route path="/reset-password" element={<ResetPassword />} /> {/* Ruta pública para restablecer contraseña */}
                 <Route path="/" element={<Navigate to="/dashboard" replace />} />
                 <Route
                   element={
