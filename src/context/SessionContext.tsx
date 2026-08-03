@@ -88,11 +88,15 @@ export const SessionProvider = ({ children }: { children: ReactNode }) => {
               navigate('/reset-password', { replace: true });
             }
           } else {
-            const lastVisitedRoute = localStorage.getItem('lastVisitedRoute');
-            if (lastVisitedRoute && lastVisitedRoute !== '/login' && lastVisitedRoute !== '/reset-password') {
-              navigate(lastVisitedRoute, { replace: true });
-            } else {
-              navigate('/dashboard', { replace: true });
+            // Solo redirigir si el usuario está actualmente en la página de login o en la raíz
+            // Esto evita bucles infinitos de navegación cuando el navegador recupera el foco o refresca el token
+            if (location.pathname === '/login' || location.pathname === '/') {
+              const lastVisitedRoute = localStorage.getItem('lastVisitedRoute');
+              if (lastVisitedRoute && lastVisitedRoute !== '/login' && lastVisitedRoute !== '/reset-password') {
+                navigate(lastVisitedRoute, { replace: true });
+              } else {
+                navigate('/dashboard', { replace: true });
+              }
             }
           }
         } else if (event === 'SIGNED_OUT') {
