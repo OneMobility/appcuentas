@@ -61,17 +61,21 @@ export const SessionProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     const { data: authListener } = supabase.auth.onAuthStateChange(
       async (event, currentSession) => {
-        setSession(currentSession);
-        const currentUser = currentSession?.user || null;
-        setUser(currentUser);
+        try {
+          setSession(currentSession);
+          const currentUser = currentSession?.user || null;
+          setUser(currentUser);
 
-        if (currentUser) {
-          await fetchProfile(currentUser.id);
-        } else {
-          setProfile(null);
+          if (currentUser) {
+            await fetchProfile(currentUser.id);
+          } else {
+            setProfile(null);
+          }
+        } catch (err) {
+          console.error("Error handling auth state change:", err);
+        } finally {
+          setIsLoading(false);
         }
-        
-        setIsLoading(false);
 
         if (event === 'PASSWORD_RECOVERY') {
           if (location.pathname !== '/reset-password') {
@@ -84,7 +88,6 @@ export const SessionProvider = ({ children }: { children: ReactNode }) => {
               navigate('/reset-password', { replace: true });
             }
           } else {
-            // Redirigir siempre al iniciar sesión con éxito
             const lastVisitedRoute = localStorage.getItem('lastVisitedRoute');
             if (lastVisitedRoute && lastVisitedRoute !== '/login' && lastVisitedRoute !== '/reset-password') {
               navigate(lastVisitedRoute, { replace: true });
@@ -102,24 +105,31 @@ export const SessionProvider = ({ children }: { children: ReactNode }) => {
     );
 
     supabase.auth.getSession().then(async ({ data: { session: currentSession } }) => {
-      setSession(currentSession);
-      const currentUser = currentSession?.user || null;
-      setUser(currentUser);
-      
-      if (currentUser) {
-        await fetchProfile(currentUser.id);
-      }
-      
-      setIsLoading(false);
-      
-      const isRecovery = window.location.hash.includes('type=recovery') || window.location.search.includes('type=recovery');
-      if (isRecovery) {
-        if (location.pathname !== '/reset-password') {
-          navigate('/reset-password', { replace: true });
+      try {
+        setSession(currentSession);
+        const currentUser = currentSession?.user || null;
+        setUser(currentUser);
+        
+        if (currentUser) {
+          await fetchProfile(currentUser.id);
         }
-      } else if (!currentSession && location.pathname !== '/login' && location.pathname !== '/reset-password') {
-        navigate('/login', { replace: true });
+        
+        const isRecovery = window.location.hash.includes('type=recovery') || window.location.search.includes('type=recovery');
+        if (isRecovery) {
+          if (location.pathname !== '/reset-password') {
+            navigate('/reset-password', { replace: true });
+          }
+        } else if (!currentSession && location.pathname !== '/login' && location.pathname !== '/reset-password') {
+          navigate('/login', { replace: true });
+        }
+      } catch (err) {
+        console.error("Error processing session data:", err);
+      } finally {
+        setIsLoading(false);
       }
+    }).catch((err) => {
+      console.error("Error getting session:", err);
+      setIsLoading(false);
     });
 
     return () => {
