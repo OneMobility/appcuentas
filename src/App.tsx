@@ -25,14 +25,17 @@ import ResetPassword from "./pages/ResetPassword";
 import { CategoryProvider } from "./context/CategoryContext";
 import { SessionProvider, useSession } from "./context/SessionContext";
 import CardNotifications from "./components/CardNotifications";
-import AppUpdater from "./components/AppUpdater"; // Importar el actualizador
+import AppUpdater from "./components/AppUpdater";
+import LoadingSpinner from "./components/LoadingSpinner"; // Importado
 import React from "react";
 
 const queryClient = new QueryClient();
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { session, isLoading } = useSession();
-  if (isLoading) return <div className="min-h-screen flex items-center justify-center bg-gray-100">Cargando...</div>;
+  
+  if (isLoading) return <LoadingSpinner />; // Usando el spinner visual en lugar de texto
+  
   if (!session) return <Navigate to="/login" replace />;
   return <>{children}</>;
 };
@@ -46,7 +49,7 @@ const App = () => {
         <BrowserRouter>
           <SessionProvider>
             <CategoryProvider>
-              <AppUpdater /> {/* Sistema de detección de nuevas versiones */}
+              <AppUpdater />
               <CardNotifications />
               <Routes>
                 <Route path="/login" element={<Login />} />
