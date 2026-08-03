@@ -1,75 +1,192 @@
 "use client";
 
-import React from 'react';
-import { Auth } from '@supabase/auth-ui-react';
-import { ThemeSupa } from '@supabase/auth-ui-shared';
+import React, { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { showError, showSuccess } from '@/utils/toast';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Loader2, Mail, Lock, User, ArrowRight } from 'lucide-react';
 
 const Login = () => {
+  const [isSignUp, setIsSignUp] = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+
+    try {
+      if (isSignUp) {
+        if (!firstName.trim()) {
+          showError("El nombre es obligatorio.");
+          setIsSubmitting(false);
+          return;
+        }
+
+        const { data, error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: {
+              first_name: firstName.trim(),
+              last_name: lastName.trim() || null,
+            },
+            emailRedirectTo: window.location.origin + '/dashboard',
+          },
+        });
+
+        if (error) throw error;
+
+        if (data.session) {
+          showSuccess("¡Registro exitoso! Bienvenido a Oinkash.");
+        } else {
+          showSuccess("¡Registro exitoso! Por favor verifica tu correo electrónico para confirmar tu cuenta.");
+        }
+      } else {
+        const { error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+
+        if (error) throw error;
+        showSuccess("¡Bienvenido de vuelta!");
+      }
+    } catch (error: any) {
+      showError(error.message || "Ocurrió un error durante el proceso.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100 p-4">
-      <div className="w-full max-w-md bg-white p-8 rounded-lg shadow-md">
-        <div className="flex flex-col items-center justify-center mb-6">
+    <div className="min-h-screen flex items-center justify-center bg-background p-4">
+      <Card className="w-full max-w-md rounded-3xl shadow-xl border-none bg-card">
+        <CardHeader className="flex flex-col items-center justify-center pb-2">
           <img
             src="https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Logo%20App.png"
             alt="Oinkash Logo"
-            className="h-12 w-12 text-primary mb-2"
+            className="h-16 w-12 object-contain mb-2"
           />
-          <h2 className="text-2xl font-bold text-center text-foreground">Bienvenido a Oinkash</h2>
-          <p className="text-sm text-muted-foreground text-center">Organiza tus finanzas de forma sencilla.</p>
-        </div>
-        <Auth
-          supabaseClient={supabase}
-          providers={[]}
-          appearance={{
-            theme: ThemeSupa,
-            variables: {
-              default: {
-                colors: {
-                  brand: 'hsl(var(--primary))',
-                  brandAccent: 'hsl(var(--primary-foreground))',
-                },
-              },
-            },
-          }}
-          theme="light"
-          redirectTo={window.location.origin + '/dashboard'}
-          localization={{
-            variables: {
-              sign_in: {
-                email_label: 'Correo electrónico',
-                password_label: 'Contraseña',
-                email_input_placeholder: 'Tu correo electrónico',
-                password_input_placeholder: 'Tu contraseña',
-                button_label: 'Iniciar sesión',
-                social_provider_text: 'Iniciar sesión con {{provider}}',
-                link_text: '¿Ya tienes una cuenta? Inicia sesión',
-              },
-              sign_up: {
-                email_label: 'Correo electrónico',
-                password_label: 'Contraseña',
-                email_input_placeholder: 'Tu correo electrónico',
-                password_input_placeholder: 'Tu contraseña',
-                button_label: 'Registrarse',
-                social_provider_text: 'Registrarse con {{provider}}',
-                link_text: '¿No tienes una cuenta? Regístrate',
-              },
-              forgotten_password: {
-                email_label: 'Correo electrónico',
-                password_label: 'Tu contraseña',
-                email_input_placeholder: 'Tu correo electrónico',
-                button_label: 'Enviar instrucciones de recuperación',
-                link_text: '¿Olvidaste tu contraseña?',
-              },
-              update_password: {
-                password_label: 'Nueva contraseña',
-                password_input_placeholder: 'Tu nueva contraseña',
-                button_label: 'Actualizar contraseña',
-              },
-            },
-          }}
-        />
-      </div>
+          <CardTitle className="text-2xl font-black text-center text-foreground">
+            {isSignUp ? "Crea tu Cuenta" : "Bienvenido a Oinkash"}
+          </CardTitle>
+          <CardDescription className="text-center text-xs">
+            {isSignUp 
+              ? "Regístrate para empezar a organizar tus finanzas de forma sencilla." 
+              : "Inicia sesión para continuar organizando tus finanzas."}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {isSignUp && (
+              <div className="grid grid-cols-2 gap-3">
+                <div className="grid gap-1.5">
+                  <Label htmlFor="firstName">Nombre</Label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="firstName"
+                      type="text"
+                      value={firstName}
+                      onChange={(e) => setFirstName(e.target.value)}
+                      placeholder="Nombre"
+                      required
+                      className="rounded-xl h-10 pl-9"
+                      disabled={isSubmitting}
+                    />
+                  </div>
+                </div>
+                <div className="grid gap-1.5">
+                  <Label htmlFor="lastName">Apellido</Label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="lastName"
+                      type="text"
+                      value={lastName}
+                      onChange={(e) => setLastName(e.target.value)}
+                      placeholder="Apellido"
+                      className="rounded-xl h-10 pl-9"
+                      disabled={isSubmitting}
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="grid gap-1.5">
+              <Label htmlFor="email">Correo Electrónico</Label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="ejemplo@correo.com"
+                  required
+                  className="rounded-xl h-10 pl-9"
+                  disabled={isSubmitting}
+                />
+              </div>
+            </div>
+
+            <div className="grid gap-1.5">
+              <Label htmlFor="password">Contraseña</Label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="password"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  required
+                  className="rounded-xl h-10 pl-9"
+                  disabled={isSubmitting}
+                />
+              </div>
+            </div>
+
+            <Button type="submit" className="w-full rounded-xl h-11 font-bold mt-2" disabled={isSubmitting}>
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Procesando...
+                </>
+              ) : (
+                <>
+                  {isSignUp ? "Registrarse" : "Iniciar Sesión"}
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </>
+              )}
+            </Button>
+
+            <div className="text-center pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsSignUp(!isSignUp);
+                  setFirstName('');
+                  setLastName('');
+                }}
+                className="text-xs text-primary hover:underline font-semibold"
+                disabled={isSubmitting}
+              >
+                {isSignUp 
+                  ? "¿Ya tienes una cuenta? Inicia sesión" 
+                  : "¿No tienes una cuenta? Regístrate"}
+              </button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
     </div>
   );
 };
