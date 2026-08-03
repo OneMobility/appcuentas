@@ -101,8 +101,8 @@ const CardDisplay: React.FC<CardDisplayProps> = ({ card, onAddTransaction, onDel
   const isVisa = parseInt(card.last_four_digits) % 2 === 0;
 
   const networkLogoUrl = isVisa 
-    ? "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Iconos/VISA.png"
-    : "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Iconos/MASTERCARD.png";
+    ? "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Iconos/VISA.png"
+    : "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Iconos/MASTERCARD.png";
 
   return (
     <div className="w-full max-w-sm mx-auto h-[240px] perspective-1000">
@@ -123,7 +123,7 @@ const CardDisplay: React.FC<CardDisplayProps> = ({ card, onAddTransaction, onDel
             backfaceVisibility: "hidden",
             WebkitBackfaceVisibility: "hidden",
             pointerEvents: isFlipped ? "none" : "auto",
-            zIndex: isFlipped ? 0 : 2,
+            zIndex: iFlipped ? 0 : 2,
           }}
         >
           {/* Brillo de plástico de tarjeta */}
