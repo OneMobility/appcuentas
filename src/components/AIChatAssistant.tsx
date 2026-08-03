@@ -4,9 +4,11 @@ import React, { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
-import { MessageCircle, X, Send, Bot, Loader2, Sparkles } from "lucide-react";
+import { X, Send, Bot, Sparkles, Loader2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/integrations/supabase/client";
+import { useSession } from "@/context/SessionContext";
 
 interface Message {
   role: 'user' | 'assistant';
@@ -14,9 +16,10 @@ interface Message {
 }
 
 const AIChatAssistant = () => {
+  const { user } = useSession();
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
-    { role: 'assistant', content: '¡Hola! Soy tu asistente Oinkash. ¿Tienes dudas sobre tus deudas, ahorros o cómo mejorar tu score financiero hoy?' }
+    { role: 'assistant', content: '¡Hola! Soy tu asistente Oinkash. ¿En qué puedo ayudarte con tus finanzas hoy? 🐷' }
   ]);
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
@@ -24,26 +27,57 @@ const AIChatAssistant = () => {
 
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-  }, [messages]);
+  }, [messages, isTyping]);
+
+  const fetchFinancialContext = async () => {
+    if (!user) return {};
+    
+    // Obtenemos un resumen rápido de los datos para la IA
+    const [cards, cash, debtors, creditors] = await Promise.all([
+      supabase.from('cards').select('*').eq('user_id', user.id),
+      supabase.from('cash_transactions').select('*').eq('user_id', user.id),
+      supabase.from('debtors').select('*').eq('user_id', user.id),
+      supabase.from('creditors').select('*').eq('user_id', user.id)
+    ]);
+
+    const cashBal = (cash.data || []).reduce((s, t) => t.type === "ingreso" ? s + t.amount : s - t.amount, 0);
+    const debitBal = (cards.data || []).filter(c => c.type === 'debit').reduce((s, c) => s + c.current_balance, 0);
+    const creditDebt = (cards.data || []).filter(c => c.type === 'credit').reduce((s, c) => s + c.current_balance, 0);
+    const credBal = (creditors.data || []).reduce((s, c) => s + c.current_balance, 0);
+    const debtRec = (debtors.data || []).reduce((s, d) => s + d.current_balance, 0);
+
+    return {
+      available: cashBal + debitBal,
+      debts: creditDebt + credBal,
+      receivable: debtRec,
+      pendingPayments: "Varios pagos de tarjeta próximos"
+    };
+  };
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim()) return;
+    if (!input.trim() || isTyping) return;
 
     const userMsg = input.trim();
     setInput("");
     setMessages(prev => [...prev, { role: 'user', content: userMsg }]);
     setIsTyping(true);
 
-    // Simulación de respuesta IA
-    // En producción aquí llamarías a: supabase.functions.invoke('chat-ai', { body: { message: userMsg } })
-    setTimeout(() => {
+    try {
+      const context = await fetchFinancialContext();
+      
+      const { data, error } = await supabase.functions.invoke('chat-ai', {
+        body: { message: userMsg, context }
+      });
+
+      if (error) throw error;
+
+      setMessages(prev => [...prev, { role: 'assistant', content: data.reply }]);
+    } catch (err) {
+      setMessages(prev => [...prev, { role: 'assistant', content: "Lo siento, tuve un problema al conectar con mis neuronas de cerdito. ¿Podrías intentar de nuevo? 🐷" }]);
+    } finally {
       setIsTyping(false);
-      setMessages(prev => [...prev, { 
-        role: 'assistant', 
-        content: `Basado en tus datos, veo que tus gastos en "Antojitos" han subido 15% este mes. Te recomiendo reducir un poco ahí para alcanzar tu meta de ahorro antes.` 
-      }]);
-    }, 1500);
+    }
   };
 
   return (
@@ -52,7 +86,7 @@ const AIChatAssistant = () => {
         onClick={() => setIsOpen(true)}
         className="fixed bottom-20 right-4 h-14 w-14 rounded-full shadow-2xl z-50 bg-indigo-600 hover:bg-indigo-700 text-white p-0 md:bottom-6"
       >
-        <Sparkles className="h-6 w-6 animate-pulse" />
+        <Sparkles className="h-6 w-6" />
       </Button>
 
       <AnimatePresence>
@@ -78,7 +112,7 @@ const AIChatAssistant = () => {
                 {messages.map((msg, i) => (
                   <div key={i} className={cn("flex", msg.role === 'user' ? "justify-end" : "justify-start")}>
                     <div className={cn(
-                      "max-w-[80%] p-3 rounded-2xl text-sm shadow-sm",
+                      "max-w-[85%] p-3 rounded-2xl text-sm shadow-sm",
                       msg.role === 'user' ? "bg-indigo-600 text-white rounded-tr-none" : "bg-white text-indigo-950 rounded-tl-none border border-indigo-100"
                     )}>
                       {msg.content}
@@ -87,10 +121,9 @@ const AIChatAssistant = () => {
                 ))}
                 {isTyping && (
                   <div className="flex justify-start">
-                    <div className="bg-white p-3 rounded-2xl border border-indigo-100 flex gap-1">
-                      <motion.div animate={{ opacity: [0.3, 1, 0.3] }} transition={{ repeat: Infinity, duration: 1 }} className="h-1.5 w-1.5 bg-indigo-400 rounded-full" />
-                      <motion.div animate={{ opacity: [0.3, 1, 0.3] }} transition={{ repeat: Infinity, duration: 1, delay: 0.2 }} className="h-1.5 w-1.5 bg-indigo-400 rounded-full" />
-                      <motion.div animate={{ opacity: [0.3, 1, 0.3] }} transition={{ repeat: Infinity, duration: 1, delay: 0.4 }} className="h-1.5 w-1.5 bg-indigo-400 rounded-full" />
+                    <div className="bg-white p-3 rounded-2xl border border-indigo-100 flex items-center gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin text-indigo-500" />
+                      <span className="text-xs text-indigo-400 font-medium">Oinkash está pensando...</span>
                     </div>
                   </div>
                 )}
@@ -101,9 +134,10 @@ const AIChatAssistant = () => {
                   placeholder="Pregúntame algo..." 
                   value={input}
                   onChange={e => setInput(e.target.value)}
-                  className="rounded-xl border-indigo-100 focus-visible:ring-indigo-500"
+                  className="rounded-xl border-indigo-100 focus-visible:ring-indigo-500 h-11"
+                  disabled={isTyping}
                 />
-                <Button type="submit" size="icon" className="rounded-xl bg-indigo-600">
+                <Button type="submit" size="icon" className="rounded-xl bg-indigo-600 h-11 w-11" disabled={isTyping}>
                   <Send className="h-4 w-4" />
                 </Button>
               </form>
