@@ -8,7 +8,7 @@ const LoadingSpinner: React.FC = () => {
       <img
         src="https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Noticias%20Region.gif"
         alt="Cargando..."
-        className="h-32 w-32 object-contain"
+        className="h-48 w-48 md:h-64 md:w-64 object-contain"
       />
     </div>
   );
