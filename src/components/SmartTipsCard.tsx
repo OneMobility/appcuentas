@@ -3,8 +3,9 @@
 import React, { useState, useEffect } from "react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Sparkles, RefreshCw, Lightbulb, Brain, Target, ShieldCheck } from "lucide-react";
-import { Button } from "./ui/button";
+import { Button } from "@/components/ui/button";
 import { motion, AnimatePresence } from "framer-motion";
+import { cn } from "@/lib/utils";
 
 const CATEGORIES = [
   { name: 'Hábito', icon: Brain, color: 'text-purple-600 bg-purple-50' },
