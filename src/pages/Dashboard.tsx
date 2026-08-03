@@ -20,6 +20,8 @@ import FinancialPredictionCard from "@/components/FinancialPredictionCard";
 import SmartTipsCard from "@/components/SmartTipsCard";
 import { cn } from "@/lib/utils";
 
+const APP_LOGO = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/ChatGPT%20Image%203%20ago%202026,%2003_44_08%20p.m..png";
+
 const Dashboard = () => {
   const { user } = useSession();
   const { incomeCategories, expenseCategories, isLoadingCategories } = useCategoryContext();
@@ -61,9 +63,7 @@ const Dashboard = () => {
   };
 
   useEffect(() => {
-    if (user && !isLoadingCategories) {
-      fetchDashboardData();
-    }
+    if (user && !isLoadingCategories) fetchDashboardData();
   }, [user, isLoadingCategories, refreshKey]);
 
   const totals = useMemo(() => {
@@ -111,9 +111,9 @@ const Dashboard = () => {
           <div className="relative">
             <div className="absolute inset-0 bg-primary/10 rounded-full blur-2xl animate-pulse" />
             <img 
-              src="https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Cochinito%20Ahorro.png" 
-              alt="Cochinito Oinkash" 
-              className="h-32 w-32 relative z-10 drop-shadow-xl hover:scale-105 transition-transform duration-300"
+              src={APP_LOGO} 
+              alt="Oinkash" 
+              className="h-32 w-32 relative z-10 drop-shadow-xl hover:scale-105 transition-transform duration-300 rounded-3xl object-cover"
             />
           </div>
           <div>
@@ -231,7 +231,7 @@ const Dashboard = () => {
           <CardHeader className="p-0 mb-6">
             <CardTitle className="text-sm font-black uppercase tracking-widest text-slate-400 flex items-center gap-2">
               <CreditCard className="h-4 w-4" /> Uso de Tarjetas 💳
-            </CardTitle>
+            </Title>
           </CardHeader>
           <div className="w-full">
             <CreditCardsChart cards={cards} />

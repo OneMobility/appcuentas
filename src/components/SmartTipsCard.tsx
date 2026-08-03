@@ -105,19 +105,19 @@ const TIPS = [
 ];
 
 const SmartTipsCard = () => {
-  const [tip, setTip] = useState(TIPS[0]);
-  const [index, setIndex] = useState(0);
+  const [tip, setTip] = useState(TIPS[Math.floor(Math.random() * TIPS.length)]);
 
   const rotateTip = () => {
-    const next = (index + 1) % TIPS.length;
-    setIndex(next);
-    setTip(TIPS[next]);
+    // Selección puramente aleatoria entre los 80 consejos
+    const randomIndex = Math.floor(Math.random() * TIPS.length);
+    setTip(TIPS[randomIndex]);
   };
 
   useEffect(() => {
-    const interval = setInterval(rotateTip, 20000);
+    // Rotación cada 30 segundos (30000ms)
+    const interval = setInterval(rotateTip, 30000);
     return () => clearInterval(interval);
-  }, [index]);
+  }, []);
 
   const CatIcon = CATEGORIES.find(c => c.name === tip.cat)?.icon || Lightbulb;
   const catColor = CATEGORIES.find(c => c.name === tip.cat)?.color || '';
@@ -157,7 +157,7 @@ const SmartTipsCard = () => {
           key={tip.text}
           initial={{ width: 0 }}
           animate={{ width: '100%' }}
-          transition={{ duration: 20, ease: 'linear' }}
+          transition={{ duration: 30, ease: 'linear' }}
           className="h-full bg-indigo-500"
         />
       </div>

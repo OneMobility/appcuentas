@@ -5,18 +5,22 @@ import { Auth } from '@supabase/auth-ui-react';
 import { ThemeSupa } from '@supabase/auth-ui-shared';
 import { supabase } from '@/integrations/supabase/client';
 
+const APP_LOGO = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/ChatGPT%20Image%203%20ago%202026,%2003_44_08%20p.m..png";
+
 const Login = () => {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-100 p-4">
-      <div className="w-full max-w-md bg-white p-8 rounded-lg shadow-md">
+      <div className="w-full max-w-md bg-white p-8 rounded-3xl shadow-md">
         <div className="flex flex-col items-center justify-center mb-6">
-          <img
-            src="https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Logo%20App.png"
-            alt="Oinkash Logo"
-            className="h-12 w-12 text-primary mb-2"
-          />
-          <h2 className="text-2xl font-bold text-center text-foreground">Bienvenido a Oinkash</h2>
-          <p className="text-sm text-muted-foreground text-center">Organiza tus finanzas de forma sencilla.</p>
+          <div className="p-1 bg-slate-50 rounded-2xl shadow-inner mb-4">
+            <img
+              src={APP_LOGO}
+              alt="Oinkash Logo"
+              className="h-20 w-20 object-cover rounded-xl"
+            />
+          </div>
+          <h2 className="text-2xl font-black text-center text-foreground tracking-tighter">Bienvenido a Oinkash</h2>
+          <p className="text-sm text-muted-foreground text-center font-medium">Organiza tus finanzas de forma sencilla.</p>
         </div>
         <Auth
           supabaseClient={supabase}
@@ -29,6 +33,10 @@ const Login = () => {
                   brand: 'hsl(var(--primary))',
                   brandAccent: 'hsl(var(--primary-foreground))',
                 },
+                radii: {
+                  buttonRadius: '1rem',
+                  inputRadius: '1rem',
+                }
               },
             },
           }}
