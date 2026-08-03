@@ -43,6 +43,7 @@ import { format, parseISO, isBefore, isSameDay } from "date-fns";
 import { es } from "date-fns/locale";
 import { fetchUsdToMxnRate } from "@/utils/currency-helper";
 import { motion, AnimatePresence } from "framer-motion";
+import { Badge } from "@/components/ui/badge";
 
 interface Debtor {
   id: string;
