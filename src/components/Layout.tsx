@@ -26,7 +26,7 @@ import { supabase } from "@/integrations/supabase/client";
 import ProfileDialog from "./ProfileDialog";
 import AIChatAssistant from "./AIChatAssistant";
 
-const COCHINITO_LOGO = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Cochinito%20Ahorro.png";
+const APP_ICON_LOGO = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/ChatGPT%20Image%203%20ago%202026,%2003_44_08%20p.m..png";
 
 const navItems = [
   { name: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
@@ -47,7 +47,7 @@ const Sidebar = () => {
     <nav className="flex flex-col gap-4 p-6 h-full text-white bg-slate-950">
       <Link to="/dashboard" className="flex items-center gap-3 mb-10 group">
         <div className="p-1 transition-transform group-hover:scale-110">
-          <img src={COCHINITO_LOGO} alt="Oinkash" className="h-10 w-10 object-contain" />
+          <img src={APP_ICON_LOGO} alt="Oinkash" className="h-10 w-10 object-cover rounded-xl" />
         </div>
         <h2 className="text-2xl font-black tracking-tighter">Oinkash</h2>
       </Link>
@@ -102,7 +102,7 @@ const Layout: React.FC = () => {
         <div className="flex flex-col w-full">
           <header className="sticky top-0 z-40 flex h-16 items-center justify-between bg-white/80 backdrop-blur-md px-6 border-b border-slate-100 shadow-sm">
             <div className="flex items-center gap-2">
-              <img src={COCHINITO_LOGO} className="h-9 w-9 object-contain" />
+              <img src={APP_ICON_LOGO} className="h-9 w-9 object-cover rounded-lg" />
               <h1 className="text-lg font-black tracking-tighter">Oinkash</h1>
             </div>
             <Button variant="ghost" onClick={() => setIsProfileOpen(true)} className="rounded-full p-0 h-9 w-9 border border-slate-100 shadow-sm">

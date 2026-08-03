@@ -5,18 +5,18 @@ import { Auth } from '@supabase/auth-ui-react';
 import { ThemeSupa } from '@supabase/auth-ui-shared';
 import { supabase } from '@/integrations/supabase/client';
 
-const COCHINITO_LOGO = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Cochinito%20Ahorro.png";
+const APP_ICON_LOGO = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/ChatGPT%20Image%203%20ago%202026,%2003_44_08%20p.m..png";
 
 const Login = () => {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-100 p-4">
       <div className="w-full max-w-md bg-white p-8 rounded-3xl shadow-md">
         <div className="flex flex-col items-center justify-center mb-6">
-          <div className="p-2 bg-slate-50 rounded-full shadow-inner mb-4">
+          <div className="p-2 bg-slate-50 rounded-3xl shadow-inner mb-4">
             <img
-              src={COCHINITO_LOGO}
+              src={APP_ICON_LOGO}
               alt="Oinkash Logo"
-              className="h-24 w-24 object-contain"
+              className="h-24 w-24 object-cover rounded-2xl"
             />
           </div>
           <h2 className="text-2xl font-black text-center text-foreground tracking-tighter">Bienvenido a Oinkash</h2>
