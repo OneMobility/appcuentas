@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&family=Quicksand:wght@300;400;500;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -6,36 +6,36 @@
 
 @layer base {
   :root {
-    /* Pastel Blue Light Mode */
-    --background: 210 50% 98%;
-    --foreground: 210 40% 20%;
+    /* Kawaii Pastel Palette */
+    --background: 340 100% 99%; /* Crema muy claro rosado */
+    --foreground: 340 20% 20%;
     --card: 0 0% 100%;
-    --card-foreground: 210 40% 20%;
+    --card-foreground: 340 20% 30%;
     --popover: 0 0% 100%;
-    --popover-foreground: 210 40% 20%;
-    --primary: 210 70% 75%;
-    --primary-foreground: 210 40% 20%;
-    --secondary: 210 60% 94%;
-    --secondary-foreground: 210 40% 20%;
-    --muted: 210 60% 94%;
-    --muted-foreground: 210 20% 50%;
-    --accent: 210 60% 90%;
-    --accent-foreground: 210 40% 20%;
-    --destructive: 0 84% 60%;
-    --destructive-foreground: 0 0% 100%;
-    --border: 210 30% 88%;
-    --input: 210 30% 88%;
-    --ring: 210 70% 75%;
-    --radius: 1rem;
+    --popover-foreground: 340 20% 30%;
+    --primary: 340 100% 88%; /* Rosa pastel principal */
+    --primary-foreground: 340 40% 30%;
+    --secondary: 260 100% 95%; /* Lila pastel */
+    --secondary-foreground: 260 40% 40%;
+    --muted: 260 100% 98%;
+    --muted-foreground: 340 10% 50%;
+    --accent: 160 100% 93%; /* Menta pastel */
+    --accent-foreground: 160 50% 30%;
+    --destructive: 0 84% 85%;
+    --destructive-foreground: 0 40% 30%;
+    --border: 340 50% 94%;
+    --input: 340 50% 94%;
+    --ring: 340 100% 88%;
+    --radius: 2rem; /* Bordes mucho más redondeados para look 'bubble' */
 
-    --sidebar-background: 210 60% 65%;
-    --sidebar-foreground: 0 0% 100%;
-    --sidebar-primary: 210 70% 80%; 
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 210 70% 75%; 
-    --sidebar-accent-foreground: 0 0% 100%;
-    --sidebar-border: 210 60% 60%;
-    --sidebar-ring: 210 70% 85%;
+    --sidebar-background: 340 100% 92%;
+    --sidebar-foreground: 340 40% 30%;
+    --sidebar-primary: 340 100% 85%;
+    --sidebar-primary-foreground: 340 40% 20%;
+    --sidebar-accent: 260 100% 93%;
+    --sidebar-accent-foreground: 260 40% 30%;
+    --sidebar-border: 340 50% 88%;
+    --sidebar-ring: 340 100% 88%;
   }
 }
 
@@ -48,7 +48,7 @@
 
   html, body {
     @apply bg-background text-foreground;
-    font-family: 'Poppins', sans-serif;
+    font-family: 'Quicksand', 'Poppins', sans-serif; /* Quicksand es más cute/redondeada */
     margin: 0;
     padding: 0;
     width: 100%;
@@ -62,27 +62,18 @@
     max-width: 100vw;
     overflow-x: hidden;
     min-height: 100vh;
-    padding-top: env(safe-area-inset-top);
-    padding-bottom: env(safe-area-inset-bottom);
   }
 }
 
-@layer utilities {
-  .scrollbar-hide {
-    -ms-overflow-style: none;
-    scrollbar-width: none;
-  }
-  .scrollbar-hide::-webkit-scrollbar {
-    display: none;
-  }
+/* Efecto de burbuja y suavidad */
+.card-kawaii {
+  @apply shadow-[0_8px_30px_rgb(0,0,0,0.04)] border-none transition-transform duration-200 active:scale-95;
 }
 
-.overflow-x-auto {
-  @apply scrollbar-hide;
-  -webkit-overflow-scrolling: touch;
-  max-width: 100%;
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
-
-.page-transition {
-  @apply transition-all duration-300 ease-in-out;
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
 }
