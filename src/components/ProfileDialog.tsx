@@ -18,10 +18,10 @@ interface ProfileDialogProps {
   forceOpen?: boolean;
 }
 
-// Generar las URLs de los 16 avatares predefinidos usando el ID del bucket 'avatar' (en minúsculas)
+// Generar las URLs de los 16 avatares usando el nombre exacto del bucket 'Avatar'
 const AVATARS = Array.from({ length: 16 }, (_, i) => {
   const id = i + 1;
-  return `https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/avatar/${id}.png`;
+  return `https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Avatar/${id}.png`;
 });
 
 const ProfileDialog: React.FC<ProfileDialogProps> = ({ isOpen, onClose, forceOpen = false }) => {
@@ -212,7 +212,7 @@ const ProfileDialog: React.FC<ProfileDialogProps> = ({ isOpen, onClose, forceOpe
             </div>
           </div>
 
-          {/* Cambiar contraseña (solo visible si no es obligatorio completar perfil) */}
+          {/* Cambiar contraseña */}
           {!forceOpen && (
             <div className="border-t pt-3 space-y-3">
               <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
