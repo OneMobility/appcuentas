@@ -12,6 +12,7 @@ import { es } from "date-fns/locale";
 import { getLocalDateString } from "@/utils/date-helpers";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import GroupedPaymentDueDatesCard from "@/components/GroupedPaymentDueDatesCard";
 import { cn } from "@/lib/utils";
 import CreditCardsChart from "@/components/CreditCardsChart";
