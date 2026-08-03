@@ -6,10 +6,20 @@ import { supabase } from '@/integrations/supabase/client';
 import { useNavigate, useLocation } from 'react-router-dom';
 import LoadingSpinner from '@/components/LoadingSpinner';
 
+export interface Profile {
+  id: string;
+  first_name: string | null;
+  last_name: string | null;
+  avatar_url: string | null;
+  updated_at?: string | null;
+}
+
 interface SessionContextType {
   session: Session | null;
   user: User | null;
+  profile: Profile | null;
   isLoading: boolean;
+  refreshProfile: () => Promise<void>;
 }
 
 const SessionContext = createContext<SessionContextType | undefined>(undefined);
@@ -17,22 +27,55 @@ const SessionContext = createContext<SessionContextType | undefined>(undefined);
 export const SessionProvider = ({ children }: { children: ReactNode }) => {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const navigate = useNavigate();
   const location = useLocation();
+
+  const fetchProfile = async (userId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
+
+      if (error) {
+        console.error("Error fetching profile:", error.message);
+        setProfile(null);
+      } else {
+        setProfile(data);
+      }
+    } catch (err) {
+      console.error("Error in fetchProfile:", err);
+      setProfile(null);
+    }
+  };
+
+  const refreshProfile = async () => {
+    if (user) {
+      await fetchProfile(user.id);
+    }
+  };
 
   useEffect(() => {
     const { data: authListener } = supabase.auth.onAuthStateChange(
       async (event, currentSession) => {
         setSession(currentSession);
-        setUser(currentSession?.user || null);
+        const currentUser = currentSession?.user || null;
+        setUser(currentUser);
+
+        if (currentUser) {
+          await fetchProfile(currentUser.id);
+        } else {
+          setProfile(null);
+        }
+        
         setIsLoading(false);
 
         if (event === 'PASSWORD_RECOVERY') {
-          // Redirigir inmediatamente a la página de restablecimiento de contraseña
           navigate('/reset-password', { replace: true });
         } else if (event === 'SIGNED_IN') {
-          // Solo redirigir al dashboard si no estamos en medio de una recuperación de contraseña
           const isRecovery = window.location.hash.includes('type=recovery') || window.location.search.includes('type=recovery');
           if (isRecovery) {
             navigate('/reset-password', { replace: true });
@@ -51,9 +94,15 @@ export const SessionProvider = ({ children }: { children: ReactNode }) => {
       }
     );
 
-    supabase.auth.getSession().then(({ data: { session: currentSession } }) => {
+    supabase.auth.getSession().then(async ({ data: { session: currentSession } }) => {
       setSession(currentSession);
-      setUser(currentSession?.user || null);
+      const currentUser = currentSession?.user || null;
+      setUser(currentUser);
+      
+      if (currentUser) {
+        await fetchProfile(currentUser.id);
+      }
+      
       setIsLoading(false);
       
       const isRecovery = window.location.hash.includes('type=recovery') || window.location.search.includes('type=recovery');
@@ -77,7 +126,7 @@ export const SessionProvider = ({ children }: { children: ReactNode }) => {
   }, [location.pathname, session, isLoading]);
 
   return (
-    <SessionContext.Provider value={{ session, user, isLoading }}>
+    <SessionContext.Provider value={{ session, user, profile, isLoading, refreshProfile }}>
       {isLoading && <LoadingSpinner />}
       {children}
     </SessionContext.Provider>
