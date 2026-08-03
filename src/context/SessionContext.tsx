@@ -117,7 +117,7 @@ export const SessionProvider = ({ children }: { children: ReactNode }) => {
     return () => {
       authListener.subscription.unsubscribe();
     };
-  }, [navigate]);
+  }, [navigate, location.pathname]);
 
   // Guardar la última ruta visitada (solo rutas protegidas)
   useEffect(() => {

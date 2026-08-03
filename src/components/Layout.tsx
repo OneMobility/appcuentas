@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import { Button } from "@/components/ui/button";
@@ -122,9 +122,16 @@ const Layout: React.FC = () => {
   const isMobile = useIsMobile();
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, profile } = useSession();
+  const { user, profile, isLoading } = useSession();
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const currentPageName = navItems.find(item => item.path === location.pathname)?.name || "Oinkash";
+
+  // Automatically open ProfileModal if the user is logged in but has no profile completed
+  useEffect(() => {
+    if (!isLoading && user && !profile?.first_name) {
+      setIsProfileOpen(true);
+    }
+  }, [user, profile, isLoading]);
 
   const handleLogout = async () => {
     try {

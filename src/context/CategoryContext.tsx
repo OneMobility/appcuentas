@@ -66,6 +66,13 @@ export const CategoryProvider = ({ children }: { children: ReactNode }) => {
   const [isLoadingCategories, setIsLoadingCategories] = useState(true);
 
   const fetchCategories = async () => {
+    if (!user) {
+      setIncomeCategories([]);
+      setExpenseCategories([]);
+      setIsLoadingCategories(false);
+      return;
+    }
+
     setIsLoadingCategories(true);
     try {
       // Fetch existing fixed categories (user_id is NULL)
