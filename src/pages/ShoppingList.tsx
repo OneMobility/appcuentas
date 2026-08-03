@@ -576,13 +576,13 @@ const ShoppingList: React.FC = () => {
         <>
           {/* Barra de Progreso y Suma en Carrito */}
           <div className="grid gap-4 md:grid-cols-2">
-            <Card className="border-l-4 border-primary bg-primary/10 text-primary-foreground">
+            <Card className="border-l-4 border-primary bg-primary/10 text-primary">
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">Total en Carrito (Marcados)</CardTitle>
+                <CardTitle className="text-sm font-bold text-blue-900">Total en Carrito (Marcados)</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-4xl font-black">${totalInCart.toFixed(2)}</div>
-                <p className="text-xs opacity-80 mt-1">Suma acumulada de lo que llevas marcado</p>
+                <div className="text-4xl font-black text-blue-900">${totalInCart.toFixed(2)}</div>
+                <p className="text-xs text-blue-800/70 mt-1 font-medium">Suma acumulada de lo que llevas marcado</p>
               </CardContent>
             </Card>
 
@@ -887,8 +887,8 @@ const ShoppingList: React.FC = () => {
           </DialogHeader>
           <form onSubmit={handleFinalizePurchase} className="grid gap-4 py-4">
             <div className="bg-primary/10 p-4 rounded-2xl text-center">
-              <p className="text-xs text-muted-foreground uppercase font-bold">Suma de Artículos Marcados</p>
-              <p className="text-2xl font-black text-primary-foreground">${totalInCart.toFixed(2)}</p>
+              <p className="text-xs text-blue-900 uppercase font-bold">Suma de Artículos Marcados</p>
+              <p className="text-2xl font-black text-blue-900">${totalInCart.toFixed(2)}</p>
             </div>
 
             <div className="grid gap-2">
