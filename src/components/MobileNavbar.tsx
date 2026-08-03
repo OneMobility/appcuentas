@@ -4,7 +4,6 @@ import React from "react";
 import { Link, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import {
-  PiggyBank,
   Banknote,
   ThumbsUp,
   ThumbsDown,
@@ -13,17 +12,20 @@ import {
   Wallet,
   BarChart,
   ShoppingCart,
+  CalendarDays,
+  LayoutDashboard,
 } from "lucide-react";
 
 const navItems = [
-  { name: "Resumen", path: "/dashboard", icon: PiggyBank },
-  { name: "Dinero", path: "/cash", icon: Banknote },
-  { name: "Te deben", path: "/debtors", icon: ThumbsUp },
-  { name: "Debes", path: "/creditors", icon: ThumbsDown },
+  { name: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
+  { name: "Efectivo", path: "/cash", icon: Banknote },
+  { name: "Me deben", path: "/debtors", icon: ThumbsUp },
+  { name: "Debo", path: "/creditors", icon: ThumbsDown },
   { name: "Tarjetas", path: "/cards", icon: CreditCard },
-  { name: "Compras", path: "/shopping-list", icon: ShoppingCart },
+  { name: "Suscripciones", path: "/recurring", icon: CalendarDays },
+  { name: "Súper", path: "/shopping-list", icon: ShoppingCart },
   { name: "Metas", path: "/savings", icon: Wallet },
-  { name: "Presupuestos", path: "/shared-budgets", icon: BarChart },
+  { name: "Compartidos", path: "/shared-budgets", icon: BarChart },
   { name: "Categorías", path: "/categories", icon: Tag },
 ];
 
@@ -41,7 +43,7 @@ const MobileNavbar = () => {
               key={item.name}
               to={item.path}
               className={cn(
-                "flex flex-col items-center justify-center flex-none min-w-[70px] gap-1 transition-all duration-200",
+                "flex flex-col items-center justify-center flex-none min-w-[75px] gap-1 transition-all duration-200",
                 isActive
                   ? "text-primary scale-105"
                   : "text-muted-foreground hover:text-foreground"
@@ -53,7 +55,9 @@ const MobileNavbar = () => {
               )}>
                 <Icon className="h-5 w-5" />
               </div>
-              <span className="text-[10px] font-medium leading-none whitespace-nowrap">{item.name}</span>
+              <span className="text-[9px] font-bold leading-none whitespace-nowrap uppercase tracking-tighter">
+                {item.name}
+              </span>
             </Link>
           );
         })}
