@@ -1,11 +1,12 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import { Link, Outlet, useLocation } from "react-router-dom";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   PiggyBank,
   Banknote,
@@ -17,10 +18,12 @@ import {
   Wallet,
   BarChart,
   ShoppingCart,
+  User,
 } from "lucide-react";
 import MobileNavbar from "./MobileNavbar";
 import { useSession } from "@/context/SessionContext";
 import { supabase } from "@/integrations/supabase/client";
+import ProfileDialog from "./ProfileDialog";
 
 const navItems = [
   { name: "Resumen", path: "/dashboard", icon: PiggyBank },
@@ -36,7 +39,6 @@ const navItems = [
 
 const Sidebar = () => {
   const location = useLocation();
-  const { user } = useSession();
 
   return (
     <nav className="flex flex-col gap-2 p-6 h-full">
@@ -59,16 +61,6 @@ const Sidebar = () => {
           </Link>
         ))}
       </div>
-      {user && (
-        <Button
-          variant="ghost"
-          onClick={() => supabase.auth.signOut()}
-          className="flex items-center gap-3 rounded-xl px-4 py-3 text-sidebar-foreground hover:bg-destructive/20 hover:text-destructive-foreground mt-auto"
-        >
-          <LogOut className="h-5 w-5" />
-          Cerrar Sesión
-        </Button>
-      )}
     </nav>
   );
 };
@@ -76,7 +68,45 @@ const Sidebar = () => {
 const Layout: React.FC = () => {
   const isMobile = useIsMobile();
   const location = useLocation();
+  const { user } = useSession();
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+
   const currentPageName = navItems.find(item => item.path === location.pathname)?.name || "Oinkash";
+  const userInitials = `${user?.user_metadata?.first_name?.charAt(0) || ""}${user?.user_metadata?.last_name?.charAt(0) || ""}`.toUpperCase() || "U";
+
+  const handleLogout = () => {
+    supabase.auth.signOut();
+  };
+
+  const renderHeaderActions = () => (
+    <div className="flex items-center gap-2">
+      {/* Botón de Perfil */}
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={() => setIsProfileOpen(true)}
+        className="rounded-full h-9 w-9 p-0 hover:bg-muted"
+        title="Mi Perfil"
+      >
+        <Avatar className="h-8 w-8 border border-primary/20">
+          <AvatarFallback className="bg-primary/10 text-primary font-bold text-xs">
+            {userInitials}
+          </AvatarFallback>
+        </Avatar>
+      </Button>
+
+      {/* Botón de Cerrar Sesión */}
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={handleLogout}
+        className="rounded-full h-9 w-9 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+        title="Cerrar Sesión"
+      >
+        <LogOut className="h-5 w-5" />
+      </Button>
+    </div>
+  );
 
   return (
     <div className="flex min-h-screen w-full bg-background">
@@ -87,6 +117,7 @@ const Layout: React.FC = () => {
               <img src="https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Logo%20App.png" alt="Logo" className="h-8 w-8" />
               <h1 className="text-lg font-bold">{currentPageName}</h1>
             </div>
+            {renderHeaderActions()}
           </header>
           <main className="flex-1 overflow-y-auto p-4 pb-24">
             <Outlet />
@@ -100,12 +131,24 @@ const Layout: React.FC = () => {
           </Panel>
           <PanelResizeHandle className="w-1 bg-border hover:bg-primary/30 transition-colors" />
           <Panel defaultSize={80}>
-            <main className="h-full overflow-y-auto p-8 lg:p-12 max-w-7xl mx-auto">
-              <Outlet />
-            </main>
+            <div className="flex flex-col h-full">
+              {/* Barra Superior para Escritorio */}
+              <header className="flex h-16 items-center justify-between px-8 lg:px-12 border-b bg-background/80 backdrop-blur-md shrink-0">
+                <div className="text-sm font-semibold text-muted-foreground">
+                  {currentPageName}
+                </div>
+                {renderHeaderActions()}
+              </header>
+              <main className="flex-1 overflow-y-auto p-8 lg:p-12 max-w-7xl mx-auto w-full">
+                <Outlet />
+              </main>
+            </div>
           </Panel>
         </PanelGroup>
       )}
+
+      {/* Diálogo de Perfil */}
+      <ProfileDialog isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} />
     </div>
   );
 };
