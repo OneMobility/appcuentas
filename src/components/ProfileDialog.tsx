@@ -18,10 +18,10 @@ interface ProfileDialogProps {
   forceOpen?: boolean;
 }
 
-// Generar las URLs de los 16 avatares predefinidos en el bucket 'avatar'
+// Generar las URLs de los 16 avatares predefinidos en la carpeta 'avatar' dentro del bucket 'Media'
 const AVATARS = Array.from({ length: 16 }, (_, i) => {
   const id = i + 1;
-  return `https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/avatar/${id}.png`;
+  return `https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/avatar/${id}.png`;
 });
 
 const ProfileDialog: React.FC<ProfileDialogProps> = ({ isOpen, onClose, forceOpen = false }) => {
@@ -147,7 +147,7 @@ const ProfileDialog: React.FC<ProfileDialogProps> = ({ isOpen, onClose, forceOpe
           
           {/* Vista previa del Avatar seleccionado */}
           <div className="flex flex-col items-center justify-center gap-2 pb-2">
-            <Avatar className="h-20 w-100 h-20 border-2 border-primary/20 shadow-md">
+            <Avatar className="h-20 w-20 border-2 border-primary/20 shadow-md">
               <AvatarImage src={selectedAvatar} alt="Avatar" />
               <AvatarFallback className="bg-primary/10 text-primary font-bold text-xl">
                 {initials}
