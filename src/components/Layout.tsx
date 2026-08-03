@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
+import React from "react";
+import { Link, Outlet, useLocation } from "react-router-dom";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -17,22 +17,10 @@ import {
   Wallet,
   BarChart,
   ShoppingCart,
-  User,
-  Settings,
 } from "lucide-react";
 import MobileNavbar from "./MobileNavbar";
 import { useSession } from "@/context/SessionContext";
 import { supabase } from "@/integrations/supabase/client";
-import ProfileModal from "./ProfileModal";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 const navItems = [
   { name: "Resumen", path: "/dashboard", icon: PiggyBank },
@@ -46,17 +34,9 @@ const navItems = [
   { name: "Categorías", path: "/categories", icon: Tag },
 ];
 
-const Sidebar = ({ onLogout, onOpenProfile }: { onLogout: () => void; onOpenProfile: () => void }) => {
+const Sidebar = () => {
   const location = useLocation();
-  const { user, profile } = useSession();
-
-  const displayName = profile?.first_name 
-    ? `${profile.first_name} ${profile.last_name || ""}`.trim()
-    : user?.email?.split("@")[0] || "Usuario";
-
-  const initials = profile?.first_name 
-    ? profile.first_name.charAt(0).toUpperCase() 
-    : "U";
+  const { user } = useSession();
 
   return (
     <nav className="flex flex-col gap-2 p-6 h-full">
@@ -64,7 +44,7 @@ const Sidebar = ({ onLogout, onOpenProfile }: { onLogout: () => void; onOpenProf
         <img src="https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Logo%20App.png" alt="Oinkash Logo" className="h-10 w-10" />
         <h2 className="text-2xl font-bold tracking-tight">Oinkash</h2>
       </Link>
-      <div className="flex-1 space-y-1 overflow-y-auto scrollbar-hide">
+      <div className="flex-1 space-y-1">
         {navItems.map((item) => (
           <Link
             key={item.name}
@@ -79,40 +59,15 @@ const Sidebar = ({ onLogout, onOpenProfile }: { onLogout: () => void; onOpenProf
           </Link>
         ))}
       </div>
-
-      {/* User Profile Section at the bottom of Sidebar */}
       {user && (
-        <div className="mt-auto pt-4 border-t border-sidebar-border flex flex-col gap-2">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button className="flex items-center gap-3 p-2 rounded-xl hover:bg-sidebar-accent/30 transition-all text-left w-full">
-                <Avatar className="h-10 w-10 border-2 border-sidebar-primary">
-                  <AvatarImage src={profile?.avatar_url || undefined} />
-                  <AvatarFallback className="bg-sidebar-primary text-sidebar-primary-foreground font-bold">
-                    {initials}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-bold text-sidebar-foreground truncate">{displayName}</p>
-                  <p className="text-xs text-sidebar-foreground/70 truncate">{user.email}</p>
-                </div>
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56 rounded-2xl">
-              <DropdownMenuLabel>Mi Cuenta</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={onOpenProfile} className="rounded-xl cursor-pointer">
-                <User className="mr-2 h-4 w-4" />
-                <span>Editar Perfil</span>
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={onLogout} className="text-destructive focus:text-destructive rounded-xl cursor-pointer">
-                <LogOut className="mr-2 h-4 w-4" />
-                <span>Cerrar Sesión</span>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
+        <Button
+          variant="ghost"
+          onClick={() => supabase.auth.signOut()}
+          className="flex items-center gap-3 rounded-xl px-4 py-3 text-sidebar-foreground hover:bg-destructive/20 hover:text-destructive-foreground mt-auto"
+        >
+          <LogOut className="h-5 w-5" />
+          Cerrar Sesión
+        </Button>
       )}
     </nav>
   );
@@ -121,36 +76,7 @@ const Sidebar = ({ onLogout, onOpenProfile }: { onLogout: () => void; onOpenProf
 const Layout: React.FC = () => {
   const isMobile = useIsMobile();
   const location = useLocation();
-  const navigate = useNavigate();
-  const { user, profile, isLoading } = useSession();
-  const [isProfileOpen, setIsProfileOpen] = useState(false);
   const currentPageName = navItems.find(item => item.path === location.pathname)?.name || "Oinkash";
-
-  // Automatically open ProfileModal if the user is logged in but has no profile completed
-  useEffect(() => {
-    if (!isLoading && user && !profile?.first_name) {
-      setIsProfileOpen(true);
-    }
-  }, [user, profile, isLoading]);
-
-  const handleLogout = async () => {
-    try {
-      await supabase.auth.signOut();
-      localStorage.removeItem('lastVisitedRoute');
-      navigate('/login', { replace: true });
-    } catch (error) {
-      console.error("Error signing out:", error);
-      navigate('/login', { replace: true });
-    }
-  };
-
-  const displayName = profile?.first_name 
-    ? `${profile.first_name} ${profile.last_name || ""}`.trim()
-    : user?.email?.split("@")[0] || "Usuario";
-
-  const initials = profile?.first_name 
-    ? profile.first_name.charAt(0).toUpperCase() 
-    : "U";
 
   return (
     <div className="flex min-h-screen w-full bg-background">
@@ -161,33 +87,6 @@ const Layout: React.FC = () => {
               <img src="https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Logo%20App.png" alt="Logo" className="h-8 w-8" />
               <h1 className="text-lg font-bold">{currentPageName}</h1>
             </div>
-            {user && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button className="focus:outline-none">
-                    <Avatar className="h-9 w-9 border-2 border-primary">
-                      <AvatarImage src={profile?.avatar_url || undefined} />
-                      <AvatarFallback className="bg-primary text-primary-foreground font-bold">
-                        {initials}
-                      </AvatarFallback>
-                    </Avatar>
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56 rounded-2xl">
-                  <DropdownMenuLabel className="font-bold">{displayName}</DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => setIsProfileOpen(true)} className="rounded-xl cursor-pointer">
-                    <User className="mr-2 h-4 w-4" />
-                    <span>Editar Perfil</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={handleLogout} className="text-destructive focus:text-destructive rounded-xl cursor-pointer">
-                    <LogOut className="mr-2 h-4 w-4" />
-                    <span>Cerrar Sesión</span>
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
           </header>
           <main className="flex-1 overflow-y-auto p-4 pb-24">
             <Outlet />
@@ -197,7 +96,7 @@ const Layout: React.FC = () => {
       ) : (
         <PanelGroup direction="horizontal" className="w-full">
           <Panel defaultSize={20} minSize={15} maxSize={25} className="bg-sidebar text-sidebar-foreground border-r">
-            <Sidebar onLogout={handleLogout} onOpenProfile={() => setIsProfileOpen(true)} />
+            <Sidebar />
           </Panel>
           <PanelResizeHandle className="w-1 bg-border hover:bg-primary/30 transition-colors" />
           <Panel defaultSize={80}>
@@ -207,9 +106,6 @@ const Layout: React.FC = () => {
           </Panel>
         </PanelGroup>
       )}
-
-      {/* Profile Modal */}
-      <ProfileModal isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} />
     </div>
   );
 };

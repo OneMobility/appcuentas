@@ -743,7 +743,7 @@ const CardDetailsPage: React.FC = () => {
                                       color: getContrastColor(category?.color || '#cbd5e1') 
                                     }}
                                   >
-                                    <DynamicLucideIcon iconName={category?.icon || "Tag"} />
+                                    <DynamicLucideIcon iconName={category?.icon || "Tag"} className="h-3.5 w-3.5" />
                                   </div>
                                 </TableCell>
                                 
@@ -878,7 +878,7 @@ const CardDetailsPage: React.FC = () => {
                       </TableCell>
                       <TableCell className="text-right">
                         <Button 
-                          size="sm" 
+                          size="xs" 
                           variant="outline" 
                           className="h-7 text-[10px] font-bold gap-1"
                           onClick={() => handleAdvanceInstallment(tx)}

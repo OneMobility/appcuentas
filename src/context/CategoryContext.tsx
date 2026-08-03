@@ -5,7 +5,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "./SessionContext";
 import { showError, showSuccess } from "@/utils/toast";
 import LoadingSpinner from '@/components/LoadingSpinner';
-import { useLocation } from "react-router-dom";
 
 export interface Category {
   id: string;
@@ -65,115 +64,102 @@ export const CategoryProvider = ({ children }: { children: ReactNode }) => {
   const [incomeCategories, setIncomeCategories] = useState<Category[]>([]);
   const [expenseCategories, setExpenseCategories] = useState<Category[]>([]);
   const [isLoadingCategories, setIsLoadingCategories] = useState(true);
-  const location = useLocation();
 
   const fetchCategories = async () => {
-    if (!user) {
-      setIncomeCategories([]);
-      setExpenseCategories([]);
-      setIsLoadingCategories(false);
-      return;
-    }
-
     setIsLoadingCategories(true);
-    try {
-      // Fetch existing fixed categories (user_id is NULL)
-      const { data: existingFixedIncomeData, error: fixedIncomeError } = await supabase
-        .from('income_categories')
-        .select('*')
-        .is('user_id', null);
+    
+    // Fetch existing fixed categories (user_id is NULL)
+    const { data: existingFixedIncomeData, error: fixedIncomeError } = await supabase
+      .from('income_categories')
+      .select('*')
+      .is('user_id', null);
 
-      const { data: existingFixedExpenseData, error: fixedExpenseError } = await supabase
-        .from('expense_categories')
-        .select('*')
-        .is('user_id', null);
+    const { data: existingFixedExpenseData, error: fixedExpenseError } = await supabase
+      .from('expense_categories')
+      .select('*')
+      .is('user_id', null);
 
-      if (fixedIncomeError || fixedExpenseError) {
-        showError('Error al cargar categorías fijas existentes: ' + (fixedIncomeError?.message || fixedExpenseError?.message));
-      }
-
-      const existingFixedIncomeMap = new Map(existingFixedIncomeData?.map(cat => [cat.name, cat.id]));
-      const existingFixedExpenseMap = new Map(existingFixedExpenseData?.map(cat => [cat.name, cat.id]));
-
-      // Insert missing predefined fixed income categories
-      for (const predefined of predefinedFixedIncomeCategories) {
-        if (!existingFixedIncomeMap.has(predefined.name)) {
-          const { error: insertError } = await supabase
-            .from('income_categories')
-            .insert({ ...predefined, user_id: null });
-          if (insertError) {
-            console.error("Error inserting fixed income category:", predefined.name, insertError);
-          }
-        }
-      }
-
-      // Insert missing predefined fixed expense categories
-      for (const predefined of predefinedFixedExpenseCategories) {
-        if (!existingFixedExpenseMap.has(predefined.name)) {
-          const { error: insertError } = await supabase
-            .from('expense_categories')
-            .insert({ ...predefined, user_id: null });
-          if (insertError) {
-            console.error("Error inserting fixed expense category:", predefined.name, insertError);
-          }
-        }
-      }
-
-      // Re-fetch all fixed categories after potential insertions
-      const { data: updatedFixedIncomeData, error: updatedFixedIncomeError } = await supabase
-        .from('income_categories')
-        .select('*')
-        .is('user_id', null);
-
-      const { data: updatedFixedExpenseData, error: updatedFixedExpenseError } = await supabase
-        .from('expense_categories')
-        .select('*')
-        .is('user_id', null);
-
-      if (updatedFixedIncomeError || updatedFixedExpenseError) {
-        showError('Error al recargar categorías fijas: ' + (updatedFixedIncomeError?.message || updatedFixedExpenseError?.message));
-      }
-
-      let allIncomeCategories: Category[] = updatedFixedIncomeData || [];
-      let allExpenseCategories: Category[] = updatedFixedExpenseData || [];
-
-      if (user) {
-        // Fetch user-specific categories
-        const { data: userDataIncome, error: userIncomeError } = await supabase
-          .from('income_categories')
-          .select('*')
-          .eq('user_id', user.id);
-
-        const { data: userDataExpense, error: userExpenseError } = await supabase
-          .from('expense_categories')
-          .select('*')
-          .eq('user_id', user.id);
-
-        if (userIncomeError) {
-          showError('Error al cargar categorías de ingresos del usuario: ' + userIncomeError.message);
-        } else {
-          allIncomeCategories = [...allIncomeCategories, ...(userDataIncome || [])];
-        }
-
-        if (userExpenseError) {
-          showError('Error al cargar categorías de egresos del usuario: ' + userExpenseError.message);
-        } else {
-          allExpenseCategories = [...allExpenseCategories, ...(userDataExpense || [])];
-        }
-      }
-
-      // Sort categories by name
-      allIncomeCategories.sort((a, b) => a.name.localeCompare(b.name));
-      allExpenseCategories.sort((a, b) => a.name.localeCompare(b.name));
-
-      setIncomeCategories(allIncomeCategories);
-      setExpenseCategories(allExpenseCategories);
-    } catch (error: any) {
-      console.error("Error in fetchCategories:", error);
-      showError("Error al cargar las categorías: " + error.message);
-    } finally {
-      setIsLoadingCategories(false);
+    if (fixedIncomeError || fixedExpenseError) {
+      showError('Error al cargar categorías fijas existentes: ' + (fixedIncomeError?.message || fixedExpenseError?.message));
     }
+
+    const existingFixedIncomeMap = new Map(existingFixedIncomeData?.map(cat => [cat.name, cat.id]));
+    const existingFixedExpenseMap = new Map(existingFixedExpenseData?.map(cat => [cat.name, cat.id]));
+
+    // Insert missing predefined fixed income categories
+    for (const predefined of predefinedFixedIncomeCategories) {
+      if (!existingFixedIncomeMap.has(predefined.name)) {
+        const { error: insertError } = await supabase
+          .from('income_categories')
+          .insert({ ...predefined, user_id: null });
+        if (insertError) {
+          console.error("Error inserting fixed income category:", predefined.name, insertError);
+        }
+      }
+    }
+
+    // Insert missing predefined fixed expense categories
+    for (const predefined of predefinedFixedExpenseCategories) {
+      if (!existingFixedExpenseMap.has(predefined.name)) {
+        const { error: insertError } = await supabase
+          .from('expense_categories')
+          .insert({ ...predefined, user_id: null });
+        if (insertError) {
+          console.error("Error inserting fixed expense category:", predefined.name, insertError);
+        }
+      }
+    }
+
+    // Re-fetch all fixed categories after potential insertions
+    const { data: updatedFixedIncomeData, error: updatedFixedIncomeError } = await supabase
+      .from('income_categories')
+      .select('*')
+      .is('user_id', null);
+
+    const { data: updatedFixedExpenseData, error: updatedFixedExpenseError } = await supabase
+      .from('expense_categories')
+      .select('*')
+      .is('user_id', null);
+
+    if (updatedFixedIncomeError || updatedFixedExpenseError) {
+      showError('Error al recargar categorías fijas: ' + (updatedFixedIncomeError?.message || updatedFixedExpenseError?.message));
+    }
+
+    let allIncomeCategories: Category[] = updatedFixedIncomeData || [];
+    let allExpenseCategories: Category[] = updatedFixedExpenseData || [];
+
+    if (user) {
+      // Fetch user-specific categories
+      const { data: userDataIncome, error: userIncomeError } = await supabase
+        .from('income_categories')
+        .select('*')
+        .eq('user_id', user.id);
+
+      const { data: userDataExpense, error: userExpenseError } = await supabase
+        .from('expense_categories')
+        .select('*')
+        .eq('user_id', user.id);
+
+      if (userIncomeError) {
+        showError('Error al cargar categorías de ingresos del usuario: ' + userIncomeError.message);
+      } else {
+        allIncomeCategories = [...allIncomeCategories, ...(userDataIncome || [])];
+      }
+
+      if (userExpenseError) {
+        showError('Error al cargar categorías de egresos del usuario: ' + userExpenseError.message);
+      } else {
+        allExpenseCategories = [...allExpenseCategories, ...(userDataExpense || [])];
+      }
+    }
+
+    // Sort categories by name
+    allIncomeCategories.sort((a, b) => a.name.localeCompare(b.name));
+    allExpenseCategories.sort((a, b) => a.name.localeCompare(b.name));
+
+    setIncomeCategories(allIncomeCategories);
+    setExpenseCategories(allExpenseCategories);
+    setIsLoadingCategories(false);
   };
 
   useEffect(() => {
@@ -275,8 +261,6 @@ export const CategoryProvider = ({ children }: { children: ReactNode }) => {
     return [...incomeCategories, ...expenseCategories].find(cat => cat.id === id);
   };
 
-  const isPublicPage = location.pathname === '/login' || location.pathname === '/reset-password';
-
   return (
     <CategoryContext.Provider
       value={{
@@ -289,7 +273,7 @@ export const CategoryProvider = ({ children }: { children: ReactNode }) => {
         isLoadingCategories,
       }}
     >
-      {isLoadingCategories && !isPublicPage && <LoadingSpinner />}
+      {isLoadingCategories && <LoadingSpinner />}
       {children}
     </CategoryContext.Provider>
   );

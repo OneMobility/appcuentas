@@ -21,7 +21,6 @@ interface CardDataForReconciliation {
   current_balance: number;
   type: "credit" | "debit";
   credit_limit?: number;
-  cut_off_day?: number;
   transactions: any[];
 }
 
@@ -144,7 +143,7 @@ const CardReconciliationDialog: React.FC<CardReconciliationDialogProps> = ({
 
   const handleReconcile = async () => {
     if (!user) {
-      showError("Debes iniciar sesión para realizar la conciliación.");
+      showError("Debes iniciar sesión.");
       return;
     }
 

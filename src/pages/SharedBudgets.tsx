@@ -20,7 +20,6 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useCategoryContext } from "@/context/CategoryContext";
 import DynamicLucideIcon from "@/components/DynamicLucideIcon";
 import { evaluateExpression } from "@/utils/math-helpers";
-import { getLocalDateString } from "@/utils/date-helpers";
 import { format, parseISO, isBefore, isSameDay, addDays } from "date-fns";
 import { es } from "date-fns/locale";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -355,10 +354,10 @@ const SharedBudgets = () => {
                                   <Badge className="bg-green-100 text-green-800">Completado</Badge>
                                 ) : (
                                   <>
-                                    <Button variant="outline" size="sm" className="h-7 text-[10px]" onClick={() => handleMarkAsPaidInternally(p, budget)} title="Yo lo pago">
+                                    <Button variant="outline" size="xs" className="h-7 text-[10px]" onClick={() => handleMarkAsPaidInternally(p, budget)} title="Yo lo pago">
                                       <UserCheck className="h-3 w-3 mr-1" /> Saldar
                                     </Button>
-                                    <Button size="sm" className="h-7 text-[10px]" onClick={() => handleOpenPaymentDialog(p, budget)}>
+                                    <Button size="xs" className="h-7 text-[10px]" onClick={() => handleOpenPaymentDialog(p, budget)}>
                                       <DollarSign className="h-3 w-3 mr-1" /> Abonar
                                     </Button>
                                   </>

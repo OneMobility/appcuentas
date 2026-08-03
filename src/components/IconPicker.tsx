@@ -40,8 +40,8 @@ const IconPicker: React.FC<IconPickerProps> = ({ selectedIcon, onSelectIcon }) =
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button variant="outline" className="w-full justify-start">
-          <DynamicLucideIcon iconName={selectedIcon || "Tag"} />
-          <span className="ml-2">{selectedIcon || "Seleccionar Icono"}</span>
+          <DynamicLucideIcon iconName={selectedIcon || "Tag"} className="mr-2 h-4 w-4 text-black" />
+          {selectedIcon || "Seleccionar Icono"}
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-[300px] p-0 z-50">
@@ -64,7 +64,7 @@ const IconPicker: React.FC<IconPickerProps> = ({ selectedIcon, onSelectIcon }) =
                   "hover:bg-muted"
                 )}
               >
-                <DynamicLucideIcon iconName={iconName} />
+                <DynamicLucideIcon iconName={iconName} className="h-4 w-4 text-black" />
               </Button>
             ))}
           </div>
