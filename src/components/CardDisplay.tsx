@@ -123,7 +123,7 @@ const CardDisplay: React.FC<CardDisplayProps> = ({ card, onAddTransaction, onDel
             backfaceVisibility: "hidden",
             WebkitBackfaceVisibility: "hidden",
             pointerEvents: isFlipped ? "none" : "auto",
-            zIndex: iFlipped ? 0 : 2,
+            zIndex: isFlipped ? 0 : 2,
           }}
         >
           {/* Brillo de plástico de tarjeta */}
