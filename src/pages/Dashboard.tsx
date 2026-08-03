@@ -22,6 +22,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { fetchUsdToMxnRate } from "@/utils/currency-helper";
+import FinancialHealthCard from "@/components/FinancialHealthCard"; // Nuevo componente
 
 export interface CardData {
   id: string;
@@ -72,23 +73,14 @@ const Dashboard = () => {
   const loadExchangeRate = async () => {
     setIsRateLoading(true);
     try {
-      const rateVal = await getExchangeRateValue();
+      const rateVal = await fetchUsdToMxnRate();
       setExchangeRate(rateVal);
-      // Actualizar el valor MXN en base a la tasa
       const usdNum = parseFloat(usdInput) || 0;
       setMxnInput((usdNum * rateVal).toFixed(2));
     } catch (e) {
       console.error(e);
     } finally {
       setIsRateLoading(false);
-    }
-  };
-
-  const getExchangeRateValue = async () => {
-    try {
-      return await fetchUsdToMxnRate();
-    } catch {
-      return 20.00;
     }
   };
 
@@ -199,12 +191,18 @@ const Dashboard = () => {
         </Button>
       </div>
 
+      {/* Fila de Inteligencia */}
       <div className="grid gap-4 lg:grid-cols-3 px-1">
+        <div className="lg:col-span-1">
+          <FinancialHealthCard />
+        </div>
         <div className="lg:col-span-2">
           <GroupedPaymentDueDatesCard cards={cards} onUpdate={() => setRefreshKey(prev => prev + 1)} />
         </div>
-        
-        {/* Widget del Convertidor de Divisas */}
+      </div>
+
+      {/* Widget del Convertidor de Divisas */}
+      <div className="px-1">
         <Card className="border-none shadow-sm bg-indigo-50/50">
           <CardHeader className="p-4 pb-2 flex flex-row items-center justify-between">
             <CardTitle className="text-sm font-bold flex items-center gap-1.5 text-indigo-900">
@@ -245,7 +243,6 @@ const Dashboard = () => {
                 </div>
               </div>
             </div>
-            <p className="text-[9px] text-indigo-700 italic text-center">Tasa obtenida en tiempo real de Open Exchange Rates.</p>
           </CardContent>
         </Card>
       </div>
@@ -277,7 +274,7 @@ const Dashboard = () => {
         <Card className="border-none shadow-sm overflow-hidden">
           <CardHeader className="p-4 pb-2"><CardTitle className="text-sm font-bold">Ingresos por Categoría (Mes)</CardTitle></CardHeader>
           <CardContent className="p-0"><CategoryPieChart data={categoryMetrics.income} title="Ingresos" /></CardContent>
-        </Card>
+        </div>
       </div>
 
       <Card className="border-none shadow-sm mx-1">

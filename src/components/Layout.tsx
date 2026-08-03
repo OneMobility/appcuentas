@@ -23,6 +23,7 @@ import MobileNavbar from "./MobileNavbar";
 import { useSession } from "@/context/SessionContext";
 import { supabase } from "@/integrations/supabase/client";
 import ProfileDialog from "./ProfileDialog";
+import AIChatAssistant from "./AIChatAssistant"; // Nuevo
 
 const navItems = [
   { name: "Resumen", path: "/dashboard", icon: PiggyBank },
@@ -84,7 +85,6 @@ const Layout: React.FC = () => {
 
     if (!error && data) {
       setUserProfile(data);
-      // Si falta nombre, apellido o avatar, forzar la apertura del diálogo de perfil
       if (!data.first_name || !data.last_name || !data.avatar_url) {
         setForceProfileOpen(true);
         setIsProfileOpen(true);
@@ -92,7 +92,6 @@ const Layout: React.FC = () => {
         setForceProfileOpen(false);
       }
     } else {
-      // Si no existe el perfil en la base de datos, forzar la creación
       setForceProfileOpen(true);
       setIsProfileOpen(true);
     }
@@ -110,7 +109,6 @@ const Layout: React.FC = () => {
 
   const renderHeaderActions = () => (
     <div className="flex items-center gap-2">
-      {/* Botón de Perfil */}
       <Button
         variant="ghost"
         size="icon"
@@ -126,7 +124,6 @@ const Layout: React.FC = () => {
         </Avatar>
       </Button>
 
-      {/* Botón de Cerrar Sesión */}
       {!forceProfileOpen && (
         <Button
           variant="ghost"
@@ -165,7 +162,6 @@ const Layout: React.FC = () => {
           <PanelResizeHandle className="w-1 bg-border hover:bg-primary/30 transition-colors" />
           <Panel defaultSize={80}>
             <div className="flex flex-col h-full">
-              {/* Barra Superior para Escritorio */}
               <header className="flex h-16 items-center justify-between px-8 lg:px-12 border-b bg-background/80 backdrop-blur-md shrink-0">
                 <div className="text-sm font-semibold text-muted-foreground">
                   {currentPageName}
@@ -180,7 +176,8 @@ const Layout: React.FC = () => {
         </PanelGroup>
       )}
 
-      {/* Diálogo de Perfil */}
+      <AIChatAssistant /> {/* Añadido aquí */}
+
       <ProfileDialog 
         isOpen={isProfileOpen} 
         onClose={() => {
