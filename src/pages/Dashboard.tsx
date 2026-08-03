@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { DollarSign, RefreshCw, ArrowRightLeft, Coins, Wallet, CreditCard, Users, Heart, TrendingUp, Star, Sparkles } from "lucide-react";
+import { DollarSign, RefreshCw, ArrowRightLeft, Coins, Wallet, CreditCard, Users, Heart, Star, Sparkles } from "lucide-react";
 import { useCategoryContext } from "@/context/CategoryContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/context/SessionContext";
@@ -16,6 +16,7 @@ import CreditCardsChart from "@/components/CreditCardsChart";
 import CategoryPieChart from "@/components/CategoryPieChart";
 import { fetchUsdToMxnRate } from "@/utils/currency-helper";
 import FinancialHealthCard from "@/components/FinancialHealthCard";
+import FinancialPredictionCard from "@/components/FinancialPredictionCard";
 import SmartTipsCard from "@/components/SmartTipsCard";
 import { cn } from "@/lib/utils";
 
@@ -130,7 +131,7 @@ const Dashboard = () => {
         </Button>
       </header>
 
-      {/* 2. TARJETAS DE RESUMEN (Disponible, Te deben, Debes, Balance) */}
+      {/* 2. TARJETAS DE RESUMEN */}
       <section className="grid gap-4 grid-cols-2 md:grid-cols-4">
         {[
           { label: "Disponible", val: totals.cash + totals.debitCards, color: "bg-indigo-50 text-indigo-700", icon: Wallet },
@@ -150,12 +151,13 @@ const Dashboard = () => {
         ))}
       </section>
 
-      {/* 3. SALUD FINANCIERA Y CONSEJOS */}
-      <section className="grid gap-6 md:grid-cols-2 lg:grid-cols-12">
-        <div className="lg:col-span-7">
-          <FinancialHealthCard />
-        </div>
-        <div className="lg:col-span-5">
+      {/* 3. SALUD FINANCIERA (Score Ancho Total) */}
+      <section className="space-y-6">
+        <FinancialHealthCard />
+        
+        {/* Predicción y Consejos abajo */}
+        <div className="grid gap-6 md:grid-cols-2">
+          <FinancialPredictionCard />
           <SmartTipsCard />
         </div>
       </section>
@@ -227,7 +229,7 @@ const Dashboard = () => {
           <CardHeader className="p-0 mb-6">
             <CardTitle className="text-sm font-black uppercase tracking-widest text-slate-400 flex items-center gap-2">
               <CreditCard className="h-4 w-4" /> Uso de Tarjetas 💳
-            </CardTitle>
+            </Title>
           </CardHeader>
           <div className="w-full">
             <CreditCardsChart cards={cards} />
