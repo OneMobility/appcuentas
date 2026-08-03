@@ -19,6 +19,7 @@ import FinancialHealthCard from "@/components/FinancialHealthCard";
 import FinancialPredictionCard from "@/components/FinancialPredictionCard";
 import SmartTipsCard from "@/components/SmartTipsCard";
 import { cn } from "@/lib/utils";
+import { showSuccess, showError } from "@/utils/toast";
 
 const COCHINITO_LOGO = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Cochinito%20Ahorro.png";
 
@@ -46,7 +47,7 @@ const Dashboard = () => {
     loadRate();
   }, [refreshKey]);
 
-  const fetchDashboardData = async () => {
+  const fetchDashboardData = async (isManual = false) => {
     if (!user) return;
     try {
       const [cardsRes, cashRes, cardTxRes, debtorsRes, creditorsRes] = await Promise.all([
@@ -61,14 +62,19 @@ const Dashboard = () => {
       setCardTransactions(cardTxRes.data || []);
       setDebtors(debtorsRes.data || []);
       setCreditors(creditorsRes.data || []);
+      
+      if (isManual) {
+        showSuccess("Datos actualizados correctamente 🐷");
+      }
     } catch (err) {
       console.error("Error fetching dashboard data:", err);
+      showError("No se pudieron cargar los datos.");
     }
   };
 
   useEffect(() => {
     if (user && !isLoadingCategories) {
-      fetchDashboardData();
+      fetchDashboardData(refreshKey > 0);
     }
   }, [user, isLoadingCategories, refreshKey]);
 
