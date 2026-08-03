@@ -1,12 +1,12 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Link, Outlet, useLocation } from "react-router-dom";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   PiggyBank,
   Banknote,
@@ -18,7 +18,6 @@ import {
   Wallet,
   BarChart,
   ShoppingCart,
-  User,
 } from "lucide-react";
 import MobileNavbar from "./MobileNavbar";
 import { useSession } from "@/context/SessionContext";
@@ -70,13 +69,44 @@ const Layout: React.FC = () => {
   const location = useLocation();
   const { user } = useSession();
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [forceProfileOpen, setForceProfileOpen] = useState(false);
+  const [userProfile, setUserProfile] = useState<{ first_name?: string; last_name?: string; avatar_url?: string } | null>(null);
 
   const currentPageName = navItems.find(item => item.path === location.pathname)?.name || "Oinkash";
-  const userInitials = `${user?.user_metadata?.first_name?.charAt(0) || ""}${user?.user_metadata?.last_name?.charAt(0) || ""}`.toUpperCase() || "U";
+
+  const fetchProfile = async () => {
+    if (!user) return;
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("first_name, last_name, avatar_url")
+      .eq("id", user.id)
+      .single();
+
+    if (!error && data) {
+      setUserProfile(data);
+      // Si falta nombre, apellido o avatar, forzar la apertura del diálogo de perfil
+      if (!data.first_name || !data.last_name || !data.avatar_url) {
+        setForceProfileOpen(true);
+        setIsProfileOpen(true);
+      } else {
+        setForceProfileOpen(false);
+      }
+    } else {
+      // Si no existe el perfil en la base de datos, forzar la creación
+      setForceProfileOpen(true);
+      setIsProfileOpen(true);
+    }
+  };
+
+  useEffect(() => {
+    fetchProfile();
+  }, [user, isProfileOpen]);
 
   const handleLogout = () => {
     supabase.auth.signOut();
   };
+
+  const userInitials = `${userProfile?.first_name?.charAt(0) || user?.user_metadata?.first_name?.charAt(0) || ""}${userProfile?.last_name?.charAt(0) || user?.user_metadata?.last_name?.charAt(0) || ""}`.toUpperCase() || "U";
 
   const renderHeaderActions = () => (
     <div className="flex items-center gap-2">
@@ -89,6 +119,7 @@ const Layout: React.FC = () => {
         title="Mi Perfil"
       >
         <Avatar className="h-8 w-8 border border-primary/20">
+          <AvatarImage src={userProfile?.avatar_url} alt="Avatar" />
           <AvatarFallback className="bg-primary/10 text-primary font-bold text-xs">
             {userInitials}
           </AvatarFallback>
@@ -96,15 +127,17 @@ const Layout: React.FC = () => {
       </Button>
 
       {/* Botón de Cerrar Sesión */}
-      <Button
-        variant="ghost"
-        size="icon"
-        onClick={handleLogout}
-        className="rounded-full h-9 w-9 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-        title="Cerrar Sesión"
-      >
-        <LogOut className="h-5 w-5" />
-      </Button>
+      {!forceProfileOpen && (
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={handleLogout}
+          className="rounded-full h-9 w-9 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+          title="Cerrar Sesión"
+        >
+          <LogOut className="h-5 w-5" />
+        </Button>
+      )}
     </div>
   );
 
@@ -148,7 +181,14 @@ const Layout: React.FC = () => {
       )}
 
       {/* Diálogo de Perfil */}
-      <ProfileDialog isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} />
+      <ProfileDialog 
+        isOpen={isProfileOpen} 
+        onClose={() => {
+          setIsProfileOpen(false);
+          fetchProfile();
+        }} 
+        forceOpen={forceProfileOpen}
+      />
     </div>
   );
 };
