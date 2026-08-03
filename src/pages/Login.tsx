@@ -4,7 +4,6 @@ import React from 'react';
 import { Auth } from '@supabase/auth-ui-react';
 import { ThemeSupa } from '@supabase/auth-ui-shared';
 import { supabase } from '@/integrations/supabase/client';
-import { PiggyBank } from 'lucide-react'; // Importar el icono de PiggyBank
 
 const Login = () => {
   return (
@@ -38,7 +37,6 @@ const Login = () => {
           localization={{
             variables: {
               sign_in: {
-                title: 'Inicia Sesión',
                 email_label: 'Correo electrónico',
                 password_label: 'Contraseña',
                 email_input_placeholder: 'Tu correo electrónico',
@@ -48,7 +46,6 @@ const Login = () => {
                 link_text: '¿Ya tienes una cuenta? Inicia sesión',
               },
               sign_up: {
-                title: 'Regístrate',
                 email_label: 'Correo electrónico',
                 password_label: 'Contraseña',
                 email_input_placeholder: 'Tu correo electrónico',

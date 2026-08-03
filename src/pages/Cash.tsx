@@ -374,7 +374,7 @@ const Cash = () => {
                 <SelectContent>
                   {(transactionForm.type === "egreso" ? expenseCategories : incomeCategories).map(cat => (
                     <SelectItem key={cat.id} value={cat.id}>
-                      <div className="flex items-center gap-2"><DynamicLucideIcon iconName={cat.icon || "Tag"} className="h-4 w-4" /> {cat.name}</div>
+                      <div className="flex items-center gap-2"><DynamicLucideIcon iconName={cat.icon || "Tag"} /> {cat.name}</div>
                     </SelectItem>
                   ))}
                 </SelectContent>
