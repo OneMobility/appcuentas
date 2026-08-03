@@ -1,6 +1,6 @@
 "use client";
 
-const BUCKET_BASE_URL = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Iconos";
+const BUCKET_BASE_URL = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Iconos";
 
 export const getBankLogoUrl = (bankName: string, isDarkCard: boolean): string | null => {
   if (!bankName) return null;
