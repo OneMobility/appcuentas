@@ -18,11 +18,13 @@ interface ProfileDialogProps {
   forceOpen?: boolean;
 }
 
-// Generar las URLs de los 16 avatares predefinidos usando el ID del bucket 'Avatar' (mayúscula exacta)
-const AVATARS = Array.from({ length: 16 }, (_, i) => {
-  const id = i + 1;
-  return `https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Avatar/${id}.png`;
-});
+// Generar las URLs de los 16 avatares usando el helper de Supabase para el bucket 'Avatar'
+const getAvatarUrl = (id: number) => {
+  const { data } = supabase.storage.from('Avatar').getPublicUrl(`${id}.png`);
+  return data.publicUrl;
+};
+
+const AVATARS = Array.from({ length: 16 }, (_, i) => getAvatarUrl(i + 1));
 
 const ProfileDialog: React.FC<ProfileDialogProps> = ({ isOpen, onClose, forceOpen = false }) => {
   const { user } = useSession();
@@ -85,7 +87,6 @@ const ProfileDialog: React.FC<ProfileDialogProps> = ({ isOpen, onClose, forceOpe
     setIsSubmitting(true);
 
     try {
-      // 1. Actualizar tabla pública de perfiles
       const { error: profileError } = await supabase
         .from("profiles")
         .upsert({
@@ -98,7 +99,6 @@ const ProfileDialog: React.FC<ProfileDialogProps> = ({ isOpen, onClose, forceOpe
 
       if (profileError) throw profileError;
 
-      // 2. Actualizar metadatos de usuario en Auth
       const { error: metadataError } = await supabase.auth.updateUser({
         data: {
           first_name: firstName.trim(),
@@ -108,7 +108,6 @@ const ProfileDialog: React.FC<ProfileDialogProps> = ({ isOpen, onClose, forceOpe
 
       if (metadataError) throw metadataError;
 
-      // 3. Actualizar contraseña si se ingresó una nueva
       if (newPassword) {
         const { error: passwordError } = await supabase.auth.updateUser({
           password: newPassword,
@@ -139,13 +138,12 @@ const ProfileDialog: React.FC<ProfileDialogProps> = ({ isOpen, onClose, forceOpe
           </DialogTitle>
           <DialogDescription>
             {forceOpen 
-              ? "¡Te damos la bienvenida a Oinkash! Por favor, ingresa tus datos y elige un avatar para comenzar."
+              ? "¡Te damos la bienvenida a Oinkash! Por favor, ingresa tus datos y elige un avatar."
               : "Actualiza tu información personal, elige tu avatar o cambia tu contraseña."}
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSave} className="space-y-4 py-2">
           
-          {/* Vista previa del Avatar seleccionado */}
           <div className="flex flex-col items-center justify-center gap-2 pb-2">
             <Avatar className="h-20 w-20 border-2 border-primary/20 shadow-md">
               <AvatarImage src={selectedAvatar} alt="Avatar" />
@@ -156,7 +154,6 @@ const ProfileDialog: React.FC<ProfileDialogProps> = ({ isOpen, onClose, forceOpe
             <span className="text-xs text-muted-foreground">{user?.email}</span>
           </div>
 
-          {/* Selector de 16 Avatares */}
           <div className="space-y-2">
             <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Elige tu Avatar</Label>
             <div className="grid grid-cols-4 gap-2 p-2 bg-muted/30 rounded-2xl border">
@@ -168,7 +165,7 @@ const ProfileDialog: React.FC<ProfileDialogProps> = ({ isOpen, onClose, forceOpe
                     type="button"
                     onClick={() => setSelectedAvatar(url)}
                     className={cn(
-                      "relative rounded-full overflow-hidden aspect-square border-2 transition-all hover:scale-105 active:scale-95",
+                      "relative rounded-full overflow-hidden aspect-square border-2 transition-all hover:scale-105 active:scale-95 bg-white",
                       isSelected ? "border-primary ring-2 ring-primary/20 scale-105" : "border-transparent hover:border-muted-foreground/30"
                     )}
                   >
@@ -186,78 +183,37 @@ const ProfileDialog: React.FC<ProfileDialogProps> = ({ isOpen, onClose, forceOpe
             </div>
           </div>
 
-          {/* Campos de Nombre y Apellido */}
           <div className="grid grid-cols-2 gap-3">
             <div className="grid gap-1.5">
               <Label htmlFor="firstName">Nombre</Label>
-              <Input
-                id="firstName"
-                value={firstName}
-                onChange={(e) => setFirstName(e.target.value)}
-                className="rounded-xl h-10"
-                placeholder="Tu nombre"
-                required
-              />
+              <Input id="firstName" value={firstName} onChange={(e) => setFirstName(e.target.value)} className="rounded-xl h-10" required />
             </div>
             <div className="grid gap-1.5">
               <Label htmlFor="lastName">Apellido</Label>
-              <Input
-                id="lastName"
-                value={lastName}
-                onChange={(e) => setLastName(e.target.value)}
-                className="rounded-xl h-10"
-                placeholder="Tu apellido"
-                required
-              />
+              <Input id="lastName" value={lastName} onChange={(e) => setLastName(e.target.value)} className="rounded-xl h-10" required />
             </div>
           </div>
 
-          {/* Cambiar contraseña */}
           {!forceOpen && (
             <div className="border-t pt-3 space-y-3">
               <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
-                <KeyRound className="h-3.5 w-3.5" /> Cambiar Contraseña (Opcional)
+                <KeyRound className="h-3.5 w-3.5" /> Cambiar Contraseña
               </h4>
               <div className="grid gap-1.5">
                 <Label htmlFor="newPassword">Nueva Contraseña</Label>
-                <Input
-                  id="newPassword"
-                  type="password"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  placeholder="Mínimo 6 caracteres"
-                  className="rounded-xl h-10"
-                />
+                <Input id="newPassword" type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} className="rounded-xl h-10" />
               </div>
               <div className="grid gap-1.5">
-                <Label htmlFor="confirmPassword">Confirmar Nueva Contraseña</Label>
-                <Input
-                  id="confirmPassword"
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="Repite la contraseña"
-                  className="rounded-xl h-10"
-                />
+                <Label htmlFor="confirmPassword">Confirmar</Label>
+                <Input id="confirmPassword" type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="rounded-xl h-10" />
               </div>
             </div>
           )}
 
           <DialogFooter className="pt-2">
-            {!forceOpen && (
-              <Button type="button" variant="outline" onClick={onClose} className="rounded-xl">
-                Cancelar
-              </Button>
-            )}
+            {!forceOpen && <Button type="button" variant="outline" onClick={onClose} className="rounded-xl">Cancelar</Button>}
             <Button type="submit" className="rounded-xl font-bold w-full" disabled={isSubmitting}>
-              {isSubmitting ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Guardando...
-                </>
-              ) : (
-                forceOpen ? "Comenzar a usar Oinkash" : "Guardar Cambios"
-              )}
+              {isSubmitting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Guardando...</> : (forceOpen ? "Comenzar" : "Guardar Cambios")}
             </Button>
           </DialogFooter>
         </form>

@@ -12,6 +12,7 @@ import { getBankLogoUrl, getFallbackBankLogoUrl } from "@/utils/logo-helper";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/integrations/supabase/client";
 
 interface CardPocket {
   id: string;
@@ -69,7 +70,6 @@ const CardDisplay: React.FC<CardDisplayProps> = ({ card, onAddTransaction, onDel
     return null;
   }, [isCredit, card.cut_off_day, card.days_to_pay_after_cut_off]);
 
-  // Calcular colores de contraste dinámicos
   const textColor = useMemo(() => getContrastColor(card.color), [card.color]);
   const isDarkText = textColor === "#0F172A";
   const isDarkCard = !isDarkText;
@@ -78,7 +78,6 @@ const CardDisplay: React.FC<CardDisplayProps> = ({ card, onAddTransaction, onDel
   const opacityClass = isDarkText ? "opacity-80" : "opacity-90";
   const subOpacityClass = isDarkText ? "opacity-60" : "opacity-75";
 
-  // Estado para manejar la URL del logo y sus fallbacks
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [logoAttempt, setLogoAttempt] = useState<"primary" | "fallback" | "failed">("primary");
 
@@ -97,12 +96,13 @@ const CardDisplay: React.FC<CardDisplayProps> = ({ card, onAddTransaction, onDel
     }
   };
 
-  // Determinar si mostramos Mastercard o Visa de forma aleatoria/estética basada en los últimos dígitos
   const isVisa = parseInt(card.last_four_digits) % 2 === 0;
 
-  const networkLogoUrl = isVisa 
-    ? "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Iconos/VISA.png"
-    : "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Iconos/MASTERCARD.png";
+  const networkLogoUrl = useMemo(() => {
+    const filename = isVisa ? "VISA.png" : "MASTERCARD.png";
+    const { data } = supabase.storage.from('Iconos').getPublicUrl(filename);
+    return data.publicUrl;
+  }, [isVisa]);
 
   return (
     <div className="w-full max-w-sm mx-auto h-[240px] perspective-1000">
@@ -113,7 +113,6 @@ const CardDisplay: React.FC<CardDisplayProps> = ({ card, onAddTransaction, onDel
           transformStyle: 'preserve-3d',
         }}
       >
-        {/* CARA FRONTAL DE LA TARJETA */}
         <div 
           className="absolute inset-0 w-full h-full rounded-2xl shadow-2xl overflow-hidden transition-all duration-500 cursor-pointer"
           onClick={() => setIsFlipped(true)}
@@ -126,10 +125,7 @@ const CardDisplay: React.FC<CardDisplayProps> = ({ card, onAddTransaction, onDel
             zIndex: isFlipped ? 0 : 2,
           }}
         >
-          {/* Brillo de plástico de tarjeta */}
           <div className="absolute inset-0 bg-gradient-to-tr from-white/0 via-white/5 to-white/20 pointer-events-none rounded-2xl" />
-          
-          {/* Chip de la tarjeta */}
           <div className="absolute top-12 left-6 w-10 h-8 bg-gradient-to-r from-yellow-200 via-yellow-400 to-yellow-300 rounded-md opacity-90 shadow-inner flex items-center justify-center overflow-hidden border border-yellow-600/30">
             <div className="w-full h-full grid grid-cols-3 grid-rows-3 gap-0.5 p-1 opacity-40">
               {Array.from({ length: 9 }).map((_, i) => (
@@ -138,22 +134,13 @@ const CardDisplay: React.FC<CardDisplayProps> = ({ card, onAddTransaction, onDel
             </div>
           </div>
 
-          {/* Contenido de la Tarjeta */}
           <div className="p-5 flex flex-col h-full justify-between relative z-10">
-            {/* Encabezado */}
             <div className="flex justify-between items-start">
               <div className="flex items-center gap-2">
                 {logoUrl ? (
-                  <img 
-                    src={logoUrl} 
-                    alt={card.bank_name} 
-                    onError={handleLogoError}
-                    className="h-7 object-contain max-w-[100px] drop-shadow-md"
-                  />
+                  <img src={logoUrl} alt={card.bank_name} onError={handleLogoError} className="h-7 object-contain max-w-[100px] drop-shadow-md" />
                 ) : (
-                  <span className="text-sm font-black tracking-wider uppercase drop-shadow-md">
-                    {card.bank_name}
-                  </span>
+                  <span className="text-sm font-black tracking-wider uppercase drop-shadow-md">{card.bank_name}</span>
                 )}
               </div>
               <span className={cn("text-[9px] font-black tracking-widest px-2.5 py-0.5 rounded-full backdrop-blur-sm", badgeBg)}>
@@ -161,15 +148,12 @@ const CardDisplay: React.FC<CardDisplayProps> = ({ card, onAddTransaction, onDel
               </span>
             </div>
 
-            {/* Saldo / Crédito */}
             <div className="space-y-1 mt-2">
               {isCredit ? (
                 <>
                   <div className="flex justify-between items-baseline">
                     <span className={cn("text-[10px] uppercase tracking-wider font-medium", subOpacityClass)}>Crédito Disp.</span>
-                    <span className="text-2xl font-black tracking-tight drop-shadow-md">
-                      ${availableCredit.toFixed(2)}
-                    </span>
+                    <span className="text-2xl font-black tracking-tight drop-shadow-md">${availableCredit.toFixed(2)}</span>
                   </div>
                   <div className={cn("flex justify-between items-center text-[10px] border-t pt-1", borderStyle, subOpacityClass)}>
                     <span>Deuda Actual:</span>
@@ -180,9 +164,7 @@ const CardDisplay: React.FC<CardDisplayProps> = ({ card, onAddTransaction, onDel
                 <>
                   <div className="flex justify-between items-baseline">
                     <span className={cn("text-[10px] uppercase tracking-wider font-medium", subOpacityClass)}>Saldo Disp.</span>
-                    <span className="text-2xl font-black tracking-tight drop-shadow-md">
-                      ${card.current_balance.toFixed(2)}
-                    </span>
+                    <span className="text-2xl font-black tracking-tight drop-shadow-md">${card.current_balance.toFixed(2)}</span>
                   </div>
                   <div className={cn("flex justify-between items-center text-[10px] border-t pt-1", borderStyle, subOpacityClass)}>
                     <span>Total (con apartados):</span>
@@ -192,48 +174,32 @@ const CardDisplay: React.FC<CardDisplayProps> = ({ card, onAddTransaction, onDel
               )}
             </div>
 
-            {/* Número de Tarjeta y Fechas */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                {/* Número de tarjeta simulado */}
-                <p className={cn("font-mono text-sm tracking-widest drop-shadow-md", opacityClass)}>
-                  ••••  ••••  ••••  {card.last_four_digits}
-                </p>
-                {/* Icono Contactless */}
+                <p className={cn("font-mono text-sm tracking-widest drop-shadow-md", opacityClass)}>••••  ••••  ••••  {card.last_four_digits}</p>
                 <svg className={cn("h-4 w-4 fill-current", opacityClass)} viewBox="0 0 24 24">
                   <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.53c-.26-.81-1-1.4-1.9-1.4h-1v-3c0-.55-.45-1-1-1h-6v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.4z"/>
                 </svg>
               </div>
 
-              {/* Fila Inferior: Nombre, Expiración y Red de Pago */}
               <div className={cn("flex justify-between items-end border-t pt-2", borderStyle)}>
                 <div className={cn("text-[9px] uppercase tracking-wider", subOpacityClass)}>
                   <p className="font-bold truncate max-w-[120px]">{card.name || "Oinkash Member"}</p>
                   <p className="opacity-60">Vence: {card.expiration_date}</p>
                 </div>
-
-                {/* Logo de Red de Pago */}
                 <div className="flex items-center gap-3">
-                  <img 
-                    src={networkLogoUrl} 
-                    alt="Network" 
-                    className={cn(
-                      "h-6 object-contain max-w-[45px] drop-shadow-md",
-                      isDarkText ? "brightness-0" : "brightness-0 invert"
-                    )}
-                  />
+                  <img src={networkLogoUrl} alt="Network" className={cn("h-6 object-contain max-w-[45px] drop-shadow-md", isDarkText ? "brightness-0" : "brightness-0 invert")} />
                 </div>
               </div>
             </div>
           </div>
         </div>
 
-        {/* CARA TRASERA DE LA TARJETA (VOLTEADA) */}
         <div 
           className="absolute inset-0 w-full h-full rounded-2xl shadow-2xl overflow-hidden flex flex-col justify-between p-4 cursor-pointer"
           onClick={() => setIsFlipped(false)}
           style={{ 
-            backgroundColor: "rgba(15, 23, 42, 0.95)", // Fondo oscuro elegante para el reverso
+            backgroundColor: "rgba(15, 23, 42, 0.95)",
             backfaceVisibility: "hidden",
             WebkitBackfaceVisibility: "hidden",
             transform: "rotateY(180deg)",
@@ -241,70 +207,21 @@ const CardDisplay: React.FC<CardDisplayProps> = ({ card, onAddTransaction, onDel
             zIndex: isFlipped ? 2 : 0,
           }}
         >
-          {/* Banda magnética simulada */}
           <div className="absolute top-4 left-0 right-0 h-8 bg-black/80" />
-
           <div className="mt-10 space-y-3 z-10">
-            <p className="text-xs font-bold text-white/90 text-center uppercase tracking-wider">Acciones de Tarjeta</p>
-            
-            {/* Botones de Acción Principales */}
+            <p className="text-xs font-bold text-white/90 text-center uppercase tracking-wider">Acciones</p>
             <div className="grid grid-cols-2 gap-2">
-              <Button 
-                variant="secondary" 
-                size="sm" 
-                onClick={(e) => { e.stopPropagation(); onAddTransaction(card.id); }} 
-                className="bg-white/10 hover:bg-white/20 text-white border-none h-9 text-[10px] font-bold rounded-xl"
-              >
-                <DollarSign className="h-3.5 w-3.5 mr-1" /> Movimiento
-              </Button>
-              <Button 
-                variant="secondary" 
-                size="sm" 
-                onClick={(e) => { e.stopPropagation(); handleViewDetails(); }} 
-                className="bg-white/10 hover:bg-white/20 text-white border-none h-9 text-[10px] font-bold rounded-xl"
-              >
-                <History className="h-3.5 w-3.5 mr-1" /> Detalles
-              </Button>
+              <Button variant="secondary" size="sm" onClick={(e) => { e.stopPropagation(); onAddTransaction(card.id); }} className="bg-white/10 hover:bg-white/20 text-white border-none h-9 text-[10px] font-bold rounded-xl"><DollarSign className="h-3.5 w-3.5 mr-1" /> Movimiento</Button>
+              <Button variant="secondary" size="sm" onClick={(e) => { e.stopPropagation(); handleViewDetails(); }} className="bg-white/10 hover:bg-white/20 text-white border-none h-9 text-[10px] font-bold rounded-xl"><History className="h-3.5 w-3.5 mr-1" /> Detalles</Button>
             </div>
-
-            {/* Botones de Configuración */}
             <div className="flex gap-2 justify-center pt-1">
-              <Button 
-                variant="secondary" 
-                size="sm" 
-                onClick={(e) => { e.stopPropagation(); onTransfer(); }} 
-                className="flex-1 h-9 bg-white/10 hover:bg-white/20 text-white border-none rounded-xl text-[10px] font-bold"
-              >
-                <ArrowRightLeft className="h-3.5 w-3.5 mr-1" /> Transferir
-              </Button>
-              <Button 
-                variant="secondary" 
-                size="sm" 
-                onClick={(e) => { e.stopPropagation(); onEditCard(card); }} 
-                className="h-9 w-9 p-0 bg-white/10 hover:bg-white/20 text-white border-none rounded-xl"
-              >
-                <Edit className="h-3.5 w-3.5" />
-              </Button>
+              <Button variant="secondary" size="sm" onClick={(e) => { e.stopPropagation(); onTransfer(); }} className="flex-1 h-9 bg-white/10 hover:bg-white/20 text-white border-none rounded-xl text-[10px] font-bold"><ArrowRightLeft className="h-3.5 w-3.5 mr-1" /> Transferir</Button>
+              <Button variant="secondary" size="sm" onClick={(e) => { e.stopPropagation(); onEditCard(card); }} className="h-9 w-9 p-0 bg-white/10 hover:bg-white/20 text-white border-none rounded-xl"><Edit className="h-3.5 w-3.5" /></Button>
               <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button 
-                    variant="destructive" 
-                    size="sm" 
-                    className="h-9 w-9 p-0 bg-red-500/20 hover:bg-red-600 text-white border-none rounded-xl"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
-                </AlertDialogTrigger>
+                <AlertDialogTrigger asChild><Button variant="destructive" size="sm" className="h-9 w-9 p-0 bg-red-500/20 hover:bg-red-600 text-white border-none rounded-xl" onClick={(e) => e.stopPropagation()}><Trash2 className="h-3.5 w-3.5" /></Button></AlertDialogTrigger>
                 <AlertDialogContent className="w-[90vw] rounded-2xl">
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>¿Eliminar tarjeta?</AlertDialogTitle>
-                    <AlertDialogDescription>Se borrarán todos los registros y apartados asociados.</AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel className="rounded-xl">Cancelar</AlertDialogCancel>
-                    <AlertDialogAction className="rounded-xl" onClick={() => onDeleteCard(card.id)}>Eliminar</AlertDialogAction>
-                  </AlertDialogFooter>
+                  <AlertDialogHeader><AlertDialogTitle>¿Eliminar?</AlertDialogTitle><AlertDialogDescription>Se borrarán los registros asociados.</AlertDialogDescription></AlertDialogHeader>
+                  <AlertDialogFooter><AlertDialogCancel className="rounded-xl">No</AlertDialogCancel><AlertDialogAction className="rounded-xl" onClick={() => onDeleteCard(card.id)}>Sí</AlertDialogAction></AlertDialogFooter>
                 </AlertDialogContent>
               </AlertDialog>
             </div>
