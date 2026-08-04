@@ -34,12 +34,14 @@ import { evaluateExpression } from "@/utils/math-helpers";
 import { motion, AnimatePresence } from "framer-motion";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
-// RECURSOS VISUALES
-const GIF_METAS = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/nuevometa.gif";
+// RECURSOS VISUALES ACTUALIZADOS
+const GIF_INICIO = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/metasinicios.gif";
+const GIF_FELIZ = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/metasfeliz.gif";
+const GIF_DEPOSITO = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/metasdeposito.gif";
+const GIF_RETIRO = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/metasretiro.gif";
 const PIGGY_STANDARD = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Cochinito%20Ahorro.png";
 const PIGGY_SAD = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Cochinito%20Ahorro%20Triste.png";
 
-// --- BANCO DE 60+ FRASES POR ACCIÓN ---
 const FEEDBACK_MESSAGES = {
   onOpen: [
     "¡Una nueva aventura financiera comienza! 🐷",
@@ -126,7 +128,6 @@ const Savings: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [feedbackOverlay, setFeedbackOverlay] = useState<any>(null);
 
-  // Registro para detectar "Sabia Decisión"
   const [lastAction, setLastAction] = useState<{ type: 'deposit' | 'withdrawal', time: number, savingId: string } | null>(null);
 
   const [newSaving, setNewSaving] = useState({
@@ -165,7 +166,13 @@ const Savings: React.FC = () => {
       setSavings(prev => [data, ...prev]);
       setIsAddSavingDialogOpen(false);
       setNewSaving({ name: "", initial_balance: "", target_amount: "", target_date: undefined, color: "#22C55E" });
-      setFeedbackOverlay({ isVisible: true, message: getRandomPhrase('onOpen'), imageSrc: GIF_METAS, bgColor: "bg-indigo-600", textColor: "text-white" });
+      setFeedbackOverlay({ 
+        isVisible: true, 
+        message: getRandomPhrase('onOpen'), 
+        imageSrc: GIF_INICIO, 
+        bgColor: "bg-white", 
+        textColor: "text-slate-900" 
+      });
     }
   };
 
@@ -212,13 +219,37 @@ const Savings: React.FC = () => {
       const isDecisionCorrected = lastAction?.type === 'withdrawal' && newTransaction.type === 'deposit' && (now - lastAction.time < 300000) && lastAction.savingId === selectedSavingId;
 
       if (isCompleting) {
-        setFeedbackOverlay({ isVisible: true, message: getRandomPhrase('onComplete'), imageSrc: GIF_METAS, bgColor: "bg-yellow-500", textColor: "text-white" });
+        setFeedbackOverlay({ 
+          isVisible: true, 
+          message: getRandomPhrase('onComplete'), 
+          imageSrc: GIF_FELIZ, 
+          bgColor: "bg-white", 
+          textColor: "text-slate-900" 
+        });
       } else if (isDecisionCorrected) {
-        setFeedbackOverlay({ isVisible: true, message: getRandomPhrase('onWiseDecision'), imageSrc: GIF_METAS, bgColor: "bg-emerald-600", textColor: "text-white" });
+        setFeedbackOverlay({ 
+          isVisible: true, 
+          message: getRandomPhrase('onWiseDecision'), 
+          imageSrc: GIF_FELIZ, 
+          bgColor: "bg-white", 
+          textColor: "text-slate-900" 
+        });
       } else if (newTransaction.type === 'deposit') {
-        setFeedbackOverlay({ isVisible: true, message: getRandomPhrase('onDeposit'), imageSrc: GIF_METAS, bgColor: "bg-indigo-600", textColor: "text-white" });
+        setFeedbackOverlay({ 
+          isVisible: true, 
+          message: getRandomPhrase('onDeposit'), 
+          imageSrc: GIF_DEPOSITO, 
+          bgColor: "bg-white", 
+          textColor: "text-slate-900" 
+        });
       } else {
-        setFeedbackOverlay({ isVisible: true, message: getRandomPhrase('onWithdraw'), imageSrc: PIGGY_SAD, bgColor: "bg-slate-900", textColor: "text-white" });
+        setFeedbackOverlay({ 
+          isVisible: true, 
+          message: getRandomPhrase('onWithdraw'), 
+          imageSrc: GIF_RETIRO, 
+          bgColor: "bg-white", 
+          textColor: "text-slate-900" 
+        });
       }
 
       setLastAction({ type: newTransaction.type, time: now, savingId: selectedSavingId! });
@@ -231,10 +262,9 @@ const Savings: React.FC = () => {
     showSuccess("Meta eliminada");
   };
 
-  // Cochinitos Evolutivos
   const getPiggyStatus = (saving: any) => {
     if (saving.completion_date || (saving.target_amount && saving.current_balance >= saving.target_amount)) {
-      return { img: GIF_METAS, label: "¡Logrado!", sub: "Cochinito fiestero" };
+      return { img: GIF_FELIZ, label: "¡Logrado!", sub: "Cochinito fiestero" };
     }
     
     const daysSinceUpdate = differenceInDays(new Date(), parseISO(saving.updated_at || saving.created_at));
@@ -255,7 +285,6 @@ const Savings: React.FC = () => {
   return (
     <div className="flex flex-col gap-8 p-4 md:p-6 pb-24 max-w-5xl mx-auto">
       
-      {/* HEADER: COCHINITO DE LAS METAS */}
       <header className="relative">
         <div className="absolute inset-0 bg-yellow-100/50 blur-3xl rounded-full -z-10" />
         <Card className="bg-yellow-500 text-white rounded-[2.5rem] border-none shadow-2xl overflow-hidden">
@@ -269,13 +298,12 @@ const Savings: React.FC = () => {
               <p className="text-xs font-medium text-yellow-50/80">¡Tu futuro se construye peso a peso!</p>
             </div>
             <div className="flex-shrink-0">
-              <img src={GIF_METAS} alt="Metas" className="h-32 w-32 object-contain" />
+              <img src={GIF_DEPOSITO} alt="Metas" className="h-32 w-32 object-contain" />
             </div>
           </div>
         </Card>
       </header>
 
-      {/* BUSQUEDA Y ACCIÓN */}
       <section className="flex flex-col md:flex-row gap-4 items-center justify-between">
         <div className="relative flex-1 w-full">
           <Search className="absolute left-4 top-3.5 h-4 w-4 text-slate-400" />
@@ -286,7 +314,6 @@ const Savings: React.FC = () => {
         </Button>
       </section>
 
-      {/* LISTA DE METAS */}
       <section className="grid grid-cols-1 sm:grid-cols-2 gap-6">
         <AnimatePresence mode="popLayout">
           {filteredSavings.map((saving, i) => {
@@ -390,7 +417,6 @@ const Savings: React.FC = () => {
         </AnimatePresence>
       </section>
 
-      {/* DIALOGOS */}
       <Dialog open={isAddSavingDialogOpen} onOpenChange={setIsAddSavingDialogOpen}>
         <DialogContent className="rounded-[2.5rem] p-8 max-w-[400px]">
           <DialogHeader><DialogTitle className="text-2xl font-black">Nueva Meta 🐷</DialogTitle></DialogHeader>
