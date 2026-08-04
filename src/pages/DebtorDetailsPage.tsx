@@ -142,6 +142,23 @@ const DebtorDetailsPage: React.FC = () => {
 
   useEffect(() => { fetchData(); }, [debtorId, user, incomeCategories]);
 
+  // AUTO-SINCRONIZACIÓN: Verificar si el saldo en la DB coincide con el historial
+  useEffect(() => {
+    if (!debtor) return;
+    const totalCharges = debtor.debtor_transactions.filter(t => t.type === 'charge').reduce((s, t) => s + t.amount, 0);
+    const totalPayments = debtor.debtor_transactions.filter(t => t.type === 'payment').reduce((s, t) => s + t.amount, 0);
+    const calculatedCurrent = debtor.initial_balance + totalCharges - totalPayments;
+
+    // Si hay discrepancia, actualizamos la base de datos silenciosamente
+    if (Math.abs(debtor.current_balance - calculatedCurrent) > 0.01) {
+      const sync = async () => {
+        await supabase.from('debtors').update({ current_balance: calculatedCurrent }).eq('id', debtor.id);
+        setDebtor(prev => prev ? { ...prev, current_balance: calculatedCurrent } : null);
+      };
+      sync();
+    }
+  }, [debtor]);
+
   // Historial ordenado con saldo acumulado
   const transactionsWithBalance = useMemo(() => {
     if (!debtor) return [];
@@ -179,7 +196,8 @@ const DebtorDetailsPage: React.FC = () => {
     return {
       charges,
       payments,
-      net: charges - payments
+      // El Balance Neto ahora incluye la deuda inicial para que coincida con el saldo real
+      net: debtor.initial_balance + charges - payments
     };
   }, [debtor]);
 
@@ -306,12 +324,12 @@ const DebtorDetailsPage: React.FC = () => {
         </div>
       </div>
 
-      {/* DASHBOARD DEUDOR (Basado en historial completo) */}
+      {/* DASHBOARD DEUDOR */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Card className="bg-slate-900 text-white rounded-[2rem] border-none shadow-xl p-6 relative overflow-hidden">
           <div className="absolute top-0 right-0 p-4 opacity-10"><DollarSign className="h-20 w-20" /></div>
-          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Deuda Pendiente</p>
-          <p className="text-4xl font-black mt-1">${debtor.current_balance.toLocaleString()}</p>
+          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Deuda Pendiente Real</p>
+          <p className="text-4xl font-black mt-1">${totalMetrics.net.toLocaleString()}</p>
           <div className="mt-4 flex items-center gap-2 text-[10px] font-bold text-emerald-400 bg-emerald-400/10 w-fit px-3 py-1 rounded-full">
             <TrendingDown className="h-3 w-3" /> Deuda Inicial: ${debtor.initial_balance.toLocaleString()}
           </div>
@@ -321,19 +339,17 @@ const DebtorDetailsPage: React.FC = () => {
           <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Histórico de Movimientos</p>
           <div className="space-y-4 mt-4">
             <div className="flex justify-between items-center">
-              <span className="text-xs font-bold text-slate-500">Total Prestado</span>
-              <span className="text-sm font-black text-rose-500">+${totalMetrics.charges.toLocaleString()}</span>
+              <span className="text-xs font-bold text-slate-500">Total Prestado Extra</span>
+              <span className="text-sm font-black text-rose-500">+${debtor.debtor_transactions.filter(t => t.type === 'charge').reduce((s, t) => s + t.amount, 0).toLocaleString()}</span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-xs font-bold text-slate-500">Total Abonado</span>
-              <span className="text-sm font-black text-emerald-500">-${totalMetrics.payments.toLocaleString()}</span>
+              <span className="text-sm font-black text-emerald-500">-${debtor.debtor_transactions.filter(t => t.type === 'payment').reduce((s, t) => s + t.amount, 0).toLocaleString()}</span>
             </div>
             <div className="h-px bg-slate-100" />
             <div className="flex justify-between items-center">
-              <span className="text-xs font-black uppercase text-slate-400">Balance Neto de Cuenta</span>
-              <span className={cn("text-sm font-black", totalMetrics.net >= 0 ? "text-rose-500" : "text-emerald-500")}>
-                {totalMetrics.net >= 0 ? '+' : ''}${totalMetrics.net.toLocaleString()}
-              </span>
+              <span className="text-xs font-black uppercase text-slate-400">Balance Final</span>
+              <span className="text-sm font-black text-indigo-600">${totalMetrics.net.toLocaleString()}</span>
             </div>
           </div>
         </Card>
