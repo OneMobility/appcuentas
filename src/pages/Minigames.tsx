@@ -4,6 +4,7 @@ import React from "react";
 import { Card } from "@/components/ui/card";
 import { Gamepad2, ChevronRight, Sparkles } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { cn } from "@/lib/utils";
 
 const GIF_GAME = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/games.gif";
 
@@ -13,6 +14,7 @@ const games = [
     name: "Pig Merge",
     description: "Combina monedas y billetes para llenar tu alcancía.",
     icon: "🐷",
+    type: "emoji",
     color: "bg-pink-500",
     path: "/minigames/pig-merge"
   },
@@ -20,7 +22,8 @@ const games = [
     id: "coin-catch",
     name: "Coin Catch",
     description: "Atrapa todas las monedas que puedas antes de que caigan.",
-    icon: "💰",
+    icon: "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/IconoJuego2.png",
+    type: "image",
     color: "bg-emerald-500",
     path: "/minigames/coin-catch"
   }
@@ -65,11 +68,15 @@ const Minigames = () => {
               <div className="p-8 flex items-center justify-between">
                 <div className="flex items-center gap-6">
                   <div className={cn(
-                    "h-16 w-16 rounded-2xl flex items-center justify-center text-3xl shadow-inner shrink-0",
+                    "h-16 w-16 rounded-2xl flex items-center justify-center text-3xl shadow-inner shrink-0 overflow-hidden",
                     game.color,
                     "bg-opacity-10"
                   )}>
-                    {game.icon}
+                    {game.type === "image" ? (
+                      <img src={game.icon} alt={game.name} className="h-full w-full object-cover p-2" />
+                    ) : (
+                      game.icon
+                    )}
                   </div>
                   <div className="space-y-1">
                     <h3 className="text-xl font-black text-slate-900">{game.name}</h3>
@@ -99,5 +106,4 @@ const Minigames = () => {
   );
 };
 
-import { cn } from "@/lib/utils";
 export default Minigames;
