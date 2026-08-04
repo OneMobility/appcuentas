@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 import { getRandomTip, OinkashTip } from "@/utils/oinkash-tips";
 
 /**
- * 🪙 COIN CATCH — Versión Premium Corregida
+ * 🪙 COIN CATCH — Versión Premium Corregida (Personaje y Reinicio)
  */
 
 const STARTING_LIVES = 3;
@@ -25,8 +25,8 @@ const BASE_MOVE_SPEED = 150;
 // Metas por nivel
 const LEVEL_GOALS = [500, 1500, 3000, 6000, 12000];
 
-// URLs de recursos
-const PIG_MASCOT = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/3bd895fd1ea2a510faa68f516cfc88ad9408d50cff95156f2fb48a61d8d7349d.png";
+// URLs de recursos - ACTUALIZADO CON TU LINK
+const PIG_MASCOT = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/ChatGPT%20Image%204%20ago%202026,%2003_46_40%20p.m..png";
 const COIN_IMG = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/IconoJuego2.png";
 
 type Kind = "coin" | "bill" | "bag" | "gasto" | "impuesto" | "factura";
@@ -129,6 +129,8 @@ export default function CoinCatch() {
     scoreRef.current = 0;
     levelRef.current = 1;
     basketXRef.current = 50;
+    
+    // IMPORTANTE: Resetear el tiempo justo antes de activar el loop
     lastTimeRef.current = performance.now();
     
     setItems([]);
@@ -144,8 +146,11 @@ export default function CoinCatch() {
   useEffect(() => {
     if (phase !== "playing") return;
 
+    // Reiniciar reloj al entrar en fase de juego
+    lastTimeRef.current = performance.now();
+
     const tick = (now: number) => {
-      if (!lastTimeRef.current) lastTimeRef.current = now;
+      // Delta time corregido para evitar saltos
       const dt = Math.min(0.05, (now - lastTimeRef.current) / 1000);
       lastTimeRef.current = now;
 
@@ -164,9 +169,9 @@ export default function CoinCatch() {
       }
 
       // Spawn
-      const difficultyMult = 1 + (levelRef.current - 1) * 0.3;
-      const spawnInterval = 1.2 / difficultyMult; 
-      const fallSpeed = 55 * (1 + (levelRef.current - 1) * 0.2);
+      const difficultyMult = 1 + (levelRef.current - 1) * 0.35;
+      const spawnInterval = 1.1 / difficultyMult; 
+      const fallSpeed = 60 * (1 + (levelRef.current - 1) * 0.2);
 
       spawnAccumulatorRef.current += dt;
       if (spawnAccumulatorRef.current >= spawnInterval) {
@@ -177,9 +182,9 @@ export default function CoinCatch() {
         itemsRef.current.push({
           id: nextIdRef.current++,
           kind,
-          x: 15 + Math.random() * 70,
+          x: 10 + Math.random() * 80,
           y: -10,
-          speed: fallSpeed + Math.random() * 15,
+          speed: fallSpeed + Math.random() * 20,
         });
       }
 
@@ -248,7 +253,7 @@ export default function CoinCatch() {
 
   const handlePointer = (e: React.PointerEvent | React.TouchEvent) => {
     if (phase !== "playing") {
-      startGame(); // Si haces clic fuera del juego (idle o over), inicia
+      startGame();
       return;
     }
     const rect = fieldRef.current?.getBoundingClientRect();
@@ -324,34 +329,30 @@ export default function CoinCatch() {
           </div>
         </div>
 
-        {/* Personaje (Cerdito) con Garantía de Visibilidad */}
+        {/* Personaje (Cerdito) - URL ACTUALIZADA */}
         <div 
           className="absolute z-40 pointer-events-none transition-transform duration-75"
           style={{ 
             left: `${basketX}%`, 
             top: `${PIG_Y_PERCENT}%`, 
             transform: 'translate(-50%, -50%)',
-            width: '140px',
-            height: '140px',
+            width: '160px', // Un poco más grande para que se aprecie mejor
+            height: '160px',
           }}
         >
           {/* Sombra Dinámica */}
-          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 w-20 h-4 bg-black/50 blur-xl rounded-full" />
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 w-24 h-4 bg-black/50 blur-xl rounded-full" />
           
-          {/* Fallback visual: si la imagen falla o tarda, se ve el círculo de color */}
-          <div className={cn("w-full h-full rounded-full flex items-center justify-center transition-opacity", imgError ? "bg-indigo-600/20" : "bg-transparent")}>
-             {!imgError ? (
-               <img 
-                src={PIG_MASCOT} 
-                className="w-full h-full object-contain drop-shadow-[0_10px_10px_rgba(0,0,0,0.5)]" 
-                alt="Oinkash" 
-                onError={() => setImgError(true)}
-              />
-             ) : (
-               <span className="text-7xl animate-pulse">🐷</span>
-             )}
-          </div>
+          <img 
+            src={PIG_MASCOT} 
+            className="w-full h-full object-contain drop-shadow-[0_15px_15px_rgba(0,0,0,0.4)]" 
+            alt="Oinkash" 
+            onLoad={() => setImgError(false)}
+            onError={() => setImgError(true)}
+          />
           
+          {imgError && <span className="absolute inset-0 flex items-center justify-center text-7xl animate-pulse">🐷</span>}
+
           {/* Indicadores de Impacto */}
           <AnimatePresence>
             {flash && (
@@ -378,7 +379,7 @@ export default function CoinCatch() {
               style={{ left: `${item.x}%`, top: `${item.y}%` }}
             >
               {def.image ? (
-                <img src={def.image} className="w-14 h-14 object-contain drop-shadow-xl animate-pulse" alt="item" />
+                <img src={def.image} className="w-14 h-14 object-contain drop-shadow-xl" alt="item" />
               ) : (
                 <span className="text-5xl drop-shadow-xl select-none">{def.emoji}</span>
               )}
@@ -395,7 +396,7 @@ export default function CoinCatch() {
             >
               <div className="relative mb-10">
                 <div className="absolute inset-0 bg-indigo-500/30 blur-[60px] rounded-full" />
-                <img src={PIG_MASCOT} className="h-44 w-44 object-contain relative z-10 animate-bounce" alt="Logo" />
+                <img src={PIG_MASCOT} className="h-48 w-44 object-contain relative z-10 animate-bounce" alt="Logo" />
               </div>
               <h2 className="text-6xl font-black tracking-tighter mb-4 italic text-indigo-400">COIN CATCH</h2>
               <div className="space-y-3 mb-12 max-w-[300px]">
