@@ -2,40 +2,39 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Trophy, RefreshCw, Lightbulb, Sparkles, Zap } from "lucide-react";
+import { Trophy, RefreshCw, Lightbulb, Sparkles, Zap, Flag, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getRandomTip, OinkashTip } from "@/utils/oinkash-tips";
 
 /**
- * 🐷 PIG FLAP — Versión Inmersiva
- * 3 Niveles Largos + Jefe Final
+ * 🐷 PIG FLAP — Versión Corregida e Inmersiva
  */
 
-const pigMascot = "/game-character.png";
+const pigMascot = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/ChatGPT%20Image%204%20ago%202026,%2003_46_40%20p.m..png";
 
 // ---------- Config física ----------
 const BIRD_X = 25; 
-const BIRD_SIZE = 45; // px aprox en escalado
+const BIRD_SIZE = 55; 
 const GRAVITY = 1100; 
 const FLAP_VELOCITY = -380; 
 const MAX_FALL_SPEED = 700; 
 
 // ---------- Config niveles ----------
-const PIPES_PER_LEVEL = 15; // Niveles más largos
+const PIPES_PER_LEVEL = 15; 
 const LEVELS = [
-  { speed: 200, gapHeight: 220, spacing: 350 }, // Nivel 1
-  { speed: 250, gapHeight: 190, spacing: 320 }, // Nivel 2
-  { speed: 320, gapHeight: 160, spacing: 280 }, // Nivel 3
+  { speed: 200, gapHeight: 230, spacing: 380 }, 
+  { speed: 260, gapHeight: 200, spacing: 340 }, 
+  { speed: 330, gapHeight: 170, spacing: 300 }, 
 ];
-const PIPE_WIDTH = 60; 
+const PIPE_WIDTH = 65; 
 
 // ---------- Config jefe ----------
-const BOSS_WIDTH = 100; 
+const BOSS_WIDTH = 120; 
 const BOSS_GAP_HEIGHT = 180; 
 const BOSS_MAX_HEALTH = 8;
 const BOSS_HIT_INTERVAL = 1.5; 
 const BOSS_ENTER_SPEED = 150; 
-const BOSS_REST_X_PCT = 70; // Se queda a la derecha
+const BOSS_REST_X_PCT = 70; 
 
 type Phase = "idle" | "playing" | "transition" | "boss" | "win" | "gameover";
 
@@ -75,11 +74,13 @@ export default function PigFlap() {
   });
   const [particles, setParticles] = useState<Particle[]>([]);
   const [gameOverTip, setGameOverTip] = useState<OinkashTip | null>(null);
+  const [pipesPassed, setPipesPassed] = useState(0);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const rafRef = useRef<number | null>(null);
   const lastTimeRef = useRef(0);
 
+  // Refs de estado real para la lógica de física
   const birdYRef = useRef(300);
   const birdVelRef = useRef(0);
   const pipesRef = useRef<Pipe[]>([]);
@@ -90,7 +91,7 @@ export default function PigFlap() {
   const scoreRef = useRef(0);
   const phaseRef = useRef<Phase>("idle");
 
-  const bossXRef = useRef(1000);
+  const bossXRef = useRef(2000);
   const bossGapYRef = useRef(300);
   const bossHealthRef = useRef(BOSS_MAX_HEALTH);
   const bossTimeRef = useRef(0);
@@ -112,6 +113,11 @@ export default function PigFlap() {
     
     const saved = localStorage.getItem("oinkash_flap_best");
     if (saved) setBest(parseInt(saved));
+    
+    // Al cargar, aseguramos que el puerquito esté en posición centrada y quieta
+    const startY = containerRef.current ? containerRef.current.offsetHeight / 2 : 300;
+    setBirdY(startY);
+    birdYRef.current = startY;
   }, []);
 
   const playSound = (audio: HTMLAudioElement | null) => {
@@ -160,11 +166,15 @@ export default function PigFlap() {
     setPipes([]);
     setScore(0);
     setLevel(1);
+    setPipesPassed(0);
     setGameOverTip(null);
+    setPhase("idle");
+    phaseRef.current = "idle";
   }, []);
 
   const die = useCallback(() => {
     setPhase("gameover");
+    phaseRef.current = "gameover";
     setGameOverTip(getRandomTip());
     playSound(audioEndRef.current);
     if (scoreRef.current > best) {
@@ -174,16 +184,26 @@ export default function PigFlap() {
   }, [best]);
 
   const flap = useCallback(() => {
-    if (phaseRef.current === "idle" || phaseRef.current === "gameover" || phaseRef.current === "win") {
+    // Si está en idle o gameover, el primer clic prepara el juego para iniciar en la siguiente acción
+    if (phaseRef.current === "gameover" || phaseRef.current === "win") {
       resetRun();
+      return;
+    }
+    
+    if (phaseRef.current === "idle") {
       setPhase("playing");
       phaseRef.current = "playing";
+      birdVelRef.current = FLAP_VELOCITY;
+      return;
     }
+
     if (phaseRef.current === "playing" || phaseRef.current === "boss") {
       birdVelRef.current = FLAP_VELOCITY;
     }
+
     if (phaseRef.current === "transition") {
       pipesPassedRef.current = 0;
+      setPipesPassed(0);
       pipesRef.current = [];
       if (levelRef.current >= 3) {
         setPhase("boss");
@@ -209,20 +229,22 @@ export default function PigFlap() {
         birdVelRef.current = Math.min(MAX_FALL_SPEED, birdVelRef.current + GRAVITY * dt);
         birdYRef.current += birdVelRef.current * dt;
         
+        // Colisión suelo/techo
         if (birdYRef.current < 0 || birdYRef.current > height) {
           die();
           return;
         }
 
         setBirdY(birdYRef.current);
-        setBirdAngle(Math.max(-25, Math.min(70, birdVelRef.current * 0.1)));
+        setBirdAngle(Math.max(-25, Math.min(70, birdVelRef.current * 0.15)));
 
         if (phaseRef.current === "playing") {
           const cfg = LEVELS[levelRef.current - 1];
           spawnAccRef.current += dt * 1000;
+          
           if (spawnAccRef.current >= (cfg.spacing / cfg.speed) * 1000) {
             spawnAccRef.current = 0;
-            const margin = 100;
+            const margin = 80;
             pipesRef.current.push({
               id: nextPipeIdRef.current++,
               x: width + 50,
@@ -236,11 +258,16 @@ export default function PigFlap() {
           for (const pipe of pipesRef.current) {
             pipe.x -= cfg.speed * dt;
             
-            // Colisión
-            const birdLeft = (BIRD_X / 100) * width - 20;
-            const birdRight = (BIRD_X / 100) * width + 20;
+            // Colisión con tubos
+            const birdWorldX = (BIRD_X / 100) * width;
+            const birdLeft = birdWorldX - 18;
+            const birdRight = birdWorldX + 18;
+            
             if (pipe.x < birdRight && pipe.x + PIPE_WIDTH > birdLeft) {
-              if (birdYRef.current < pipe.gapY || birdYRef.current > pipe.gapY + pipe.gapHeight) {
+              const birdTop = birdYRef.current - 18;
+              const birdBottom = birdYRef.current + 18;
+              
+              if (birdTop < pipe.gapY || birdBottom > pipe.gapY + pipe.gapHeight) {
                 die();
                 return;
               }
@@ -249,6 +276,7 @@ export default function PigFlap() {
             if (!pipe.passed && pipe.x < birdLeft) {
               pipe.passed = true;
               pipesPassedRef.current += 1;
+              setPipesPassed(pipesPassedRef.current);
               scoreRef.current += 10;
               setScore(scoreRef.current);
               playSound(audioCoinRef.current);
@@ -275,9 +303,8 @@ export default function PigFlap() {
           const amplitude = (height - BOSS_GAP_HEIGHT) / 2 - 50;
           bossGapYRef.current = (height / 2 - BOSS_GAP_HEIGHT / 2) + Math.sin(bossTimeRef.current * 1.5) * amplitude;
 
-          // Daño al jefe si el pájaro está en su X y dentro del hueco
-          const birdXPos = (BIRD_X / 100) * width;
-          if (birdXPos > bossXRef.current && birdXPos < bossXRef.current + BOSS_WIDTH) {
+          const birdWorldX = (BIRD_X / 100) * width;
+          if (birdWorldX > bossXRef.current && birdWorldX < bossXRef.current + BOSS_WIDTH) {
             if (birdYRef.current > bossGapYRef.current && birdYRef.current < bossGapYRef.current + BOSS_GAP_HEIGHT) {
               bossInsideTimerRef.current += dt;
               if (bossInsideTimerRef.current >= BOSS_HIT_INTERVAL) {
@@ -310,7 +337,7 @@ export default function PigFlap() {
         }
       }
 
-      // Partículas
+      // Partículas siempre activas
       if (particlesRef.current.length > 0) {
         particlesRef.current = particlesRef.current
           .map(p => ({
@@ -339,6 +366,7 @@ export default function PigFlap() {
   }, [flap]);
 
   const bossHealthPct = (bossState.health / BOSS_MAX_HEALTH) * 100;
+  const levelProgress = Math.min(100, (pipesPassed / PIPES_PER_LEVEL) * 100);
 
   return (
     <div 
@@ -346,139 +374,185 @@ export default function PigFlap() {
       className="relative w-full h-full overflow-hidden touch-none select-none bg-sky-400"
       onPointerDown={flap}
     >
-      {/* Fondo personalizado */}
+      {/* Fondo inmersivo */}
       <div 
-        className="absolute inset-0 bg-cover bg-center bg-no-repeat transition-transform duration-1000"
-        style={{ backgroundImage: 'url(/flappy-bg.png)', transform: phase === 'playing' ? 'scale(1.05)' : 'scale(1)' }}
+        className="absolute inset-0 bg-cover bg-center bg-no-repeat transition-all duration-1000"
+        style={{ 
+          backgroundImage: 'url(/flappy-bg.png)', 
+          transform: (phase === 'playing' || phase === 'boss') ? 'scale(1.1)' : 'scale(1)',
+          filter: (phase === 'gameover') ? 'grayscale(0.5) brightness(0.5)' : 'none'
+        }}
       />
 
-      {/* Pipes (Gastos) */}
+      {/* Tubos de Gastos */}
       {pipes.map(p => (
         <React.Fragment key={p.id}>
-          <div className="absolute bg-rose-600 border-x-4 border-rose-800 rounded-b-3xl shadow-lg" style={{ left: p.x, top: 0, width: PIPE_WIDTH, height: p.gapY }}>
+          <div className="absolute bg-rose-600 border-x-4 border-rose-800 rounded-b-3xl shadow-lg z-10" style={{ left: p.x, top: 0, width: PIPE_WIDTH, height: p.gapY }}>
             <div className="absolute bottom-4 left-0 right-0 text-center text-[10px] font-black text-rose-200 uppercase tracking-tighter">GASTO</div>
           </div>
-          <div className="absolute bg-rose-600 border-x-4 border-rose-800 rounded-t-3xl shadow-lg" style={{ left: p.x, top: p.gapY + p.gapHeight, width: PIPE_WIDTH, height: 1000 }}>
+          <div className="absolute bg-rose-600 border-x-4 border-rose-800 rounded-t-3xl shadow-lg z-10" style={{ left: p.x, top: p.gapY + p.gapHeight, width: PIPE_WIDTH, height: 1000 }}>
             <div className="absolute top-4 left-0 right-0 text-center text-[10px] font-black text-rose-200 uppercase tracking-tighter">DEUDA</div>
           </div>
         </React.Fragment>
       ))}
 
-      {/* Jefe Final (Monstruo de las Deudas) */}
+      {/* Jefe: La Deuda Total */}
       {phase === "boss" && (
         <div className="absolute z-20" style={{ left: bossState.x, top: 0, width: BOSS_WIDTH, height: '100%' }}>
-          <div className={cn("absolute top-0 w-full rounded-b-[3rem] border-4 border-black/20 flex items-end justify-center pb-4 transition-colors", bossState.hitFlash ? "bg-white" : "bg-slate-900")} style={{ height: bossState.gapY }}>
-             <span className="text-4xl">👹</span>
+          <div className={cn("absolute top-0 w-full rounded-b-[3rem] border-4 border-black/20 flex items-end justify-center pb-4 transition-colors duration-100 shadow-2xl", bossState.hitFlash ? "bg-white" : "bg-slate-950")} style={{ height: bossState.gapY }}>
+             <span className="text-5xl drop-shadow-lg">👹</span>
           </div>
-          <div className={cn("absolute w-full rounded-t-[3rem] border-4 border-black/20 flex items-start justify-center pt-4 transition-colors", bossState.hitFlash ? "bg-white" : "bg-slate-900")} style={{ top: bossState.gapY + BOSS_GAP_HEIGHT, height: 1000 }}>
-             <span className="text-4xl">💀</span>
+          <div className={cn("absolute w-full rounded-t-[3rem] border-4 border-black/20 flex items-start justify-center pt-4 transition-colors duration-100 shadow-2xl", bossState.hitFlash ? "bg-white" : "bg-slate-950")} style={{ top: bossState.gapY + BOSS_GAP_HEIGHT, height: 1000 }}>
+             <span className="text-5xl drop-shadow-lg">💀</span>
           </div>
         </div>
       )}
 
-      {/* HUD Superior */}
-      <div className="absolute top-16 left-0 right-0 p-4 flex justify-between items-start z-30 pointer-events-none">
-        <div className="bg-black/40 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/10 text-white">
-          <p className="text-[10px] font-black uppercase opacity-60">Puntos</p>
-          <p className="text-2xl font-black">{score}</p>
+      {/* HUD: Puntos y Progreso */}
+      <div className="absolute top-16 left-0 right-0 p-4 flex flex-col gap-4 z-30 pointer-events-none">
+        <div className="flex justify-between items-start">
+          <div className="bg-black/50 backdrop-blur-md px-5 py-2 rounded-2xl border border-white/20 text-white shadow-xl">
+            <p className="text-[10px] font-black uppercase opacity-60 tracking-widest">Puntos</p>
+            <p className="text-3xl font-black tracking-tight">{score}</p>
+          </div>
+
+          <div className="flex flex-col items-end gap-2">
+            <div className="bg-indigo-600/90 backdrop-blur-sm px-4 py-2 rounded-2xl border border-white/20 text-white shadow-xl text-center">
+              <p className="text-[10px] font-black uppercase opacity-60">Nivel</p>
+              <p className="text-xl font-black">{level} / 3</p>
+            </div>
+            {best > 0 && <span className="text-[10px] font-black text-white bg-black/40 px-2 py-1 rounded-lg">Best: {best}</span>}
+          </div>
         </div>
 
-        {phase === "boss" ? (
-          <div className="flex-1 max-w-[200px] mx-4 space-y-1">
-            <p className="text-[10px] font-black text-white text-center uppercase tracking-widest">JEFE: DEUDA TOTAL</p>
-            <div className="h-3 w-full bg-black/40 rounded-full overflow-hidden border border-white/20">
+        {/* Barra de Progreso a la META */}
+        <div className="w-full max-w-xs mx-auto space-y-1">
+          <div className="flex justify-between items-center text-white text-[9px] font-black uppercase tracking-widest px-1">
+            <span>Progreso</span>
+            <span className="flex items-center gap-1"><Flag className="h-3 w-3 text-yellow-400" /> Meta</span>
+          </div>
+          <div className="h-4 w-full bg-black/30 rounded-full border border-white/20 overflow-hidden shadow-inner p-0.5">
+            <motion.div 
+              className="h-full bg-gradient-to-r from-indigo-500 to-emerald-400 rounded-full flex items-center justify-end px-2"
+              animate={{ width: `${levelProgress}%` }}
+              transition={{ type: 'spring', bounce: 0 }}
+            >
+               {levelProgress > 10 && <Sparkles className="h-2 w-2 text-white animate-pulse" />}
+            </motion.div>
+          </div>
+        </div>
+
+        {phase === "boss" && (
+          <div className="w-full max-w-sm mx-auto space-y-1 pt-2">
+            <p className="text-[10px] font-black text-white text-center uppercase tracking-widest drop-shadow-md">JEFE: DEUDA TOTAL 👾</p>
+            <div className="h-3 w-full bg-black/60 rounded-full overflow-hidden border-2 border-rose-500 shadow-lg">
               <motion.div className="h-full bg-rose-500" animate={{ width: `${bossHealthPct}%` }} />
             </div>
-          </div>
-        ) : (
-          <div className="bg-indigo-600 px-4 py-2 rounded-2xl border border-white/20 text-white text-center">
-            <p className="text-[10px] font-black uppercase opacity-60">Nivel</p>
-            <p className="text-xl font-black">{level} / 3</p>
           </div>
         )}
       </div>
 
-      {/* El Cerdito */}
+      {/* Personaje: El Puerquito Volador */}
       <motion.div
-        className="absolute z-30"
+        className="absolute z-40 pointer-events-none"
         animate={{ top: birdY, rotate: birdAngle }}
-        transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+        transition={{ type: 'spring', stiffness: 400, damping: 25 }}
         style={{ left: `${BIRD_X}%`, width: BIRD_SIZE, height: BIRD_SIZE, marginLeft: -BIRD_SIZE/2, marginTop: -BIRD_SIZE/2 }}
       >
         <img src={pigMascot} className="w-full h-full object-contain drop-shadow-2xl" />
       </motion.div>
 
-      {/* Partículas */}
+      {/* Efectos visuales de explosión */}
       {particles.map(p => (
-        <div key={p.id} className="absolute z-40 text-xl pointer-events-none" style={{ left: p.x, top: p.y, opacity: p.life }}>
+        <div key={p.id} className="absolute z-[45] text-2xl pointer-events-none drop-shadow-lg" style={{ left: p.x, top: p.y, opacity: p.life }}>
           {p.emoji}
         </div>
       ))}
 
-      {/* Overlays de Estado */}
+      {/* Pantallas de Estado (Overlays) */}
       <AnimatePresence>
         {phase === "idle" && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 z-50 bg-slate-900/60 backdrop-blur-md flex flex-col items-center justify-center p-8 text-center text-white">
-            <img src={pigMascot} className="h-24 w-24 mb-6 animate-bounce" />
-            <h2 className="text-5xl font-black tracking-tighter mb-2">FLAPPY OINK</h2>
-            <p className="text-sm font-medium mb-8 opacity-80 max-w-[280px]">Toca para saltar. Cruza los 3 niveles de gastos y vence al Jefe de las Deudas.</p>
-            <Button className="h-16 px-12 rounded-full bg-white text-indigo-900 font-black text-xl shadow-2xl">¡EMPEZAR! 🚀</Button>
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 z-50 bg-slate-900/70 backdrop-blur-md flex flex-col items-center justify-center p-8 text-center text-white">
+            <div className="relative mb-8">
+              <div className="absolute inset-0 bg-indigo-500/20 blur-3xl rounded-full" />
+              <img src={pigMascot} className="h-32 w-32 object-contain relative z-10 animate-bounce" />
+            </div>
+            <h2 className="text-5xl font-black tracking-tighter mb-2 drop-shadow-2xl">PIG FLAP</h2>
+            <p className="text-base font-bold mb-10 opacity-90 max-w-[300px] leading-tight">
+              Toca para saltar. Esquiva los gastos innecesarios y <span className="text-emerald-400">¡ahorra hasta llegar a la meta!</span>
+            </p>
+            <div className="space-y-4">
+               <Button className="h-16 px-12 rounded-full bg-white text-indigo-900 font-black text-xl shadow-2xl hover:scale-105 active:scale-95 transition-transform group">
+                 ¡VOLAR AHORA! <ArrowRight className="ml-2 h-6 w-6 group-hover:translate-x-1 transition-transform" />
+               </Button>
+               <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">O usa la tecla Espacio</p>
+            </div>
           </motion.div>
         )}
 
         {phase === "transition" && (
-          <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="absolute inset-0 z-50 flex flex-col items-center justify-center p-8 text-center">
-            <div className="bg-white p-8 rounded-[3rem] shadow-2xl space-y-6">
-              <div className="h-20 w-20 bg-emerald-500 rounded-3xl flex items-center justify-center mx-auto text-white">
-                <Zap className="h-10 w-10 fill-current" />
+          <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="absolute inset-0 z-50 flex flex-col items-center justify-center p-8 text-center bg-black/40 backdrop-blur-sm">
+            <div className="bg-white p-10 rounded-[3rem] shadow-2xl space-y-6 border-4 border-indigo-100">
+              <div className="h-24 w-24 bg-emerald-500 rounded-3xl flex items-center justify-center mx-auto text-white shadow-lg shadow-emerald-200">
+                <Zap className="h-12 w-12 fill-current" />
               </div>
-              <h2 className="text-3xl font-black text-slate-900">¡NIVEL {level} LISTO!</h2>
-              <p className="text-slate-500 font-bold">
-                {level < 3 ? "Prepárate para el siguiente reto." : "¡ATENCIÓN! El Jefe de las Deudas se aproxima."}
+              <div className="space-y-1">
+                <h2 className="text-4xl font-black text-slate-900 tracking-tight">¡NIVEL {level} SUPERADO!</h2>
+                <p className="text-lg text-slate-500 font-bold">Llegaste a la meta.</p>
+              </div>
+              <p className="text-sm font-medium text-slate-400">
+                {level < 3 ? "Aumentando la velocidad para el siguiente reto..." : "¡Cuidado! El Monstruo de las Deudas te está esperando."}
               </p>
-              <Button className="w-full h-14 rounded-2xl bg-indigo-600 text-white font-black">CONTINUAR ➔</Button>
+              <Button onClick={flap} className="w-full h-16 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-black text-lg shadow-xl shadow-indigo-100">
+                CONTINUAR 🚀
+              </Button>
             </div>
           </motion.div>
         )}
 
         {phase === "gameover" && (
-          <motion.div initial={{ opacity: 0, y: 50 }} animate={{ opacity: 1, y: 0 }} className="absolute inset-0 z-50 bg-rose-950/90 backdrop-blur-xl flex flex-col items-center justify-center p-6 text-center text-white">
-            <Trophy className="h-16 w-16 text-yellow-400 mb-4" />
-            <h2 className="text-4xl font-black tracking-tighter">¡BANCARROTA!</h2>
-            <div className="bg-white/10 px-8 py-4 rounded-3xl my-6 border border-white/10">
-              <p className="text-[10px] font-black uppercase text-white/50 mb-1">Tu Puntuación</p>
-              <p className="text-5xl font-black">{score}</p>
+          <motion.div initial={{ opacity: 0, y: 50 }} animate={{ opacity: 1, y: 0 }} className="absolute inset-0 z-50 bg-rose-950/90 backdrop-blur-xl flex flex-col items-center justify-center p-6 text-center text-white overflow-y-auto">
+            <Trophy className="h-20 w-20 text-yellow-400 mb-4 drop-shadow-xl" />
+            <h2 className="text-4xl font-black tracking-tighter">¡BANCARROTA! 💸</h2>
+            <div className="bg-white/10 px-10 py-6 rounded-[2.5rem] my-8 border border-white/10 shadow-2xl">
+              <p className="text-[10px] font-black uppercase text-white/50 mb-1 tracking-widest">Ahorro Acumulado</p>
+              <p className="text-6xl font-black text-white">{score}</p>
             </div>
 
             {gameOverTip && (
-              <div className="bg-indigo-600/40 p-5 rounded-[2rem] mb-8 max-w-xs border border-white/10">
-                <div className="flex items-center justify-center gap-2 mb-2">
-                  <Lightbulb className="h-4 w-4 text-yellow-400" />
-                  <span className="text-[10px] font-black uppercase tracking-widest">Consejo Oinkash</span>
+              <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} className="bg-indigo-600/40 p-6 rounded-[2rem] mb-10 max-w-xs border border-white/10 shadow-lg">
+                <div className="flex items-center justify-center gap-2 mb-3">
+                  <Lightbulb className="h-5 w-5 text-yellow-400" />
+                  <span className="text-xs font-black uppercase tracking-widest text-indigo-100">Consejo Oinkash</span>
                 </div>
-                <p className="text-sm font-bold italic leading-tight">"{gameOverTip.text}"</p>
-              </div>
+                <p className="text-sm font-bold italic leading-tight text-white/90">"{gameOverTip.text}"</p>
+              </motion.div>
             )}
 
-            <Button className="h-14 px-10 rounded-full bg-white text-slate-900 font-black text-lg shadow-xl flex gap-3">
-              <RefreshCw className="h-5 w-5" /> REINTENTAR
+            <Button 
+              onClick={(e) => { e.stopPropagation(); resetRun(); }} 
+              className="h-16 px-12 rounded-full bg-white text-slate-900 font-black text-xl shadow-2xl flex gap-3 hover:scale-105 active:scale-95 transition-transform"
+            >
+              <RefreshCw className="h-6 w-6" /> REINTENTAR
             </Button>
           </motion.div>
         )}
 
         {phase === "win" && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="absolute inset-0 z-50 bg-indigo-900/90 backdrop-blur-xl flex flex-col items-center justify-center p-8 text-center text-white">
-            <div className="relative">
-              <Sparkles className="absolute -top-10 -right-10 h-20 w-20 text-yellow-400 animate-pulse" />
-              <Trophy className="h-32 w-32 text-yellow-400 mb-6" />
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="absolute inset-0 z-50 bg-indigo-900/95 backdrop-blur-xl flex flex-col items-center justify-center p-8 text-center text-white">
+            <div className="relative mb-6">
+              <Sparkles className="absolute -top-10 -right-10 h-24 w-24 text-yellow-400 animate-pulse" />
+              <Trophy className="h-40 w-40 text-yellow-400 drop-shadow-2xl" />
             </div>
-            <h2 className="text-5xl font-black tracking-tighter mb-2">¡VICTORIA TOTAL!</h2>
-            <p className="text-xl font-bold text-indigo-200 mb-8">Venciste al Monstruo de las Deudas.</p>
-            <div className="bg-white/10 px-12 py-6 rounded-[2.5rem] border border-white/20 mb-8">
-              <p className="text-sm font-black uppercase opacity-60">Puntaje Final Maestro</p>
-              <p className="text-6xl font-black">{score}</p>
+            <h2 className="text-5xl font-black tracking-tighter mb-4">¡LIBERTAD FINANCIERA! 🏆</h2>
+            <p className="text-xl font-bold text-indigo-200 mb-10 max-w-[300px]">Derrotaste a la deuda y completaste todos los niveles.</p>
+            <div className="bg-white/10 px-12 py-8 rounded-[3rem] border border-white/20 mb-10 shadow-2xl">
+              <p className="text-sm font-black uppercase opacity-60 tracking-widest">Puntaje Maestro</p>
+              <p className="text-7xl font-black text-emerald-400">{score}</p>
             </div>
-            <Button className="h-16 px-12 rounded-full bg-emerald-500 text-white font-black text-xl shadow-2xl">¡SOY UN CRACK! 🐷</Button>
+            <Button onClick={resetRun} className="h-16 px-16 rounded-full bg-emerald-500 hover:bg-emerald-600 text-white font-black text-2xl shadow-2xl shadow-emerald-500/40">
+              ¡SOY UN CRACK! 🐷
+            </Button>
           </motion.div>
         )}
       </AnimatePresence>
