@@ -68,12 +68,12 @@ const Minigames = () => {
               <div className="p-8 flex items-center justify-between">
                 <div className="flex items-center gap-6">
                   <div className={cn(
-                    "h-16 w-16 rounded-2xl flex items-center justify-center text-3xl shadow-inner shrink-0 overflow-hidden",
+                    "h-16 w-16 rounded-2xl flex items-center justify-center text-3xl shadow-inner shrink-0 overflow-hidden p-3",
                     game.color,
                     "bg-opacity-10"
                   )}>
                     {game.type === "image" ? (
-                      <img src={game.icon} alt={game.name} className="h-full w-full object-cover p-2" />
+                      <img src={game.icon} alt={game.name} className="h-full w-full object-contain" />
                     ) : (
                       game.icon
                     )}
