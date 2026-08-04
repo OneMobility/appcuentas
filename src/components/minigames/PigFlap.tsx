@@ -11,17 +11,17 @@ import { getRandomTip, OinkashTip } from "@/utils/oinkash-tips";
  * 3 Niveles Largos + Jefe Final
  */
 
-const pigMascot = "/game-character.png";
+const pigMascot = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/3bd895fd1ea2a510faa68f516cfc88ad9408d50cff95156f2fb48a61d8d7349d.png";
 
 // ---------- Config física ----------
 const BIRD_X = 25; 
-const BIRD_SIZE = 45; // px aprox en escalado
+const BIRD_SIZE = 60; // Aumentado ligeramente para que se vea mejor el nuevo arte
 const GRAVITY = 1100; 
 const FLAP_VELOCITY = -380; 
 const MAX_FALL_SPEED = 700; 
 
 // ---------- Config niveles ----------
-const PIPES_PER_LEVEL = 15; // Niveles más largos
+const PIPES_PER_LEVEL = 15; 
 const LEVELS = [
   { speed: 200, gapHeight: 220, spacing: 350 }, // Nivel 1
   { speed: 250, gapHeight: 190, spacing: 320 }, // Nivel 2
@@ -35,7 +35,7 @@ const BOSS_GAP_HEIGHT = 180;
 const BOSS_MAX_HEALTH = 8;
 const BOSS_HIT_INTERVAL = 1.5; 
 const BOSS_ENTER_SPEED = 150; 
-const BOSS_REST_X_PCT = 70; // Se queda a la derecha
+const BOSS_REST_X_PCT = 70; 
 
 type Phase = "idle" | "playing" | "transition" | "boss" | "win" | "gameover";
 
@@ -161,10 +161,14 @@ export default function PigFlap() {
     setScore(0);
     setLevel(1);
     setGameOverTip(null);
+    
+    // Resetear el tiempo para evitar el salto inicial "loco"
+    lastTimeRef.current = performance.now();
   }, []);
 
   const die = useCallback(() => {
     setPhase("gameover");
+    phaseRef.current = "gameover";
     setGameOverTip(getRandomTip());
     playSound(audioEndRef.current);
     if (scoreRef.current > best) {
@@ -173,11 +177,14 @@ export default function PigFlap() {
     }
   }, [best]);
 
-  const flap = useCallback(() => {
+  const flap = useCallback((e?: React.MouseEvent | React.TouchEvent) => {
+    if (e) e.stopPropagation();
+
     if (phaseRef.current === "idle" || phaseRef.current === "gameover" || phaseRef.current === "win") {
       resetRun();
       setPhase("playing");
       phaseRef.current = "playing";
+      return;
     }
     if (phaseRef.current === "playing" || phaseRef.current === "boss") {
       birdVelRef.current = FLAP_VELOCITY;
@@ -194,11 +201,13 @@ export default function PigFlap() {
         setPhase("playing");
         phaseRef.current = "playing";
       }
+      lastTimeRef.current = performance.now();
     }
   }, [resetRun]);
 
   useEffect(() => {
     const tick = (now: number) => {
+      // dt debe ser pequeño, si es la primera vez o hubo pausa, lo limitamos
       const dt = Math.min(0.05, (now - lastTimeRef.current) / 1000);
       lastTimeRef.current = now;
 
@@ -209,7 +218,7 @@ export default function PigFlap() {
         birdVelRef.current = Math.min(MAX_FALL_SPEED, birdVelRef.current + GRAVITY * dt);
         birdYRef.current += birdVelRef.current * dt;
         
-        if (birdYRef.current < 0 || birdYRef.current > height) {
+        if (birdYRef.current < -50 || birdYRef.current > height + 50) {
           die();
           return;
         }
@@ -237,8 +246,12 @@ export default function PigFlap() {
             pipe.x -= cfg.speed * dt;
             
             // Colisión
-            const birdLeft = (BIRD_X / 100) * width - 20;
-            const birdRight = (BIRD_X / 100) * width + 20;
+            const birdXPos = (BIRD_X / 100) * width;
+            const birdLeft = birdXPos - 15;
+            const birdRight = birdXPos + 15;
+            const birdTop = birdYRef.current - 15;
+            const birdBottom = birdYRef.current + 15;
+
             if (pipe.x < birdRight && pipe.x + PIPE_WIDTH > birdLeft) {
               if (birdYRef.current < pipe.gapY || birdYRef.current > pipe.gapY + pipe.gapHeight) {
                 die();
@@ -275,7 +288,6 @@ export default function PigFlap() {
           const amplitude = (height - BOSS_GAP_HEIGHT) / 2 - 50;
           bossGapYRef.current = (height / 2 - BOSS_GAP_HEIGHT / 2) + Math.sin(bossTimeRef.current * 1.5) * amplitude;
 
-          // Daño al jefe si el pájaro está en su X y dentro del hueco
           const birdXPos = (BIRD_X / 100) * width;
           if (birdXPos > bossXRef.current && birdXPos < bossXRef.current + BOSS_WIDTH) {
             if (birdYRef.current > bossGapYRef.current && birdYRef.current < bossGapYRef.current + BOSS_GAP_HEIGHT) {
@@ -344,12 +356,12 @@ export default function PigFlap() {
     <div 
       ref={containerRef}
       className="relative w-full h-full overflow-hidden touch-none select-none bg-sky-400"
-      onPointerDown={flap}
+      onPointerDown={(e) => flap()}
     >
       {/* Fondo personalizado */}
       <div 
         className="absolute inset-0 bg-cover bg-center bg-no-repeat transition-transform duration-1000"
-        style={{ backgroundImage: 'url(/flappy-bg.png)', transform: phase === 'playing' ? 'scale(1.05)' : 'scale(1)' }}
+        style={{ backgroundImage: 'url(/flappy-bg.png)', transform: (phase === 'playing' || phase === 'boss') ? 'scale(1.05)' : 'scale(1)' }}
       />
 
       {/* Pipes (Gastos) */}
@@ -401,9 +413,15 @@ export default function PigFlap() {
       {/* El Cerdito */}
       <motion.div
         className="absolute z-30"
-        animate={{ top: birdY, rotate: birdAngle }}
-        transition={{ type: 'spring', stiffness: 300, damping: 20 }}
-        style={{ left: `${BIRD_X}%`, width: BIRD_SIZE, height: BIRD_SIZE, marginLeft: -BIRD_SIZE/2, marginTop: -BIRD_SIZE/2 }}
+        style={{ 
+          top: birdY, 
+          left: `${BIRD_X}%`, 
+          width: BIRD_SIZE, 
+          height: BIRD_SIZE, 
+          marginLeft: -BIRD_SIZE/2, 
+          marginTop: -BIRD_SIZE/2,
+          rotate: birdAngle 
+        }}
       >
         <img src={pigMascot} className="w-full h-full object-contain drop-shadow-2xl" />
       </motion.div>
@@ -422,7 +440,7 @@ export default function PigFlap() {
             <img src={pigMascot} className="h-24 w-24 mb-6 animate-bounce" />
             <h2 className="text-5xl font-black tracking-tighter mb-2">FLAPPY OINK</h2>
             <p className="text-sm font-medium mb-8 opacity-80 max-w-[280px]">Toca para saltar. Cruza los 3 niveles de gastos y vence al Jefe de las Deudas.</p>
-            <Button className="h-16 px-12 rounded-full bg-white text-indigo-900 font-black text-xl shadow-2xl">¡EMPEZAR! 🚀</Button>
+            <Button onClick={(e) => flap(e)} className="h-16 px-12 rounded-full bg-white text-indigo-900 font-black text-xl shadow-2xl active:scale-95 transition-transform">¡EMPEZAR! 🚀</Button>
           </motion.div>
         )}
 
@@ -436,7 +454,7 @@ export default function PigFlap() {
               <p className="text-slate-500 font-bold">
                 {level < 3 ? "Prepárate para el siguiente reto." : "¡ATENCIÓN! El Jefe de las Deudas se aproxima."}
               </p>
-              <Button className="w-full h-14 rounded-2xl bg-indigo-600 text-white font-black">CONTINUAR ➔</Button>
+              <Button onClick={(e) => flap(e)} className="w-full h-14 rounded-2xl bg-indigo-600 text-white font-black active:scale-95 transition-transform">CONTINUAR ➔</Button>
             </div>
           </motion.div>
         )}
@@ -460,7 +478,7 @@ export default function PigFlap() {
               </div>
             )}
 
-            <Button className="h-14 px-10 rounded-full bg-white text-slate-900 font-black text-lg shadow-xl flex gap-3">
+            <Button onClick={(e) => flap(e)} className="h-14 px-10 rounded-full bg-white text-slate-900 font-black text-lg shadow-xl flex gap-3 active:scale-95 transition-transform">
               <RefreshCw className="h-5 w-5" /> REINTENTAR
             </Button>
           </motion.div>
@@ -478,7 +496,7 @@ export default function PigFlap() {
               <p className="text-sm font-black uppercase opacity-60">Puntaje Final Maestro</p>
               <p className="text-6xl font-black">{score}</p>
             </div>
-            <Button className="h-16 px-12 rounded-full bg-emerald-500 text-white font-black text-xl shadow-2xl">¡SOY UN CRACK! 🐷</Button>
+            <Button onClick={(e) => flap(e)} className="h-16 px-12 rounded-full bg-emerald-500 text-white font-black text-xl shadow-2xl active:scale-95 transition-transform">¡SOY UN CRACK! 🐷</Button>
           </motion.div>
         )}
       </AnimatePresence>
