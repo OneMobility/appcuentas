@@ -2,14 +2,14 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 
 /**
- * 🪙 COIN CATCH — Versión Oinkash Master (Fluidez Restaurada)
+ * 🪙 COIN CATCH — Versión Oinkash Master (Con Imágenes Personalizadas)
  */
 
 const STARTING_LIVES = 3;
 const CATCH_LINE = 86; 
 const MISS_LINE = 101; 
-const BASKET_HALF_WIDTH = 9; 
-const CATCH_TOLERANCE = 10; 
+const BASKET_HALF_WIDTH = 12; // Un poco más ancho para la imagen
+const CATCH_TOLERANCE = 12; 
 const STREAK_PER_MULT_LEVEL = 3; 
 const MAX_MULTIPLIER = 5;
 const BASE_MOVE_SPEED = 90; 
@@ -20,16 +20,17 @@ type BadKind = "gasto" | "impuesto" | "factura";
 type Kind = GoodKind | BadKind;
 
 type ItemDef = {
-  emoji: string;
+  emoji?: string;
+  image?: string;
   points: number;
   bad: boolean;
   weight: number; 
 };
 
 const ITEM_DEFS: Record<Kind, ItemDef> = {
-  coin: { emoji: "🪙", points: 10, bad: false, weight: 5 },
-  bill: { emoji: "💵", points: 25, bad: false, weight: 3 },
-  bag: { emoji: "💰", points: 50, bad: false, weight: 1 },
+  coin: { image: "/game-coin.png", points: 10, bad: false, weight: 5 },
+  bill: { image: "/game-coin.png", points: 25, bad: false, weight: 3 },
+  bag: { image: "/game-coin.png", points: 50, bad: false, weight: 1 },
   gasto: { emoji: "💸", points: 0, bad: true, weight: 4 },
   impuesto: { emoji: "🏛️", points: 0, bad: true, weight: 3 },
   factura: { emoji: "🧾", points: -20, bad: true, weight: 3 },
@@ -158,7 +159,6 @@ export default function CoinCatch({
       lastTimeRef.current = now;
       elapsedRef.current += dt;
 
-      // Velocidad dinámica (teclado)
       const livesLost = STARTING_LIVES - livesRef.current;
       const currentMoveSpeed = Math.max(30, BASE_MOVE_SPEED - (livesLost * SPEED_PENALTY_PER_LIFE));
 
@@ -336,9 +336,6 @@ export default function CoinCatch({
         ref={fieldRef}
         style={{
           ...styles.field,
-          backgroundImage: 'url(/game-bg.png)',
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
           boxShadow:
             flash === "good"
               ? "inset 0 0 0 10px rgba(76, 175, 131, 0.4)"
@@ -363,7 +360,11 @@ export default function CoinCatch({
                 top: `${item.y}%`,
               }}
             >
-              {def.emoji}
+              {def.image ? (
+                <img src={def.image} alt="coin" style={styles.itemImage} />
+              ) : (
+                def.emoji
+              )}
             </div>
           );
         })}
@@ -372,10 +373,10 @@ export default function CoinCatch({
           style={{
             ...styles.basket,
             left: `${basketX}%`,
-            opacity: lives === 3 ? 1 : lives === 2 ? 0.8 : 0.6
+            opacity: lives === 3 ? 1 : lives === 2 ? 0.9 : 0.8
           }}
         >
-          🐷
+          <img src="/game-character.png" alt="pig" style={styles.characterImage} />
         </div>
 
         <AnimatePresence>
@@ -396,9 +397,10 @@ export default function CoinCatch({
 
         {phase === "idle" && (
           <div style={styles.overlay}>
+            <img src="/game-character.png" className="h-24 w-24 mb-4 object-contain" />
             <p style={styles.overlayTitle}>🪙 Coin Catch</p>
             <p style={styles.overlaySubtitle}>
-              Atrapa 🪙 💵 💰 para ganar puntos.
+              Atrapa las monedas para ganar puntos.
               <br />
               ¡Cuidado! Perder vidas te hará más lento.
               <br />
@@ -517,6 +519,7 @@ const styles: Record<string, React.CSSProperties> = {
     userSelect: "none",
     transition: "box-shadow 0.2s ease",
     border: "4px solid #f1f5f9",
+    backgroundColor: "#f8fafc",
   },
   item: {
     position: "absolute",
@@ -524,21 +527,31 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: "clamp(24px, 7vw, 34px)",
     lineHeight: 1,
     pointerEvents: "none",
-    filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.2))",
+    filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.15))",
+  },
+  itemImage: {
+    width: "40px",
+    height: "40px",
+    objectFit: "contain",
   },
   basket: {
     position: "absolute",
     top: "88%",
     transform: "translate(-50%, -50%)",
-    fontSize: "clamp(34px, 10vw, 48px)",
-    lineHeight: 1,
     pointerEvents: "none",
-    filter: "drop-shadow(0 4px 6px rgba(0,0,0,0.3))",
+    filter: "drop-shadow(0 6px 12px rgba(0,0,0,0.2))",
+    width: "80px",
+    height: "80px",
+  },
+  characterImage: {
+    width: "100%",
+    height: "100%",
+    objectFit: "contain",
   },
   overlay: {
     position: "absolute",
     inset: 0,
-    background: "rgba(255, 255, 255, 0.92)",
+    background: "rgba(255, 255, 255, 0.95)",
     display: "flex",
     flexDirection: "column",
     alignItems: "center",
