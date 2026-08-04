@@ -6,14 +6,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Calendar } from "@/components/ui/calendar";
 import { 
   PlusCircle, 
   DollarSign, 
   Trash2, 
   Edit, 
-  CalendarIcon, 
   Trophy, 
   MoreHorizontal,
   CheckCircle2,
@@ -34,11 +31,13 @@ import { evaluateExpression } from "@/utils/math-helpers";
 import { motion, AnimatePresence } from "framer-motion";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
-// RECURSOS VISUALES ACTUALIZADOS
+// RECURSOS PARA ANIMACIONES DE PANTALLA COMPLETA
 const GIF_INICIO = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/metasinicios.gif";
 const GIF_FELIZ = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/metasfeliz.gif";
 const GIF_DEPOSITO = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/metasdeposito.gif";
 const GIF_RETIRO = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/metasretiro.gif";
+
+// RECURSOS ESTÁTICOS / UI
 const PIGGY_STANDARD = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Cochinito%20Ahorro.png";
 const PIGGY_SAD = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Cochinito%20Ahorro%20Triste.png";
 
@@ -47,73 +46,33 @@ const FEEDBACK_MESSAGES = {
     "¡Una nueva aventura financiera comienza! 🐷",
     "¡Meta creada! El primer paso es el más importante.",
     "¡Felicidades por definir tu próximo gran objetivo!",
-    "¡Tu plan de ahorro acaba de nacer! Cuídalo mucho.",
-    "¡Hoy decidiste que tu futuro vale la pena!"
+    "¡Tu plan de ahorro acaba de nacer! Cuídalo mucho."
   ],
   onWithdraw: [
     "Retiraste un poco, pero sé que es por algo necesario. 📉",
     "Un ajuste en el camino no detiene tu meta.",
-    "El dinero está para usarse, pero recuerda volver pronto.",
-    "¡Ánimo! El saldo bajó pero tu voluntad sigue intacta.",
-    "Toma lo que necesites, tus metas te esperarán."
+    "El dinero está para usarse, pero recuerda volver pronto."
   ],
   onDeposit: [
     "¡Eso! Un paso más cerca de lo que sueñas. 🚀",
     "¡Tu cochinito está sonriendo con este abono!",
-    "¡Ahorro registrado con éxito! Eres imparable.",
     "¡Cada peso cuenta y hoy sumaste una victoria!",
-    "¡Buen trabajo! Estás construyendo algo increíble.",
-    "¡Pum! El saldo sube y tu estrés baja.",
-    "Alimentando al cochinito... ¡se ve más gordito hoy!",
-    "Tu disciplina de hoy es tu libertad de mañana.",
-    "¡Excelente abono! Estás dominando tus finanzas.",
-    "Una moneda más, un día menos para lograrlo."
+    "¡Pum! El saldo sube y tu estrés baja."
   ],
   onComplete: [
     "¡LO LOGRASTE! Eres un maestro del ahorro. 🏆",
     "¡Meta cumplida! Disfruta tu recompensa, te la ganaste.",
-    "¡Increíble! Sabíamos que podías hacerlo. ¡A celebrar!",
-    "¡Misión cumplida! Tu disciplina ha dado frutos.",
-    "¡Felicidades! Has alcanzado la cima. ¿Cuál es la siguiente?"
+    "¡Increíble! Sabíamos que podías hacerlo."
   ],
   onWiseDecision: [
     "¡Esa es la actitud! Rectificar es de sabios financieros. ✨",
     "¡Wow! Te arrepentiste de gastar y preferiste ahorrar. ¡Genial!",
-    "¡Sabia decisión! Tu meta te lo agradece profundamente.",
-    "¡Prioridades claras! Decidiste que tu sueño vale más que el gasto.",
-    "¡Felicidades por esa fuerza de voluntad! Eres un crack.",
-    "Tu 'yo' del futuro te acaba de dar un high-five virtual.",
-    "El ahorro le ganó a la tentación. ¡Punto para ti!",
-    "Borrón y cuenta nueva: ¡el dinero vuelve a donde pertenece!",
-    "¡Eso se llama autocontrol! Muy bien hecho.",
-    "El cochinito respira aliviado... ¡gracias por volver!"
+    "¡Prioridades claras! El sueño vale más que el gasto."
   ],
   onInactivityReminder: [
     "Tu meta te extraña... ¿hace cuánto no le das amor? 🐷",
     "¡Oye! El cochinito está empezando a pasar hambre.",
-    "Un ahorro a la semana mantiene el estrés fuera.",
-    "No dejes que el tiempo enfríe tus sueños.",
-    "Los grandes imperios se construyeron ladrillo a ladrillo.",
-    "Tu meta se ve un poco triste, ¡anímala con un pesito!",
-    "El éxito es la suma de pequeños esfuerzos repetidos.",
-    "¿Recuerdas por qué empezaste esta meta?",
-    "Un paso pequeño sigue siendo movimiento hacia adelante.",
-    "El tiempo vuela, ¡haz que tus ahorros vuelen también!",
-    "¡No te rindas! Lo más difícil es mantener el ritmo.",
-    "El cochinito dice que ya es hora de otro depósito.",
-    "La constancia es la clave del tesoro.",
-    "¡Vamos! Un pequeño abono hoy hace la diferencia.",
-    "El ahorro es un hábito, no dejes que se oxide.",
-    "Tu meta sigue aquí, esperando que la cumplas.",
-    "Visualiza tu objetivo y verás que vale el esfuerzo.",
-    "¡Ánimo! El camino es largo pero la recompensa es grande.",
-    "¿Sabías que cada peso hoy es más libertad mañana?",
-    "El cochinito está listo para recibir tu próximo ahorro.",
-    "¡Ey! Tus sueños no se toman vacaciones.",
-    "Mantén la vista en el premio, ¡falta menos!",
-    "Un día sin ahorrar es un día más lejos del éxito.",
-    "Tu disciplina financiera es tu superpoder.",
-    "¡Despierta ese cochinito! Ya durmió demasiado."
+    "Un ahorro a la semana mantiene el estrés fuera."
   ]
 };
 
@@ -170,7 +129,7 @@ const Savings: React.FC = () => {
         isVisible: true, 
         message: getRandomPhrase('onOpen'), 
         imageSrc: GIF_INICIO, 
-        bgColor: "bg-white", 
+        bgColor: "bg-white", // Fondo blanco (255 255 255)
         textColor: "text-slate-900" 
       });
     }
@@ -216,6 +175,7 @@ const Savings: React.FC = () => {
       setIsTransactionDialogOpen(false);
       
       const now = Date.now();
+      // "Sabia decisión" si el usuario deposita poco después de haber retirado de la misma meta
       const isDecisionCorrected = lastAction?.type === 'withdrawal' && newTransaction.type === 'deposit' && (now - lastAction.time < 300000) && lastAction.savingId === selectedSavingId;
 
       if (isCompleting) {
@@ -298,7 +258,7 @@ const Savings: React.FC = () => {
               <p className="text-xs font-medium text-yellow-50/80">¡Tu futuro se construye peso a peso!</p>
             </div>
             <div className="flex-shrink-0">
-              <img src={GIF_DEPOSITO} alt="Metas" className="h-32 w-32 object-contain" />
+              <img src={PIGGY_STANDARD} alt="Metas" className="h-32 w-32 object-contain" />
             </div>
           </div>
         </Card>
