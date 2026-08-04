@@ -31,7 +31,7 @@ const games = [
     id: "flappy-oink",
     name: "Flappy Oink",
     description: "Vuela y esquiva los gastos innecesarios para ahorrar.",
-    icon: "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/ChatGPT%20Image%203%20ago%202026,%2003_44_08%20p.m..png",
+    icon: "/flappy-oink-icon.png",
     type: "image",
     color: "bg-sky-500",
     path: "/minigames/flappy-oink"
