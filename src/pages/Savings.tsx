@@ -40,8 +40,7 @@ const GIF_RETIRO = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/p
 
 // RECURSOS PARA LA UI
 const GIF_CABECERA = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/nuevometa.gif";
-const PIGGY_STANDARD = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Cochinito%20Ahorro.png";
-const PIGGY_SAD = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Cochinito%20Ahorro%20Triste.png";
+const METAS_BASE_URL = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/metas/";
 
 const FEEDBACK_MESSAGES = {
   onOpen: [
@@ -274,21 +273,39 @@ const Savings: React.FC = () => {
   };
 
   const getPiggyStatus = (saving: any) => {
-    if (saving.completion_date || (saving.target_amount && saving.current_balance >= saving.target_amount)) {
-      return { img: GIF_FELIZ, label: "¡Logrado!", sub: "Cochinito fiestero" };
-    }
-    
+    const progress = saving.target_amount ? (saving.current_balance / saving.target_amount) * 100 : 0;
+    const isCompleted = saving.completion_date || (saving.target_amount && saving.current_balance >= saving.target_amount);
     const daysSinceUpdate = differenceInDays(new Date(), parseISO(saving.created_at));
-    if (daysSinceUpdate > 30) {
-      return { img: PIGGY_SAD, label: "Abandonada", sub: getRandomPhrase('onInactivityReminder') };
+
+    // 1. Meta cumplida (100%) -> 08
+    if (isCompleted) {
+      return { img: `${METAS_BASE_URL}08.png`, label: "¡Logrado!", sub: getRandomPhrase('onComplete') };
     }
 
-    const progress = saving.target_amount ? (saving.current_balance / saving.target_amount) * 100 : 0;
-    if (progress < 30) {
-      return { img: PIGGY_SAD, label: "Hambriento", sub: "Necesito comida..." };
+    // 2. Inactividad (Prioridad sobre progreso si cumple días)
+    if (daysSinceUpdate > 30) {
+      return { img: `${METAS_BASE_URL}07.png`, label: "Abandonada", sub: "Más de 30 días sin actividad." };
     }
-    
-    return { img: PIGGY_STANDARD, label: "Creciendo", sub: "¡Vamos bien!" };
+    if (daysSinceUpdate === 30) {
+      return { img: `${METAS_BASE_URL}06.png`, label: "Crítico", sub: "Hoy cumples 30 días inactivo." };
+    }
+    if (daysSinceUpdate >= 15) {
+      return { img: `${METAS_BASE_URL}05.png`, label: "En pausa", sub: "Llevas 15 días sin movimientos." };
+    }
+
+    // 3. Progreso
+    if (progress >= 75) {
+      return { img: `${METAS_BASE_URL}04.png`, label: "Casi listo", sub: "¡Ya casi llegas al 100%!" };
+    }
+    if (progress >= 50) {
+      return { img: `${METAS_BASE_URL}03.png`, label: "A la mitad", sub: "¡Vas por excelente camino!" };
+    }
+    if (progress >= 25) {
+      return { img: `${METAS_BASE_URL}02.png`, label: "Avanzando", sub: "Poco a poco se llena el cochinito." };
+    }
+
+    // 4. Recién creada / Bajo progreso (< 25%) -> 01
+    return { img: `${METAS_BASE_URL}01.png`, label: "Iniciando", sub: "¡El primer paso es el más importante!" };
   };
 
   const filteredSavings = savings.filter(s => s.name.toLowerCase().includes(searchTerm.toLowerCase()));
@@ -336,11 +353,11 @@ const Savings: React.FC = () => {
               <motion.div key={saving.id} layout initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: i * 0.05 }}>
                 <Card className={cn(
                   "rounded-[2.5rem] border-none shadow-sm hover:shadow-xl transition-all bg-white overflow-hidden group relative",
-                  status.label === "Abandonada" && "bg-slate-50/80 border-dashed border-2 border-slate-200"
+                  (status.label === "Abandonada" || status.label === "Crítico") && "bg-slate-50/80 border-dashed border-2 border-slate-200"
                 )}>
-                  {status.label === "Abandonada" && (
+                  {(status.label === "Abandonada" || status.label === "Crítico") && (
                     <div className="absolute top-4 right-14 bg-amber-100 text-amber-700 text-[8px] font-black uppercase px-2 py-0.5 rounded-full flex items-center gap-1 z-20 animate-pulse">
-                      <AlertCircle className="h-2.5 w-2.5" /> Meta Abandonada
+                      <AlertCircle className="h-2.5 w-2.5" /> Meta con Inactividad
                     </div>
                   )}
 
@@ -354,14 +371,18 @@ const Savings: React.FC = () => {
                           >
                             <img 
                               src={status.img} 
-                              className={cn("h-14 w-14 object-contain opacity-100", status.label === "Abandonada" && "grayscale")} 
+                              className={cn("h-14 w-14 object-contain opacity-100", (status.label === "Abandonada" || status.label === "Crítico") && "grayscale")} 
                               alt="Status" 
+                              onError={(e) => {
+                                // Fallback en caso de que la imagen no exista o cargue mal
+                                (e.target as HTMLImageElement).src = METAS_BASE_URL + "01.png";
+                              }}
                             />
                           </div>
                           {isCompleted && <div className="absolute -top-2 -right-2 bg-yellow-400 rounded-full p-1.5 shadow-lg animate-bounce"><Trophy className="h-4 w-4 text-white" /></div>}
                         </div>
                         <div className="flex flex-col">
-                          <span className={cn("font-black text-slate-900 text-lg leading-tight", status.label === "Abandonada" && "text-slate-400")}>{saving.name}</span>
+                          <span className={cn("font-black text-slate-900 text-lg leading-tight", (status.label === "Abandonada" || status.label === "Crítico") && "text-slate-400")}>{saving.name}</span>
                           <span className="text-[9px] font-black uppercase text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full w-fit mt-1">{status.label}</span>
                           <span className="text-[10px] font-bold text-slate-400 mt-1 flex items-center gap-1">
                             <Clock className="h-3 w-3" /> {saving.target_date ? format(parseISO(saving.target_date), 'dd MMM yyyy', { locale: es }) : 'Sin fecha'}
