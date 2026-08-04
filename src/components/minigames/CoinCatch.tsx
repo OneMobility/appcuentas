@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 
 /**
- * 🪙 COIN CATCH — Versión Oinkash Master (Con Fondo de Campo)
+ * 🪙 COIN CATCH — Versión Oinkash Master (Con Fondo Real)
  */
 
 const STARTING_LIVES = 3;
@@ -336,6 +336,9 @@ export default function CoinCatch({
         ref={fieldRef}
         style={{
           ...styles.field,
+          backgroundImage: 'url(/game-bg.png)',
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
           boxShadow:
             flash === "good"
               ? "inset 0 0 0 10px rgba(76, 175, 131, 0.4)"
