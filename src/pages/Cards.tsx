@@ -24,6 +24,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { addMonths, parseISO, isWithinInterval, startOfMonth, endOfMonth } from "date-fns";
 import { fetchUsdToMxnRate } from "@/utils/currency-helper";
 
+const COCHINITO_LOGO = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Cochinito%20Ahorro.png";
+
 const Cards = () => {
   const { user } = useSession();
   const { incomeCategories, expenseCategories, isLoadingCategories } = useCategoryContext();
@@ -344,9 +346,26 @@ const Cards = () => {
 
   return (
     <div className="flex flex-col gap-6 p-4">
-      <h1 className="text-3xl font-bold">Tus Tarjetas</h1>
+      <header className="relative">
+        <div className="absolute inset-0 bg-indigo-100/50 blur-3xl rounded-full -z-10" />
+        <Card className="bg-indigo-900 text-white rounded-[2.5rem] border-none shadow-2xl overflow-hidden">
+          <div className="p-8 space-y-4 relative">
+            <div className="absolute top-0 right-0 p-4 opacity-20">
+              <img src={COCHINITO_LOGO} alt="Tarjetas" className="h-40 w-40 object-contain" />
+            </div>
+            <p className="text-[10px] font-black uppercase tracking-widest text-indigo-200">Bóveda de Tarjetas 🐷</p>
+            <div className="flex items-baseline gap-2">
+              <span className="text-5xl font-black tracking-tighter">
+                ${netCardBalance.toLocaleString()}
+              </span>
+              <span className="text-xl font-bold opacity-60">MXN</span>
+            </div>
+            <p className="text-xs font-medium text-indigo-50/80">Gestiona tu plástico de forma inteligente.</p>
+          </div>
+        </Card>
+      </header>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card className="border-l-4 border-green-600 bg-green-50 text-green-800">
           <CardHeader className="pb-2"><CardTitle className="text-xs font-medium flex items-center gap-2"><Wallet className="h-3 w-3" /> SALDO EN DÉBITO</CardTitle></CardHeader>
           <CardContent><div className="text-xl font-bold">${totalDebitBalance.toFixed(2)}</div></CardContent>
@@ -362,10 +381,6 @@ const Cards = () => {
         <Card className="border-l-4 border-red-600 bg-red-50 text-red-800">
           <CardHeader className="pb-2"><CardTitle className="text-xs font-medium flex items-center gap-2"><CalendarDays className="h-3 w-3" /> DEUDA CRÉDITO (GLOBAL)</CardTitle></CardHeader>
           <CardContent><div className="text-xl font-bold">${totalCreditDebtGlobal.toFixed(2)}</div></CardContent>
-        </Card>
-        <Card className="border-l-4 border-pink-500 bg-pink-50 text-pink-800">
-          <CardHeader className="pb-2"><CardTitle className="text-xs font-medium flex items-center gap-2"><PiggyBank className="h-3 w-3" /> BALANCE NETO</CardTitle></CardHeader>
-          <CardContent><div className="text-xl font-bold">${netCardBalance.toFixed(2)}</div></CardContent>
         </Card>
       </div>
 

@@ -21,49 +21,24 @@ import { getLocalDateString } from "@/utils/date-helpers";
 import { format, parseISO } from "date-fns";
 import { es } from "date-fns/locale";
 
-interface ShoppingListType {
-  id: string;
-  name: string;
-  status: 'active' | 'completed';
-  created_at: string;
-}
-
-interface ShoppingItem {
-  id: string;
-  list_id: string;
-  name: string;
-  quantity: number;
-  estimated_unit_price: number;
-  actual_unit_price?: number | null;
-  is_completed: boolean;
-  category_id?: string;
-}
-
-interface PriceHistoryItem {
-  actual_unit_price: number;
-  created_at: string;
-  list_name: string;
-}
+const SHOPPING_PIGGY = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Cochinito%20Ahorro.png";
 
 const ShoppingList: React.FC = () => {
   const { user } = useSession();
   const { expenseCategories, getCategoryById } = useCategoryContext();
   
-  // Listas y artículos
   const [lists, setLists] = useState<ShoppingListType[]>([]);
   const [selectedListId, setSelectedListId] = useState<string>("");
   const [items, setItems] = useState<ShoppingItem[]>([]);
   const [cards, setCards] = useState<any[]>([]);
   const [cashBalance, setCashBalance] = useState(0);
   
-  // Diálogos
   const [isAddListDialogOpen, setIsAddListDialogOpen] = useState(false);
   const [isBulkAddDialogOpen, setIsBulkAddDialogOpen] = useState(false);
   const [isFinalizeDialogOpen, setIsFinalizeDialogOpen] = useState(false);
   const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
   const [isHistoryDialogOpen, setIsHistoryDialogOpen] = useState(false);
 
-  // Formularios
   const [newListName, setNewListListName] = useState("");
   const [bulkText, setBulkText] = useState("");
   const [bulkCategory, setBulkCategory] = useState("");
@@ -75,7 +50,6 @@ const ShoppingList: React.FC = () => {
     category_id: "",
   });
 
-  // Formulario de Cierre de Compra
   const [finalizeForm, setExpenseForm] = useState({
     totalChargedByStore: "",
     paymentMethod: "cash",
@@ -92,7 +66,6 @@ const ShoppingList: React.FC = () => {
   const [sharePhone, setSharePhone] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Cargar listas de compras
   const fetchLists = async () => {
     if (!user) return;
     const { data, error } = await supabase
@@ -111,7 +84,6 @@ const ShoppingList: React.FC = () => {
     }
   };
 
-  // Cargar artículos de la lista seleccionada
   const fetchItems = async () => {
     if (!user || !selectedListId) {
       setItems([]);
@@ -134,7 +106,6 @@ const ShoppingList: React.FC = () => {
     }
   };
 
-  // Cargar datos financieros (efectivo y tarjetas)
   const fetchFinancialData = async () => {
     if (!user) return;
     const [cardsRes, cashRes] = await Promise.all([
@@ -147,7 +118,6 @@ const ShoppingList: React.FC = () => {
     ));
   };
 
-  // Cargar históricos de precios de forma masiva para comparar tendencias
   const fetchGlobalPriceHistories = async (itemNames: string[]) => {
     if (!user || itemNames.length === 0) return;
 
@@ -187,7 +157,6 @@ const ShoppingList: React.FC = () => {
     }
   }, [selectedListId]);
 
-  // Crear nueva lista
   const handleCreateList = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newListName.trim() || !user) return;
@@ -209,7 +178,6 @@ const ShoppingList: React.FC = () => {
     }
   };
 
-  // Eliminar lista completa
   const handleDeleteList = async (listId: string) => {
     const { error } = await supabase.from('shopping_lists').delete().eq('id', listId);
     if (error) {
@@ -223,7 +191,6 @@ const ShoppingList: React.FC = () => {
     }
   };
 
-  // Parsear texto libre y añadir artículos masivamente
   const handleBulkAdd = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!bulkText.trim() || !selectedListId || !user) return;
@@ -235,7 +202,6 @@ const ShoppingList: React.FC = () => {
       const trimmed = line.trim();
       if (!trimmed) return;
 
-      // Regex para detectar cantidad al inicio (ej: "2 leches", "1.5 manzanas", "3x huevos")
       const match = trimmed.match(/^(\d+(?:\.\d+)?)\s*(?:x|pcs|pzas|unidades|de|kg|g)?\s*(.+)$/i);
       
       if (match) {
@@ -269,7 +235,6 @@ const ShoppingList: React.FC = () => {
     }
   };
 
-  // Añadir un solo artículo
   const handleAddSingleItem = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newItem.name.trim() || !selectedListId || !user) return;
@@ -295,7 +260,6 @@ const ShoppingList: React.FC = () => {
     }
   };
 
-  // Eliminar un artículo
   const handleDeleteItem = async (itemId: string) => {
     const { error } = await supabase.from('shopping_items').delete().eq('id', itemId);
     if (error) showError("Error al eliminar artículo.");
@@ -305,27 +269,21 @@ const ShoppingList: React.FC = () => {
     }
   };
 
-  // Actualizar cantidad o precio de un artículo directamente en la tabla
   const handleUpdateItemInline = async (itemId: string, field: 'quantity' | 'actual_unit_price', value: string) => {
     const parsedValue = parseFloat(value);
     const updateData = { [field]: isNaN(parsedValue) ? null : parsedValue };
 
-    // Actualizar localmente primero para rapidez visual
     setItems(prev => prev.map(item => item.id === itemId ? { ...item, ...updateData } : item));
 
-    // Guardar en Supabase
     await supabase
       .from('shopping_items')
       .update(updateData)
       .eq('id', itemId);
   };
 
-  // Marcar/Desmarcar artículo como "En el carrito"
   const handleToggleCart = async (itemId: string, isChecked: boolean) => {
-    // Actualizar localmente
     setItems(prev => prev.map(item => {
       if (item.id === itemId) {
-        // Si se marca y no tiene precio real, sugerimos el estimado
         const actual_unit_price = isChecked && !item.actual_unit_price ? item.estimated_unit_price : item.actual_unit_price;
         return { ...item, is_completed: isChecked, actual_unit_price };
       }
@@ -341,14 +299,12 @@ const ShoppingList: React.FC = () => {
       .eq('id', itemId);
   };
 
-  // Suma total de los artículos que están marcados (en el carrito)
   const totalInCart = useMemo(() => {
     return items
       .filter(i => i.is_completed)
       .reduce((sum, i) => sum + (i.quantity * (i.actual_unit_price || 0)), 0);
   }, [items]);
 
-  // Abrir diálogo de finalización de compra
   const handleOpenAdd = () => {
     const currentList = lists.find(l => l.id === selectedListId);
     setExpenseForm({
@@ -360,7 +316,6 @@ const ShoppingList: React.FC = () => {
     setIsFinalizeDialogOpen(true);
   };
 
-  // Confirmar compra y registrar un único gasto consolidado
   const handleFinalizePurchase = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user || !selectedListId) return;
@@ -375,14 +330,12 @@ const ShoppingList: React.FC = () => {
     const transactionDate = getLocalDateString(new Date());
     const difference = totalCharged - totalInCart;
     
-    // Nota de diferencia si existe
     let finalDescription = finalizeForm.description;
     if (Math.abs(difference) >= 0.01) {
-      finalDescription += ` (Diferencia de cuadre: ${difference > 0 ? "+" : ""}${difference.toFixed(2)})`;
+      finalDescription += ` (Diferencia de cuadre: ${difference > 0 ? "+" : ""}{difference.toFixed(2)})`;
     }
 
     try {
-      // 1. Registrar un único gasto consolidado en Efectivo o Tarjeta
       if (finalizeForm.paymentMethod === "cash") {
         const { error } = await supabase.from('cash_transactions').insert({
           user_id: user.id,
@@ -419,7 +372,6 @@ const ShoppingList: React.FC = () => {
         }
       }
 
-      // 2. Marcar la lista de compras como completada
       const { error: listError } = await supabase
         .from('shopping_lists')
         .update({ status: 'completed' })
@@ -438,7 +390,6 @@ const ShoppingList: React.FC = () => {
     }
   };
 
-  // Ver historial de precios detallado de un artículo
   const handleViewHistory = (itemName: string) => {
     const key = itemName.trim().toLowerCase();
     const history = globalPriceHistories[key] || [];
@@ -447,13 +398,11 @@ const ShoppingList: React.FC = () => {
     setIsHistoryDialogOpen(true);
   };
 
-  // Analizar tendencia de precios basada en las últimas 3 compras
   const getPriceTrend = (itemName: string, currentPrice: number) => {
     const key = itemName.trim().toLowerCase();
     const history = globalPriceHistories[key];
     if (!history || history.length === 0) return null;
 
-    // Tomar los últimos 3 precios históricos (excluyendo el actual)
     const prices = history.slice(0, 3).map(h => h.actual_unit_price);
     
     if (prices.length < 1) return null;
@@ -461,7 +410,6 @@ const ShoppingList: React.FC = () => {
     const lastPrice = prices[0];
     if (currentPrice === 0) return { lastPrice, status: 'stable' as const, label: "Estable" };
 
-    // Comparación simple con la última compra
     if (currentPrice > lastPrice + 0.05) {
       return { lastPrice, status: 'up' as const, label: "Subió" };
     } else if (currentPrice < lastPrice - 0.05) {
@@ -470,7 +418,6 @@ const ShoppingList: React.FC = () => {
     return { lastPrice, status: 'stable' as const, label: "Estable" };
   };
 
-  // Filtrar artículos
   const filteredItems = useMemo(() => {
     return items.filter(item => {
       const matchesSearch = item.name.toLowerCase().includes(searchTerm.toLowerCase());
@@ -479,7 +426,6 @@ const ShoppingList: React.FC = () => {
     });
   }, [items, searchTerm, filterCategory]);
 
-  // Métricas de la lista seleccionada
   const metrics = useMemo(() => {
     const pending = items.filter(i => !i.is_completed);
     const completed = items.filter(i => i.is_completed);
@@ -495,7 +441,6 @@ const ShoppingList: React.FC = () => {
     };
   }, [items]);
 
-  // Generar texto para compartir
   const generateShareText = () => {
     const currentList = lists.find(l => l.id === selectedListId);
     let text = `🛒 *LISTA DE COMPRAS: ${currentList?.name.toUpperCase() || "OINKASH"}*\n\n`;
@@ -542,39 +487,44 @@ const ShoppingList: React.FC = () => {
 
   return (
     <div className="flex flex-col gap-6 p-4">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <h1 className="text-3xl font-bold flex items-center gap-2">
-          <ShoppingCart className="h-8 w-8 text-primary" /> Lista de Compras
-        </h1>
-        
-        {/* Selector de Listas */}
-        <div className="flex items-center gap-2">
-          <Select value={selectedListId} onValueChange={setSelectedListId}>
-            <SelectTrigger className="w-[200px] rounded-xl h-10">
-              <SelectValue placeholder="Selecciona una lista" />
-            </SelectTrigger>
-            <SelectContent>
-              {lists.map(l => (
-                <SelectItem key={l.id} value={l.id}>
-                  {l.name} {l.status === 'completed' ? '(Completada)' : ''}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Button variant="outline" size="icon" className="h-10 w-10 rounded-xl" onClick={() => setIsAddListDialogOpen(true)}>
-            <ListPlus className="h-5 w-5" />
-          </Button>
-          {selectedListId && (
-            <Button variant="outline" size="icon" className="h-10 w-10 rounded-xl text-destructive" onClick={() => handleDeleteList(selectedListId)}>
-              <Trash2 className="h-5 w-5" />
-            </Button>
-          )}
-        </div>
-      </div>
+      <header className="relative">
+        <div className="absolute inset-0 bg-blue-100/50 blur-3xl rounded-full -z-10" />
+        <Card className="bg-blue-600 text-white rounded-[2.5rem] border-none shadow-2xl overflow-hidden">
+          <div className="p-8 space-y-4 relative">
+            <div className="absolute top-0 right-0 p-4 opacity-30">
+              <img src={SHOPPING_PIGGY} alt="Súper" className="h-32 w-32 object-contain -rotate-12" />
+            </div>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-blue-100">Lista del Súper 🐷</p>
+                <h1 className="text-3xl font-bold flex items-center gap-2">
+                  <ShoppingCart className="h-8 w-8" /> {lists.find(l => l.id === selectedListId)?.name || "Tu Despensa"}
+                </h1>
+              </div>
+              <div className="flex items-center gap-2">
+                <Select value={selectedListId} onValueChange={setSelectedListId}>
+                  <SelectTrigger className="w-[200px] rounded-xl h-10 bg-white/10 border-white/20 text-white font-bold">
+                    <SelectValue placeholder="Selecciona una lista" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {lists.map(l => (
+                      <SelectItem key={l.id} value={l.id}>
+                        {l.name} {l.status === 'completed' ? '(Completada)' : ''}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button variant="outline" size="icon" className="h-10 w-10 rounded-xl bg-white/10 border-white/20 hover:bg-white/20" onClick={() => setIsAddListDialogOpen(true)}>
+                  <ListPlus className="h-5 w-5 text-white" />
+                </Button>
+              </div>
+            </div>
+          </div>
+        </Card>
+      </header>
 
       {selectedListId ? (
         <>
-          {/* Barra de Progreso y Suma en Carrito */}
           <div className="grid gap-4 md:grid-cols-2">
             <Card className="border-l-4 border-primary bg-primary/10 text-primary">
               <CardHeader className="pb-2">
@@ -606,7 +556,6 @@ const ShoppingList: React.FC = () => {
             </Card>
           </div>
 
-          {/* Filtros y Búsqueda */}
           <div className="flex flex-col md:flex-row gap-3 items-center justify-between">
             <div className="flex flex-col sm:flex-row gap-2 w-full md:max-w-2xl">
               <div className="relative flex-1">
@@ -629,7 +578,6 @@ const ShoppingList: React.FC = () => {
             </div>
           </div>
 
-          {/* Formulario de Añadir Artículo Rápido */}
           <Card className="p-4">
             <form onSubmit={handleAddSingleItem} className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-end">
               <div className="grid gap-1.5">
@@ -683,7 +631,6 @@ const ShoppingList: React.FC = () => {
             </form>
           </Card>
 
-          {/* Tabla de Artículos Interactiva para Tienda */}
           <Card className="shadow-sm overflow-hidden">
             <CardContent className="p-0">
               <div className="overflow-x-auto">
@@ -725,7 +672,6 @@ const ShoppingList: React.FC = () => {
                                   {item.name}
                                 </span>
                                 
-                                {/* Indicador de Tendencia Histórica */}
                                 {trend && (
                                   <div className="flex items-center gap-1 mt-1 text-[10px] font-semibold">
                                     {trend.status === 'up' && (
@@ -810,7 +756,6 @@ const ShoppingList: React.FC = () => {
         </Card>
       )}
 
-      {/* Diálogo para Crear Lista */}
       <Dialog open={isAddListDialogOpen} onOpenChange={setIsAddListDialogOpen}>
         <DialogContent className="w-[90vw] max-w-[400px] rounded-3xl">
           <DialogHeader>
@@ -835,7 +780,6 @@ const ShoppingList: React.FC = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Diálogo para Pegar Texto Masivo */}
       <Dialog open={isBulkAddDialogOpen} onOpenChange={setIsBulkAddDialogOpen}>
         <DialogContent className="w-[90vw] max-w-[450px] rounded-3xl">
           <DialogHeader>
@@ -876,7 +820,6 @@ const ShoppingList: React.FC = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Diálogo para Finalizar Compra (Cierre de Caja) */}
       <Dialog open={isFinalizeDialogOpen} onOpenChange={setIsFinalizeDialogOpen}>
         <DialogContent className="w-[90vw] max-w-[400px] rounded-3xl">
           <DialogHeader>
@@ -903,7 +846,6 @@ const ShoppingList: React.FC = () => {
               />
             </div>
 
-            {/* Mostrar diferencia en tiempo real */}
             {(() => {
               const charged = parseFloat(finalizeForm.totalChargedByStore) || 0;
               const diff = charged - totalInCart;
@@ -976,7 +918,6 @@ const ShoppingList: React.FC = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Diálogo de Historial de Precios */}
       <Dialog open={isHistoryDialogOpen} onOpenChange={setIsHistoryDialogOpen}>
         <DialogContent className="w-[90vw] max-w-[450px] rounded-3xl">
           <DialogHeader>
@@ -1016,7 +957,6 @@ const ShoppingList: React.FC = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Diálogo para Compartir */}
       <Dialog open={isShareDialogOpen} onOpenChange={setIsShareDialogOpen}>
         <DialogContent className="w-[90vw] max-w-[400px] rounded-3xl">
           <DialogHeader>

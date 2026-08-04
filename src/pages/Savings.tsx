@@ -12,7 +12,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { PlusCircle, DollarSign, Trash2, Edit, CalendarIcon, FileText, FileDown, PiggyBank, ArrowUpCircle, ArrowDownCircle } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { cn } from "@/lib/utils";
-import { format, isAfter, isSameDay, parseISO } from "date-fns"; // Importar isAfter y isSameDay
+import { format, isAfter, isSameDay, parseISO } from "date-fns";
 import { es } from "date-fns/locale";
 import ColorPicker from "@/components/ColorPicker";
 import { supabase } from "@/integrations/supabase/client";
@@ -23,23 +23,12 @@ import { exportToCsv, exportToPdf } from "@/utils/export";
 import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import FeedbackOverlay from "@/components/FeedbackOverlay";
-import RandomSavingTipCard from "@/components/RandomSavingTipCard"; // Importar el nuevo componente
-import FixedSavingTipCard from "@/components/FixedSavingTipCard"; // Importar el nuevo componente
-import { getLocalDateString } from "@/utils/date-helpers"; // Importar la nueva función de utilidad
-import { evaluateExpression } from "@/utils/math-helpers"; // Importar la nueva función
+import RandomSavingTipCard from "@/components/RandomSavingTipCard";
+import FixedSavingTipCard from "@/components/FixedSavingTipCard";
+import { getLocalDateString } from "@/utils/date-helpers";
+import { evaluateExpression } from "@/utils/math-helpers";
 
-interface Saving {
-  id: string;
-  name: string;
-  current_balance: number;
-  target_amount?: number;
-  target_date?: string; // Fecha objetivo
-  completion_date?: string; // Nueva: Fecha de cumplimiento
-  color: string;
-  user_id?: string;
-  challenge_id?: string; // Añadir challenge_id
-  // Eliminamos la incrustación de 'challenges' aquí para evitar la ambigüedad
-}
+const META_PIGGY = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Meta%202.png";
 
 const Savings: React.FC = () => {
   const { user } = useSession();
@@ -54,7 +43,7 @@ const Savings: React.FC = () => {
     initial_balance: "",
     target_amount: "",
     target_date: undefined as Date | undefined,
-    color: "#22C55E", // Default green color
+    color: "#22C55E",
   });
   const [newTransaction, setNewTransaction] = useState({
     type: "deposit" as "deposit" | "withdrawal",
@@ -78,7 +67,6 @@ const Savings: React.FC = () => {
       return;
     }
 
-    // Modificación: Solo seleccionar challenge_id para evitar el error de incrustación ambigua.
     const { data, error } = await supabase
       .from('savings')
       .select('*, challenge_id') 
@@ -171,9 +159,9 @@ const Savings: React.FC = () => {
         name: newSaving.name.trim(),
         current_balance: initialBalance,
         target_amount: targetAmount,
-        target_date: newSaving.target_date ? getLocalDateString(newSaving.target_date) : null, // Usar getLocalDateString
+        target_date: newSaving.target_date ? getLocalDateString(newSaving.target_date) : null,
         color: newSaving.color,
-        completion_date: null, // Inicializar completion_date como null
+        completion_date: null,
       })
       .select();
 
@@ -187,7 +175,7 @@ const Savings: React.FC = () => {
       setFeedbackOverlay({
         isVisible: true,
         message: "¡Muy bien! ¡Cumpliremos esa meta!",
-        imageSrc: "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/cochinito%20amor.png", // Updated URL
+        imageSrc: "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/cochinito%20amor.png",
         bgColor: "bg-pink-100",
         textColor: "text-pink-800",
       });
@@ -218,9 +206,9 @@ const Savings: React.FC = () => {
     setEditingSaving(saving);
     setNewSaving({
       name: saving.name,
-      initial_balance: saving.current_balance.toString(), // Usar current_balance como initial_balance para edición
+      initial_balance: saving.current_balance.toString(),
       target_amount: saving.target_amount?.toString() || "",
-      target_date: saving.target_date ? parseISO(saving.target_date) : undefined, // Usar parseISO
+      target_date: saving.target_date ? parseISO(saving.target_date) : undefined,
       color: saving.color,
     });
     setIsEditSavingDialogOpen(true);
@@ -259,13 +247,12 @@ const Savings: React.FC = () => {
       }
     }
 
-    // No actualizamos current_balance ni completion_date desde aquí
     const { data, error } = await supabase
       .from('savings')
       .update({ 
         name: newSaving.name.trim(),
         target_amount: targetAmount,
-        target_date: newSaving.target_date ? getLocalDateString(newSaving.target_date) : null, // Usar getLocalDateString
+        target_date: newSaving.target_date ? getLocalDateString(newSaving.target_date) : null,
         color: newSaving.color,
       })
       .eq('id', editingSaving.id)
@@ -285,9 +272,8 @@ const Savings: React.FC = () => {
       setIsEditSavingDialogOpen(false);
       showSuccess("Cuenta de ahorro actualizada exitosamente.");
 
-      // Check if goal is reached after update (only if target_amount is set and current_balance is already >= target_amount)
       if (updatedSaving.target_amount && updatedSaving.current_balance >= updatedSaving.target_amount && !updatedSaving.completion_date) {
-        const todayFormatted = getLocalDateString(new Date()); // Usar getLocalDateString
+        const todayFormatted = getLocalDateString(new Date());
         const { data: updatedSavingWithCompletionDate, error: dateUpdateError } = await supabase
           .from('savings')
           .update({ completion_date: todayFormatted })
@@ -305,7 +291,7 @@ const Savings: React.FC = () => {
           setFeedbackOverlay({
             isVisible: true,
             message: "¡Lo has logrado! ¡Felicidades por alcanzar tu meta!",
-            imageSrc: "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Meta%202.png", // Updated URL
+            imageSrc: "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Meta%202.png",
             bgColor: "bg-green-100",
             textColor: "text-green-800",
           });
@@ -366,7 +352,7 @@ const Savings: React.FC = () => {
 
     if (transactionType === "deposit") {
       newBalance += amount;
-    } else { // withdrawal
+    } else {
       if (newBalance < amount) {
         showError("Saldo insuficiente en la cuenta de ahorro para este retiro.");
         return;
@@ -375,18 +361,15 @@ const Savings: React.FC = () => {
     }
 
     let updatedCompletionDate = currentSaving.completion_date;
-    const todayFormatted = getLocalDateString(new Date()); // Usar getLocalDateString
+    const todayFormatted = getLocalDateString(new Date());
 
-    // Check if goal is reached after this transaction and set completion_date
     if (currentSaving.target_amount && newBalance >= currentSaving.target_amount && !currentSaving.completion_date) {
       updatedCompletionDate = todayFormatted;
     } else if (currentSaving.target_amount && newBalance < currentSaving.target_amount && currentSaving.completion_date) {
-      // If balance drops below target after a withdrawal, clear completion_date
       updatedCompletionDate = null;
     }
 
 
-    // Update saving balance and completion_date
     const { data, error } = await supabase
       .from('savings')
       .update({ 
@@ -410,30 +393,28 @@ const Savings: React.FC = () => {
       setIsTransactionDialogOpen(false);
       showSuccess("Transacción registrada exitosamente.");
 
-      // Show feedback overlay based on transaction type
       if (transactionType === "deposit") {
         setFeedbackOverlay({
           isVisible: true,
           message: "¡Felicidades! ¡Un paso más cerca de tus metas!",
-          imageSrc: "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Cochinito%20Ahorro.png", // No change
+          imageSrc: "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Cochinito%20Ahorro.png",
           bgColor: "bg-pink-100",
           textColor: "text-pink-800",
         });
-        // Check if goal is reached after deposit
         if (updatedSaving.target_amount && updatedSaving.current_balance >= updatedSaving.target_amount) {
           setFeedbackOverlay({
             isVisible: true,
             message: "¡Lo has logrado! ¡Felicidades por alcanzar tu meta!",
-            imageSrc: "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Meta%202.png", // Updated URL
+            imageSrc: "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Meta%202.png",
             bgColor: "bg-green-100",
             textColor: "text-green-800",
           });
         }
-      } else { // withdrawal
+      } else {
         setFeedbackOverlay({
           isVisible: true,
           message: "Pensé que éramos amigos... ¡No te rindas!",
-          imageSrc: "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Cochinito%20Ahorro%20Triste.png", // No change
+          imageSrc: "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Cochinito%20Ahorro%20Triste.png",
           bgColor: "bg-blue-100",
           textColor: "text-blue-800",
         });
@@ -455,13 +436,13 @@ const Savings: React.FC = () => {
       "Saldo Actual": saving.current_balance.toFixed(2),
       "Monto Objetivo": saving.target_amount?.toFixed(2) || "N/A",
       "Fecha Objetivo": saving.target_date ? format(parseISO(saving.target_date), "dd/MM/yyyy", { locale: es }) : "N/A",
-      "Fecha Cumplimiento": saving.completion_date ? format(parseISO(saving.completion_date), "dd/MM/yyyy", { locale: es }) : "N/A", // Añadido
+      "Fecha Cumplimiento": saving.completion_date ? format(parseISO(saving.completion_date), "dd/MM/yyyy", { locale: es }) : "N/A",
       "Progreso (%)": saving.target_amount ? ((saving.current_balance / saving.target_amount) * 100).toFixed(2) : "N/A",
     }));
 
     const filename = `ahorros_${format(new Date(), "yyyyMMdd_HHmmss")}`;
     const title = "Reporte de Cuentas de Ahorro";
-    const headers = ["Nombre", "Saldo Actual", "Monto Objetivo", "Fecha Objetivo", "Fecha Cumplimiento", "Progreso (%)"]; // Añadido
+    const headers = ["Nombre", "Saldo Actual", "Monto Objetivo", "Fecha Objetivo", "Fecha Cumplimiento", "Progreso (%)"];
     const pdfData = dataToExport.map(row => Object.values(row));
 
     if (formatType === 'csv') {
@@ -475,21 +456,29 @@ const Savings: React.FC = () => {
 
   return (
     <div className="flex flex-col gap-6 p-4">
-      <h1 className="text-3xl font-bold">Tus Metas</h1>
+      <header className="relative">
+        <div className="absolute inset-0 bg-yellow-100/50 blur-3xl rounded-full -z-10" />
+        <Card className="bg-yellow-600 text-white rounded-[2.5rem] border-none shadow-2xl overflow-hidden">
+          <div className="p-8 space-y-4 relative">
+            <div className="absolute top-0 right-0 p-4 opacity-30">
+              <img src={META_PIGGY} alt="Metas" className="h-32 w-32 object-contain rotate-6" />
+            </div>
+            <p className="text-[10px] font-black uppercase tracking-widest text-yellow-100">Tus Metas de Ahorro 🐷</p>
+            <div className="flex items-baseline gap-2">
+              <span className="text-5xl font-black tracking-tighter">
+                ${totalSavingsBalance.toLocaleString()}
+              </span>
+              <span className="text-xl font-bold opacity-60">MXN</span>
+            </div>
+            <p className="text-xs font-medium text-yellow-50/80">¡Pequeños pasos construyen grandes imperios!</p>
+          </div>
+        </Card>
+      </header>
 
       <div className="grid gap-4 md:grid-cols-2">
         <RandomSavingTipCard />
         <FixedSavingTipCard />
       </div>
-
-      <Card className="border-l-4 border-green-500 bg-green-50 text-green-800">
-        <CardHeader>
-          <CardTitle>Saldo Total de Ahorros</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="text-4xl font-bold">${totalSavingsBalance.toFixed(2)}</div>
-        </CardContent>
-      </Card>
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
@@ -529,7 +518,7 @@ const Savings: React.FC = () => {
                     <Input
                       id="initial_balance"
                       name="initial_balance"
-                      type="text" // Cambiado a text para permitir '='
+                      type="text"
                       step="0.01"
                       value={newSaving.initial_balance}
                       onChange={handleNewSavingChange}
@@ -545,7 +534,7 @@ const Savings: React.FC = () => {
                     <Input
                       id="target_amount"
                       name="target_amount"
-                      type="text" // Cambiado a text para permitir '='
+                      type="text"
                       step="0.01"
                       value={newSaving.target_amount}
                       onChange={handleNewSavingChange}
@@ -632,7 +621,7 @@ const Savings: React.FC = () => {
                   <TableHead>Saldo Actual</TableHead>
                   <TableHead>Monto Objetivo</TableHead>
                   <TableHead>Fecha Objetivo</TableHead>
-                  <TableHead>Fecha Cumplimiento</TableHead> {/* Nueva columna */}
+                  <TableHead>Fecha Cumplimiento</TableHead>
                   <TableHead>Progreso</TableHead>
                   <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
@@ -640,9 +629,6 @@ const Savings: React.FC = () => {
               <TableBody>
                 {filteredSavings.map((saving) => {
                   const progress = saving.target_amount ? (saving.current_balance / saving.target_amount) * 100 : 0;
-                  
-                  // Dado que eliminamos la incrustación de challenges, no podemos verificar si está vinculado a un reto activo
-                  // Dejaremos la edición/eliminación habilitada por ahora, ya que la lógica de retos no está completamente implementada aquí.
                   const isLinkedToActiveChallenge = false; 
 
                   return (
@@ -656,7 +642,7 @@ const Savings: React.FC = () => {
                       <TableCell>${saving.current_balance.toFixed(2)}</TableCell>
                       <TableCell>${saving.target_amount?.toFixed(2) || "N/A"}</TableCell>
                       <TableCell>{saving.target_date ? format(parseISO(saving.target_date), "dd/MM/yyyy", { locale: es }) : "N/A"}</TableCell>
-                      <TableCell>{saving.completion_date ? format(parseISO(saving.completion_date), "dd/MM/yyyy", { locale: es }) : "N/A"}</TableCell> {/* Mostrar nueva columna */}
+                      <TableCell>{saving.completion_date ? format(parseISO(saving.completion_date), "dd/MM/yyyy", { locale: es }) : "N/A"}</TableCell>
                       <TableCell>
                         {saving.target_amount ? (
                           <div className="flex items-center gap-2">
@@ -671,7 +657,6 @@ const Savings: React.FC = () => {
                           size="sm"
                           onClick={() => handleOpenTransactionDialog(saving.id)}
                           className="h-8 gap-1"
-                          // La transacción siempre está permitida
                         >
                           <DollarSign className="h-3.5 w-3.5" />
                           Transacción
@@ -681,7 +666,7 @@ const Savings: React.FC = () => {
                           size="sm"
                           onClick={() => handleOpenEditSavingDialog(saving)}
                           className="h-8 w-8 p-0"
-                          disabled={isLinkedToActiveChallenge} // Deshabilitar si está vinculado a un reto activo
+                          disabled={isLinkedToActiveChallenge}
                         >
                           <Edit className="h-3.5 w-3.5" />
                           <span className="sr-only">Editar</span>
@@ -692,7 +677,7 @@ const Savings: React.FC = () => {
                               variant="destructive"
                               size="sm"
                               className="h-8 w-8 p-0"
-                              disabled={isLinkedToActiveChallenge} // Deshabilitar si está vinculado a un reto activo
+                              disabled={isLinkedToActiveChallenge}
                             >
                               <Trash2 className="h-3.5 w-3.5" />
                             </Button>
@@ -703,7 +688,6 @@ const Savings: React.FC = () => {
                               <AlertDialogDescription>
                                 Esta acción no se puede deshacer. Esto eliminará permanentemente la cuenta de ahorro 
                                 **{saving.name}** y todos sus registros.
-                                {isLinkedToActiveChallenge && <p className="mt-2 text-red-500">Esta cuenta de ahorro está vinculada a un reto activo. No puedes eliminarla mientras el reto esté en curso.</p>}
                               </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>
@@ -739,7 +723,7 @@ const Savings: React.FC = () => {
                     onChange={handleNewSavingChange}
                     className="col-span-3"
                     required
-                    disabled={!!editingSaving?.challenge_id} // Deshabilitar si está vinculado a un reto
+                    disabled={!!editingSaving?.challenge_id}
                   />
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
@@ -749,13 +733,13 @@ const Savings: React.FC = () => {
                   <Input
                     id="editTargetAmount"
                     name="target_amount"
-                    type="text" // Cambiado a text para permitir '='
+                    type="text"
                     step="0.01"
                     value={newSaving.target_amount}
                     onChange={handleNewSavingChange}
                     className="col-span-3"
                     placeholder="Ej. 1000 o =500*2"
-                    disabled={!!editingSaving?.challenge_id} // Deshabilitar si está vinculado a un reto
+                    disabled={!!editingSaving?.challenge_id}
                   />
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
@@ -770,7 +754,7 @@ const Savings: React.FC = () => {
                           "col-span-3 justify-start text-left font-normal",
                           !newSaving.target_date && "text-muted-foreground"
                         )}
-                        disabled={!!editingSaving?.challenge_id} // Deshabilitar si está vinculado a un reto
+                        disabled={!!editingSaving?.challenge_id}
                       >
                         <CalendarIcon className="mr-2 h-4 w-4" />
                         {newSaving.target_date ? format(newSaving.target_date, "dd/MM/yyyy", { locale: es }) : <span>Selecciona una fecha</span>}
@@ -829,7 +813,7 @@ const Savings: React.FC = () => {
                   <Input
                     id="transactionAmount"
                     name="amount"
-                    type="text" // Cambiado a text para permitir '='
+                    type="text"
                     step="0.01"
                     value={newTransaction.amount}
                     onChange={handleTransactionInputChange}

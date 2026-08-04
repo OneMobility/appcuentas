@@ -45,15 +45,7 @@ import { fetchUsdToMxnRate } from "@/utils/currency-helper";
 import { motion, AnimatePresence } from "framer-motion";
 import { Badge } from "@/components/ui/badge";
 
-interface Debtor {
-  id: string;
-  name: string;
-  initial_balance: number;
-  current_balance: number;
-  phone?: string;
-  due_date?: string;
-  debtor_transactions?: any[];
-}
+const COCHINITO_AMOR = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/cochinito%20amor.png";
 
 const Debtors = () => {
   const { user } = useSession();
@@ -93,14 +85,12 @@ const Debtors = () => {
   const fetchData = async () => {
     if (!user) return;
     
-    // Fetch con transacciones para calcular saldo real
     const { data } = await supabase
       .from('debtors')
       .select('*, debtor_transactions(type, amount)')
       .eq('user_id', user.id)
       .order('created_at', { ascending: false });
 
-    // Calcular saldo real en tiempo de ejecución (Deuda Inicial + Cargos - Pagos)
     const debtorsWithRealBalance = (data || []).map((d: any) => {
       const totalCharges = d.debtor_transactions.filter((t: any) => t.type === 'charge').reduce((s: number, t: any) => s + t.amount, 0);
       const totalPayments = d.debtor_transactions.filter((t: any) => t.type === 'payment').reduce((s: number, t: any) => s + t.amount, 0);
@@ -138,7 +128,7 @@ const Debtors = () => {
     if (error) showError(error.message);
     else {
       showSuccess("Deudor registrado");
-      fetchData(); // Recargar para asegurar cálculos
+      fetchData();
       setIsAddDebtorDialogOpen(false);
       setNewDebtor({ name: "", initial_balance: "", phone: "", due_date: undefined });
     }
@@ -251,17 +241,17 @@ const Debtors = () => {
         <div className="absolute inset-0 bg-emerald-100/50 blur-3xl rounded-full -z-10" />
         <Card className="bg-emerald-600 text-white rounded-[2.5rem] border-none shadow-2xl overflow-hidden">
           <div className="p-8 space-y-4 relative">
-            <div className="absolute top-0 right-0 p-6 opacity-10">
-              <CheckCircle2 className="h-32 w-32 rotate-12" />
+            <div className="absolute top-0 right-0 p-4 opacity-20">
+              <img src={COCHINITO_AMOR} alt="Cobrando" className="h-36 w-36 object-contain -rotate-6" />
             </div>
-            <p className="text-[10px] font-black uppercase tracking-widest text-emerald-100">Dinero por Cobrar</p>
+            <p className="text-[10px] font-black uppercase tracking-widest text-emerald-100">Dinero por Cobrar 🐷</p>
             <div className="flex items-baseline gap-2">
               <span className="text-5xl font-black tracking-tighter">
                 ${debtors.filter(d => d.current_balance > 0.01).reduce((s, d) => s + d.current_balance, 0).toLocaleString()}
               </span>
               <span className="text-xl font-bold opacity-60">MXN</span>
             </div>
-            <p className="text-xs font-medium text-emerald-50/80">Tienes {activeDebtors.length} personas con saldos pendientes.</p>
+            <p className="text-xs font-medium text-emerald-50/80">¡Es hora de que esos cerditos vuelvan a casa!</p>
           </div>
         </Card>
       </header>

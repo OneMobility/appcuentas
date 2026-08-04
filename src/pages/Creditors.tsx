@@ -18,12 +18,7 @@ import { evaluateExpression } from "@/utils/math-helpers";
 import { useNavigate } from "react-router-dom";
 import { fetchUsdToMxnRate } from "@/utils/currency-helper";
 
-interface Creditor {
-  id: string;
-  name: string;
-  initial_balance: number;
-  current_balance: number;
-}
+const COCHINITO_TRISTE = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Cochinito%20Ahorro%20Triste.png";
 
 const Creditors = () => {
   const { user } = useSession();
@@ -33,11 +28,9 @@ const Creditors = () => {
   const [newCreditor, setNewCreditor] = useState({ name: "", initial_balance: "" });
   const [searchTerm, setSearchTerm] = useState("");
 
-  // Moneda y tipo cambio
   const [currency, setCurrency] = useState<"MXN" | "USD">("MXN");
   const [usdToMxnRate, setUsdToMxnRate] = useState<number>(20.00);
 
-  // Cargar tasa de cambio
   useEffect(() => {
     const fetchRate = async () => {
       try {
@@ -82,7 +75,6 @@ const Creditors = () => {
       return;
     }
 
-    // Convertir si se ingresó en dólares
     let finalBalance = baseBalance;
     let finalName = newCreditor.name;
     if (currency === "USD") {
@@ -170,14 +162,24 @@ const Creditors = () => {
 
   return (
     <div className="flex flex-col gap-6 p-4">
-      <h1 className="text-3xl font-bold">A quien le debes</h1>
-
-      <Card className="border-l-4 border-red-500 bg-red-50 text-red-800">
-        <CardHeader><CardTitle>Saldo Total de Acreedores</CardTitle></CardHeader>
-        <CardContent>
-          <div className="text-4xl font-bold">${activeCreditors.reduce((s, c) => s + c.current_balance, 0).toFixed(2)}</div>
-        </CardContent>
-      </Card>
+      <header className="relative">
+        <div className="absolute inset-0 bg-rose-100/50 blur-3xl rounded-full -z-10" />
+        <Card className="bg-rose-600 text-white rounded-[2.5rem] border-none shadow-2xl overflow-hidden">
+          <div className="p-8 space-y-4 relative">
+            <div className="absolute top-0 right-0 p-4 opacity-30">
+              <img src={COCHINITO_TRISTE} alt="Deuda" className="h-32 w-32 object-contain" />
+            </div>
+            <p className="text-[10px] font-black uppercase tracking-widest text-rose-100">Dinero que Debes 🐷</p>
+            <div className="flex items-baseline gap-2">
+              <span className="text-5xl font-black tracking-tighter">
+                ${activeCreditors.reduce((s, c) => s + c.current_balance, 0).toLocaleString()}
+              </span>
+              <span className="text-xl font-bold opacity-60">MXN</span>
+            </div>
+            <p className="text-xs font-medium text-rose-50/80">No te preocupes, ¡pronto serás libre de deudas!</p>
+          </div>
+        </Card>
+      </header>
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">

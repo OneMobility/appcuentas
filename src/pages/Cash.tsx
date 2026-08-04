@@ -44,6 +44,8 @@ import CardTransferDialog from "@/components/CardTransferDialog";
 import { motion } from "framer-motion";
 import { getContrastColor } from "@/utils/color-helpers";
 
+const COCHINITO_AHORRO = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Cochinito%20Ahorro.png";
+
 const Cash = () => {
   const { user } = useSession();
   const { incomeCategories, expenseCategories, getCategoryById, isLoadingCategories } = useCategoryContext();
@@ -250,12 +252,12 @@ const Cash = () => {
         <div className="absolute inset-0 bg-primary/20 blur-3xl rounded-full -z-10" />
         <Card className="bg-slate-950 text-white rounded-[2.5rem] border-none shadow-2xl overflow-hidden">
           <div className="p-8 space-y-6 relative">
-            <div className="absolute top-0 right-0 p-6 opacity-10">
-              <Wallet className="h-32 w-32 rotate-12" />
+            <div className="absolute top-0 right-0 p-4 opacity-20">
+              <img src={COCHINITO_AHORRO} alt="Ahorro" className="h-40 w-40 object-contain rotate-12" />
             </div>
 
             <div className="space-y-1">
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Saldo Total en Efectivo</p>
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Saldo Total en Efectivo 🐷</p>
               <div className="flex items-baseline gap-2">
                 <span className="text-5xl font-black tracking-tighter">${balance.toLocaleString()}</span>
                 <span className="text-xl font-bold text-slate-500">MXN</span>
