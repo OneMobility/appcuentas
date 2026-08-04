@@ -32,26 +32,29 @@ const AIChatAssistant = () => {
   const fetchFinancialContext = async () => {
     if (!user) return {};
     
-    // Obtenemos un resumen rápido de los datos para la IA
-    const [cards, cash, debtors, creditors] = await Promise.all([
-      supabase.from('cards').select('*').eq('user_id', user.id),
-      supabase.from('cash_transactions').select('*').eq('user_id', user.id),
-      supabase.from('debtors').select('*').eq('user_id', user.id),
-      supabase.from('creditors').select('*').eq('user_id', user.id)
-    ]);
+    try {
+      const [cards, cash, debtors, creditors] = await Promise.all([
+        supabase.from('cards').select('*').eq('user_id', user.id),
+        supabase.from('cash_transactions').select('*').eq('user_id', user.id),
+        supabase.from('debtors').select('*').eq('user_id', user.id),
+        supabase.from('creditors').select('*').eq('user_id', user.id)
+      ]);
 
-    const cashBal = (cash.data || []).reduce((s, t) => t.type === "ingreso" ? s + t.amount : s - t.amount, 0);
-    const debitBal = (cards.data || []).filter(c => c.type === 'debit').reduce((s, c) => s + c.current_balance, 0);
-    const creditDebt = (cards.data || []).filter(c => c.type === 'credit').reduce((s, c) => s + c.current_balance, 0);
-    const credBal = (creditors.data || []).reduce((s, c) => s + c.current_balance, 0);
-    const debtRec = (debtors.data || []).reduce((s, d) => s + d.current_balance, 0);
+      const cashBal = (cash.data || []).reduce((s, t) => t.type === "ingreso" ? s + t.amount : s - t.amount, 0);
+      const debitBal = (cards.data || []).filter(c => c.type === 'debit').reduce((s, c) => s + c.current_balance, 0);
+      const creditDebt = (cards.data || []).filter(c => c.type === 'credit').reduce((s, c) => s + c.current_balance, 0);
+      const credBal = (creditors.data || []).reduce((s, c) => s + c.current_balance, 0);
+      const debtRec = (debtors.data || []).reduce((s, d) => s + d.current_balance, 0);
 
-    return {
-      available: cashBal + debitBal,
-      debts: creditDebt + credBal,
-      receivable: debtRec,
-      pendingPayments: "Varios pagos de tarjeta próximos"
-    };
+      return {
+        available: cashBal + debitBal,
+        debts: creditDebt + credBal,
+        receivable: debtRec,
+        pendingPayments: "Revisa tus tarjetas próximamente"
+      };
+    } catch (e) {
+      return { available: 0, debts: 0, receivable: 0 };
+    }
   };
 
   const handleSendMessage = async (e: React.FormEvent) => {
@@ -70,11 +73,20 @@ const AIChatAssistant = () => {
         body: { message: userMsg, context }
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error("[Oinkash IA] Error de invocación:", error);
+        throw error;
+      }
+
+      if (data?.error) {
+        console.error("[Oinkash IA] Error retornado por la función:", data.error);
+        throw new Error(data.error);
+      }
 
       setMessages(prev => [...prev, { role: 'assistant', content: data.reply }]);
-    } catch (err) {
-      setMessages(prev => [...prev, { role: 'assistant', content: "Lo siento, tuve un problema al conectar con mis neuronas de cerdito. ¿Podrías intentar de nuevo? 🐷" }]);
+    } catch (err: any) {
+      console.error("[Oinkash IA] Error crítico:", err);
+      setMessages(prev => [...prev, { role: 'assistant', content: `Lo siento, el cerdito tuvo un error: ${err.message || 'Error desconocido'}. 🐷 Intenta de nuevo en unos segundos.` }]);
     } finally {
       setIsTyping(false);
     }
