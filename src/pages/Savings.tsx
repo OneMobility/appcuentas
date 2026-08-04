@@ -197,7 +197,8 @@ const Savings: React.FC = () => {
         name: newSaving.name.trim(), 
         target_amount: target,
         target_date: newSaving.target_date ? getLocalDateString(newSaving.target_date) : null, 
-        color: newSaving.color
+        color: newSaving.color,
+        updated_at: new Date().toISOString()
       }).eq('id', editingSaving.id).select().single();
 
       if (error) throw error;
@@ -234,7 +235,8 @@ const Savings: React.FC = () => {
 
       const { data, error } = await supabase.from('savings').update({ 
         current_balance: newBal, 
-        completion_date: completionDate
+        completion_date: completionDate,
+        updated_at: new Date().toISOString()
       }).eq('id', selectedSavingId).select().single();
 
       if (error) throw error;
@@ -275,25 +277,27 @@ const Savings: React.FC = () => {
   const getPiggyStatus = (saving: any) => {
     const progress = saving.target_amount ? (saving.current_balance / saving.target_amount) * 100 : 0;
     const isCompleted = saving.completion_date || (saving.target_amount && saving.current_balance >= saving.target_amount);
-    const daysSinceUpdate = differenceInDays(new Date(), parseISO(saving.created_at));
+    
+    // Usar updated_at para detectar inactividad real, o created_at como fallback
+    const daysSinceActivity = differenceInDays(new Date(), parseISO(saving.updated_at || saving.created_at));
 
-    // 1. Meta cumplida (100%) -> 08
+    // 1. Meta cumplida (100%) -> 08 (SIEMPRE prioridad máxima)
     if (isCompleted) {
       return { img: `${METAS_BASE_URL}08.png`, label: "¡Logrado!", sub: getRandomPhrase('onComplete') };
     }
 
-    // 2. Inactividad (Prioridad sobre progreso si cumple días)
-    if (daysSinceUpdate > 30) {
+    // 2. Inactividad (Solo si han pasado 15 días o más sin actividad)
+    if (daysSinceActivity > 30) {
       return { img: `${METAS_BASE_URL}07.png`, label: "Abandonada", sub: "Más de 30 días sin actividad." };
     }
-    if (daysSinceUpdate === 30) {
+    if (daysSinceActivity === 30) {
       return { img: `${METAS_BASE_URL}06.png`, label: "Crítico", sub: "Hoy cumples 30 días inactivo." };
     }
-    if (daysSinceUpdate >= 15) {
+    if (daysSinceActivity >= 15) {
       return { img: `${METAS_BASE_URL}05.png`, label: "En pausa", sub: "Llevas 15 días sin movimientos." };
     }
 
-    // 3. Progreso
+    // 3. Progreso (Prioridad si hay actividad reciente o < 15 días)
     if (progress >= 75) {
       return { img: `${METAS_BASE_URL}04.png`, label: "Casi listo", sub: "¡Ya casi llegas al 100%!" };
     }
@@ -353,9 +357,9 @@ const Savings: React.FC = () => {
               <motion.div key={saving.id} layout initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: i * 0.05 }}>
                 <Card className={cn(
                   "rounded-[2.5rem] border-none shadow-sm hover:shadow-xl transition-all bg-white overflow-hidden group relative",
-                  (status.label === "Abandonada" || status.label === "Crítico") && "bg-slate-50/80 border-dashed border-2 border-slate-200"
+                  (status.label === "Abandonada" || status.label === "Crítico" || status.label === "En pausa") && "bg-slate-50/80 border-dashed border-2 border-slate-200"
                 )}>
-                  {(status.label === "Abandonada" || status.label === "Crítico") && (
+                  {(status.label === "Abandonada" || status.label === "Crítico" || status.label === "En pausa") && (
                     <div className="absolute top-4 right-14 bg-amber-100 text-amber-700 text-[8px] font-black uppercase px-2 py-0.5 rounded-full flex items-center gap-1 z-20 animate-pulse">
                       <AlertCircle className="h-2.5 w-2.5" /> Meta con Inactividad
                     </div>
@@ -366,15 +370,14 @@ const Savings: React.FC = () => {
                       <div className="flex items-center gap-4">
                         <div className="relative">
                           <div 
-                            className="h-20 w-20 rounded-3xl flex items-center justify-center shadow-inner shrink-0 overflow-hidden"
+                            className="h-24 w-24 rounded-3xl flex items-center justify-center shadow-inner shrink-0 overflow-hidden"
                             style={{ backgroundColor: `${saving.color}15` }}
                           >
                             <img 
                               src={status.img} 
-                              className={cn("h-14 w-14 object-contain opacity-100", (status.label === "Abandonada" || status.label === "Crítico") && "grayscale")} 
+                              className="h-full w-full object-cover" 
                               alt="Status" 
                               onError={(e) => {
-                                // Fallback en caso de que la imagen no exista o cargue mal
                                 (e.target as HTMLImageElement).src = METAS_BASE_URL + "01.png";
                               }}
                             />
@@ -435,7 +438,7 @@ const Savings: React.FC = () => {
                     </div>
 
                     <Button 
-                      className="w-full rounded-2xl h-12 font-black shadow-lg gap-2 transition-transform active:scale-95"
+                      className="w-full rounded-2xl h-12 font-black shadow-lg gap-2 transition-transform active:scale-95 text-white"
                       style={{ backgroundColor: saving.color, boxShadow: `0 10px 20px -5px ${saving.color}40` }}
                       onClick={() => { setSelectedSavingId(saving.id); setIsTransactionDialogOpen(true); }}
                     >
@@ -471,7 +474,7 @@ const Savings: React.FC = () => {
               <Label className="text-[10px] font-black uppercase text-slate-400 ml-1">Color de la meta</Label>
               <ColorPicker selectedColor={newSaving.color} onSelectColor={c => setNewSaving({...newSaving, color: c})} />
             </div>
-            <Button type="submit" className="w-full rounded-2xl h-14 font-black text-lg bg-yellow-600 shadow-xl shadow-yellow-100 mt-2" disabled={isSubmitting}>
+            <Button type="submit" className="w-full rounded-2xl h-14 font-black text-lg bg-yellow-600 shadow-xl shadow-yellow-100 mt-2 text-white" disabled={isSubmitting}>
               {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : "¡Empezar Ahorro!"}
             </Button>
           </form>
@@ -483,14 +486,14 @@ const Savings: React.FC = () => {
           <DialogHeader><DialogTitle className="text-2xl font-black">Registrar Movimiento</DialogTitle></DialogHeader>
           <form onSubmit={handleTransaction} className="grid gap-6 py-4">
             <div className="grid grid-cols-2 gap-2 bg-slate-100 p-1 rounded-2xl">
-              <Button type="button" variant={newTransaction.type === 'deposit' ? 'default' : 'ghost'} className={cn("rounded-xl font-bold h-10", newTransaction.type === 'deposit' && "bg-emerald-500 shadow-md")} onClick={() => setNewTransaction({...newTransaction, type: 'deposit'})}>Ahorrar</Button>
-              <Button type="button" variant={newTransaction.type === 'withdrawal' ? 'default' : 'ghost'} className={cn("rounded-xl font-bold h-10", newTransaction.type === 'withdrawal' && "bg-rose-500 shadow-md")} onClick={() => setNewTransaction({...newTransaction, type: 'withdrawal'})}>Retirar</Button>
+              <Button type="button" variant={newTransaction.type === 'deposit' ? 'default' : 'ghost'} className={cn("rounded-xl font-bold h-10", newTransaction.type === 'deposit' && "bg-emerald-500 shadow-md text-white")} onClick={() => setNewTransaction({...newTransaction, type: 'deposit'})}>Ahorrar</Button>
+              <Button type="button" variant={newTransaction.type === 'withdrawal' ? 'default' : 'ghost'} className={cn("rounded-xl font-bold h-10", newTransaction.type === 'withdrawal' && "bg-rose-500 shadow-md text-white")} onClick={() => setNewTransaction({...newTransaction, type: 'withdrawal'})}>Retirar</Button>
             </div>
             <div className="space-y-2">
               <Label className="text-[10px] font-black uppercase text-slate-400 ml-1">Monto</Label>
               <Input value={newTransaction.amount} onChange={e => setNewTransaction({...newTransaction, amount: e.target.value})} className="rounded-2xl h-14 text-xl font-black bg-slate-50 border-none focus-visible:ring-indigo-200" placeholder="0.00" required />
             </div>
-            <Button type="submit" className="w-full rounded-2xl h-14 font-black text-lg bg-indigo-600 shadow-xl shadow-indigo-100" disabled={isSubmitting}>
+            <Button type="submit" className="w-full rounded-2xl h-14 font-black text-lg bg-indigo-600 shadow-xl shadow-indigo-100 text-white" disabled={isSubmitting}>
               {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : "Confirmar"}
             </Button>
           </form>
