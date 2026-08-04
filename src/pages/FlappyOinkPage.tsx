@@ -4,14 +4,14 @@ import React from "react";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import FlappyOink from "@/components/minigames/FlappyOink";
+import PigFlap from "@/components/minigames/PigFlap";
 
 const FlappyOinkPage = () => {
   const navigate = useNavigate();
 
   return (
     <div className="fixed inset-0 z-[100] bg-slate-950 flex flex-col overflow-hidden">
-      {/* Header flotante */}
+      {/* Header flotante inmersivo */}
       <div className="absolute top-0 left-0 right-0 z-[110] flex items-center gap-3 p-4 pointer-events-none">
         <Button 
           variant="ghost" 
@@ -27,7 +27,8 @@ const FlappyOinkPage = () => {
       </div>
 
       <div className="flex-1 w-full h-full">
-        <FlappyOink />
+        {/* Usamos el componente PigFlap basado en la construcción de Claude */}
+        <PigFlap />
       </div>
     </div>
   );
