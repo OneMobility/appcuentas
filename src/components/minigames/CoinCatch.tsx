@@ -5,14 +5,14 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 /**
- * 🪙 COIN CATCH — Versión Pantalla Completa y Posición Corregida
+ * 🪙 COIN CATCH — Posición ajustada (más abajo)
  */
 
 const STARTING_LIVES = 3;
-const PIG_Y_PERCENT = 72; // Posición vertical del puerquito (más arriba)
-const CATCH_LINE_START = 68; // Donde empieza a poder capturar
-const CATCH_LINE_END = 76;   // Donde termina la captura (pasando esto, ya se perdió)
-const MISS_LINE = 85;        // Una vez aquí, el objeto desaparece
+const PIG_Y_PERCENT = 82; // Bajado de 72 a 82 (aprox 15% de desplazamiento hacia abajo)
+const CATCH_LINE_START = 78; // Ajustado a la nueva posición
+const CATCH_LINE_END = 86;   // Ajustado a la nueva posición
+const MISS_LINE = 95;        // Desaparece justo después de pasar al puerquito
 const BASKET_HALF_WIDTH = 10; 
 const CATCH_TOLERANCE = 8; 
 const STREAK_PER_MULT_LEVEL = 3; 
@@ -175,7 +175,6 @@ export default function CoinCatch() {
       for (const item of itemsRef.current) {
         const newY = item.y + item.speed * dt;
         
-        // LÓGICA DE CAPTURA MEJORADA
         if (newY >= CATCH_LINE_START && newY <= CATCH_LINE_END) {
           const dx = Math.abs(item.x - basketXRef.current);
           if (dx <= CATCH_TOLERANCE) {
@@ -198,10 +197,8 @@ export default function CoinCatch() {
           }
         }
         
-        // Si el objeto ya pasó la línea de captura final, ya no cuenta como nada
         if (newY > MISS_LINE) {
           if (!ITEM_DEFS[item.kind].bad && item.y <= CATCH_LINE_END) {
-             // Solo reseteamos racha si era una moneda que NO se atrapó
              streakRef.current = 0;
           }
           continue; 
@@ -315,7 +312,7 @@ export default function CoinCatch() {
           );
         })}
 
-        {/* PERSONAJE (CERDITO) SUBIDO */}
+        {/* PERSONAJE (CERDITO) */}
         <div 
           className="absolute z-20 pointer-events-none transition-opacity"
           style={{ 
