@@ -11,6 +11,11 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
  * No usa localStorage: el mejor puntaje se expone vía props/callback
  * para que la app anfitriona (Oinkash) lo persista donde prefiera
  * (backend, storage nativo, etc.).
+ *
+ * Responsive: el tablero usa unidades relativas (%, fr, aspect-ratio) y
+ * clamp() para el texto, así que se adapta solo a pantallas de celular
+ * sin necesitar media queries aparte. Los controles funcionan con
+ * flechas de teclado y con swipe táctil.
  */
 
 // ---------- Config de niveles de ahorro ----------
@@ -41,8 +46,16 @@ const TIERS: Tier[] = [
 const tierFor = (value: number): Tier =>
   TIERS.find((t) => t.value === value) ?? TIERS[TIERS.length - 1];
 
-const GRID_SIZE = 8;
+const GRID_SIZE = 6;
 const WIN_VALUE = 8192;
+
+// Hitos con su texto animado. Se muestran una sola vez por partida,
+// la primera vez que aparece esa ficha en el tablero.
+const MILESTONES: { value: number; text: string }[] = [
+  { value: 1024, text: "¡Bien! 🏦" },
+  { value: 4096, text: "¡Genial! 💎" },
+  { value: 8192, text: "¡Excelente! 🎯" },
+];
 
 // ---------- Tipos ----------
 type CellValue = number | null;
@@ -53,7 +66,7 @@ interface PigMergeProps {
   initialBestScore?: number;
   /** Se llama cada vez que el mejor puntaje mejora, para que Oinkash lo guarde */
   onBestScoreChange?: (best: number) => void;
-  /** Se llama cuando el jugador alcanza la meta de ahorro (tile 2048) */
+  /** Se llama la primera vez que el jugador alcanza la ficha objetivo */
   onGoalReached?: () => void;
 }
 
@@ -83,15 +96,6 @@ function addRandomTile(board: Board): Board {
   const next = cloneBoard(board);
   next[r][c] = Math.random() < 0.9 ? 2 : 4;
   return next;
-}
-
-function boardsEqual(a: Board, b: Board): boolean {
-  for (let r = 0; r < GRID_SIZE; r++) {
-    for (let c = 0; c < GRID_SIZE; c++) {
-      if (a[r][c] !== b[r][c]) return false;
-    }
-  }
-  return true;
 }
 
 /** Desliza y fusiona una fila hacia la izquierda. Devuelve la fila resultante y puntos ganados. */
@@ -166,15 +170,16 @@ function boardHasMoves(board: Board): boolean {
   return false;
 }
 
-function boardHasWon(board: Board): boolean {
-  return board.some((row) => row.some((v) => v !== null && v >= WIN_VALUE));
+function boardMaxValue(board: Board): number {
+  let max = 0;
+  for (const row of board) for (const v of row) if (v && v > max) max = v;
+  return max;
 }
 
 function initBoard(): Board {
   let b = emptyBoard();
-  // En un tablero 8x8 arrancamos con más monedas para que se sienta lleno.
-  const startingTiles = Math.max(2, Math.round((GRID_SIZE * GRID_SIZE) / 16));
-  for (let i = 0; i < startingTiles; i++) b = addRandomTile(b);
+  b = addRandomTile(b);
+  b = addRandomTile(b);
   return b;
 }
 
@@ -187,14 +192,21 @@ export default function PigMerge({
   const [board, setBoard] = useState<Board>(() => initBoard());
   const [score, setScore] = useState(0);
   const [best, setBest] = useState(initialBestScore);
-  const [status, setStatus] = useState<"playing" | "won" | "lost">("playing");
-  const [keepPlayingAfterWin, setKeepPlayingAfterWin] = useState(false);
+  const [status, setStatus] = useState<"playing" | "lost">("playing");
+  const [toast, setToast] = useState<string | null>(null);
   const touchStart = useRef<{ x: number; y: number } | null>(null);
+  const shownMilestones = useRef<Set<number>>(new Set());
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showToast = useCallback((text: string) => {
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    setToast(text);
+    toastTimer.current = setTimeout(() => setToast(null), 1600);
+  }, []);
 
   const handleMove = useCallback(
     (direction: Direction) => {
       if (status === "lost") return;
-      if (status === "won" && !keepPlayingAfterWin) return;
 
       setBoard((prevBoard) => {
         const { board: moved, gained, moved: didMove } = moveBoard(prevBoard, direction);
@@ -214,17 +226,23 @@ export default function PigMerge({
           return nextScore;
         });
 
-        if (boardHasWon(withNewTile) && status !== "won") {
-          setStatus("won");
-          onGoalReached?.();
-        } else if (!boardHasMoves(withNewTile)) {
+        const maxValue = boardMaxValue(withNewTile);
+        for (const milestone of MILESTONES) {
+          if (maxValue >= milestone.value && !shownMilestones.current.has(milestone.value)) {
+            shownMilestones.current.add(milestone.value);
+            showToast(milestone.text);
+            if (milestone.value >= WIN_VALUE) onGoalReached?.();
+          }
+        }
+
+        if (!boardHasMoves(withNewTile)) {
           setStatus("lost");
         }
 
         return withNewTile;
       });
     },
-    [status, keepPlayingAfterWin, onBestScoreChange, onGoalReached]
+    [status, onBestScoreChange, onGoalReached, showToast]
   );
 
   // Controles de teclado
@@ -250,7 +268,7 @@ export default function PigMerge({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [handleMove]);
 
-  // Controles táctiles (swipe)
+  // Controles táctiles (swipe) — móvil primero
   const onTouchStart = (e: React.TouchEvent) => {
     const t = e.touches[0];
     touchStart.current = { x: t.clientX, y: t.clientY };
@@ -262,7 +280,7 @@ export default function PigMerge({
     const dy = t.clientY - touchStart.current.y;
     const absX = Math.abs(dx);
     const absY = Math.abs(dy);
-    const threshold = 24;
+    const threshold = 20;
     if (Math.max(absX, absY) < threshold) return;
     if (absX > absY) {
       handleMove(dx > 0 ? "right" : "left");
@@ -276,15 +294,14 @@ export default function PigMerge({
     setBoard(initBoard());
     setScore(0);
     setStatus("playing");
-    setKeepPlayingAfterWin(false);
+    setToast(null);
+    shownMilestones.current = new Set();
   };
-
-  // Tamaños de fuente adaptados a un tablero más denso (8x8).
-  const emojiFontSize = GRID_SIZE >= 8 ? 13 : 20;
-  const labelFontSize = GRID_SIZE >= 8 ? 8 : 12;
 
   return (
     <div style={styles.wrapper}>
+      <style>{keyframesCss}</style>
+
       <div style={styles.header}>
         <div>
           <h1 style={styles.title}>🐷 PIG MERGE</h1>
@@ -327,12 +344,8 @@ export default function PigMerge({
                         color: tier!.fg,
                       }}
                     >
-                      <span style={{ ...styles.tileEmoji, fontSize: emojiFontSize }}>
-                        {tier!.emoji}
-                      </span>
-                      <span style={{ ...styles.tileLabel, fontSize: labelFontSize }}>
-                        {tier!.label}
-                      </span>
+                      <span style={styles.tileEmoji}>{tier!.emoji}</span>
+                      <span style={styles.tileLabel}>{tier!.label}</span>
                     </div>
                   )}
                 </div>
@@ -341,50 +354,52 @@ export default function PigMerge({
           )}
         </div>
 
-        {status !== "playing" && (
+        {toast && (
+          <div style={styles.toast} key={toast}>
+            {toast}
+          </div>
+        )}
+
+        {status === "lost" && (
           <div style={styles.overlay}>
-            {status === "won" && !keepPlayingAfterWin ? (
-              <>
-                <p style={styles.overlayTitle}>🎯 ¡Meta de ahorro alcanzada!</p>
-                <p style={styles.overlaySubtitle}>Llegaste a la alcancía máxima.</p>
-                <div style={styles.overlayButtons}>
-                  <button style={styles.overlayButton} onClick={() => setKeepPlayingAfterWin(true)}>
-                    Seguir ahorrando
-                  </button>
-                  <button style={styles.overlayButtonSecondary} onClick={restart}>
-                    Reiniciar
-                  </button>
-                </div>
-              </>
-            ) : (
-              <>
-                <p style={styles.overlayTitle}>🐷 Alcancía llena</p>
-                <p style={styles.overlaySubtitle}>No hay más movimientos. ¡Intenta de nuevo!</p>
-                <button style={styles.overlayButton} onClick={restart}>
-                  Reiniciar
-                </button>
-              </>
-            )}
+            <p style={styles.overlayTitle}>🐷 Alcancía llena</p>
+            <p style={styles.overlaySubtitle}>No hay más movimientos. ¡Intenta de nuevo!</p>
+            <button style={styles.overlayButton} onClick={restart}>
+              Reiniciar
+            </button>
           </div>
         )}
       </div>
 
       <p style={styles.hint}>
-        Usa las flechas del teclado (o desliza en móvil) para juntar monedas iguales y hacerlas
-        crecer: 🪙 → 💵 → 🐖 → 🐷 → 💰 → 🏦 → 💎 → 🎯
+        Desliza (o usa las flechas) para juntar monedas iguales y hacerlas crecer: 🪙 → 💵 → 🐖
+        → 🐷 → 💰 → 🏦 → 💎 → 🎯
       </p>
     </div>
   );
 }
 
+// ---------- Animaciones ----------
+const keyframesCss = `
+@keyframes pigMergeToastPop {
+  0% { opacity: 0; transform: translate(-50%, -40%) scale(0.6); }
+  15% { opacity: 1; transform: translate(-50%, -50%) scale(1.15); }
+  30% { transform: translate(-50%, -50%) scale(1); }
+  80% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -65%) scale(0.9); }
+}
+`;
+
 // ---------- Estilos ----------
+// Todas las medidas del tablero usan % / clamp() / aspect-ratio para
+// verse bien tanto en pantallas de escritorio como en celulares.
 const styles: Record<string, React.CSSProperties> = {
   wrapper: {
-    maxWidth: 560,
+    width: "100%",
+    maxWidth: 480,
     margin: "0 auto",
-    padding: 16,
-    fontFamily:
-      "'Segoe UI', system-ui, -apple-system, sans-serif",
+    padding: "clamp(10px, 3vw, 18px)",
+    fontFamily: "'Segoe UI', system-ui, -apple-system, sans-serif",
     background: "#FDF6EC",
     borderRadius: 20,
     boxSizing: "border-box",
@@ -395,17 +410,18 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: "flex-start",
     gap: 12,
     marginBottom: 12,
+    flexWrap: "wrap",
   },
   title: {
     margin: 0,
-    fontSize: 24,
+    fontSize: "clamp(20px, 5vw, 26px)",
     color: "#5C3300",
   },
   subtitle: {
     margin: "4px 0 0",
     fontSize: 12,
     color: "#8A5A00",
-    maxWidth: 200,
+    maxWidth: 220,
   },
   scoreRow: {
     display: "flex",
@@ -414,11 +430,11 @@ const styles: Record<string, React.CSSProperties> = {
   scoreBox: {
     background: "#FFB13D",
     borderRadius: 10,
-    padding: "6px 10px",
+    padding: "6px 12px",
     display: "flex",
     flexDirection: "column",
     alignItems: "center",
-    minWidth: 56,
+    minWidth: 60,
   },
   scoreLabel: {
     fontSize: 10,
@@ -426,7 +442,7 @@ const styles: Record<string, React.CSSProperties> = {
     color: "#5C3300",
   },
   scoreValue: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: 800,
     color: "#3A2100",
   },
@@ -447,22 +463,25 @@ const styles: Record<string, React.CSSProperties> = {
   },
   boardOuter: {
     position: "relative",
+    width: "100%",
     background: "#E8C99A",
     borderRadius: 14,
-    padding: 8,
+    padding: "2.5%",
+    boxSizing: "border-box",
     touchAction: "none",
+    userSelect: "none",
   },
   boardGrid: {
     display: "grid",
     gridTemplateColumns: `repeat(${GRID_SIZE}, 1fr)`,
     gridTemplateRows: `repeat(${GRID_SIZE}, 1fr)`,
-    gap: 8,
+    gap: "2.5%",
   },
   cellBg: {
     position: "relative",
     aspectRatio: "1 / 1",
     background: "#F3DCB4",
-    borderRadius: 10,
+    borderRadius: "16%",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
@@ -470,26 +489,42 @@ const styles: Record<string, React.CSSProperties> = {
   tile: {
     position: "absolute",
     inset: 0,
-    borderRadius: 10,
+    borderRadius: "16%",
     display: "flex",
     flexDirection: "column",
     alignItems: "center",
     justifyContent: "center",
     fontWeight: 800,
     transition: "all 0.1s ease",
-    boxShadow: "0 2px 4px rgba(0,0,0,0.12)",
+    boxShadow: "0 2px 4px rgba(0,0,0,0.15)",
   },
   tileEmoji: {
-    fontSize: 20,
+    fontSize: "clamp(18px, 6vw, 34px)",
     lineHeight: 1,
   },
   tileLabel: {
-    fontSize: 12,
-    marginTop: 2,
+    fontSize: "clamp(9px, 2.6vw, 15px)",
+    marginTop: "4%",
+  },
+  toast: {
+    position: "absolute",
+    left: "50%",
+    top: "45%",
+    transform: "translate(-50%, -50%)",
+    background: "rgba(58, 33, 0, 0.92)",
+    color: "#FFF6E5",
+    fontWeight: 800,
+    fontSize: "clamp(18px, 6vw, 30px)",
+    padding: "10px 22px",
+    borderRadius: 999,
+    whiteSpace: "nowrap",
+    pointerEvents: "none",
+    animation: "pigMergeToastPop 1.6s ease forwards",
+    zIndex: 5,
   },
   overlay: {
     position: "absolute",
-    inset: 8,
+    inset: "2.5%",
     background: "rgba(253, 246, 236, 0.92)",
     borderRadius: 14,
     display: "flex",
@@ -510,23 +545,9 @@ const styles: Record<string, React.CSSProperties> = {
     color: "#8A5A00",
     margin: "6px 0 16px",
   },
-  overlayButtons: {
-    display: "flex",
-    gap: 8,
-  },
   overlayButton: {
     background: "#4CAF83",
     color: "#fff",
-    border: "none",
-    borderRadius: 10,
-    padding: "10px 16px",
-    fontWeight: 700,
-    fontSize: 13,
-    cursor: "pointer",
-  },
-  overlayButtonSecondary: {
-    background: "#FFB13D",
-    color: "#3A2100",
     border: "none",
     borderRadius: 10,
     padding: "10px 16px",
