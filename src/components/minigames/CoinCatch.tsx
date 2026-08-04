@@ -1,34 +1,16 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 
 /**
- * 🪙 COIN CATCH — mini-juego arcade de atrapar monedas
- * Hecho para Oinkash (app de control de gastos).
- *
- * Género: Catch / Arcade
- * - Atrapa monedas y billetes, evita gastos, impuestos y facturas.
- * - Rachas de aciertos suben el multiplicador de puntos (x1 → x5).
- * - Partidas rápidas de 60 segundos, 3 vidas.
- *
- * Controles:
- *  - Móvil: arrastra el dedo sobre el área de juego para mover la canasta.
- *  - PC: flechas ← → (mantenidas para movimiento continuo) o arrastra con el mouse.
- *
- * Uso:
- *   import CoinCatch from "./CoinCatch";
- *   <CoinCatch onBestScoreChange={(s) => saveToOinkashProfile(s)} initialBestScore={0} />
- *
- * No usa localStorage: el mejor puntaje se expone vía props/callback para
- * que la app anfitriona persista el dato donde prefiera.
+ * 🪙 COIN CATCH — Versión Oinkash Modificada
  */
 
-// ---------- Config ----------
-const GAME_SECONDS = 60;
 const STARTING_LIVES = 3;
-const CATCH_LINE = 86; // % vertical donde vive la canasta
-const MISS_LINE = 101; // % vertical donde se considera "cayó al piso"
-const BASKET_HALF_WIDTH = 9; // % de ancho medio de la canasta
-const CATCH_TOLERANCE = 10; // % de tolerancia horizontal para atrapar
-const STREAK_PER_MULT_LEVEL = 3; // aciertos seguidos para subir un nivel de multiplicador
+const CATCH_LINE = 86; 
+const MISS_LINE = 101; 
+const BASKET_HALF_WIDTH = 9; 
+const CATCH_TOLERANCE = 10; 
+const STREAK_PER_MULT_LEVEL = 3; 
 const MAX_MULTIPLIER = 5;
 
 type GoodKind = "coin" | "bill" | "bag";
@@ -39,7 +21,7 @@ type ItemDef = {
   emoji: string;
   points: number;
   bad: boolean;
-  weight: number; // probabilidad relativa dentro de su grupo (bueno/malo)
+  weight: number; 
 };
 
 const ITEM_DEFS: Record<Kind, ItemDef> = {
@@ -48,7 +30,7 @@ const ITEM_DEFS: Record<Kind, ItemDef> = {
   bag: { emoji: "💰", points: 50, bad: false, weight: 1 },
   gasto: { emoji: "💸", points: 0, bad: true, weight: 4 },
   impuesto: { emoji: "🏛️", points: 0, bad: true, weight: 3 },
-  factura: { emoji: "🧾", points: 0, bad: true, weight: 3 },
+  factura: { emoji: "🧾", points: -20, bad: true, weight: 3 }, // Resta puntos
 };
 
 const GOOD_KINDS: GoodKind[] = ["coin", "bill", "bag"];
@@ -67,24 +49,20 @@ function pickWeighted<K extends Kind>(kinds: K[]): K {
 interface FallingItem {
   id: number;
   kind: Kind;
-  x: number; // % horizontal, 0-100
-  y: number; // % vertical, 0-100+
-  speed: number; // %/segundo
+  x: number; 
+  y: number; 
+  speed: number; 
   caught: boolean;
 }
 
 interface CoinCatchProps {
-  /** Mejor puntaje ya guardado por Oinkash (persistencia externa) */
   initialBestScore?: number;
-  /** Se llama cada vez que el mejor puntaje mejora, para que Oinkash lo guarde */
   onBestScoreChange?: (best: number) => void;
-  /** Se llama al terminar una partida, con el puntaje final */
   onGameOver?: (score: number) => void;
 }
 
 type Phase = "idle" | "playing" | "over";
 
-// ---------- Componente ----------
 export default function CoinCatch({
   initialBestScore = 0,
   onBestScoreChange,
@@ -94,12 +72,13 @@ export default function CoinCatch({
   const [score, setScore] = useState(0);
   const [best, setBest] = useState(initialBestScore);
   const [lives, setLives] = useState(STARTING_LIVES);
-  const [timeLeft, setTimeLeft] = useState(GAME_SECONDS);
   const [streak, setStreak] = useState(0);
   const [multiplier, setMultiplier] = useState(1);
   const [items, setItems] = useState<FallingItem[]>([]);
   const [basketX, setBasketX] = useState(50);
   const [flash, setFlash] = useState<"good" | "bad" | null>(null);
+  const [showBien, setShowBien] = useState(false);
+  const hasTriggeredBien = useRef(false);
 
   const fieldRef = useRef<HTMLDivElement | null>(null);
   const itemsRef = useRef<FallingItem[]>([]);
@@ -143,19 +122,20 @@ export default function CoinCatch({
     livesRef.current = STARTING_LIVES;
     scoreRef.current = 0;
     basketXRef.current = 50;
+    hasTriggeredBien.current = false;
 
     setItems([]);
     setScore(0);
     setLives(STARTING_LIVES);
-    setTimeLeft(GAME_SECONDS);
     setStreak(0);
     setMultiplier(1);
     setBasketX(50);
     setFlash(null);
+    setShowBien(false);
     setPhase("playing");
   }, []);
 
-  // ---------- Bucle principal del juego ----------
+  // ---------- Bucle principal ----------
   useEffect(() => {
     if (phase !== "playing") return;
 
@@ -166,8 +146,7 @@ export default function CoinCatch({
       lastTimeRef.current = now;
       elapsedRef.current += dt;
 
-      // Movimiento continuo con teclado
-      const moveSpeed = 70; // %/seg
+      const moveSpeed = 85; 
       if (keysRef.current.has("ArrowLeft")) {
         basketXRef.current = Math.max(BASKET_HALF_WIDTH, basketXRef.current - moveSpeed * dt);
       }
@@ -175,15 +154,15 @@ export default function CoinCatch({
         basketXRef.current = Math.min(100 - BASKET_HALF_WIDTH, basketXRef.current + moveSpeed * dt);
       }
 
-      // Dificultad: la partida se acelera durante los 60s
-      const progress = Math.min(1, elapsedRef.current / GAME_SECONDS);
-      const spawnInterval = 0.9 - 0.55 * progress; // de 0.9s a 0.35s
-      const fallDuration = 3.2 - 1.6 * progress; // de 3.2s a 1.6s en cruzar la pantalla
+      // Dificultad progresiva aunque no haya tiempo
+      const progress = Math.min(1, elapsedRef.current / 120); // Se estabiliza a los 2 min
+      const spawnInterval = 1.0 - 0.65 * progress; 
+      const fallDuration = 3.5 - 1.8 * progress; 
 
       spawnAccumulatorRef.current += dt;
       if (spawnAccumulatorRef.current >= spawnInterval) {
         spawnAccumulatorRef.current = 0;
-        const isBad = Math.random() < 0.32;
+        const isBad = Math.random() < 0.35;
         const kind: Kind = isBad ? pickWeighted(BAD_KINDS) : pickWeighted(GOOD_KINDS);
         itemsRef.current.push({
           id: nextIdRef.current++,
@@ -195,7 +174,6 @@ export default function CoinCatch({
         });
       }
 
-      // Actualiza posiciones y detecta colisiones / misses
       const remaining: FallingItem[] = [];
       for (const item of itemsRef.current) {
         const newY = item.y + item.speed * dt;
@@ -207,35 +185,46 @@ export default function CoinCatch({
             if (def.bad) {
               livesRef.current -= 1;
               streakRef.current = 0;
+              
+              // Solo la factura resta puntos
+              if (item.kind === "factura") {
+                scoreRef.current = Math.max(0, scoreRef.current + def.points);
+              }
+
               setStreak(0);
               setMultiplier(1);
               setLives(livesRef.current);
+              setScore(scoreRef.current);
               showFlash("bad");
             } else {
               streakRef.current += 1;
-              const mult = Math.min(
-                MAX_MULTIPLIER,
-                1 + Math.floor(streakRef.current / STREAK_PER_MULT_LEVEL)
-              );
+              const mult = Math.min(MAX_MULTIPLIER, 1 + Math.floor(streakRef.current / STREAK_PER_MULT_LEVEL));
               scoreRef.current += def.points * mult;
+              
+              // Animación BIEN a los 100 puntos
+              if (scoreRef.current >= 100 && !hasTriggeredBien.current) {
+                setShowBien(true);
+                hasTriggeredBien.current = true;
+                setTimeout(() => setShowBien(false), 2000);
+              }
+
               setStreak(streakRef.current);
               setMultiplier(mult);
               setScore(scoreRef.current);
               showFlash("good");
             }
-            continue; // el item se elimina al ser atrapado
+            continue; 
           }
         }
 
         if (newY >= MISS_LINE) {
           const def = ITEM_DEFS[item.kind];
           if (!def.bad) {
-            // se te escapó una moneda buena: se corta la racha
             streakRef.current = 0;
             setStreak(0);
             setMultiplier(1);
           }
-          continue; // se elimina al salir de la pantalla
+          continue; 
         }
 
         remaining.push({ ...item, y: newY });
@@ -259,17 +248,6 @@ export default function CoinCatch({
     };
   }, [phase, endGame, showFlash]);
 
-  // ---------- Cuenta regresiva ----------
-  useEffect(() => {
-    if (phase !== "playing") return;
-    if (timeLeft <= 0) {
-      endGame();
-      return;
-    }
-    const id = setTimeout(() => setTimeLeft((t) => t - 1), 1000);
-    return () => clearTimeout(id);
-  }, [phase, timeLeft, endGame]);
-
   // ---------- Teclado ----------
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -289,7 +267,6 @@ export default function CoinCatch({
     };
   }, []);
 
-  // ---------- Arrastre táctil / mouse ----------
   const setBasketFromClientX = useCallback((clientX: number) => {
     const field = fieldRef.current;
     if (!field) return;
@@ -309,16 +286,13 @@ export default function CoinCatch({
     if (!draggingRef.current) return;
     setBasketFromClientX(e.clientX);
   };
-  const stopDragging = () => {
-    draggingRef.current = false;
-  };
 
   return (
     <div style={styles.wrapper}>
       <div style={styles.header}>
         <div>
           <h1 style={styles.title}>🪙 COIN CATCH</h1>
-          <p style={styles.subtitle}>Atrapa el ahorro, esquiva los gastos — un juego de Oinkash</p>
+          <p style={styles.subtitle}>¡Tiempo ilimitado! Atrapa el ahorro.</p>
         </div>
         <div style={styles.statsRow}>
           <div style={styles.statBox}>
@@ -334,11 +308,11 @@ export default function CoinCatch({
 
       <div style={styles.hudRow}>
         <div style={styles.hudItem}>
-          ⏱️ <strong style={styles.hudStrong}>{timeLeft}s</strong>
+          🕹️ <strong style={styles.hudStrong}>Survival</strong>
         </div>
         <div style={styles.hudItem}>
           {Array.from({ length: STARTING_LIVES }).map((_, i) => (
-            <span key={i} style={{ opacity: i < lives ? 1 : 0.25, marginLeft: i ? 2 : 0 }}>
+            <span key={i} style={{ opacity: i < lives ? 1 : 0.2, marginLeft: i ? 2 : 0, filter: i < lives ? 'none' : 'grayscale(1)' }}>
               🐷
             </span>
           ))}
@@ -352,18 +326,21 @@ export default function CoinCatch({
         ref={fieldRef}
         style={{
           ...styles.field,
+          backgroundImage: 'url(/game-bg.png)',
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
           boxShadow:
             flash === "good"
-              ? "inset 0 0 0 6px #4CAF83"
+              ? "inset 0 0 0 10px rgba(76, 175, 131, 0.4)"
               : flash === "bad"
-              ? "inset 0 0 0 6px #E4572E"
+              ? "inset 0 0 0 10px rgba(228, 87, 46, 0.4)"
               : "inset 0 0 0 0px transparent",
         }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
-        onPointerUp={stopDragging}
-        onPointerLeave={stopDragging}
-        onPointerCancel={stopDragging}
+        onPointerUp={() => (draggingRef.current = false)}
+        onPointerLeave={() => (draggingRef.current = false)}
+        onPointerCancel={() => (draggingRef.current = false)}
       >
         {items.map((item) => {
           const def = ITEM_DEFS[item.kind];
@@ -390,54 +367,68 @@ export default function CoinCatch({
           🐷
         </div>
 
+        {/* Animación BIEN */}
+        <AnimatePresence>
+          {showBien && (
+            <motion.div
+              initial={{ scale: 0, opacity: 0, y: 0 }}
+              animate={{ scale: 1.5, opacity: 1, y: -50 }}
+              exit={{ scale: 2, opacity: 0 }}
+              className="absolute inset-0 flex items-center justify-center pointer-events-none z-30"
+            >
+              <span className="text-5xl font-black text-yellow-400 drop-shadow-[0_4px_4px_rgba(0,0,0,0.5)] italic">
+                ¡BIEN!
+              </span>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {phase === "idle" && (
           <div style={styles.overlay}>
             <p style={styles.overlayTitle}>🪙 Coin Catch</p>
             <p style={styles.overlaySubtitle}>
-              Atrapa monedas y billetes. Evita gastos, impuestos y facturas.
+              Atrapa 🪙 💵 💰 para ganar puntos.
               <br />
-              Arrastra el dedo (o el mouse) o usa ← → para mover a tu cerdito.
+              Evita 💸 🏛️. Ojo: ¡Las 🧾 restan puntos!
               <br />
-              Tienes 3 vidas y 60 segundos.
+              Mueve a tu cerdito para no perder tus 3 vidas.
             </p>
             <button style={styles.overlayButton} onClick={startGame}>
-              Jugar
+              ¡A Ahorrar!
             </button>
           </div>
         )}
 
         {phase === "over" && (
           <div style={styles.overlay}>
-            <p style={styles.overlayTitle}>🐷 ¡Se acabó!</p>
+            <p style={styles.overlayTitle}>🐷 ¡Sin vidas!</p>
             <p style={styles.overlaySubtitle}>
-              Puntaje: <strong>{score}</strong>
-              {score >= best && score > 0 ? " · ¡Nuevo mejor puntaje! 🎉" : ""}
+              Lograste juntar: <strong>{score}</strong>
+              {score >= best && score > 0 ? " · ¡Nuevo récord personal! 🎉" : ""}
             </p>
             <button style={styles.overlayButton} onClick={startGame}>
-              Jugar de nuevo
+              Intentar de nuevo
             </button>
           </div>
         )}
       </div>
 
       <p style={styles.hint}>
-        🪙 💵 💰 suman puntos y racha · 💸 🏛️ 🧾 te quitan una vida y reinician el multiplicador
+        Solo monedas y billetes suman · Las facturas (🧾) restan -20 pts y quitan vida
       </p>
     </div>
   );
 }
 
-// ---------- Estilos ----------
-// Medidas en % / clamp() para que el campo de juego se adapte a celulares.
 const styles: Record<string, React.CSSProperties> = {
   wrapper: {
     width: "100%",
     maxWidth: 480,
     margin: "0 auto",
-    padding: "clamp(10px, 3vw, 18px)",
-    fontFamily: "'Segoe UI', system-ui, -apple-system, sans-serif",
-    background: "#FDF6EC",
-    borderRadius: 20,
+    padding: "16px",
+    fontFamily: "'Quicksand', sans-serif",
+    background: "#fff",
+    borderRadius: 32,
     boxSizing: "border-box",
   },
   header: {
@@ -445,53 +436,57 @@ const styles: Record<string, React.CSSProperties> = {
     justifyContent: "space-between",
     alignItems: "flex-start",
     gap: 12,
-    marginBottom: 8,
+    marginBottom: 12,
     flexWrap: "wrap",
   },
   title: {
     margin: 0,
-    fontSize: "clamp(20px, 5vw, 26px)",
-    color: "#5C3300",
+    fontSize: 24,
+    fontWeight: 900,
+    color: "#0f172a",
+    letterSpacing: "-0.05em",
   },
   subtitle: {
-    margin: "4px 0 0",
-    fontSize: 12,
-    color: "#8A5A00",
-    maxWidth: 220,
+    margin: "2px 0 0",
+    fontSize: 11,
+    fontWeight: 700,
+    color: "#64748b",
+    textTransform: "uppercase",
   },
   statsRow: {
     display: "flex",
     gap: 8,
   },
   statBox: {
-    background: "#FFB13D",
-    borderRadius: 10,
-    padding: "6px 12px",
+    background: "#f1f5f9",
+    borderRadius: 16,
+    padding: "8px 12px",
     display: "flex",
     flexDirection: "column",
     alignItems: "center",
-    minWidth: 60,
+    minWidth: 70,
   },
   statLabel: {
-    fontSize: 10,
-    fontWeight: 700,
-    color: "#5C3300",
+    fontSize: 9,
+    fontWeight: 800,
+    color: "#94a3b8",
+    textTransform: "uppercase",
   },
   statValue: {
-    fontSize: 17,
-    fontWeight: 800,
-    color: "#3A2100",
+    fontSize: 18,
+    fontWeight: 900,
+    color: "#0f172a",
   },
   hudRow: {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
-    background: "#F3DCB4",
-    borderRadius: 10,
-    padding: "6px 12px",
-    marginBottom: 8,
-    fontSize: 14,
-    color: "#5C3300",
+    background: "#0f172a",
+    borderRadius: 16,
+    padding: "8px 16px",
+    marginBottom: 12,
+    fontSize: 13,
+    color: "#fff",
   },
   hudItem: {
     display: "flex",
@@ -499,72 +494,79 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 4,
   },
   hudStrong: {
-    color: "#3A2100",
+    color: "#fff",
   },
   field: {
     position: "relative",
     width: "100%",
     aspectRatio: "3 / 4",
-    background: "linear-gradient(#FFF6E5, #F3DCB4)",
-    borderRadius: 14,
+    borderRadius: 24,
     overflow: "hidden",
     touchAction: "none",
     userSelect: "none",
-    transition: "box-shadow 0.1s ease",
+    transition: "box-shadow 0.2s ease",
+    border: "4px solid #f1f5f9",
   },
   item: {
     position: "absolute",
     transform: "translate(-50%, -50%)",
-    fontSize: "clamp(20px, 6vw, 30px)",
+    fontSize: "clamp(24px, 7vw, 34px)",
     lineHeight: 1,
     pointerEvents: "none",
+    filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.2))",
   },
   basket: {
     position: "absolute",
     top: "88%",
     transform: "translate(-50%, -50%)",
-    fontSize: "clamp(28px, 8vw, 40px)",
+    fontSize: "clamp(34px, 10vw, 48px)",
     lineHeight: 1,
     pointerEvents: "none",
-    filter: "drop-shadow(0 3px 3px rgba(0,0,0,0.25))",
+    filter: "drop-shadow(0 4px 6px rgba(0,0,0,0.3))",
   },
   overlay: {
     position: "absolute",
     inset: 0,
-    background: "rgba(253, 246, 236, 0.95)",
+    background: "rgba(255, 255, 255, 0.92)",
     display: "flex",
     flexDirection: "column",
     alignItems: "center",
     justifyContent: "center",
     textAlign: "center",
-    padding: 20,
+    padding: 24,
+    zIndex: 40,
+    backdropBlur: "4px",
   },
   overlayTitle: {
-    fontSize: 22,
-    fontWeight: 800,
-    color: "#3A2100",
+    fontSize: 28,
+    fontWeight: 900,
+    color: "#0f172a",
     margin: 0,
+    letterSpacing: "-0.05em",
   },
   overlaySubtitle: {
-    fontSize: 13,
-    color: "#8A5A00",
-    margin: "10px 0 18px",
-    lineHeight: 1.5,
+    fontSize: 14,
+    color: "#64748b",
+    margin: "12px 0 24px",
+    lineHeight: 1.6,
+    fontWeight: 600,
   },
   overlayButton: {
-    background: "#4CAF83",
+    background: "#4f46e5",
     color: "#fff",
     border: "none",
-    borderRadius: 10,
-    padding: "12px 22px",
-    fontWeight: 700,
-    fontSize: 14,
+    borderRadius: 16,
+    padding: "16px 32px",
+    fontWeight: 800,
+    fontSize: 16,
     cursor: "pointer",
+    boxShadow: "0 10px 15px -3px rgba(79, 70, 229, 0.3)",
   },
   hint: {
     fontSize: 11,
-    color: "#8A5A00",
+    color: "#94a3b8",
     textAlign: "center",
-    marginTop: 10,
+    marginTop: 12,
+    fontWeight: 600,
   },
 };
