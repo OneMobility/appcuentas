@@ -197,8 +197,7 @@ const Savings: React.FC = () => {
         name: newSaving.name.trim(), 
         target_amount: target,
         target_date: newSaving.target_date ? getLocalDateString(newSaving.target_date) : null, 
-        color: newSaving.color,
-        updated_at: new Date().toISOString()
+        color: newSaving.color
       }).eq('id', editingSaving.id).select().single();
 
       if (error) throw error;
@@ -233,10 +232,11 @@ const Savings: React.FC = () => {
       if (isCompleting) completionDate = getLocalDateString(new Date());
       else if (current.target_amount && newBal < current.target_amount) completionDate = null;
 
+      // Importante: Solo intentamos actualizar updated_at si estamos seguros de que existe
+      // Por ahora actualizamos solo el saldo para evitar errores de cache de esquema
       const { data, error } = await supabase.from('savings').update({ 
         current_balance: newBal, 
-        completion_date: completionDate,
-        updated_at: new Date().toISOString()
+        completion_date: completionDate
       }).eq('id', selectedSavingId).select().single();
 
       if (error) throw error;
@@ -278,15 +278,15 @@ const Savings: React.FC = () => {
     const progress = saving.target_amount ? (saving.current_balance / saving.target_amount) * 100 : 0;
     const isCompleted = saving.completion_date || (saving.target_amount && saving.current_balance >= saving.target_amount);
     
-    // Usar updated_at para detectar inactividad real, o created_at como fallback
+    // Si la columna updated_at no existe aún, usamos created_at como fallback
     const daysSinceActivity = differenceInDays(new Date(), parseISO(saving.updated_at || saving.created_at));
 
-    // 1. Meta cumplida (100%) -> 08 (SIEMPRE prioridad máxima)
+    // 1. Meta cumplida (100%) -> 08 (Prioridad máxima)
     if (isCompleted) {
       return { img: `${METAS_BASE_URL}08.png`, label: "¡Logrado!", sub: getRandomPhrase('onComplete') };
     }
 
-    // 2. Inactividad (Solo si han pasado 15 días o más sin actividad)
+    // 2. Inactividad (Solo si no hay actividad reciente)
     if (daysSinceActivity > 30) {
       return { img: `${METAS_BASE_URL}07.png`, label: "Abandonada", sub: "Más de 30 días sin actividad." };
     }
@@ -297,7 +297,7 @@ const Savings: React.FC = () => {
       return { img: `${METAS_BASE_URL}05.png`, label: "En pausa", sub: "Llevas 15 días sin movimientos." };
     }
 
-    // 3. Progreso (Prioridad si hay actividad reciente o < 15 días)
+    // 3. Progreso
     if (progress >= 75) {
       return { img: `${METAS_BASE_URL}04.png`, label: "Casi listo", sub: "¡Ya casi llegas al 100%!" };
     }
