@@ -29,7 +29,8 @@ import {
   TrendingUp,
   TrendingDown,
   Calendar,
-  PlusCircle
+  PlusCircle,
+  Briefcase
 } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { cn } from "@/lib/utils";
@@ -38,7 +39,7 @@ import { es } from "date-fns/locale";
 import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/context/SessionContext";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { exportToCsv, exportToPdf } from "@/utils/export";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import { useCategoryContext } from "@/context/CategoryContext";
@@ -47,7 +48,6 @@ import { evaluateExpression } from "@/utils/math-helpers";
 import { getLocalDateString } from "@/utils/date-helpers";
 import { Badge } from "@/components/ui/badge";
 import { fetchUsdToMxnRate } from "@/utils/currency-helper";
-import { getContrastColor } from "@/utils/color-helpers";
 
 interface DebtorTransaction {
   id: string;
@@ -142,6 +142,7 @@ const DebtorDetailsPage: React.FC = () => {
 
   useEffect(() => { fetchData(); }, [debtorId, user, incomeCategories]);
 
+  // Historial ordenado con saldo acumulado
   const transactionsWithBalance = useMemo(() => {
     if (!debtor) return [];
     const sortedAsc = [...debtor.debtor_transactions].sort((a, b) => 
@@ -170,12 +171,17 @@ const DebtorDetailsPage: React.FC = () => {
     });
   }, [transactionsWithBalance, filterInterval, searchTerm, filterType]);
 
-  const monthMetrics = useMemo(() => {
-    const monthTxs = (debtor?.debtor_transactions || []).filter(tx => isWithinInterval(parseISO(tx.date), filterInterval));
-    const charges = monthTxs.filter(tx => tx.type === "charge").reduce((sum, tx) => sum + tx.amount, 0);
-    const payments = monthTxs.filter(tx => tx.type === "payment").reduce((sum, tx) => sum + tx.amount, 0);
-    return { charges, payments, net: charges - payments };
-  }, [debtor, filterInterval]);
+  // Métricas totales (Histórico)
+  const totalMetrics = useMemo(() => {
+    if (!debtor) return { charges: 0, payments: 0, net: 0 };
+    const charges = debtor.debtor_transactions.filter(tx => tx.type === "charge").reduce((sum, tx) => sum + tx.amount, 0);
+    const payments = debtor.debtor_transactions.filter(tx => tx.type === "payment").reduce((sum, tx) => sum + tx.amount, 0);
+    return {
+      charges,
+      payments,
+      net: charges - payments
+    };
+  }, [debtor]);
 
   const handleTransactionSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -216,9 +222,11 @@ const DebtorDetailsPage: React.FC = () => {
     fetchData();
   };
 
-  const handleExport = (formatType: 'csv' | 'pdf') => {
+  const handleExport = (formatType: 'csv' | 'pdf', scope: 'month' | 'total') => {
     if (!debtor) return;
-    const data = filteredTransactions.map(tx => ({
+    
+    const source = scope === 'month' ? filteredTransactions : transactionsWithBalance;
+    const data = source.map(tx => ({
       Fecha: format(parseISO(tx.date), "dd/MM/yyyy"),
       Tipo: tx.type === "charge" ? "Cargo" : "Pago",
       Descripción: tx.description,
@@ -226,19 +234,19 @@ const DebtorDetailsPage: React.FC = () => {
       Saldo: tx.runningBalance.toFixed(2)
     }));
 
-    const filename = `historial_${debtor.name}_${format(currentViewDate, "MMM_yyyy")}`;
+    const filename = `historial_${debtor.name}_${scope === 'month' ? format(currentViewDate, "MMM_yyyy") : 'total'}`;
 
     if (formatType === 'csv') {
       exportToCsv(`${filename}.csv`, data);
-      showSuccess("Historial exportado a CSV.");
+      showSuccess(`Historial ${scope === 'month' ? 'mensual' : 'total'} exportado a CSV.`);
     } else {
       exportToPdf(
         `${filename}.pdf`, 
-        `Estado de Cuenta: ${debtor.name} (${format(currentViewDate, "MMMM yyyy", { locale: es })})`, 
+        `Estado de Cuenta: ${debtor.name} (${scope === 'month' ? format(currentViewDate, "MMMM yyyy", { locale: es }) : 'Todo el Historial'})`, 
         ["Fecha", "Tipo", "Descripción", "Monto", "Saldo"], 
         data.map(d => Object.values(d))
       );
-      showSuccess("Historial exportado a PDF.");
+      showSuccess(`Historial ${scope === 'month' ? 'mensual' : 'total'} exportado a PDF.`);
     }
   };
 
@@ -267,7 +275,7 @@ const DebtorDetailsPage: React.FC = () => {
           <Button variant="ghost" size="icon" className="rounded-full" onClick={() => navigate('/debtors')}><ArrowLeft className="h-5 w-5" /></Button>
           <div>
             <h1 className="text-2xl font-black tracking-tight">{debtor.name}</h1>
-            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Historial de Préstamos</p>
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Detalle de Cuenta</p>
           </div>
         </div>
         <div className="flex gap-2">
@@ -275,12 +283,21 @@ const DebtorDetailsPage: React.FC = () => {
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="icon" className="h-10 w-10 rounded-xl" title="Exportar"><FileDown className="h-4 w-4" /></Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="rounded-xl">
-                <DropdownMenuItem onClick={() => handleExport('csv')} className="text-xs font-bold gap-2">
-                  <FileText className="h-3.5 w-3.5" /> Exportar CSV
+              <DropdownMenuContent align="end" className="rounded-xl w-56">
+                <DropdownMenuLabel className="text-[10px] font-black uppercase text-slate-400">Exportar Mes Actual</DropdownMenuLabel>
+                <DropdownMenuItem onClick={() => handleExport('csv', 'month')} className="text-xs font-bold gap-2">
+                  <FileText className="h-3.5 w-3.5" /> CSV (Mes)
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => handleExport('pdf')} className="text-xs font-bold gap-2">
-                  <FileText className="h-3.5 w-3.5" /> Exportar PDF
+                <DropdownMenuItem onClick={() => handleExport('pdf', 'month')} className="text-xs font-bold gap-2">
+                  <FileText className="h-3.5 w-3.5" /> PDF (Mes)
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel className="text-[10px] font-black uppercase text-slate-400">Exportar Historial Completo</DropdownMenuLabel>
+                <DropdownMenuItem onClick={() => handleExport('csv', 'total')} className="text-xs font-bold gap-2">
+                  <Briefcase className="h-3.5 w-3.5" /> CSV (Todo)
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleExport('pdf', 'total')} className="text-xs font-bold gap-2">
+                  <Briefcase className="h-3.5 w-3.5" /> PDF (Todo)
                 </DropdownMenuItem>
               </DropdownMenuContent>
            </DropdownMenu>
@@ -289,7 +306,7 @@ const DebtorDetailsPage: React.FC = () => {
         </div>
       </div>
 
-      {/* DASHBOARD DEUDOR */}
+      {/* DASHBOARD DEUDOR (Basado en historial completo) */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Card className="bg-slate-900 text-white rounded-[2rem] border-none shadow-xl p-6 relative overflow-hidden">
           <div className="absolute top-0 right-0 p-4 opacity-10"><DollarSign className="h-20 w-20" /></div>
@@ -301,21 +318,21 @@ const DebtorDetailsPage: React.FC = () => {
         </Card>
 
         <Card className="rounded-[2rem] border-none shadow-sm bg-white p-6">
-          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Flujo este Mes</p>
+          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Histórico de Movimientos</p>
           <div className="space-y-4 mt-4">
             <div className="flex justify-between items-center">
-              <span className="text-xs font-bold text-slate-500">Nuevos Préstamos</span>
-              <span className="text-sm font-black text-rose-500">+${monthMetrics.charges.toLocaleString()}</span>
+              <span className="text-xs font-bold text-slate-500">Total Prestado</span>
+              <span className="text-sm font-black text-rose-500">+${totalMetrics.charges.toLocaleString()}</span>
             </div>
             <div className="flex justify-between items-center">
-              <span className="text-xs font-bold text-slate-500">Abonos Recibidos</span>
-              <span className="text-sm font-black text-emerald-500">-${monthMetrics.payments.toLocaleString()}</span>
+              <span className="text-xs font-bold text-slate-500">Total Abonado</span>
+              <span className="text-sm font-black text-emerald-500">-${totalMetrics.payments.toLocaleString()}</span>
             </div>
             <div className="h-px bg-slate-100" />
             <div className="flex justify-between items-center">
-              <span className="text-xs font-black uppercase text-slate-400">Balance Neto</span>
-              <span className={cn("text-sm font-black", monthMetrics.net >= 0 ? "text-rose-500" : "text-emerald-500")}>
-                {monthMetrics.net >= 0 ? '+' : ''}${monthMetrics.net.toLocaleString()}
+              <span className="text-xs font-black uppercase text-slate-400">Balance Neto de Cuenta</span>
+              <span className={cn("text-sm font-black", totalMetrics.net >= 0 ? "text-rose-500" : "text-emerald-500")}>
+                {totalMetrics.net >= 0 ? '+' : ''}${totalMetrics.net.toLocaleString()}
               </span>
             </div>
           </div>
