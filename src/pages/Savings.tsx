@@ -125,8 +125,12 @@ const Savings: React.FC = () => {
     setIsSubmitting(true);
     try {
       const { data, error } = await supabase.from('savings').insert({
-        user_id: user?.id, name: newSaving.name.trim(), current_balance: initial, target_amount: target,
-        target_date: newSaving.target_date ? getLocalDateString(newSaving.target_date) : null, color: newSaving.color
+        user_id: user?.id, 
+        name: newSaving.name.trim(), 
+        current_balance: initial, 
+        target_amount: target,
+        target_date: newSaving.target_date ? getLocalDateString(newSaving.target_date) : null, 
+        color: newSaving.color
       }).select().single();
 
       if (error) throw error;
@@ -158,8 +162,10 @@ const Savings: React.FC = () => {
     setIsSubmitting(true);
     try {
       const { data, error } = await supabase.from('savings').update({
-        name: newSaving.name.trim(), target_amount: target,
-        target_date: newSaving.target_date ? getLocalDateString(newSaving.target_date) : null, color: newSaving.color
+        name: newSaving.name.trim(), 
+        target_amount: target,
+        target_date: newSaving.target_date ? getLocalDateString(newSaving.target_date) : null, 
+        color: newSaving.color
       }).eq('id', editingSaving.id).select().single();
 
       if (error) throw error;
@@ -196,15 +202,14 @@ const Savings: React.FC = () => {
 
       const { data, error } = await supabase.from('savings').update({ 
         current_balance: newBal, 
-        completion_date: completionDate,
-        updated_at: new Date().toISOString() 
+        completion_date: completionDate
       }).eq('id', selectedSavingId).select().single();
 
       if (error) throw error;
 
       setSavings(prev => prev.map(s => s.id === data.id ? data : s));
       setIsTransactionDialogOpen(false);
-      setNewTransaction(prev => ({ ...prev, amount: "" })); // Limpiar monto
+      setNewTransaction(prev => ({ ...prev, amount: "" })); 
       
       const now = Date.now();
       const isDecisionCorrected = lastAction?.type === 'withdrawal' && newTransaction.type === 'deposit' && (now - lastAction.time < 300000) && lastAction.savingId === selectedSavingId;
@@ -240,8 +245,9 @@ const Savings: React.FC = () => {
       return { img: GIF_FELIZ, label: "¡Logrado!", sub: "Cochinito fiestero" };
     }
     
-    const daysSinceUpdate = differenceInDays(new Date(), parseISO(saving.updated_at || saving.created_at));
-    if (daysSinceUpdate > 7) {
+    // Al no tener updated_at, usamos created_at como referencia base
+    const daysSinceUpdate = differenceInDays(new Date(), parseISO(saving.created_at));
+    if (daysSinceUpdate > 30) {
       return { img: PIGGY_SAD, label: "Abandonada", sub: getRandomPhrase('onInactivityReminder') };
     }
 
