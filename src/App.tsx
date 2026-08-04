@@ -20,6 +20,8 @@ import EditSharedBudget from "./pages/EditSharedBudget";
 import ShoppingList from "./pages/ShoppingList";
 import RecurringExpenses from "./pages/RecurringExpenses";
 import Minigames from "./pages/Minigames";
+import PigMergePage from "./pages/PigMergePage";
+import CoinCatchPage from "./pages/CoinCatchPage";
 import NotFound from "./pages/NotFound";
 import Login from "./pages/Login";
 import ResetPassword from "./pages/ResetPassword";
@@ -73,6 +75,8 @@ const App = () => {
                   <Route path="/recurring" element={<RecurringExpenses />} />
                   <Route path="/shopping-list" element={<ShoppingList />} />
                   <Route path="/minigames" element={<Minigames />} />
+                  <Route path="/minigames/pig-merge" element={<PigMergePage />} />
+                  <Route path="/minigames/coin-catch" element={<CoinCatchPage />} />
                 </Route>
                 <Route path="*" element={<NotFound />} />
               </Routes>
