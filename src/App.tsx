@@ -22,6 +22,7 @@ import RecurringExpenses from "./pages/RecurringExpenses";
 import Minigames from "./pages/Minigames";
 import PigMergePage from "./pages/PigMergePage";
 import CoinCatchPage from "./pages/CoinCatchPage";
+import FlappyOinkPage from "./pages/FlappyOinkPage";
 import NotFound from "./pages/NotFound";
 import Login from "./pages/Login";
 import ResetPassword from "./pages/ResetPassword";
@@ -59,9 +60,10 @@ const App = () => {
                 <Route path="/reset-password" element={<ProtectedRoute><ResetPassword /></ProtectedRoute>} />
                 <Route path="/" element={<Navigate to="/dashboard" replace />} />
                 
-                {/* Rutas de Minijuegos INMERSIVOS (Fuera del Layout normal) */}
+                {/* Rutas de Minijuegos INMERSIVOS */}
                 <Route path="/minigames/pig-merge" element={<ProtectedRoute><PigMergePage /></ProtectedRoute>} />
                 <Route path="/minigames/coin-catch" element={<ProtectedRoute><CoinCatchPage /></ProtectedRoute>} />
+                <Route path="/minigames/flappy-oink" element={<ProtectedRoute><FlappyOinkPage /></ProtectedRoute>} />
 
                 {/* Rutas con Menú y Navegación estándar */}
                 <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>

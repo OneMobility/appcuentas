@@ -26,6 +26,15 @@ const games = [
     type: "image",
     color: "bg-emerald-500",
     path: "/minigames/coin-catch"
+  },
+  {
+    id: "flappy-oink",
+    name: "Flappy Oink",
+    description: "Vuela y esquiva los gastos innecesarios para ahorrar.",
+    icon: "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/ChatGPT%20Image%203%20ago%202026,%2003_44_08%20p.m..png",
+    type: "image",
+    color: "bg-sky-500",
+    path: "/minigames/flappy-oink"
   }
 ];
 
@@ -68,7 +77,7 @@ const Minigames = () => {
               <div className="p-8 flex items-center justify-between">
                 <div className="flex items-center gap-6">
                   <div className={cn(
-                    "h-16 w-16 rounded-2xl flex items-center justify-center text-3xl shadow-inner shrink-0 overflow-hidden",
+                    "h-16 w-16 rounded-2xl flex items-center justify-center shadow-inner shrink-0 overflow-hidden",
                     game.color,
                   )}>
                     <img src={game.icon} alt={game.name} className="h-full w-full object-cover" />
