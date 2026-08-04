@@ -314,7 +314,12 @@ const Savings: React.FC = () => {
                             className="h-20 w-20 rounded-3xl flex items-center justify-center shadow-inner shrink-0 overflow-hidden"
                             style={{ backgroundColor: `${saving.color}15` }}
                           >
-                            <img src={status.img} className={cn("h-14 w-14 object-contain", status.label === "Abandonada" && "grayscale opacity-60")} alt="Status" />
+                            {/* Icono con 100% opacidad garantizado */}
+                            <img 
+                              src={status.img} 
+                              className={cn("h-14 w-14 object-contain opacity-100", status.label === "Abandonada" && "grayscale")} 
+                              alt="Status" 
+                            />
                           </div>
                           {isCompleted && <div className="absolute -top-2 -right-2 bg-yellow-400 rounded-full p-1.5 shadow-lg animate-bounce"><Trophy className="h-4 w-4 text-white" /></div>}
                         </div>
