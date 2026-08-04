@@ -2,13 +2,13 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 
 /**
- * 🪙 COIN CATCH — Versión Oinkash Master (Con Imágenes Personalizadas)
+ * 🪙 COIN CATCH — Versión Oinkash Master (Con Fondo de Campo)
  */
 
 const STARTING_LIVES = 3;
 const CATCH_LINE = 86; 
 const MISS_LINE = 101; 
-const BASKET_HALF_WIDTH = 12; // Un poco más ancho para la imagen
+const BASKET_HALF_WIDTH = 12; 
 const CATCH_TOLERANCE = 12; 
 const STREAK_PER_MULT_LEVEL = 3; 
 const MAX_MULTIPLIER = 5;
@@ -519,7 +519,7 @@ const styles: Record<string, React.CSSProperties> = {
     userSelect: "none",
     transition: "box-shadow 0.2s ease",
     border: "4px solid #f1f5f9",
-    backgroundColor: "#f8fafc",
+    background: "linear-gradient(to bottom, #bae6fd 0%, #e0f2fe 75%, #d1fae5 75%, #6ee7b7 100%)",
   },
   item: {
     position: "absolute",
@@ -542,6 +542,7 @@ const styles: Record<string, React.CSSProperties> = {
     filter: "drop-shadow(0 6px 12px rgba(0,0,0,0.2))",
     width: "80px",
     height: "80px",
+    zIndex: 10,
   },
   characterImage: {
     width: "100%",
