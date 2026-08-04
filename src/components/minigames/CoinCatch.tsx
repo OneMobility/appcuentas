@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 
 /**
- * 🪙 COIN CATCH — Versión Oinkash Master
+ * 🪙 COIN CATCH — Versión Oinkash Master (Fluidez Restaurada)
  */
 
 const STARTING_LIVES = 3;
@@ -12,8 +12,8 @@ const BASKET_HALF_WIDTH = 9;
 const CATCH_TOLERANCE = 10; 
 const STREAK_PER_MULT_LEVEL = 3; 
 const MAX_MULTIPLIER = 5;
-const BASE_MOVE_SPEED = 90; // Velocidad base de movimiento del cerdo
-const SPEED_PENALTY_PER_LIFE = 20; // Cuánto se ralentiza por cada vida perdida
+const BASE_MOVE_SPEED = 90; 
+const SPEED_PENALTY_PER_LIFE = 20; 
 
 type GoodKind = "coin" | "bill" | "bag";
 type BadKind = "gasto" | "impuesto" | "factura";
@@ -148,7 +148,6 @@ export default function CoinCatch({
     setPhase("playing");
   }, []);
 
-  // ---------- Bucle principal ----------
   useEffect(() => {
     if (phase !== "playing") return;
 
@@ -159,7 +158,7 @@ export default function CoinCatch({
       lastTimeRef.current = now;
       elapsedRef.current += dt;
 
-      // Cálculo de velocidad de movimiento dinámica: más lento según vidas perdidas
+      // Velocidad dinámica (teclado)
       const livesLost = STARTING_LIVES - livesRef.current;
       const currentMoveSpeed = Math.max(30, BASE_MOVE_SPEED - (livesLost * SPEED_PENALTY_PER_LIFE));
 
@@ -202,11 +201,9 @@ export default function CoinCatch({
             if (def.bad) {
               livesRef.current -= 1;
               streakRef.current = 0;
-              
               if (item.kind === "factura") {
                 scoreRef.current = Math.max(0, scoreRef.current + def.points);
               }
-
               setStreak(0);
               setMultiplier(1);
               setLives(livesRef.current);
@@ -216,7 +213,6 @@ export default function CoinCatch({
               streakRef.current += 1;
               const mult = Math.min(MAX_MULTIPLIER, 1 + Math.floor(streakRef.current / STREAK_PER_MULT_LEVEL));
               scoreRef.current += def.points * mult;
-              
               const currentScore = scoreRef.current;
               MILESTONES.forEach(m => {
                 if (currentScore >= m.score && !triggeredMilestones.current.has(m.score)) {
@@ -225,7 +221,6 @@ export default function CoinCatch({
                   setTimeout(() => setMilestone(null), 2500);
                 }
               });
-
               setStreak(streakRef.current);
               setMultiplier(mult);
               setScore(scoreRef.current);
@@ -244,7 +239,6 @@ export default function CoinCatch({
           }
           continue; 
         }
-
         remaining.push({ ...item, y: newY });
       }
       itemsRef.current = remaining;
@@ -256,7 +250,6 @@ export default function CoinCatch({
         endGame();
         return;
       }
-
       rafRef.current = requestAnimationFrame(tick);
     };
 
@@ -266,7 +259,6 @@ export default function CoinCatch({
     };
   }, [phase, endGame, showFlash]);
 
-  // ---------- Teclado ----------
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
@@ -290,8 +282,6 @@ export default function CoinCatch({
     if (!field) return;
     const rect = field.getBoundingClientRect();
     const pct = ((clientX - rect.left) / rect.width) * 100;
-    
-    // Aplicar la misma lógica de velocidad si se usa el ratón/táctil para mover
     basketXRef.current = Math.max(BASKET_HALF_WIDTH, Math.min(100 - BASKET_HALF_WIDTH, pct));
     setBasketX(basketXRef.current);
   }, []);
@@ -382,8 +372,7 @@ export default function CoinCatch({
           style={{
             ...styles.basket,
             left: `${basketX}%`,
-            transition: 'left 0.1s linear', // Suaviza un poco el movimiento
-            opacity: lives === 3 ? 1 : lives === 2 ? 0.8 : 0.6 // Efecto visual de cansancio
+            opacity: lives === 3 ? 1 : lives === 2 ? 0.8 : 0.6
           }}
         >
           🐷
