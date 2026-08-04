@@ -18,7 +18,7 @@ import { evaluateExpression } from "@/utils/math-helpers";
 import { useNavigate } from "react-router-dom";
 import { fetchUsdToMxnRate } from "@/utils/currency-helper";
 
-const COCHINITO_TRISTE = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Cochinito%20Ahorro%20Triste.png";
+const COCHINITO_TRISTE = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/debo.gif";
 
 const Creditors = () => {
   const { user } = useSession();

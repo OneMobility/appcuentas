@@ -44,7 +44,7 @@ import CardTransferDialog from "@/components/CardTransferDialog";
 import { motion } from "framer-motion";
 import { getContrastColor } from "@/utils/color-helpers";
 
-const GIF_EFECTIVO = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/efectivo.gif";
+const GIF_EFECTIVO = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/efectivnuevo.gif";
 
 const Cash = () => {
   const { user } = useSession();

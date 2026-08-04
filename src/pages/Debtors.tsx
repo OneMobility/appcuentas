@@ -45,7 +45,7 @@ import { fetchUsdToMxnRate } from "@/utils/currency-helper";
 import { motion, AnimatePresence } from "framer-motion";
 import { Badge } from "@/components/ui/badge";
 
-const GIF_COBRANDO = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/cobrando.gif";
+const GIF_COBRANDO = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/debtorsnuevos.gif";
 
 const Debtors = () => {
   const { user } = useSession();
