@@ -1,36 +1,41 @@
+"use client";
+
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Trophy, RefreshCw, Lightbulb, Sparkles, Zap } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { getRandomTip, OinkashTip } from "@/utils/oinkash-tips";
 
 /**
- * 🐷 PIG FLAP — estilo Flappy Bird, por niveles, con jefe final
+ * 🐷 PIG FLAP — Versión Inmersiva
+ * 3 Niveles Largos + Jefe Final
  */
 
-// Usamos el recurso global del personaje disponible en public/
 const pigMascot = "/game-character.png";
 
 // ---------- Config física ----------
-const BIRD_X = 24; // % fijo horizontal del cerdito
-const BIRD_SIZE = 9; // % ancho/alto visual del cerdito
-const GRAVITY = 130; // %/s²
-const FLAP_VELOCITY = -46; // %/s
-const MAX_FALL_SPEED = 85; // %/s
+const BIRD_X = 25; 
+const BIRD_SIZE = 45; // px aprox en escalado
+const GRAVITY = 1100; 
+const FLAP_VELOCITY = -380; 
+const MAX_FALL_SPEED = 700; 
 
 // ---------- Config niveles ----------
-const PIPES_PER_LEVEL = 6;
+const PIPES_PER_LEVEL = 15; // Niveles más largos
 const LEVELS = [
-  { speed: 34, gapHeight: 32, spacing: 46 }, // nivel 1
-  { speed: 42, gapHeight: 28, spacing: 44 }, // nivel 2
-  { speed: 50, gapHeight: 24, spacing: 42 }, // nivel 3
+  { speed: 200, gapHeight: 220, spacing: 350 }, // Nivel 1
+  { speed: 250, gapHeight: 190, spacing: 320 }, // Nivel 2
+  { speed: 320, gapHeight: 160, spacing: 280 }, // Nivel 3
 ];
-const PIPE_WIDTH = 12; // %
+const PIPE_WIDTH = 60; 
 
 // ---------- Config jefe ----------
-const BOSS_WIDTH = 18; // %
-const BOSS_GAP_HEIGHT = 26; // %
-const BOSS_MAX_HEALTH = 5;
-const BOSS_HIT_INTERVAL = 2; // segundos dentro del hueco para restar 1 de vida
-const BOSS_ENTER_SPEED = 60; // %/s al entrar en escena
-const BOSS_REST_X = BIRD_X; // se detiene justo en la columna del cerdito
-const BOSS_OSC_PERIOD = 3.4; // segundos por ciclo de su movimiento
+const BOSS_WIDTH = 100; 
+const BOSS_GAP_HEIGHT = 180; 
+const BOSS_MAX_HEALTH = 8;
+const BOSS_HIT_INTERVAL = 1.5; 
+const BOSS_ENTER_SPEED = 150; 
+const BOSS_REST_X_PCT = 70; // Se queda a la derecha
 
 type Phase = "idle" | "playing" | "transition" | "boss" | "win" | "gameover";
 
@@ -52,41 +57,30 @@ interface Particle {
   emoji: string;
 }
 
-interface PigFlapProps {
-  initialBestScore?: number;
-  onBestScoreChange?: (best: number) => void;
-  onGameOver?: (score: number) => void;
-  onVictory?: (score: number) => void;
-}
-
 const PARTICLE_EMOJIS = ["🪙", "💰", "💵", "✨"];
 
-export default function PigFlap({
-  initialBestScore = 0,
-  onBestScoreChange,
-  onGameOver,
-  onVictory,
-}: PigFlapProps) {
+export default function PigFlap() {
   const [phase, setPhase] = useState<Phase>("idle");
   const [level, setLevel] = useState(1);
   const [score, setScore] = useState(0);
-  const [best, setBest] = useState(initialBestScore);
-  const [birdY, setBirdY] = useState(50);
+  const [best, setBest] = useState(0);
+  const [birdY, setBirdY] = useState(300);
   const [birdAngle, setBirdAngle] = useState(0);
   const [pipes, setPipes] = useState<Pipe[]>([]);
   const [bossState, setBossState] = useState({
-    x: 120,
-    gapY: 50,
+    x: 1000,
+    gapY: 300,
     health: BOSS_MAX_HEALTH,
     hitFlash: false,
   });
   const [particles, setParticles] = useState<Particle[]>([]);
+  const [gameOverTip, setGameOverTip] = useState<OinkashTip | null>(null);
 
-  const fieldRef = useRef<HTMLDivElement | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const rafRef = useRef<number | null>(null);
   const lastTimeRef = useRef(0);
 
-  const birdYRef = useRef(50);
+  const birdYRef = useRef(300);
   const birdVelRef = useRef(0);
   const pipesRef = useRef<Pipe[]>([]);
   const nextPipeIdRef = useRef(0);
@@ -96,8 +90,8 @@ export default function PigFlap({
   const scoreRef = useRef(0);
   const phaseRef = useRef<Phase>("idle");
 
-  const bossXRef = useRef(120);
-  const bossGapYRef = useRef(50);
+  const bossXRef = useRef(1000);
+  const bossGapYRef = useRef(300);
   const bossHealthRef = useRef(BOSS_MAX_HEALTH);
   const bossTimeRef = useRef(0);
   const bossInsideTimerRef = useRef(0);
@@ -106,12 +100,47 @@ export default function PigFlap({
   const particlesRef = useRef<Particle[]>([]);
   const nextParticleIdRef = useRef(0);
 
+  // Audio Refs
+  const audioCoinRef = useRef<HTMLAudioElement | null>(null);
+  const audioEndRef = useRef<HTMLAudioElement | null>(null);
+  const audioHitRef = useRef<HTMLAudioElement | null>(null);
+
   useEffect(() => {
-    phaseRef.current = phase;
-  }, [phase]);
+    audioCoinRef.current = new Audio("/sounds/coin.wav");
+    audioEndRef.current = new Audio("/sounds/end-point.wav");
+    audioHitRef.current = new Audio("/sounds/achievement.mp3");
+    
+    const saved = localStorage.getItem("oinkash_flap_best");
+    if (saved) setBest(parseInt(saved));
+  }, []);
+
+  const playSound = (audio: HTMLAudioElement | null) => {
+    if (audio) {
+      audio.currentTime = 0;
+      audio.play().catch(() => {});
+    }
+  };
+
+  const spawnExplosion = useCallback((x: number, y: number) => {
+    const created: Particle[] = [];
+    for (let i = 0; i < 15; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = 100 + Math.random() * 200;
+      created.push({
+        id: nextParticleIdRef.current++,
+        x, y,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        life: 1,
+        emoji: PARTICLE_EMOJIS[Math.floor(Math.random() * PARTICLE_EMOJIS.length)],
+      });
+    }
+    particlesRef.current = [...particlesRef.current, ...created];
+  }, []);
 
   const resetRun = useCallback(() => {
-    birdYRef.current = 50;
+    const startY = containerRef.current ? containerRef.current.offsetHeight / 2 : 300;
+    birdYRef.current = startY;
     birdVelRef.current = 0;
     pipesRef.current = [];
     nextPipeIdRef.current = 0;
@@ -119,641 +148,340 @@ export default function PigFlap({
     pipesPassedRef.current = 0;
     levelRef.current = 1;
     scoreRef.current = 0;
-    bossXRef.current = 120;
-    bossGapYRef.current = 50;
+    bossXRef.current = 2000;
     bossHealthRef.current = BOSS_MAX_HEALTH;
     bossTimeRef.current = 0;
     bossInsideTimerRef.current = 0;
     bossRestedRef.current = false;
     particlesRef.current = [];
 
-    setBirdY(50);
+    setBirdY(startY);
     setBirdAngle(0);
     setPipes([]);
     setScore(0);
     setLevel(1);
-    setBossState({ x: 120, gapY: 50, health: BOSS_MAX_HEALTH, hitFlash: false });
-    setParticles([]);
+    setGameOverTip(null);
   }, []);
-
-  const startGame = useCallback(() => {
-    resetRun();
-    setPhase("playing");
-  }, [resetRun]);
 
   const die = useCallback(() => {
     setPhase("gameover");
-    setBest((prevBest) => {
-      if (scoreRef.current > prevBest) {
-        onBestScoreChange?.(scoreRef.current);
-        return scoreRef.current;
-      }
-      return prevBest;
-    });
-    onGameOver?.(scoreRef.current);
-  }, [onBestScoreChange, onGameOver]);
+    setGameOverTip(getRandomTip());
+    playSound(audioEndRef.current);
+    if (scoreRef.current > best) {
+      setBest(scoreRef.current);
+      localStorage.setItem("oinkash_flap_best", scoreRef.current.toString());
+    }
+  }, [best]);
 
   const flap = useCallback(() => {
-    const p = phaseRef.current;
-    if (p === "idle") {
-      startGame();
-      return;
+    if (phaseRef.current === "idle" || phaseRef.current === "gameover" || phaseRef.current === "win") {
+      resetRun();
+      setPhase("playing");
+      phaseRef.current = "playing";
     }
-    if (p === "playing" || p === "boss") {
+    if (phaseRef.current === "playing" || phaseRef.current === "boss") {
       birdVelRef.current = FLAP_VELOCITY;
     }
-  }, [startGame]);
-
-  const continueToNextLevel = useCallback(() => {
-    pipesPassedRef.current = 0;
-    pipesRef.current = [];
-    spawnAccRef.current = 0;
-    setPipes([]);
-    birdVelRef.current = 0;
-
-    if (levelRef.current >= 3) {
-      bossXRef.current = 120;
-      bossGapYRef.current = 50;
-      bossHealthRef.current = BOSS_MAX_HEALTH;
-      bossTimeRef.current = 0;
-      bossInsideTimerRef.current = 0;
-      bossRestedRef.current = false;
-      setBossState({ x: 120, gapY: 50, health: BOSS_MAX_HEALTH, hitFlash: false });
-      setPhase("boss");
-    } else {
-      levelRef.current += 1;
-      setLevel(levelRef.current);
-      setPhase("playing");
+    if (phaseRef.current === "transition") {
+      pipesPassedRef.current = 0;
+      pipesRef.current = [];
+      if (levelRef.current >= 3) {
+        setPhase("boss");
+        phaseRef.current = "boss";
+      } else {
+        levelRef.current += 1;
+        setLevel(levelRef.current);
+        setPhase("playing");
+        phaseRef.current = "playing";
+      }
     }
-  }, []);
-
-  const spawnExplosion = useCallback((x: number, y: number) => {
-    const created: Particle[] = [];
-    for (let i = 0; i < 26; i++) {
-      const angle = Math.random() * Math.PI * 2;
-      const speed = 30 + Math.random() * 55;
-      created.push({
-        id: nextParticleIdRef.current++,
-        x,
-        y,
-        vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed - 20,
-        life: 1,
-        emoji: PARTICLE_EMOJIS[Math.floor(Math.random() * PARTICLE_EMOJIS.length)],
-      });
-    }
-    particlesRef.current = [...particlesRef.current, ...created];
-    setParticles([...particlesRef.current]);
-  }, []);
+  }, [resetRun]);
 
   useEffect(() => {
-    if (phase !== "playing" && phase !== "boss") return;
-
-    lastTimeRef.current = performance.now();
-
     const tick = (now: number) => {
       const dt = Math.min(0.05, (now - lastTimeRef.current) / 1000);
       lastTimeRef.current = now;
 
-      birdVelRef.current = Math.min(MAX_FALL_SPEED, birdVelRef.current + GRAVITY * dt);
-      birdYRef.current += birdVelRef.current * dt;
+      if (phaseRef.current === "playing" || phaseRef.current === "boss") {
+        const height = containerRef.current?.offsetHeight || 600;
+        const width = containerRef.current?.offsetWidth || 400;
 
-      const outOfBounds = birdYRef.current <= 0 || birdYRef.current >= 100;
-      birdYRef.current = Math.max(0, Math.min(100, birdYRef.current));
-      setBirdY(birdYRef.current);
-      setBirdAngle(Math.max(-25, Math.min(70, birdVelRef.current * 0.6)));
-
-      if (outOfBounds) {
-        die();
-        return;
-      }
-
-      if (phase === "playing") {
-        const cfg = LEVELS[levelRef.current - 1];
-
-        spawnAccRef.current += dt;
-        const spawnInterval = cfg.spacing / cfg.speed;
-        if (spawnAccRef.current >= spawnInterval) {
-          spawnAccRef.current = 0;
-          const margin = cfg.gapHeight / 2 + 8;
-          pipesRef.current.push({
-            id: nextPipeIdRef.current++,
-            x: 110,
-            gapY: margin + Math.random() * (100 - margin * 2),
-            gapHeight: cfg.gapHeight,
-            passed: false,
-          });
-        }
-
-        let collided = false;
-        const remaining: Pipe[] = [];
-        for (const pipe of pipesRef.current) {
-          const newX = pipe.x - cfg.speed * dt;
-          if (newX < -PIPE_WIDTH - 2) continue;
-
-          const overlapsX =
-            BIRD_X + BIRD_SIZE / 2 > newX - PIPE_WIDTH / 2 &&
-            BIRD_X - BIRD_SIZE / 2 < newX + PIPE_WIDTH / 2;
-          if (overlapsX) {
-            const topGap = pipe.gapY - pipe.gapHeight / 2;
-            const bottomGap = pipe.gapY + pipe.gapHeight / 2;
-            const birdTop = birdYRef.current - BIRD_SIZE / 2;
-            const birdBottom = birdYRef.current + BIRD_SIZE / 2;
-            if (birdTop < topGap || birdBottom > bottomGap) {
-              collided = true;
-            }
-          }
-
-          let passed = pipe.passed;
-          if (!passed && newX + PIPE_WIDTH / 2 < BIRD_X - BIRD_SIZE / 2) {
-            passed = true;
-            pipesPassedRef.current += 1;
-            scoreRef.current += 5;
-            setScore(scoreRef.current);
-          }
-
-          remaining.push({ ...pipe, x: newX, passed });
-        }
-        pipesRef.current = remaining;
-        setPipes([...pipesRef.current]);
-
-        if (collided) {
+        birdVelRef.current = Math.min(MAX_FALL_SPEED, birdVelRef.current + GRAVITY * dt);
+        birdYRef.current += birdVelRef.current * dt;
+        
+        if (birdYRef.current < 0 || birdYRef.current > height) {
           die();
           return;
         }
 
-        if (pipesPassedRef.current >= PIPES_PER_LEVEL) {
-          setPhase("transition");
-          return;
-        }
-      } else if (phase === "boss") {
-        if (!bossRestedRef.current) {
-          bossXRef.current = Math.max(BOSS_REST_X, bossXRef.current - BOSS_ENTER_SPEED * dt);
-          if (bossXRef.current <= BOSS_REST_X) {
-            bossRestedRef.current = true;
+        setBirdY(birdYRef.current);
+        setBirdAngle(Math.max(-25, Math.min(70, birdVelRef.current * 0.1)));
+
+        if (phaseRef.current === "playing") {
+          const cfg = LEVELS[levelRef.current - 1];
+          spawnAccRef.current += dt * 1000;
+          if (spawnAccRef.current >= (cfg.spacing / cfg.speed) * 1000) {
+            spawnAccRef.current = 0;
+            const margin = 100;
+            pipesRef.current.push({
+              id: nextPipeIdRef.current++,
+              x: width + 50,
+              gapY: margin + Math.random() * (height - margin * 2 - cfg.gapHeight),
+              gapHeight: cfg.gapHeight,
+              passed: false,
+            });
           }
-        } else {
-          bossTimeRef.current += dt;
-        }
 
-        const amplitude = (100 - BOSS_GAP_HEIGHT) / 2 - 4;
-        bossGapYRef.current =
-          50 + Math.sin((bossTimeRef.current / BOSS_OSC_PERIOD) * Math.PI * 2) * amplitude;
-
-        const overlapsX =
-          BIRD_X + BIRD_SIZE / 2 > bossXRef.current - BOSS_WIDTH / 2 &&
-          BIRD_X - BIRD_SIZE / 2 < bossXRef.current + BOSS_WIDTH / 2;
-
-        let hitFlash = false;
-        if (overlapsX) {
-          const topGap = bossGapYRef.current - BOSS_GAP_HEIGHT / 2;
-          const bottomGap = bossGapYRef.current + BOSS_GAP_HEIGHT / 2;
-          const birdTop = birdYRef.current - BIRD_SIZE / 2;
-          const birdBottom = birdYRef.current + BIRD_SIZE / 2;
-          const insideGap = birdTop >= topGap && birdBottom <= bottomGap;
-
-          if (insideGap && bossRestedRef.current) {
-            bossInsideTimerRef.current += dt;
-            if (bossInsideTimerRef.current >= BOSS_HIT_INTERVAL) {
-              bossInsideTimerRef.current = 0;
-              bossHealthRef.current -= 1;
-              hitFlash = true;
-              scoreRef.current += 40;
-              setScore(scoreRef.current);
-              spawnExplosion(bossXRef.current, bossGapYRef.current);
-
-              if (bossHealthRef.current <= 0) {
-                spawnExplosion(bossXRef.current, 30);
-                spawnExplosion(bossXRef.current, 70);
-                scoreRef.current += 500;
-                setScore(scoreRef.current);
-                setPhase("win");
-                setBest((prevBest) => {
-                  if (scoreRef.current > prevBest) {
-                    onBestScoreChange?.(scoreRef.current);
-                    return scoreRef.current;
-                  }
-                  return prevBest;
-                });
-                onVictory?.(scoreRef.current);
+          const remaining: Pipe[] = [];
+          for (const pipe of pipesRef.current) {
+            pipe.x -= cfg.speed * dt;
+            
+            // Colisión
+            const birdLeft = (BIRD_X / 100) * width - 20;
+            const birdRight = (BIRD_X / 100) * width + 20;
+            if (pipe.x < birdRight && pipe.x + PIPE_WIDTH > birdLeft) {
+              if (birdYRef.current < pipe.gapY || birdYRef.current > pipe.gapY + pipe.gapHeight) {
+                die();
                 return;
               }
             }
-          } else if (!insideGap) {
-            bossInsideTimerRef.current = 0;
-            die();
-            return;
-          }
-        } else {
-          bossInsideTimerRef.current = 0;
-        }
 
-        setBossState({
-          x: bossXRef.current,
-          gapY: bossGapYRef.current,
-          health: bossHealthRef.current,
-          hitFlash,
-        });
+            if (!pipe.passed && pipe.x < birdLeft) {
+              pipe.passed = true;
+              pipesPassedRef.current += 1;
+              scoreRef.current += 10;
+              setScore(scoreRef.current);
+              playSound(audioCoinRef.current);
+            }
+
+            if (pipe.x > -PIPE_WIDTH) remaining.push(pipe);
+          }
+          pipesRef.current = remaining;
+          setPipes([...pipesRef.current]);
+
+          if (pipesPassedRef.current >= PIPES_PER_LEVEL) {
+            setPhase("transition");
+            phaseRef.current = "transition";
+          }
+        } else if (phaseRef.current === "boss") {
+          const targetX = width * (BOSS_REST_X_PCT / 100);
+          if (!bossRestedRef.current) {
+            bossXRef.current -= BOSS_ENTER_SPEED * dt;
+            if (bossXRef.current <= targetX) bossRestedRef.current = true;
+          } else {
+            bossTimeRef.current += dt;
+          }
+
+          const amplitude = (height - BOSS_GAP_HEIGHT) / 2 - 50;
+          bossGapYRef.current = (height / 2 - BOSS_GAP_HEIGHT / 2) + Math.sin(bossTimeRef.current * 1.5) * amplitude;
+
+          // Daño al jefe si el pájaro está en su X y dentro del hueco
+          const birdXPos = (BIRD_X / 100) * width;
+          if (birdXPos > bossXRef.current && birdXPos < bossXRef.current + BOSS_WIDTH) {
+            if (birdYRef.current > bossGapYRef.current && birdYRef.current < bossGapYRef.current + BOSS_GAP_HEIGHT) {
+              bossInsideTimerRef.current += dt;
+              if (bossInsideTimerRef.current >= BOSS_HIT_INTERVAL) {
+                bossInsideTimerRef.current = 0;
+                bossHealthRef.current -= 1;
+                scoreRef.current += 100;
+                setScore(scoreRef.current);
+                playSound(audioHitRef.current);
+                spawnExplosion(bossXRef.current + BOSS_WIDTH / 2, bossGapYRef.current + BOSS_GAP_HEIGHT / 2);
+                
+                if (bossHealthRef.current <= 0) {
+                  setPhase("win");
+                  phaseRef.current = "win";
+                  scoreRef.current += 1000;
+                  setScore(scoreRef.current);
+                }
+              }
+            } else {
+              die();
+              return;
+            }
+          }
+
+          setBossState({
+            x: bossXRef.current,
+            gapY: bossGapYRef.current,
+            health: bossHealthRef.current,
+            hitFlash: bossInsideTimerRef.current > 0 && bossInsideTimerRef.current < 0.2
+          });
+        }
       }
 
+      // Partículas
       if (particlesRef.current.length > 0) {
         particlesRef.current = particlesRef.current
-          .map((p) => ({
+          .map(p => ({
             ...p,
             x: p.x + p.vx * dt,
             y: p.y + p.vy * dt,
-            vy: p.vy + 60 * dt,
-            life: p.life - dt / 1.1,
+            vy: p.vy + 400 * dt,
+            life: p.life - dt,
           }))
-          .filter((p) => p.life > 0);
+          .filter(p => p.life > 0);
         setParticles([...particlesRef.current]);
       }
 
       rafRef.current = requestAnimationFrame(tick);
     };
 
+    lastTimeRef.current = performance.now();
     rafRef.current = requestAnimationFrame(tick);
-    return () => {
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
-    };
-  }, [phase, die, spawnExplosion, onBestScoreChange, onVictory]);
+    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
+  }, [die, spawnExplosion]);
 
   useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.code === "Space") {
-        e.preventDefault();
-        flap();
-      }
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+    const handleKey = (e: KeyboardEvent) => { if (e.code === "Space") { e.preventDefault(); flap(); } };
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
   }, [flap]);
-
-  const onFieldPointerDown = () => {
-    flap();
-  };
 
   const bossHealthPct = (bossState.health / BOSS_MAX_HEALTH) * 100;
 
   return (
-    <div style={styles.wrapper}>
-      <div style={styles.header}>
-        <div>
-          <h1 style={styles.title}>🐷 PIG FLAP</h1>
-          <p style={styles.subtitle}>Aletea, esquiva los gastos y vence al jefe de las deudas</p>
-        </div>
-        <div style={styles.statsRow}>
-          <div style={styles.statBox}>
-            <span style={styles.statLabel}>PUNTOS</span>
-            <span style={styles.statValue}>{score}</span>
-          </div>
-          <div style={styles.statBox}>
-            <span style={styles.statLabel}>MEJOR</span>
-            <span style={styles.statValue}>{best}</span>
-          </div>
-        </div>
-      </div>
+    <div 
+      ref={containerRef}
+      className="relative w-full h-full overflow-hidden touch-none select-none bg-sky-400"
+      onPointerDown={flap}
+    >
+      {/* Fondo personalizado */}
+      <div 
+        className="absolute inset-0 bg-cover bg-center bg-no-repeat transition-transform duration-1000"
+        style={{ backgroundImage: 'url(/flappy-bg.png)', transform: phase === 'playing' ? 'scale(1.05)' : 'scale(1)' }}
+      />
 
-      <div style={styles.hudRow}>
-        <div style={styles.hudItem}>
-          🚩 <strong style={styles.hudStrong}>Nivel {phase === "boss" || phase === "win" ? "JEFE" : level} / 3</strong>
+      {/* Pipes (Gastos) */}
+      {pipes.map(p => (
+        <React.Fragment key={p.id}>
+          <div className="absolute bg-rose-600 border-x-4 border-rose-800 rounded-b-3xl shadow-lg" style={{ left: p.x, top: 0, width: PIPE_WIDTH, height: p.gapY }}>
+            <div className="absolute bottom-4 left-0 right-0 text-center text-[10px] font-black text-rose-200 uppercase tracking-tighter">GASTO</div>
+          </div>
+          <div className="absolute bg-rose-600 border-x-4 border-rose-800 rounded-t-3xl shadow-lg" style={{ left: p.x, top: p.gapY + p.gapHeight, width: PIPE_WIDTH, height: 1000 }}>
+            <div className="absolute top-4 left-0 right-0 text-center text-[10px] font-black text-rose-200 uppercase tracking-tighter">DEUDA</div>
+          </div>
+        </React.Fragment>
+      ))}
+
+      {/* Jefe Final (Monstruo de las Deudas) */}
+      {phase === "boss" && (
+        <div className="absolute z-20" style={{ left: bossState.x, top: 0, width: BOSS_WIDTH, height: '100%' }}>
+          <div className={cn("absolute top-0 w-full rounded-b-[3rem] border-4 border-black/20 flex items-end justify-center pb-4 transition-colors", bossState.hitFlash ? "bg-white" : "bg-slate-900")} style={{ height: bossState.gapY }}>
+             <span className="text-4xl">👹</span>
+          </div>
+          <div className={cn("absolute w-full rounded-t-[3rem] border-4 border-black/20 flex items-start justify-center pt-4 transition-colors", bossState.hitFlash ? "bg-white" : "bg-slate-900")} style={{ top: bossState.gapY + BOSS_GAP_HEIGHT, height: 1000 }}>
+             <span className="text-4xl">💀</span>
+          </div>
         </div>
-        {phase === "boss" && (
-          <div style={styles.bossHealthOuter}>
-            <div style={{ ...styles.bossHealthInner, width: `${bossHealthPct}%` }} />
+      )}
+
+      {/* HUD Superior */}
+      <div className="absolute top-16 left-0 right-0 p-4 flex justify-between items-start z-30 pointer-events-none">
+        <div className="bg-black/40 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/10 text-white">
+          <p className="text-[10px] font-black uppercase opacity-60">Puntos</p>
+          <p className="text-2xl font-black">{score}</p>
+        </div>
+
+        {phase === "boss" ? (
+          <div className="flex-1 max-w-[200px] mx-4 space-y-1">
+            <p className="text-[10px] font-black text-white text-center uppercase tracking-widest">JEFE: DEUDA TOTAL</p>
+            <div className="h-3 w-full bg-black/40 rounded-full overflow-hidden border border-white/20">
+              <motion.div className="h-full bg-rose-500" animate={{ width: `${bossHealthPct}%` }} />
+            </div>
+          </div>
+        ) : (
+          <div className="bg-indigo-600 px-4 py-2 rounded-2xl border border-white/20 text-white text-center">
+            <p className="text-[10px] font-black uppercase opacity-60">Nivel</p>
+            <p className="text-xl font-black">{level} / 3</p>
           </div>
         )}
       </div>
 
-      <div
-        ref={fieldRef}
-        style={styles.field}
-        onPointerDown={onFieldPointerDown}
+      {/* El Cerdito */}
+      <motion.div
+        className="absolute z-30"
+        animate={{ top: birdY, rotate: birdAngle }}
+        transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+        style={{ left: `${BIRD_X}%`, width: BIRD_SIZE, height: BIRD_SIZE, marginLeft: -BIRD_SIZE/2, marginTop: -BIRD_SIZE/2 }}
       >
-        {pipes.map((pipe) => {
-          const topH = pipe.gapY - pipe.gapHeight / 2;
-          const bottomStart = pipe.gapY + pipe.gapHeight / 2;
-          return (
-            <React.Fragment key={pipe.id}>
-              <div
-                style={{
-                  ...styles.pipe,
-                  left: `${pipe.x - PIPE_WIDTH / 2}%`,
-                  width: `${PIPE_WIDTH}%`,
-                  top: 0,
-                  height: `${topH}%`,
-                }}
-              />
-              <div
-                style={{
-                  ...styles.pipe,
-                  left: `${pipe.x - PIPE_WIDTH / 2}%`,
-                  width: `${PIPE_WIDTH}%`,
-                  top: `${bottomStart}%`,
-                  height: `${100 - bottomStart}%`,
-                }}
-              />
-            </React.Fragment>
-          );
-        })}
+        <img src={pigMascot} className="w-full h-full object-contain drop-shadow-2xl" />
+      </motion.div>
 
-        {(phase === "boss" || phase === "win") && (
-          <>
-            <div
-              style={{
-                ...styles.bossPart,
-                left: `${bossState.x - BOSS_WIDTH / 2}%`,
-                width: `${BOSS_WIDTH}%`,
-                top: 0,
-                height: `${bossState.gapY - BOSS_GAP_HEIGHT / 2}%`,
-                background: bossState.hitFlash ? "#FFD36E" : "#5C3300",
-              }}
-            />
-            <div
-              style={{
-                ...styles.bossPart,
-                left: `${bossState.x - BOSS_WIDTH / 2}%`,
-                width: `${BOSS_WIDTH}%`,
-                top: `${bossState.gapY + BOSS_GAP_HEIGHT / 2}%`,
-                height: `${100 - (bossState.gapY + BOSS_GAP_HEIGHT / 2)}%`,
-                background: bossState.hitFlash ? "#FFD36E" : "#5C3300",
-              }}
-            />
-            {phase === "boss" && (
-              <div
-                style={{
-                  ...styles.bossFace,
-                  left: `${bossState.x}%`,
-                  top: `${bossState.gapY <= 50 ? 90 : 10}%`,
-                }}
-              >
-                👹
-              </div>
-            )}
-          </>
-        )}
+      {/* Partículas */}
+      {particles.map(p => (
+        <div key={p.id} className="absolute z-40 text-xl pointer-events-none" style={{ left: p.x, top: p.y, opacity: p.life }}>
+          {p.emoji}
+        </div>
+      ))}
 
-        {phase !== "idle" && (
-          <img
-            src={pigMascot}
-            alt="Cochinito Oinkash"
-            style={{
-              ...styles.bird,
-              top: `${birdY}%`,
-              transform: `translate(-50%, -50%) rotate(${birdAngle}deg)`,
-            }}
-          />
-        )}
-
-        {particles.map((p) => (
-          <div
-            key={p.id}
-            style={{
-              ...styles.particle,
-              left: `${p.x}%`,
-              top: `${p.y}%`,
-              opacity: Math.max(0, p.life),
-            }}
-          >
-            {p.emoji}
-          </div>
-        ))}
-
+      {/* Overlays de Estado */}
+      <AnimatePresence>
         {phase === "idle" && (
-          <div style={styles.overlay}>
-            <img src={pigMascot} alt="" style={styles.overlayMascot} />
-            <p style={styles.overlayTitle}>🐷 Pig Flap</p>
-            <p style={styles.overlaySubtitle}>
-              Toca la pantalla (o barra espaciadora) para aletear.
-              <br />
-              Cruza 3 niveles de gastos y vence al Monstruo de las Deudas.
-            </p>
-            <button style={styles.overlayButton} onClick={startGame}>
-              Jugar
-            </button>
-          </div>
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 z-50 bg-slate-900/60 backdrop-blur-md flex flex-col items-center justify-center p-8 text-center text-white">
+            <img src={pigMascot} className="h-24 w-24 mb-6 animate-bounce" />
+            <h2 className="text-5xl font-black tracking-tighter mb-2">FLAPPY OINK</h2>
+            <p className="text-sm font-medium mb-8 opacity-80 max-w-[280px]">Toca para saltar. Cruza los 3 niveles de gastos y vence al Jefe de las Deudas.</p>
+            <Button className="h-16 px-12 rounded-full bg-white text-indigo-900 font-black text-xl shadow-2xl">¡EMPEZAR! 🚀</Button>
+          </motion.div>
         )}
 
         {phase === "transition" && (
-          <div style={styles.overlay}>
-            <p style={styles.overlayTitle}>🎉 ¡Nivel {level} completado!</p>
-            <p style={styles.overlaySubtitle}>
-              {level >= 3 ? "Prepárate: viene el jefe final." : `Nivel ${level + 1} de 3 a continuación.`}
-            </p>
-            <button style={styles.overlayButton} onClick={continueToNextLevel}>
-              Continuar
-            </button>
-          </div>
+          <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="absolute inset-0 z-50 flex flex-col items-center justify-center p-8 text-center">
+            <div className="bg-white p-8 rounded-[3rem] shadow-2xl space-y-6">
+              <div className="h-20 w-20 bg-emerald-500 rounded-3xl flex items-center justify-center mx-auto text-white">
+                <Zap className="h-10 w-10 fill-current" />
+              </div>
+              <h2 className="text-3xl font-black text-slate-900">¡NIVEL {level} LISTO!</h2>
+              <p className="text-slate-500 font-bold">
+                {level < 3 ? "Prepárate para el siguiente reto." : "¡ATENCIÓN! El Jefe de las Deudas se aproxima."}
+              </p>
+              <Button className="w-full h-14 rounded-2xl bg-indigo-600 text-white font-black">CONTINUAR ➔</Button>
+            </div>
+          </motion.div>
         )}
 
         {phase === "gameover" && (
-          <div style={styles.overlay}>
-            <p style={styles.overlayTitle}>🐷 ¡Ups!</p>
-            <p style={styles.overlaySubtitle}>
-              Puntaje: <strong>{score}</strong>
-              {score >= best && score > 0 ? " · ¡Nuevo mejor puntaje! 🎉" : ""}
-            </p>
-            <button style={styles.overlayButton} onClick={startGame}>
-              Jugar de nuevo
-            </button>
-          </div>
+          <motion.div initial={{ opacity: 0, y: 50 }} animate={{ opacity: 1, y: 0 }} className="absolute inset-0 z-50 bg-rose-950/90 backdrop-blur-xl flex flex-col items-center justify-center p-6 text-center text-white">
+            <Trophy className="h-16 w-16 text-yellow-400 mb-4" />
+            <h2 className="text-4xl font-black tracking-tighter">¡BANCARROTA!</h2>
+            <div className="bg-white/10 px-8 py-4 rounded-3xl my-6 border border-white/10">
+              <p className="text-[10px] font-black uppercase text-white/50 mb-1">Tu Puntuación</p>
+              <p className="text-5xl font-black">{score}</p>
+            </div>
+
+            {gameOverTip && (
+              <div className="bg-indigo-600/40 p-5 rounded-[2rem] mb-8 max-w-xs border border-white/10">
+                <div className="flex items-center justify-center gap-2 mb-2">
+                  <Lightbulb className="h-4 w-4 text-yellow-400" />
+                  <span className="text-[10px] font-black uppercase tracking-widest">Consejo Oinkash</span>
+                </div>
+                <p className="text-sm font-bold italic leading-tight">"{gameOverTip.text}"</p>
+              </div>
+            )}
+
+            <Button className="h-14 px-10 rounded-full bg-white text-slate-900 font-black text-lg shadow-xl flex gap-3">
+              <RefreshCw className="h-5 w-5" /> REINTENTAR
+            </Button>
+          </motion.div>
         )}
 
         {phase === "win" && (
-          <div style={styles.overlay}>
-            <p style={styles.overlayTitle}>🏆 ¡Venciste al Monstruo de las Deudas!</p>
-            <p style={styles.overlaySubtitle}>
-              Puntaje final: <strong>{score}</strong>
-              {score >= best ? " · ¡Nuevo mejor puntaje! 🎉" : ""}
-            </p>
-            <button style={styles.overlayButton} onClick={startGame}>
-              Jugar de nuevo
-            </button>
-          </div>
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="absolute inset-0 z-50 bg-indigo-900/90 backdrop-blur-xl flex flex-col items-center justify-center p-8 text-center text-white">
+            <div className="relative">
+              <Sparkles className="absolute -top-10 -right-10 h-20 w-20 text-yellow-400 animate-pulse" />
+              <Trophy className="h-32 w-32 text-yellow-400 mb-6" />
+            </div>
+            <h2 className="text-5xl font-black tracking-tighter mb-2">¡VICTORIA TOTAL!</h2>
+            <p className="text-xl font-bold text-indigo-200 mb-8">Venciste al Monstruo de las Deudas.</p>
+            <div className="bg-white/10 px-12 py-6 rounded-[2.5rem] border border-white/20 mb-8">
+              <p className="text-sm font-black uppercase opacity-60">Puntaje Final Maestro</p>
+              <p className="text-6xl font-black">{score}</p>
+            </div>
+            <Button className="h-16 px-12 rounded-full bg-emerald-500 text-white font-black text-xl shadow-2xl">¡SOY UN CRACK! 🐷</Button>
+          </motion.div>
         )}
-      </div>
-
-      <p style={styles.hint}>
-        Toca o presiona espacio para aletear · esquiva las columnas de gastos · en el jefe,
-        mantente dentro del hueco que se mueve para dañarlo
-      </p>
+      </AnimatePresence>
     </div>
   );
 }
-
-// ---------- Estilos ----------
-const styles: Record<string, React.CSSProperties> = {
-  wrapper: {
-    width: "100%",
-    maxWidth: 480,
-    margin: "0 auto",
-    padding: "clamp(10px, 3vw, 18px)",
-    fontFamily: "'Segoe UI', system-ui, -apple-system, sans-serif",
-    background: "#FDF6EC",
-    borderRadius: 20,
-    boxSizing: "border-box",
-  },
-  header: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    gap: 12,
-    marginBottom: 8,
-    flexWrap: "wrap",
-  },
-  title: {
-    margin: 0,
-    fontSize: "clamp(20px, 5vw, 26px)",
-    color: "#5C3300",
-  },
-  subtitle: {
-    margin: "4px 0 0",
-    fontSize: 12,
-    color: "#8A5A00",
-    maxWidth: 220,
-  },
-  statsRow: {
-    display: "flex",
-    gap: 8,
-  },
-  statBox: {
-    background: "#FFB13D",
-    borderRadius: 10,
-    padding: "6px 12px",
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    minWidth: 60,
-  },
-  statLabel: {
-    fontSize: 10,
-    fontWeight: 700,
-    color: "#5C3300",
-  },
-  statValue: {
-    fontSize: 17,
-    fontWeight: 800,
-    color: "#3A2100",
-  },
-  hudRow: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    background: "#F3DCB4",
-    borderRadius: 10,
-    padding: "6px 12px",
-    marginBottom: 8,
-    fontSize: 14,
-    color: "#5C3300",
-    gap: 10,
-  },
-  hudItem: {
-    display: "flex",
-    alignItems: "center",
-    gap: 4,
-    whiteSpace: "nowrap",
-  },
-  hudStrong: {
-    color: "#3A2100",
-  },
-  bossHealthOuter: {
-    flex: 1,
-    height: 10,
-    background: "#E8C99A",
-    borderRadius: 999,
-    overflow: "hidden",
-  },
-  bossHealthInner: {
-    height: "100%",
-    background: "linear-gradient(90deg, #E4572E, #FF8A5B)",
-    transition: "width 0.2s ease",
-  },
-  field: {
-    position: "relative",
-    width: "100%",
-    aspectRatio: "3 / 4",
-    background: "linear-gradient(#BEE7F2, #EAF7EE)",
-    borderRadius: 14,
-    overflow: "hidden",
-    touchAction: "none",
-    userSelect: "none",
-    cursor: "pointer",
-  },
-  pipe: {
-    position: "absolute",
-    background: "#C4483A",
-    borderLeft: "3px solid #8F2E23",
-    borderRight: "3px solid #8F2E23",
-    boxSizing: "border-box",
-  },
-  bossPart: {
-    position: "absolute",
-    boxSizing: "border-box",
-    transition: "background 0.15s ease",
-  },
-  bossFace: {
-    position: "absolute",
-    transform: "translate(-50%, -50%)",
-    fontSize: "clamp(24px, 8vw, 36px)",
-    pointerEvents: "none",
-  },
-  bird: {
-    position: "absolute",
-    left: `${BIRD_X}%`,
-    width: `${BIRD_SIZE}%`,
-    height: "auto",
-    pointerEvents: "none",
-    filter: "drop-shadow(0 3px 3px rgba(0,0,0,0.25))",
-    transition: "transform 0.05s linear",
-  },
-  particle: {
-    position: "absolute",
-    fontSize: "clamp(14px, 4vw, 20px)",
-    transform: "translate(-50%, -50%)",
-    pointerEvents: "none",
-  },
-  overlay: {
-    position: "absolute",
-    inset: 0,
-    background: "rgba(253, 246, 236, 0.95)",
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    justifyContent: "center",
-    textAlign: "center",
-    padding: 20,
-  },
-  overlayMascot: {
-    width: 72,
-    height: "auto",
-    marginBottom: 8,
-  },
-  overlayTitle: {
-    fontSize: 20,
-    fontWeight: 800,
-    color: "#3A2100",
-    margin: 0,
-  },
-  overlaySubtitle: {
-    fontSize: 13,
-    color: "#8A5A00",
-    margin: "10px 0 18px",
-    lineHeight: 1.5,
-  },
-  overlayButton: {
-    background: "#4CAF83",
-    color: "#fff",
-    border: "none",
-    borderRadius: 10,
-    padding: "12px 22px",
-    fontWeight: 700,
-    fontSize: 14,
-    cursor: "pointer",
-  },
-  hint: {
-    fontSize: 11,
-    color: "#8A5A00",
-    textAlign: "center",
-    marginTop: 10,
-  },
-};
