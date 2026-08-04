@@ -35,7 +35,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
 // RECURSOS VISUALES
-const GIF_METAS = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/meta.gif";
+const GIF_METAS = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/nuevometa.gif";
 const PIGGY_STANDARD = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Cochinito%20Ahorro.png";
 const PIGGY_SAD = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Cochinito%20Ahorro%20Triste.png";
 
@@ -314,7 +314,6 @@ const Savings: React.FC = () => {
                             className="h-20 w-20 rounded-3xl flex items-center justify-center shadow-inner shrink-0 overflow-hidden"
                             style={{ backgroundColor: `${saving.color}15` }}
                           >
-                            {/* Icono con 100% opacidad garantizado */}
                             <img 
                               src={status.img} 
                               className={cn("h-14 w-14 object-contain opacity-100", status.label === "Abandonada" && "grayscale")} 
@@ -423,7 +422,7 @@ const Savings: React.FC = () => {
         <DialogContent className="rounded-[2.5rem] p-8 max-w-[400px]">
           <DialogHeader><DialogTitle className="text-2xl font-black">Registrar Movimiento</DialogTitle></DialogHeader>
           <form onSubmit={handleTransaction} className="grid gap-6 py-4">
-            <div className="grid grid-cols-2 gap-2 bg-slate-50 p-1 rounded-2xl">
+            <div className="grid grid-cols-2 gap-2 bg-slate-100 p-1 rounded-2xl">
               <Button type="button" variant={newTransaction.type === 'deposit' ? 'default' : 'ghost'} className={cn("rounded-xl font-bold h-10", newTransaction.type === 'deposit' && "bg-emerald-500 shadow-md")} onClick={() => setNewTransaction({...newTransaction, type: 'deposit'})}>Ahorrar</Button>
               <Button type="button" variant={newTransaction.type === 'withdrawal' ? 'default' : 'ghost'} className={cn("rounded-xl font-bold h-10", newTransaction.type === 'withdrawal' && "bg-rose-500 shadow-md")} onClick={() => setNewTransaction({...newTransaction, type: 'withdrawal'})}>Retirar</Button>
             </div>
