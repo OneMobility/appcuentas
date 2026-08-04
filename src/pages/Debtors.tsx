@@ -52,6 +52,7 @@ interface Debtor {
   current_balance: number;
   phone?: string;
   due_date?: string;
+  debtor_transactions?: any[];
 }
 
 const Debtors = () => {
@@ -91,8 +92,23 @@ const Debtors = () => {
 
   const fetchData = async () => {
     if (!user) return;
-    const { data } = await supabase.from('debtors').select('*').eq('user_id', user.id).order('created_at', { ascending: false });
-    setDebtors(data || []);
+    
+    // Fetch con transacciones para calcular saldo real
+    const { data } = await supabase
+      .from('debtors')
+      .select('*, debtor_transactions(type, amount)')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false });
+
+    // Calcular saldo real en tiempo de ejecución (Deuda Inicial + Cargos - Pagos)
+    const debtorsWithRealBalance = (data || []).map((d: any) => {
+      const totalCharges = d.debtor_transactions.filter((t: any) => t.type === 'charge').reduce((s: number, t: any) => s + t.amount, 0);
+      const totalPayments = d.debtor_transactions.filter((t: any) => t.type === 'payment').reduce((s: number, t: any) => s + t.amount, 0);
+      const realBalance = d.initial_balance + totalCharges - totalPayments;
+      return { ...d, current_balance: realBalance };
+    });
+
+    setDebtors(debtorsWithRealBalance);
 
     const { data: cData } = await supabase.from('cards').select('*').eq('user_id', user.id);
     setCards(cData || []);
@@ -122,7 +138,7 @@ const Debtors = () => {
     if (error) showError(error.message);
     else {
       showSuccess("Deudor registrado");
-      setDebtors(prev => [data, ...prev]);
+      fetchData(); // Recargar para asegurar cálculos
       setIsAddDebtorDialogOpen(false);
       setNewDebtor({ name: "", initial_balance: "", phone: "", due_date: undefined });
     }
@@ -168,8 +184,8 @@ const Debtors = () => {
     window.open(`https://wa.me/${debtor.phone.replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`, '_blank');
   };
 
-  const activeDebtors = debtors.filter(d => d.current_balance > 0 && d.name.toLowerCase().includes(searchTerm.toLowerCase()));
-  const settledDebtors = debtors.filter(d => d.current_balance <= 0 && d.name.toLowerCase().includes(searchTerm.toLowerCase()));
+  const activeDebtors = debtors.filter(d => d.current_balance > 0.01 && d.name.toLowerCase().includes(searchTerm.toLowerCase()));
+  const settledDebtors = debtors.filter(d => d.current_balance <= 0.01 && d.name.toLowerCase().includes(searchTerm.toLowerCase()));
 
   const DebtorCard = ({ debtor }: { debtor: Debtor }) => {
     const isOverdue = debtor.due_date && isBefore(parseISO(debtor.due_date), new Date()) && !isSameDay(parseISO(debtor.due_date), new Date());
@@ -241,7 +257,7 @@ const Debtors = () => {
             <p className="text-[10px] font-black uppercase tracking-widest text-emerald-100">Dinero por Cobrar</p>
             <div className="flex items-baseline gap-2">
               <span className="text-5xl font-black tracking-tighter">
-                ${debtors.filter(d => d.current_balance > 0).reduce((s, d) => s + d.current_balance, 0).toLocaleString()}
+                ${debtors.filter(d => d.current_balance > 0.01).reduce((s, d) => s + d.current_balance, 0).toLocaleString()}
               </span>
               <span className="text-xl font-bold opacity-60">MXN</span>
             </div>
