@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Maximize, Minimize, RefreshCw, Trophy, Lightbulb, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { getRandomTip, OinkashTip } from "@/utils/oinkash-tips";
 
 /**
  * 🪙 COIN CATCH — Posición ajustada (77% de altura)
@@ -62,6 +63,7 @@ export default function CoinCatch() {
   const [basketX, setBasketX] = useState(50);
   const [flash, setFlash] = useState<"good" | "bad" | null>(null);
   const [currentTip, setCurrentTip] = useState("");
+  const [gameOverTip, setGameOverTip] = useState<OinkashTip | null>(null);
   const [showBien, setShowBien] = useState(false);
   
   const containerRef = useRef<HTMLDivElement>(null);
@@ -80,6 +82,11 @@ export default function CoinCatch() {
   const livesRef = useRef(STARTING_LIVES);
   const lastTipThreshold = useRef(0);
   const lastBienThreshold = useRef(0);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    audioRef.current = new Audio("/sounds/end-point.wav");
+  }, []);
 
   useEffect(() => {
     const saved = localStorage.getItem("oinkash_coincatch_best");
@@ -93,6 +100,10 @@ export default function CoinCatch() {
 
   const endGame = useCallback(() => {
     setPhase("over");
+    setGameOverTip(getRandomTip());
+    if (audioRef.current) {
+      audioRef.current.play().catch(e => console.error("Audio play failed:", e));
+    }
     if (scoreRef.current > best) {
       setBest(scoreRef.current);
       localStorage.setItem("oinkash_coincatch_best", scoreRef.current.toString());
@@ -116,6 +127,7 @@ export default function CoinCatch() {
     setLives(STARTING_LIVES);
     setMultiplier(1);
     setBasketX(50);
+    setGameOverTip(null);
     setPhase("playing");
   }, []);
 
@@ -358,15 +370,32 @@ export default function CoinCatch() {
           )}
 
           {phase === "over" && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="absolute inset-0 z-[100] bg-rose-950/95 backdrop-blur-xl flex flex-col items-center justify-center p-8 text-center text-white">
-              <Trophy className="h-20 w-20 text-yellow-400 mb-6" />
-              <h2 className="text-4xl font-black tracking-tighter mb-2">¡FIN DEL JUEGO!</h2>
-              <div className="bg-white/10 px-8 py-4 rounded-3xl mb-8 border border-white/10">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="absolute inset-0 z-[100] bg-rose-950/95 backdrop-blur-xl flex flex-col items-center justify-center p-6 text-center text-white overflow-y-auto">
+              <Trophy className="h-16 w-16 text-yellow-400 mb-4 shrink-0" />
+              <h2 className="text-3xl font-black tracking-tighter mb-2">¡FIN DEL JUEGO!</h2>
+              <div className="bg-white/10 px-8 py-4 rounded-3xl mb-6 border border-white/10 shrink-0">
                 <p className="text-[10px] font-black uppercase text-white/50 mb-1">Puntaje Final</p>
-                <p className="text-5xl font-black text-white">{score.toLocaleString()}</p>
+                <p className="text-4xl font-black text-white">{score.toLocaleString()}</p>
               </div>
-              <Button onClick={startGame} className="h-16 px-12 rounded-full bg-white text-slate-900 font-black text-xl shadow-xl flex gap-3">
-                <RefreshCw className="h-6 w-6" /> REINTENTAR
+
+              {gameOverTip && (
+                <motion.div 
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="bg-indigo-600/30 border border-indigo-500/30 p-4 rounded-3xl mb-8 max-w-xs"
+                >
+                  <div className="flex items-center justify-center gap-2 mb-2">
+                    <Lightbulb className="h-4 w-4 text-yellow-400" />
+                    <span className="text-[10px] font-black uppercase tracking-widest text-indigo-200">Consejo Oinkash</span>
+                  </div>
+                  <p className="text-sm font-bold italic leading-tight text-indigo-50">
+                    "{gameOverTip.text}"
+                  </p>
+                </motion.div>
+              )}
+
+              <Button onClick={startGame} className="h-14 px-10 rounded-full bg-white text-slate-900 font-black text-lg shadow-xl flex gap-3 shrink-0">
+                <RefreshCw className="h-5 w-5" /> REINTENTAR
               </Button>
             </motion.div>
           )}

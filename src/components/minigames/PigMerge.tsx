@@ -3,8 +3,9 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { Trophy, RefreshCw, Smartphone, Keyboard, Flame, Sparkles } from "lucide-react";
+import { Trophy, RefreshCw, Smartphone, Keyboard, Flame, Sparkles, Lightbulb } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { getRandomTip, OinkashTip } from "@/utils/oinkash-tips";
 
 // Definición de Niveles con colores VIVOS y etiquetas de ahorro solicitadas
 const TIERS: Record<number, { label: string; emoji: string; color: string; text: string; message?: string }> = {
@@ -30,7 +31,13 @@ const PigMerge = () => {
   const [bestScore, setBestScore] = useState(0);
   const [gameOver, setGameOver] = useState(false);
   const [achievement, setAchievement] = useState<string | null>(null);
+  const [gameOverTip, setGameOverTip] = useState<OinkashTip | null>(null);
   const touchStart = useRef<{ x: number; y: number } | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    audioRef.current = new Audio("/sounds/end-point.wav");
+  }, []);
 
   // Inicializar tablero
   const initGame = useCallback(() => {
@@ -40,6 +47,7 @@ const PigMerge = () => {
     setScore(0);
     setGameOver(false);
     setAchievement(null);
+    setGameOverTip(null);
   }, []);
 
   useEffect(() => {
@@ -68,6 +76,14 @@ const PigMerge = () => {
     newBoard[r][c] = Math.random() < 0.9 ? 2 : 4;
     return newBoard;
   };
+
+  const onGameOver = useCallback(() => {
+    setGameOver(true);
+    setGameOverTip(getRandomTip());
+    if (audioRef.current) {
+      audioRef.current.play().catch(e => console.error("Audio play failed:", e));
+    }
+  }, []);
 
   const move = useCallback((direction: "up" | "down" | "left" | "right") => {
     if (gameOver) return;
@@ -127,12 +143,12 @@ const PigMerge = () => {
         }
 
         const boardWithNew = addRandomTile(newBoard);
-        if (checkGameOver(boardWithNew)) setGameOver(true);
+        if (checkGameOver(boardWithNew)) onGameOver();
         return boardWithNew;
       }
       return prevBoard;
     });
-  }, [gameOver]);
+  }, [gameOver, onGameOver]);
 
   const checkGameOver = (currentBoard: (number | null)[][]) => {
     for (let r = 0; r < GRID_SIZE; r++) {
@@ -257,20 +273,38 @@ const PigMerge = () => {
             <motion.div 
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="absolute inset-0 bg-slate-950/90 backdrop-blur-md rounded-[2.5rem] flex flex-col items-center justify-center text-white p-8 text-center z-20"
+              className="absolute inset-0 bg-slate-950/95 backdrop-blur-md rounded-[2.5rem] flex flex-col items-center justify-center text-white p-6 text-center z-20 overflow-y-auto"
             >
-              <div className="relative mb-6">
-                <Trophy className="h-20 w-20 text-yellow-400 animate-bounce" />
-                <Sparkles className="absolute -top-2 -right-2 h-8 w-8 text-yellow-300 animate-pulse" />
+              <div className="relative mb-4 shrink-0">
+                <Trophy className="h-16 w-16 text-yellow-400 animate-bounce" />
+                <Sparkles className="absolute -top-2 -right-2 h-6 w-6 text-yellow-300 animate-pulse" />
               </div>
-              <h4 className="text-4xl font-black mb-2 tracking-tighter">¡Meta Alcanzada!</h4>
-              <p className="text-sm font-medium text-slate-400 mb-10 leading-relaxed">
+              
+              <h4 className="text-3xl font-black mb-1 tracking-tighter">¡Meta Alcanzada!</h4>
+              <p className="text-xs font-medium text-slate-400 mb-4 leading-relaxed">
                 Lograste un ahorro acumulado de <br />
-                <span className="text-2xl font-black text-white">${score.toLocaleString()}</span>
+                <span className="text-xl font-black text-white">${score.toLocaleString()}</span>
               </p>
+
+              {gameOverTip && (
+                <motion.div 
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="bg-indigo-600/30 border border-indigo-500/30 p-4 rounded-3xl mb-6 max-w-xs"
+                >
+                  <div className="flex items-center justify-center gap-2 mb-2">
+                    <Lightbulb className="h-4 w-4 text-yellow-400" />
+                    <span className="text-[10px] font-black uppercase tracking-widest text-indigo-200">Consejo Oinkash</span>
+                  </div>
+                  <p className="text-sm font-bold italic leading-tight text-indigo-50">
+                    "{gameOverTip.text}"
+                  </p>
+                </motion.div>
+              )}
+
               <Button 
                 onClick={initGame}
-                className="rounded-full h-16 px-12 font-black bg-indigo-600 text-white hover:bg-indigo-700 shadow-xl shadow-indigo-900/40 text-xl"
+                className="rounded-full h-14 px-10 font-black bg-indigo-600 text-white hover:bg-indigo-700 shadow-xl shadow-indigo-900/40 text-lg"
               >
                 Volver a Juntar
               </Button>
