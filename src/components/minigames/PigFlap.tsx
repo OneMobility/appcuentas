@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { getRandomTip, OinkashTip } from "@/utils/oinkash-tips";
 
 /**
- * 🐷 PIG FLAP — Versión Corregida e Inmersiva
+ * 🐷 PIG FLAP — Versión Final con Reinicio Corregido
  */
 
 const pigMascot = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/ChatGPT%20Image%204%20ago%202026,%2003_46_40%20p.m..png";
@@ -80,7 +80,7 @@ export default function PigFlap() {
   const rafRef = useRef<number | null>(null);
   const lastTimeRef = useRef(0);
 
-  // Refs de estado real para la lógica de física
+  // Refs de estado real para la lógica de física (Evita lag de estado de React)
   const birdYRef = useRef(300);
   const birdVelRef = useRef(0);
   const pipesRef = useRef<Pipe[]>([]);
@@ -113,11 +113,6 @@ export default function PigFlap() {
     
     const saved = localStorage.getItem("oinkash_flap_best");
     if (saved) setBest(parseInt(saved));
-    
-    // Al cargar, aseguramos que el puerquito esté en posición centrada y quieta
-    const startY = containerRef.current ? containerRef.current.offsetHeight / 2 : 300;
-    setBirdY(startY);
-    birdYRef.current = startY;
   }, []);
 
   const playSound = (audio: HTMLAudioElement | null) => {
@@ -145,8 +140,12 @@ export default function PigFlap() {
   }, []);
 
   const resetRun = useCallback(() => {
-    const startY = containerRef.current ? containerRef.current.offsetHeight / 2 : 300;
-    birdYRef.current = startY;
+    // 1. Detener cualquier animación previa
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    
+    // 2. Limpiar todos los valores lógicos en las REFS
+    const containerH = containerRef.current?.offsetHeight || 600;
+    birdYRef.current = containerH / 2;
     birdVelRef.current = 0;
     pipesRef.current = [];
     nextPipeIdRef.current = 0;
@@ -160,8 +159,10 @@ export default function PigFlap() {
     bossInsideTimerRef.current = 0;
     bossRestedRef.current = false;
     particlesRef.current = [];
+    phaseRef.current = "idle";
 
-    setBirdY(startY);
+    // 3. Limpiar los estados de React para la UI
+    setBirdY(birdYRef.current);
     setBirdAngle(0);
     setPipes([]);
     setScore(0);
@@ -169,14 +170,21 @@ export default function PigFlap() {
     setPipesPassed(0);
     setGameOverTip(null);
     setPhase("idle");
-    phaseRef.current = "idle";
+    setParticles([]);
+    
+    // Reiniciar el loop principal
+    lastTimeRef.current = performance.now();
+    rafRef.current = requestAnimationFrame(tick);
   }, []);
 
   const die = useCallback(() => {
+    if (phaseRef.current === "gameover") return;
+    
     setPhase("gameover");
     phaseRef.current = "gameover";
     setGameOverTip(getRandomTip());
     playSound(audioEndRef.current);
+    
     if (scoreRef.current > best) {
       setBest(scoreRef.current);
       localStorage.setItem("oinkash_flap_best", scoreRef.current.toString());
@@ -184,11 +192,8 @@ export default function PigFlap() {
   }, [best]);
 
   const flap = useCallback(() => {
-    // Si está en idle o gameover, el primer clic prepara el juego para iniciar en la siguiente acción
-    if (phaseRef.current === "gameover" || phaseRef.current === "win") {
-      resetRun();
-      return;
-    }
+    // Si estamos en pantallas de fin, el botón se encarga del resetRun, no el flap global
+    if (phaseRef.current === "gameover" || phaseRef.current === "win") return;
     
     if (phaseRef.current === "idle") {
       setPhase("playing");
@@ -215,149 +220,154 @@ export default function PigFlap() {
         phaseRef.current = "playing";
       }
     }
-  }, [resetRun]);
+  }, []);
 
-  useEffect(() => {
-    const tick = (now: number) => {
-      const dt = Math.min(0.05, (now - lastTimeRef.current) / 1000);
-      lastTimeRef.current = now;
+  const tick = useCallback((now: number) => {
+    const dt = Math.min(0.05, (now - lastTimeRef.current) / 1000);
+    lastTimeRef.current = now;
 
-      if (phaseRef.current === "playing" || phaseRef.current === "boss") {
-        const height = containerRef.current?.offsetHeight || 600;
-        const width = containerRef.current?.offsetWidth || 400;
+    if (phaseRef.current === "playing" || phaseRef.current === "boss") {
+      const height = containerRef.current?.offsetHeight || 600;
+      const width = containerRef.current?.offsetWidth || 400;
 
-        birdVelRef.current = Math.min(MAX_FALL_SPEED, birdVelRef.current + GRAVITY * dt);
-        birdYRef.current += birdVelRef.current * dt;
+      // Gravedad
+      birdVelRef.current = Math.min(MAX_FALL_SPEED, birdVelRef.current + GRAVITY * dt);
+      birdYRef.current += birdVelRef.current * dt;
+      
+      // Colisión suelo/techo
+      if (birdYRef.current < 0 || birdYRef.current > height) {
+        die();
+        // Seguimos para que se actualice la posición visual una última vez
+      }
+
+      setBirdY(birdYRef.current);
+      setBirdAngle(Math.max(-25, Math.min(70, birdVelRef.current * 0.15)));
+
+      // Lógica de Niveles (Tubos)
+      if (phaseRef.current === "playing") {
+        const cfg = LEVELS[levelRef.current - 1];
+        spawnAccRef.current += dt * 1000;
         
-        // Colisión suelo/techo
-        if (birdYRef.current < 0 || birdYRef.current > height) {
-          die();
-          return;
-        }
-
-        setBirdY(birdYRef.current);
-        setBirdAngle(Math.max(-25, Math.min(70, birdVelRef.current * 0.15)));
-
-        if (phaseRef.current === "playing") {
-          const cfg = LEVELS[levelRef.current - 1];
-          spawnAccRef.current += dt * 1000;
-          
-          if (spawnAccRef.current >= (cfg.spacing / cfg.speed) * 1000) {
-            spawnAccRef.current = 0;
-            const margin = 80;
-            pipesRef.current.push({
-              id: nextPipeIdRef.current++,
-              x: width + 50,
-              gapY: margin + Math.random() * (height - margin * 2 - cfg.gapHeight),
-              gapHeight: cfg.gapHeight,
-              passed: false,
-            });
-          }
-
-          const remaining: Pipe[] = [];
-          for (const pipe of pipesRef.current) {
-            pipe.x -= cfg.speed * dt;
-            
-            // Colisión con tubos
-            const birdWorldX = (BIRD_X / 100) * width;
-            const birdLeft = birdWorldX - 18;
-            const birdRight = birdWorldX + 18;
-            
-            if (pipe.x < birdRight && pipe.x + PIPE_WIDTH > birdLeft) {
-              const birdTop = birdYRef.current - 18;
-              const birdBottom = birdYRef.current + 18;
-              
-              if (birdTop < pipe.gapY || birdBottom > pipe.gapY + pipe.gapHeight) {
-                die();
-                return;
-              }
-            }
-
-            if (!pipe.passed && pipe.x < birdLeft) {
-              pipe.passed = true;
-              pipesPassedRef.current += 1;
-              setPipesPassed(pipesPassedRef.current);
-              scoreRef.current += 10;
-              setScore(scoreRef.current);
-              playSound(audioCoinRef.current);
-            }
-
-            if (pipe.x > -PIPE_WIDTH) remaining.push(pipe);
-          }
-          pipesRef.current = remaining;
-          setPipes([...pipesRef.current]);
-
-          if (pipesPassedRef.current >= PIPES_PER_LEVEL) {
-            setPhase("transition");
-            phaseRef.current = "transition";
-          }
-        } else if (phaseRef.current === "boss") {
-          const targetX = width * (BOSS_REST_X_PCT / 100);
-          if (!bossRestedRef.current) {
-            bossXRef.current -= BOSS_ENTER_SPEED * dt;
-            if (bossXRef.current <= targetX) bossRestedRef.current = true;
-          } else {
-            bossTimeRef.current += dt;
-          }
-
-          const amplitude = (height - BOSS_GAP_HEIGHT) / 2 - 50;
-          bossGapYRef.current = (height / 2 - BOSS_GAP_HEIGHT / 2) + Math.sin(bossTimeRef.current * 1.5) * amplitude;
-
-          const birdWorldX = (BIRD_X / 100) * width;
-          if (birdWorldX > bossXRef.current && birdWorldX < bossXRef.current + BOSS_WIDTH) {
-            if (birdYRef.current > bossGapYRef.current && birdYRef.current < bossGapYRef.current + BOSS_GAP_HEIGHT) {
-              bossInsideTimerRef.current += dt;
-              if (bossInsideTimerRef.current >= BOSS_HIT_INTERVAL) {
-                bossInsideTimerRef.current = 0;
-                bossHealthRef.current -= 1;
-                scoreRef.current += 100;
-                setScore(scoreRef.current);
-                playSound(audioHitRef.current);
-                spawnExplosion(bossXRef.current + BOSS_WIDTH / 2, bossGapYRef.current + BOSS_GAP_HEIGHT / 2);
-                
-                if (bossHealthRef.current <= 0) {
-                  setPhase("win");
-                  phaseRef.current = "win";
-                  scoreRef.current += 1000;
-                  setScore(scoreRef.current);
-                }
-              }
-            } else {
-              die();
-              return;
-            }
-          }
-
-          setBossState({
-            x: bossXRef.current,
-            gapY: bossGapYRef.current,
-            health: bossHealthRef.current,
-            hitFlash: bossInsideTimerRef.current > 0 && bossInsideTimerRef.current < 0.2
+        if (spawnAccRef.current >= (cfg.spacing / cfg.speed) * 1000) {
+          spawnAccRef.current = 0;
+          const margin = 80;
+          pipesRef.current.push({
+            id: nextPipeIdRef.current++,
+            x: width + 50,
+            gapY: margin + Math.random() * (height - margin * 2 - cfg.gapHeight),
+            gapHeight: cfg.gapHeight,
+            passed: false,
           });
         }
+
+        const remaining: Pipe[] = [];
+        for (const pipe of pipesRef.current) {
+          pipe.x -= cfg.speed * dt;
+          
+          // Colisión
+          const birdWorldX = (BIRD_X / 100) * width;
+          const birdLeft = birdWorldX - 18;
+          const birdRight = birdWorldX + 18;
+          
+          if (pipe.x < birdRight && pipe.x + PIPE_WIDTH > birdLeft) {
+            const birdTop = birdYRef.current - 18;
+            const birdBottom = birdYRef.current + 18;
+            
+            if (birdTop < pipe.gapY || birdBottom > pipe.gapY + pipe.gapHeight) {
+              die();
+            }
+          }
+
+          if (!pipe.passed && pipe.x < birdLeft) {
+            pipe.passed = true;
+            pipesPassedRef.current += 1;
+            setPipesPassed(pipesPassedRef.current);
+            scoreRef.current += 10;
+            setScore(scoreRef.current);
+            playSound(audioCoinRef.current);
+          }
+
+          if (pipe.x > -PIPE_WIDTH) remaining.push(pipe);
+        }
+        pipesRef.current = remaining;
+        setPipes([...pipesRef.current]);
+
+        if (pipesPassedRef.current >= PIPES_PER_LEVEL) {
+          setPhase("transition");
+          phaseRef.current = "transition";
+        }
+      } 
+      
+      // Lógica de Jefe
+      else if (phaseRef.current === "boss") {
+        const width = containerRef.current?.offsetWidth || 400;
+        const targetX = width * (BOSS_REST_X_PCT / 100);
+        
+        if (!bossRestedRef.current) {
+          bossXRef.current -= BOSS_ENTER_SPEED * dt;
+          if (bossXRef.current <= targetX) bossRestedRef.current = true;
+        } else {
+          bossTimeRef.current += dt;
+        }
+
+        const amplitude = (height - BOSS_GAP_HEIGHT) / 2 - 50;
+        bossGapYRef.current = (height / 2 - BOSS_GAP_HEIGHT / 2) + Math.sin(bossTimeRef.current * 1.5) * amplitude;
+
+        const birdWorldX = (BIRD_X / 100) * width;
+        if (birdWorldX > bossXRef.current && birdWorldX < bossXRef.current + BOSS_WIDTH) {
+          if (birdYRef.current > bossGapYRef.current && birdYRef.current < birdYRef.current + BOSS_GAP_HEIGHT) {
+            bossInsideTimerRef.current += dt;
+            if (bossInsideTimerRef.current >= BOSS_HIT_INTERVAL) {
+              bossInsideTimerRef.current = 0;
+              bossHealthRef.current -= 1;
+              scoreRef.current += 100;
+              setScore(scoreRef.current);
+              playSound(audioHitRef.current);
+              spawnExplosion(bossXRef.current + BOSS_WIDTH / 2, bossGapYRef.current + BOSS_GAP_HEIGHT / 2);
+              
+              if (bossHealthRef.current <= 0) {
+                setPhase("win");
+                phaseRef.current = "win";
+                scoreRef.current += 1000;
+                setScore(scoreRef.current);
+              }
+            }
+          } else {
+            die();
+          }
+        }
+
+        setBossState({
+          x: bossXRef.current,
+          gapY: bossGapYRef.current,
+          health: bossHealthRef.current,
+          hitFlash: bossInsideTimerRef.current > 0 && bossInsideTimerRef.current < 0.2
+        });
       }
+    }
 
-      // Partículas siempre activas
-      if (particlesRef.current.length > 0) {
-        particlesRef.current = particlesRef.current
-          .map(p => ({
-            ...p,
-            x: p.x + p.vx * dt,
-            y: p.y + p.vy * dt,
-            vy: p.vy + 400 * dt,
-            life: p.life - dt,
-          }))
-          .filter(p => p.life > 0);
-        setParticles([...particlesRef.current]);
-      }
+    // Partículas
+    if (particlesRef.current.length > 0) {
+      particlesRef.current = particlesRef.current
+        .map(p => ({
+          ...p,
+          x: p.x + p.vx * dt,
+          y: p.y + p.vy * dt,
+          vy: p.vy + 400 * dt,
+          life: p.life - dt,
+        }))
+        .filter(p => p.life > 0);
+      setParticles([...particlesRef.current]);
+    }
 
-      rafRef.current = requestAnimationFrame(tick);
-    };
+    rafRef.current = requestAnimationFrame(tick);
+  }, [die, spawnExplosion]);
 
+  useEffect(() => {
     lastTimeRef.current = performance.now();
     rafRef.current = requestAnimationFrame(tick);
     return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
-  }, [die, spawnExplosion]);
+  }, [tick]);
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => { if (e.code === "Space") { e.preventDefault(); flap(); } };
@@ -384,7 +394,7 @@ export default function PigFlap() {
         }}
       />
 
-      {/* Tubos de Gastos */}
+      {/* Tubos */}
       {pipes.map(p => (
         <React.Fragment key={p.id}>
           <div className="absolute bg-rose-600 border-x-4 border-rose-800 rounded-b-3xl shadow-lg z-10" style={{ left: p.x, top: 0, width: PIPE_WIDTH, height: p.gapY }}>
@@ -396,7 +406,7 @@ export default function PigFlap() {
         </React.Fragment>
       ))}
 
-      {/* Jefe: La Deuda Total */}
+      {/* Jefe */}
       {phase === "boss" && (
         <div className="absolute z-20" style={{ left: bossState.x, top: 0, width: BOSS_WIDTH, height: '100%' }}>
           <div className={cn("absolute top-0 w-full rounded-b-[3rem] border-4 border-black/20 flex items-end justify-center pb-4 transition-colors duration-100 shadow-2xl", bossState.hitFlash ? "bg-white" : "bg-slate-950")} style={{ height: bossState.gapY }}>
@@ -408,7 +418,7 @@ export default function PigFlap() {
         </div>
       )}
 
-      {/* HUD: Puntos y Progreso */}
+      {/* HUD */}
       <div className="absolute top-16 left-0 right-0 p-4 flex flex-col gap-4 z-30 pointer-events-none">
         <div className="flex justify-between items-start">
           <div className="bg-black/50 backdrop-blur-md px-5 py-2 rounded-2xl border border-white/20 text-white shadow-xl">
@@ -425,7 +435,7 @@ export default function PigFlap() {
           </div>
         </div>
 
-        {/* Barra de Progreso a la META */}
+        {/* Barra de Meta */}
         <div className="w-full max-w-xs mx-auto space-y-1">
           <div className="flex justify-between items-center text-white text-[9px] font-black uppercase tracking-widest px-1">
             <span>Progreso</span>
@@ -452,7 +462,7 @@ export default function PigFlap() {
         )}
       </div>
 
-      {/* Personaje: El Puerquito Volador */}
+      {/* Personaje */}
       <motion.div
         className="absolute z-40 pointer-events-none"
         animate={{ top: birdY, rotate: birdAngle }}
@@ -462,14 +472,14 @@ export default function PigFlap() {
         <img src={pigMascot} className="w-full h-full object-contain drop-shadow-2xl" />
       </motion.div>
 
-      {/* Efectos visuales de explosión */}
+      {/* Partículas */}
       {particles.map(p => (
         <div key={p.id} className="absolute z-[45] text-2xl pointer-events-none drop-shadow-lg" style={{ left: p.x, top: p.y, opacity: p.life }}>
           {p.emoji}
         </div>
       ))}
 
-      {/* Pantallas de Estado (Overlays) */}
+      {/* Pantallas de Estado */}
       <AnimatePresence>
         {phase === "idle" && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 z-50 bg-slate-900/70 backdrop-blur-md flex flex-col items-center justify-center p-8 text-center text-white">
@@ -477,12 +487,12 @@ export default function PigFlap() {
               <div className="absolute inset-0 bg-indigo-500/20 blur-3xl rounded-full" />
               <img src={pigMascot} className="h-32 w-32 object-contain relative z-10 animate-bounce" />
             </div>
-            <h2 className="text-5xl font-black tracking-tighter mb-2 drop-shadow-2xl">PIG FLAP</h2>
-            <p className="text-base font-bold mb-10 opacity-90 max-w-[300px] leading-tight">
-              Toca para saltar. Esquiva los gastos innecesarios y <span className="text-emerald-400">¡ahorra hasta llegar a la meta!</span>
+            <h2 className="text-5xl font-black tracking-tighter mb-2 drop-shadow-2xl text-white">PIG FLAP</h2>
+            <p className="text-base font-bold mb-10 opacity-90 max-w-[300px] leading-tight text-white">
+              Toca para saltar. Esquiva los gastos y <span className="text-emerald-400">¡llega a la meta de ahorro!</span>
             </p>
             <div className="space-y-4">
-               <Button className="h-16 px-12 rounded-full bg-white text-indigo-900 font-black text-xl shadow-2xl hover:scale-105 active:scale-95 transition-transform group">
+               <Button onClick={flap} className="h-16 px-12 rounded-full bg-white text-indigo-900 font-black text-xl shadow-2xl hover:scale-105 active:scale-95 transition-transform group pointer-events-auto">
                  ¡VOLAR AHORA! <ArrowRight className="ml-2 h-6 w-6 group-hover:translate-x-1 transition-transform" />
                </Button>
                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">O usa la tecla Espacio</p>
@@ -491,27 +501,24 @@ export default function PigFlap() {
         )}
 
         {phase === "transition" && (
-          <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="absolute inset-0 z-50 flex flex-col items-center justify-center p-8 text-center bg-black/40 backdrop-blur-sm">
+          <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="absolute inset-0 z-50 flex flex-col items-center justify-center p-8 text-center bg-black/40 backdrop-blur-sm pointer-events-auto">
             <div className="bg-white p-10 rounded-[3rem] shadow-2xl space-y-6 border-4 border-indigo-100">
               <div className="h-24 w-24 bg-emerald-500 rounded-3xl flex items-center justify-center mx-auto text-white shadow-lg shadow-emerald-200">
                 <Zap className="h-12 w-12 fill-current" />
               </div>
               <div className="space-y-1">
                 <h2 className="text-4xl font-black text-slate-900 tracking-tight">¡NIVEL {level} SUPERADO!</h2>
-                <p className="text-lg text-slate-500 font-bold">Llegaste a la meta.</p>
+                <p className="text-lg text-slate-500 font-bold">Meta alcanzada.</p>
               </div>
-              <p className="text-sm font-medium text-slate-400">
-                {level < 3 ? "Aumentando la velocidad para el siguiente reto..." : "¡Cuidado! El Monstruo de las Deudas te está esperando."}
-              </p>
               <Button onClick={flap} className="w-full h-16 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-black text-lg shadow-xl shadow-indigo-100">
-                CONTINUAR 🚀
+                SIGUIENTE NIVEL 🚀
               </Button>
             </div>
           </motion.div>
         )}
 
         {phase === "gameover" && (
-          <motion.div initial={{ opacity: 0, y: 50 }} animate={{ opacity: 1, y: 0 }} className="absolute inset-0 z-50 bg-rose-950/90 backdrop-blur-xl flex flex-col items-center justify-center p-6 text-center text-white overflow-y-auto">
+          <motion.div initial={{ opacity: 0, y: 50 }} animate={{ opacity: 1, y: 0 }} className="absolute inset-0 z-50 bg-rose-950/90 backdrop-blur-xl flex flex-col items-center justify-center p-6 text-center text-white overflow-y-auto pointer-events-auto">
             <Trophy className="h-20 w-20 text-yellow-400 mb-4 drop-shadow-xl" />
             <h2 className="text-4xl font-black tracking-tighter">¡BANCARROTA! 💸</h2>
             <div className="bg-white/10 px-10 py-6 rounded-[2.5rem] my-8 border border-white/10 shadow-2xl">
@@ -539,18 +546,17 @@ export default function PigFlap() {
         )}
 
         {phase === "win" && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="absolute inset-0 z-50 bg-indigo-900/95 backdrop-blur-xl flex flex-col items-center justify-center p-8 text-center text-white">
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="absolute inset-0 z-50 bg-indigo-900/95 backdrop-blur-xl flex flex-col items-center justify-center p-8 text-center text-white pointer-events-auto">
             <div className="relative mb-6">
               <Sparkles className="absolute -top-10 -right-10 h-24 w-24 text-yellow-400 animate-pulse" />
               <Trophy className="h-40 w-40 text-yellow-400 drop-shadow-2xl" />
             </div>
             <h2 className="text-5xl font-black tracking-tighter mb-4">¡LIBERTAD FINANCIERA! 🏆</h2>
-            <p className="text-xl font-bold text-indigo-200 mb-10 max-w-[300px]">Derrotaste a la deuda y completaste todos los niveles.</p>
             <div className="bg-white/10 px-12 py-8 rounded-[3rem] border border-white/20 mb-10 shadow-2xl">
               <p className="text-sm font-black uppercase opacity-60 tracking-widest">Puntaje Maestro</p>
               <p className="text-7xl font-black text-emerald-400">{score}</p>
             </div>
-            <Button onClick={resetRun} className="h-16 px-16 rounded-full bg-emerald-500 hover:bg-emerald-600 text-white font-black text-2xl shadow-2xl shadow-emerald-500/40">
+            <Button onClick={resetRun} className="h-16 px-16 rounded-full bg-emerald-500 hover:bg-emerald-600 text-white font-black text-2xl shadow-2xl">
               ¡SOY UN CRACK! 🐷
             </Button>
           </motion.div>

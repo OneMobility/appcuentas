@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import { getRandomTip, OinkashTip } from "@/utils/oinkash-tips";
 
 /**
- * 🪙 COIN CATCH — Con Efectos de Sonido
+ * 🪙 COIN CATCH — Versión con Guardado de Best Score
  */
 
 const STARTING_LIVES = 3;
@@ -95,9 +95,8 @@ export default function CoinCatch() {
     audioErrorRef.current = new Audio("/sounds/error.mp3");
     audioAchievementRef.current = new Audio("/sounds/achievement.mp3");
     audioTipRef.current = new Audio("/sounds/tip.mp3");
-  }, []);
-
-  useEffect(() => {
+    
+    // Cargar Best Score
     const saved = localStorage.getItem("oinkash_coincatch_best");
     if (saved) setBest(parseInt(saved));
   }, []);
@@ -118,11 +117,14 @@ export default function CoinCatch() {
     setPhase("over");
     setGameOverTip(getRandomTip());
     playSound(audioEndRef.current);
-    if (scoreRef.current > best) {
+    
+    // Guardar Best Score
+    const currentBest = parseInt(localStorage.getItem("oinkash_coincatch_best") || "0");
+    if (scoreRef.current > currentBest) {
       setBest(scoreRef.current);
       localStorage.setItem("oinkash_coincatch_best", scoreRef.current.toString());
     }
-  }, [best]);
+  }, []);
 
   const startGame = useCallback(() => {
     itemsRef.current = [];
@@ -302,6 +304,11 @@ export default function CoinCatch() {
               <p className="text-[10px] font-black text-white/60 uppercase tracking-widest">Puntos</p>
               <p className="text-2xl font-black text-white tracking-tighter">{score.toLocaleString()}</p>
             </div>
+            {best > 0 && (
+               <div className="bg-black/20 backdrop-blur-sm px-3 py-1 rounded-xl border border-white/5 w-fit">
+                 <p className="text-[8px] font-black text-white/40 uppercase">Best: {best.toLocaleString()}</p>
+               </div>
+            )}
           </div>
 
           <div className="flex flex-col items-end gap-2">
@@ -388,6 +395,7 @@ export default function CoinCatch() {
               <div className="bg-white/10 px-8 py-4 rounded-3xl mb-6 border border-white/10 shrink-0">
                 <p className="text-[10px] font-black uppercase text-white/50 mb-1">Puntaje Final</p>
                 <p className="text-4xl font-black text-white">{score.toLocaleString()}</p>
+                <p className="text-[10px] font-bold text-white/30 uppercase mt-1">Mejor puntuación: {best.toLocaleString()}</p>
               </div>
 
               {gameOverTip && (
