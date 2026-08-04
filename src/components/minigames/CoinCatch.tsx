@@ -2,14 +2,14 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Maximize, Minimize, RefreshCw, Trophy } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils"; // Importación añadida
+import { cn } from "@/lib/utils";
 
 /**
  * 🪙 COIN CATCH — Versión Pantalla Completa UI Integrada
  */
 
 const STARTING_LIVES = 3;
-const CATCH_LINE = 82; 
+const CATCH_LINE = 78; // Ajustado: el objeto se captura un poco más arriba
 const MISS_LINE = 101; 
 const BASKET_HALF_WIDTH = 12; 
 const CATCH_TOLERANCE = 12; 
@@ -256,7 +256,7 @@ export default function CoinCatch() {
           onClick={(e) => { e.stopPropagation(); toggleFullscreen(); }}
           className="absolute bottom-6 right-6 z-40 bg-white/10 backdrop-blur-md p-3 rounded-2xl border border-white/20 text-white hover:bg-white/20 transition-all pointer-events-auto"
         >
-          {isFullscreen ? <Maximize className="h-5 w-5" /> : <Maximize className="h-5 w-5" />}
+          {isFullscreen ? <Minimize className="h-5 w-5" /> : <Maximize className="h-5 w-5" />}
         </button>
 
         {/* OBJETOS CAYENDO */}
@@ -282,7 +282,7 @@ export default function CoinCatch() {
           className="absolute z-20 pointer-events-none transition-opacity"
           style={{ 
             left: `${basketX}%`, 
-            top: '84%', // Posición ajustada para la banqueta
+            top: '80%', // Subido de 84% a 80%
             transform: 'translate(-50%, -50%)',
             width: '90px',
             height: '90px',
