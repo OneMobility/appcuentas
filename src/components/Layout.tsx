@@ -25,6 +25,8 @@ import { useSession } from "@/context/SessionContext";
 import { supabase } from "@/integrations/supabase/client";
 import ProfileDialog from "./ProfileDialog";
 import AIChatAssistant from "./AIChatAssistant";
+import NotificationsPopover from "./NotificationsPopover";
+import PushNotificationManager from "./PushNotificationManager";
 
 const APP_ICON_LOGO = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/ChatGPT%20Image%203%20ago%202026,%2003_44_08%20p.m..png";
 
@@ -98,6 +100,7 @@ const Layout: React.FC = () => {
 
   return (
     <div className="flex min-h-screen w-full bg-slate-50">
+      <PushNotificationManager />
       {isMobile ? (
         <div className="flex flex-col w-full">
           <header className="sticky top-0 z-40 flex h-16 items-center justify-between bg-white/80 backdrop-blur-md px-6 border-b border-slate-100 shadow-sm">
@@ -105,9 +108,12 @@ const Layout: React.FC = () => {
               <img src={APP_ICON_LOGO} className="h-9 w-9 object-cover rounded-lg" />
               <h1 className="text-lg font-black tracking-tighter">Oinkash</h1>
             </div>
-            <Button variant="ghost" onClick={() => setIsProfileOpen(true)} className="rounded-full p-0 h-9 w-9 border border-slate-100 shadow-sm">
-              <Avatar className="h-full w-full"><AvatarImage src={userProfile?.avatar_url} /><AvatarFallback>{initials}</AvatarFallback></Avatar>
-            </Button>
+            <div className="flex items-center gap-2">
+              <NotificationsPopover />
+              <Button variant="ghost" onClick={() => setIsProfileOpen(true)} className="rounded-full p-0 h-9 w-9 border border-slate-100 shadow-sm">
+                <Avatar className="h-full w-full"><AvatarImage src={userProfile?.avatar_url} /><AvatarFallback>{initials}</AvatarFallback></Avatar>
+              </Button>
+            </div>
           </header>
           <main className="flex-1 p-4 pb-24 overflow-x-hidden"><Outlet /></main>
           <MobileNavbar />
@@ -119,6 +125,7 @@ const Layout: React.FC = () => {
           <Panel defaultSize={85}>
             <div className="flex flex-col h-full">
               <header className="flex h-16 items-center justify-end px-10 gap-4 bg-white/50 backdrop-blur-sm border-b border-slate-100">
+                <NotificationsPopover />
                 <Button variant="ghost" onClick={() => setIsProfileOpen(true)} className="rounded-full p-0 h-10 w-10 border border-slate-200 shadow-sm hover:scale-105 transition-transform">
                   <Avatar className="h-full w-full"><AvatarImage src={userProfile?.avatar_url} /><AvatarFallback>{initials}</AvatarFallback></Avatar>
                 </Button>
