@@ -1,32 +1,11 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import pigMascot from "./pig-mascot.png";
 
 /**
  * 🐷 PIG FLAP — estilo Flappy Bird, por niveles, con jefe final
- * Hecho para Oinkash (app de control de gastos).
- *
- * - 3 niveles cortos de dificultad creciente (aletea para esquivar
- *   columnas de "gastos"/facturas).
- * - Al completar el nivel 3 aparece el Monstruo de las Deudas.
- * - Se destruye chocando N veces contra su punto débil (el hueco que
- *   se mueve): cada 2s que logras mantenerte dentro del hueco le
- *   quitas una vida al jefe. Tocar su cuerpo sólido = fin de la partida,
- *   igual que chocar una columna normal.
- * - Al destruirlo, explota en una lluvia de monedas y ganas la partida.
- *
- * Controles: un solo toque/clic (o barra espaciadora) para aletear —
- * funciona igual en móvil y PC.
- *
- * Uso:
- *   import PigFlap from "./PigFlap";
- *   <PigFlap onBestScoreChange={(s) => saveToOinkashProfile(s)} initialBestScore={0} />
- *
- * No usa localStorage: el mejor puntaje se expone vía props/callback para
- * que la app anfitriona persista el dato donde prefiera.
- *
- * Nota: importa "./pig-mascot.png" (el cochinito ya usado en Coin Catch).
- * Colócalo junto a este archivo o ajusta la ruta del import.
  */
+
+// Usamos el recurso global del personaje disponible en public/
+const pigMascot = "/game-character.png";
 
 // ---------- Config física ----------
 const BIRD_X = 24; // % fijo horizontal del cerdito
@@ -74,13 +53,9 @@ interface Particle {
 }
 
 interface PigFlapProps {
-  /** Mejor puntaje ya guardado por Oinkash (persistencia externa) */
   initialBestScore?: number;
-  /** Se llama cada vez que el mejor puntaje mejora, para que Oinkash lo guarde */
   onBestScoreChange?: (best: number) => void;
-  /** Se llama al terminar una partida (por derrota), con el puntaje final */
   onGameOver?: (score: number) => void;
-  /** Se llama al destruir al jefe y ganar la partida */
   onVictory?: (score: number) => void;
 }
 
@@ -135,7 +110,6 @@ export default function PigFlap({
     phaseRef.current = phase;
   }, [phase]);
 
-  // ---------- Helpers ----------
   const resetRun = useCallback(() => {
     birdYRef.current = 50;
     birdVelRef.current = 0;
@@ -232,7 +206,6 @@ export default function PigFlap({
     setParticles([...particlesRef.current]);
   }, []);
 
-  // ---------- Bucle principal ----------
   useEffect(() => {
     if (phase !== "playing" && phase !== "boss") return;
 
@@ -242,7 +215,6 @@ export default function PigFlap({
       const dt = Math.min(0.05, (now - lastTimeRef.current) / 1000);
       lastTimeRef.current = now;
 
-      // Física del cerdito
       birdVelRef.current = Math.min(MAX_FALL_SPEED, birdVelRef.current + GRAVITY * dt);
       birdYRef.current += birdVelRef.current * dt;
 
@@ -277,7 +249,7 @@ export default function PigFlap({
         const remaining: Pipe[] = [];
         for (const pipe of pipesRef.current) {
           const newX = pipe.x - cfg.speed * dt;
-          if (newX < -PIPE_WIDTH - 2) continue; // fuera de pantalla
+          if (newX < -PIPE_WIDTH - 2) continue;
 
           const overlapsX =
             BIRD_X + BIRD_SIZE / 2 > newX - PIPE_WIDTH / 2 &&
@@ -315,7 +287,6 @@ export default function PigFlap({
           return;
         }
       } else if (phase === "boss") {
-        // Entrada del jefe
         if (!bossRestedRef.current) {
           bossXRef.current = Math.max(BOSS_REST_X, bossXRef.current - BOSS_ENTER_SPEED * dt);
           if (bossXRef.current <= BOSS_REST_X) {
@@ -385,7 +356,6 @@ export default function PigFlap({
         });
       }
 
-      // Partículas (explosión de monedas)
       if (particlesRef.current.length > 0) {
         particlesRef.current = particlesRef.current
           .map((p) => ({
@@ -408,7 +378,6 @@ export default function PigFlap({
     };
   }, [phase, die, spawnExplosion, onBestScoreChange, onVictory]);
 
-  // ---------- Controles ----------
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.code === "Space") {
@@ -461,7 +430,6 @@ export default function PigFlap({
         style={styles.field}
         onPointerDown={onFieldPointerDown}
       >
-        {/* Tuberías / columnas de gastos */}
         {pipes.map((pipe) => {
           const topH = pipe.gapY - pipe.gapHeight / 2;
           const bottomStart = pipe.gapY + pipe.gapHeight / 2;
@@ -489,7 +457,6 @@ export default function PigFlap({
           );
         })}
 
-        {/* Jefe final */}
         {(phase === "boss" || phase === "win") && (
           <>
             <div
@@ -526,7 +493,6 @@ export default function PigFlap({
           </>
         )}
 
-        {/* Cerdito */}
         {phase !== "idle" && (
           <img
             src={pigMascot}
@@ -539,7 +505,6 @@ export default function PigFlap({
           />
         )}
 
-        {/* Partículas de monedas */}
         {particles.map((p) => (
           <div
             key={p.id}
