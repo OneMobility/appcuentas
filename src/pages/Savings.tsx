@@ -48,28 +48,61 @@ const FEEDBACK_MESSAGES = {
     "¡Una nueva aventura financiera comienza! 🐷",
     "¡Meta creada! El primer paso es el más importante.",
     "¡Felicidades por definir tu próximo gran objetivo!",
-    "¡Tu plan de ahorro acaba de nacer! Cuídalo mucho."
+    "¡Tu plan de ahorro acaba de nacer! Cuídalo mucho.",
+    "¡Ese sueño ya tiene nombre y cuenta! Vamos por él.",
+    "Plantaste una semilla de abundancia. ¡A regarla! 🌿",
+    "¡Objetivo fijado! Oinkash te acompañará en cada peso.",
+    "¡Qué emoción! Un nuevo propósito para tu dinero.",
+    "El futuro te lo agradecerá. ¡Meta registrada con éxito!",
+    "¡Oficialmente en camino a lograrlo! 🚀"
   ],
   onWithdraw: [
     "Retiraste un poco, pero sé que es por algo necesario. 📉",
     "Un ajuste en el camino no detiene tu meta.",
-    "El dinero está para usarse, pero recuerda volver pronto."
+    "El dinero está para usarse, pero recuerda volver pronto.",
+    "¡Ouch! El cochinito sintió ese pellizco. 🐷",
+    "¡Cuidado! No dejes que el impulso le gane al largo plazo.",
+    "A veces hay que retroceder un paso para dar dos adelante.",
+    "¡Ánimo! Recuperaremos este saldo muy pronto.",
+    "Prioridades son prioridades, úsalo con sabiduría.",
+    "¡No pasa nada! El plan sigue en pie, solo se ajustó.",
+    "¡Vuelve pronto a llenar este espacio vacío! ✨"
   ],
   onDeposit: [
     "¡Eso! Un paso más cerca de lo que sueñas. 🚀",
     "¡Tu cochinito está sonriendo con este abono!",
     "¡Cada peso cuenta y hoy sumaste una victoria!",
-    "¡Pum! El saldo sube y tu estrés baja."
+    "¡Pum! El saldo sube y tu estrés baja.",
+    "¡Estás alimentando tus sueños! Sigue así. 🍬",
+    "Un pequeño depósito hoy, una gran alegría mañana.",
+    "¡Hábito de acero! Otro abono a la saca.",
+    "¡Ese progreso se ve increíble! No te detengas.",
+    "¡Ahorrar es el mejor regalo que te puedes dar!",
+    "¡Tu dinero está trabajando para tu felicidad! 💰"
   ],
   onComplete: [
     "¡LO LOGRASTE! Eres un maestro del ahorro. 🏆",
     "¡Meta cumplida! Disfruta tu recompensa, te la ganaste.",
-    "¡Increíble! Sabíamos que podías hacerlo."
+    "¡Increíble! Sabíamos que podías hacerlo.",
+    "¡Misión cumplida! El cochinito está listo para la fiesta. 🎉",
+    "¡Sueño alcanzado! ¿Cuál será el siguiente reto?",
+    "Eres la prueba de que la disciplina paga. ¡Felicidades!",
+    "¡Meta desbloqueada! Disfruta el fruto de tu esfuerzo.",
+    "¡Bravo! Hoy eres más rico de lo que eras al empezar.",
+    "¡Tu constancia dio frutos! Disfrútalo al máximo. 🍎",
+    "¡Oinkash celebra contigo! ¡Objetivo terminado! 🐷✨"
   ],
   onWiseDecision: [
     "¡Esa es la actitud! Rectificar es de sabios financieros. ✨",
     "¡Wow! Te arrepentiste de gastar y preferiste ahorrar. ¡Genial!",
-    "¡Prioridades claras! El sueño vale más que el gasto."
+    "¡Prioridades claras! El sueño vale más que el gasto.",
+    "¡Victoria mental! Le ganaste al impulso de gasto. 🏆",
+    "¡Héroe del ahorro! Devolviste el dinero a su lugar.",
+    "El arrepentimiento positivo es el mejor maestro.",
+    "¡Tu meta saltó de alegría al ver que regresaste! 🐷",
+    "¡Decisión de crack! Tu futuro acaba de sonreír.",
+    "¡Nivel de madurez financiera: Experto! 🌟",
+    "¡Nada como la paz de saber que tu ahorro sigue intacto!"
   ],
   onInactivityReminder: [
     "Tu meta te extraña... ¿hace cuánto no le das amor? 🐷",
@@ -245,7 +278,6 @@ const Savings: React.FC = () => {
       return { img: GIF_FELIZ, label: "¡Logrado!", sub: "Cochinito fiestero" };
     }
     
-    // Al no tener updated_at, usamos created_at como referencia base
     const daysSinceUpdate = differenceInDays(new Date(), parseISO(saving.created_at));
     if (daysSinceUpdate > 30) {
       return { img: PIGGY_SAD, label: "Abandonada", sub: getRandomPhrase('onInactivityReminder') };
