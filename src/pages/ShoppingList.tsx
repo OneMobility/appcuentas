@@ -21,7 +21,7 @@ import { getLocalDateString } from "@/utils/date-helpers";
 import { format, parseISO } from "date-fns";
 import { es } from "date-fns/locale";
 
-const SHOPPING_PIGGY = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Cochinito%20Ahorro.png";
+const GIF_SUPER = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/cart.gif";
 
 const ShoppingList: React.FC = () => {
   const { user } = useSession();
@@ -490,18 +490,15 @@ const ShoppingList: React.FC = () => {
       <header className="relative">
         <div className="absolute inset-0 bg-blue-100/50 blur-3xl rounded-full -z-10" />
         <Card className="bg-blue-600 text-white rounded-[2.5rem] border-none shadow-2xl overflow-hidden">
-          <div className="p-8 space-y-4 relative">
-            <div className="absolute top-0 right-0 p-4 opacity-30 pointer-events-none">
-              <img src={SHOPPING_PIGGY} alt="Súper" className="h-32 w-32 object-contain -rotate-12" />
-            </div>
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="p-8 relative flex flex-col md:flex-row items-center justify-between gap-6">
+            <div className="space-y-4 flex-1 text-center md:text-left">
               <div>
                 <p className="text-[10px] font-black uppercase tracking-widest text-blue-100">Lista del Súper 🐷</p>
-                <h1 className="text-3xl font-bold flex items-center gap-2">
+                <h1 className="text-3xl font-bold flex items-center justify-center md:justify-start gap-2">
                   <ShoppingCart className="h-8 w-8" /> {lists.find(l => l.id === selectedListId)?.name || "Tu Despensa"}
                 </h1>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center justify-center md:justify-start gap-2">
                 <Select value={selectedListId} onValueChange={setSelectedListId}>
                   <SelectTrigger className="w-[200px] rounded-xl h-10 bg-white/10 border-white/20 text-white font-bold">
                     <SelectValue placeholder="Selecciona una lista" />
@@ -518,6 +515,9 @@ const ShoppingList: React.FC = () => {
                   <ListPlus className="h-5 w-5 text-white" />
                 </Button>
               </div>
+            </div>
+            <div className="flex-shrink-0">
+              <img src={GIF_SUPER} alt="Súper" className="h-32 w-32 object-contain" />
             </div>
           </div>
         </Card>

@@ -24,7 +24,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { addMonths, parseISO, isWithinInterval, startOfMonth, endOfMonth } from "date-fns";
 import { fetchUsdToMxnRate } from "@/utils/currency-helper";
 
-const COCHINITO_LOGO = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Cochinito%20Ahorro.png";
+const GIF_CARD = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/card.gif";
 
 const Cards = () => {
   const { user } = useSession();
@@ -349,18 +349,20 @@ const Cards = () => {
       <header className="relative">
         <div className="absolute inset-0 bg-indigo-100/50 blur-3xl rounded-full -z-10" />
         <Card className="bg-indigo-900 text-white rounded-[2.5rem] border-none shadow-2xl overflow-hidden">
-          <div className="p-8 space-y-4 relative">
-            <div className="absolute top-0 right-0 p-4 opacity-20">
-              <img src={COCHINITO_LOGO} alt="Tarjetas" className="h-40 w-40 object-contain" />
+          <div className="p-8 relative flex flex-col md:flex-row items-center justify-between gap-6">
+            <div className="space-y-4 flex-1 text-center md:text-left">
+              <p className="text-[10px] font-black uppercase tracking-widest text-indigo-200">Bóveda de Tarjetas 🐷</p>
+              <div className="flex items-baseline justify-center md:justify-start gap-2">
+                <span className="text-5xl font-black tracking-tighter">
+                  ${netCardBalance.toLocaleString()}
+                </span>
+                <span className="text-xl font-bold opacity-60">MXN</span>
+              </div>
+              <p className="text-xs font-medium text-indigo-50/80">Gestiona tu plástico de forma inteligente.</p>
             </div>
-            <p className="text-[10px] font-black uppercase tracking-widest text-indigo-200">Bóveda de Tarjetas 🐷</p>
-            <div className="flex items-baseline gap-2">
-              <span className="text-5xl font-black tracking-tighter">
-                ${netCardBalance.toLocaleString()}
-              </span>
-              <span className="text-xl font-bold opacity-60">MXN</span>
+            <div className="flex-shrink-0">
+              <img src={GIF_CARD} alt="Tarjetas" className="h-32 w-32 object-contain" />
             </div>
-            <p className="text-xs font-medium text-indigo-50/80">Gestiona tu plástico de forma inteligente.</p>
           </div>
         </Card>
       </header>
@@ -385,7 +387,7 @@ const Cards = () => {
       </div>
 
       <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
-        <div className="relative flex-1 max-w-md">
+        <div className="relative flex-1 max-w-md w-full">
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Buscar por nombre o banco..."

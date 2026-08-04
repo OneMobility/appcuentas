@@ -45,7 +45,7 @@ import { fetchUsdToMxnRate } from "@/utils/currency-helper";
 import { motion, AnimatePresence } from "framer-motion";
 import { Badge } from "@/components/ui/badge";
 
-const COCHINITO_AMOR = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/cochinito%20amor.png";
+const GIF_COBRANDO = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/cobrando.gif";
 
 const Debtors = () => {
   const { user } = useSession();
@@ -240,18 +240,20 @@ const Debtors = () => {
       <header className="relative">
         <div className="absolute inset-0 bg-emerald-100/50 blur-3xl rounded-full -z-10" />
         <Card className="bg-emerald-600 text-white rounded-[2.5rem] border-none shadow-2xl overflow-hidden">
-          <div className="p-8 space-y-4 relative">
-            <div className="absolute top-0 right-0 p-4 opacity-20">
-              <img src={COCHINITO_AMOR} alt="Cobrando" className="h-36 w-36 object-contain -rotate-6" />
+          <div className="p-8 relative flex flex-col md:flex-row items-center justify-between gap-6">
+            <div className="space-y-4 flex-1 text-center md:text-left">
+              <p className="text-[10px] font-black uppercase tracking-widest text-emerald-100">Dinero por Cobrar 🐷</p>
+              <div className="flex items-baseline justify-center md:justify-start gap-2">
+                <span className="text-5xl font-black tracking-tighter">
+                  ${debtors.filter(d => d.current_balance > 0.01).reduce((s, d) => s + d.current_balance, 0).toLocaleString()}
+                </span>
+                <span className="text-xl font-bold opacity-60">MXN</span>
+              </div>
+              <p className="text-xs font-medium text-emerald-50/80">¡Es hora de que esos cerditos vuelvan a casa!</p>
             </div>
-            <p className="text-[10px] font-black uppercase tracking-widest text-emerald-100">Dinero por Cobrar 🐷</p>
-            <div className="flex items-baseline gap-2">
-              <span className="text-5xl font-black tracking-tighter">
-                ${debtors.filter(d => d.current_balance > 0.01).reduce((s, d) => s + d.current_balance, 0).toLocaleString()}
-              </span>
-              <span className="text-xl font-bold opacity-60">MXN</span>
+            <div className="flex-shrink-0">
+              <img src={GIF_COBRANDO} alt="Cobrando" className="h-36 w-36 object-contain" />
             </div>
-            <p className="text-xs font-medium text-emerald-50/80">¡Es hora de que esos cerditos vuelvan a casa!</p>
           </div>
         </Card>
       </header>

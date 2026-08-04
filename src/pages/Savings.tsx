@@ -39,7 +39,7 @@ import { evaluateExpression } from "@/utils/math-helpers";
 import { motion, AnimatePresence } from "framer-motion";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
-const META_PIGGY = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Meta%202.png";
+const GIF_METAS = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/meta.gif";
 
 const Savings: React.FC = () => {
   const { user } = useSession();
@@ -83,7 +83,7 @@ const Savings: React.FC = () => {
       setSavings(prev => [data, ...prev]);
       setIsAddSavingDialogOpen(false);
       setNewSaving({ name: "", initial_balance: "", target_amount: "", target_date: undefined, color: "#22C55E" });
-      setFeedbackOverlay({ isVisible: true, message: "¡Meta creada! ¡Vamos por ello! 🐷", imageSrc: META_PIGGY, bgColor: "bg-indigo-50", textColor: "text-indigo-800" });
+      setFeedbackOverlay({ isVisible: true, message: "¡Meta creada! ¡Vamos por ello! 🐷", imageSrc: GIF_METAS, bgColor: "bg-indigo-50", textColor: "text-indigo-800" });
     }
   };
 
@@ -141,16 +141,18 @@ const Savings: React.FC = () => {
       <header className="relative">
         <div className="absolute inset-0 bg-yellow-100/50 blur-3xl rounded-full -z-10" />
         <Card className="bg-yellow-500 text-white rounded-[2.5rem] border-none shadow-2xl overflow-hidden">
-          <div className="p-8 space-y-4 relative">
-            <div className="absolute top-0 right-0 p-4 opacity-30 pointer-events-none">
-              <img src={META_PIGGY} alt="Metas" className="h-40 w-40 object-contain rotate-6" />
+          <div className="p-8 relative flex flex-col md:flex-row items-center justify-between gap-6">
+            <div className="space-y-4 flex-1 text-center md:text-left">
+              <p className="text-[10px] font-black uppercase tracking-widest text-yellow-100">Mis Ahorros Totales 🐷</p>
+              <div className="flex items-baseline justify-center md:justify-start gap-2">
+                <span className="text-5xl font-black tracking-tighter">${totalSaved.toLocaleString()}</span>
+                <span className="text-xl font-bold opacity-60">MXN</span>
+              </div>
+              <p className="text-xs font-medium text-yellow-50/80">¡Tu futuro se construye peso a peso!</p>
             </div>
-            <p className="text-[10px] font-black uppercase tracking-widest text-yellow-100">Mis Ahorros Totales 🐷</p>
-            <div className="flex items-baseline gap-2">
-              <span className="text-5xl font-black tracking-tighter">${totalSaved.toLocaleString()}</span>
-              <span className="text-xl font-bold opacity-60">MXN</span>
+            <div className="flex-shrink-0">
+              <img src={GIF_METAS} alt="Metas" className="h-32 w-32 object-contain" />
             </div>
-            <p className="text-xs font-medium text-yellow-50/80">¡Tu futuro se construye peso a peso!</p>
           </div>
         </Card>
       </header>

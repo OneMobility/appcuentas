@@ -32,7 +32,7 @@ import { cn } from "@/lib/utils";
 import DynamicLucideIcon from "@/components/DynamicLucideIcon";
 import { getContrastColor } from "@/utils/color-helpers";
 
-const COCHINITO_PLANNER = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Cochinito%20Ahorro.png";
+const GIF_SUSCRIPCIONES = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/netflix.gif";
 
 const RecurringExpenses = () => {
   const { user } = useSession();
@@ -99,21 +99,23 @@ const RecurringExpenses = () => {
       <header className="relative">
         <div className="absolute inset-0 bg-purple-100/50 blur-3xl rounded-full -z-10" />
         <Card className="bg-slate-900 text-white rounded-[2.5rem] border-none shadow-2xl overflow-hidden">
-          <div className="p-8 space-y-6 relative">
-            <div className="absolute top-0 right-0 p-4 opacity-20 pointer-events-none">
-              <img src={COCHINITO_PLANNER} alt="Planner" className="h-40 w-40 object-contain rotate-6" />
-            </div>
+          <div className="p-8 relative flex flex-col md:flex-row items-center justify-between gap-6">
+            <div className="space-y-6 flex-1 text-center md:text-left">
+              <div className="space-y-1">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Presupuesto Fijo Mensual 🐷</p>
+                <div className="flex items-baseline justify-center md:justify-start gap-2">
+                  <span className="text-5xl font-black tracking-tighter">${totalMonthly.toLocaleString()}</span>
+                  <span className="text-xl font-bold text-slate-500">MXN</span>
+                </div>
+              </div>
 
-            <div className="space-y-1">
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Presupuesto Fijo Mensual 🐷</p>
-              <div className="flex items-baseline gap-2">
-                <span className="text-5xl font-black tracking-tighter">${totalMonthly.toLocaleString()}</span>
-                <span className="text-xl font-bold text-slate-500">MXN</span>
+              <div className="flex items-center justify-center md:justify-start gap-2 text-[10px] font-bold text-purple-400 bg-purple-400/10 w-fit mx-auto md:mx-0 px-4 py-1.5 rounded-full">
+                <RefreshCw className="h-3 w-3 animate-spin-slow" /> {expenses.length} suscripciones activas
               </div>
             </div>
-
-            <div className="flex items-center gap-2 text-[10px] font-bold text-purple-400 bg-purple-400/10 w-fit px-4 py-1.5 rounded-full">
-              <RefreshCw className="h-3 w-3 animate-spin-slow" /> {expenses.length} suscripciones activas
+            
+            <div className="flex-shrink-0">
+              <img src={GIF_SUSCRIPCIONES} alt="Suscripciones" className="h-32 w-32 object-contain" />
             </div>
           </div>
         </Card>

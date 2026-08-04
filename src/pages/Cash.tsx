@@ -44,7 +44,7 @@ import CardTransferDialog from "@/components/CardTransferDialog";
 import { motion } from "framer-motion";
 import { getContrastColor } from "@/utils/color-helpers";
 
-const COCHINITO_AHORRO = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Cochinito%20Ahorro.png";
+const GIF_EFECTIVO = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/efectivo.gif";
 
 const Cash = () => {
   const { user } = useSession();
@@ -251,44 +251,46 @@ const Cash = () => {
       <header className="relative">
         <div className="absolute inset-0 bg-primary/20 blur-3xl rounded-full -z-10" />
         <Card className="bg-slate-950 text-white rounded-[2.5rem] border-none shadow-2xl overflow-hidden">
-          <div className="p-8 space-y-6 relative">
-            <div className="absolute top-0 right-0 p-4 opacity-20">
-              <img src={COCHINITO_AHORRO} alt="Ahorro" className="h-40 w-40 object-contain rotate-12" />
-            </div>
+          <div className="p-8 relative flex flex-col md:flex-row items-center justify-between gap-6">
+            <div className="space-y-6 flex-1 text-center md:text-left">
+              <div className="space-y-1">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Saldo Total en Efectivo 🐷</p>
+                <div className="flex items-baseline justify-center md:justify-start gap-2">
+                  <span className="text-5xl font-black tracking-tighter">${balance.toLocaleString()}</span>
+                  <span className="text-xl font-bold text-slate-500">MXN</span>
+                </div>
+              </div>
 
-            <div className="space-y-1">
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Saldo Total en Efectivo 🐷</p>
-              <div className="flex items-baseline gap-2">
-                <span className="text-5xl font-black tracking-tighter">${balance.toLocaleString()}</span>
-                <span className="text-xl font-bold text-slate-500">MXN</span>
+              <div className="grid grid-cols-2 gap-4 pt-4 border-t border-white/5">
+                <div className="flex items-center gap-3">
+                  <div className="h-8 w-8 rounded-full bg-emerald-500/20 flex items-center justify-center text-emerald-400">
+                    <ArrowUpCircle className="h-4 w-4" />
+                  </div>
+                  <div className="flex flex-col text-left">
+                    <span className="text-[8px] font-bold uppercase text-slate-500">Entradas</span>
+                    <span className="text-sm font-black text-emerald-400">+${monthStats.ingresos.toLocaleString()}</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="h-8 w-8 rounded-full bg-rose-500/20 flex items-center justify-center text-rose-400">
+                    <ArrowDownCircle className="h-4 w-4" />
+                  </div>
+                  <div className="flex flex-col text-left">
+                    <span className="text-[8px] font-bold uppercase text-slate-500">Salidas</span>
+                    <span className="text-sm font-black text-rose-400">-${monthStats.egresos.toLocaleString()}</span>
+                  </div>
+                </div>
               </div>
             </div>
-
-            <div className="grid grid-cols-2 gap-4 pt-4 border-t border-white/5">
-              <div className="flex items-center gap-3">
-                <div className="h-8 w-8 rounded-full bg-emerald-500/20 flex items-center justify-center text-emerald-400">
-                  <ArrowUpCircle className="h-4 w-4" />
-                </div>
-                <div className="flex flex-col">
-                  <span className="text-[8px] font-bold uppercase text-slate-500">Entradas</span>
-                  <span className="text-sm font-black text-emerald-400">+${monthStats.ingresos.toLocaleString()}</span>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <div className="h-8 w-8 rounded-full bg-rose-500/20 flex items-center justify-center text-rose-400">
-                  <ArrowDownCircle className="h-4 w-4" />
-                </div>
-                <div className="flex flex-col">
-                  <span className="text-[8px] font-bold uppercase text-slate-500">Salidas</span>
-                  <span className="text-sm font-black text-rose-400">-${monthStats.egresos.toLocaleString()}</span>
-                </div>
-              </div>
+            
+            <div className="flex-shrink-0">
+              <img src={GIF_EFECTIVO} alt="Efectivo" className="h-32 w-32 object-contain" />
             </div>
           </div>
         </Card>
       </header>
 
-      {/* ACCIONES RÁPIDAS (NUEVA SECCIÓN) */}
+      {/* ACCIONES RÁPIDAS */}
       <section className="grid grid-cols-2 gap-3 px-1">
         <Button 
           variant="outline" 
