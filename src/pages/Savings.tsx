@@ -16,7 +16,8 @@ import {
   CheckCircle2,
   Clock,
   Search,
-  AlertCircle
+  AlertCircle,
+  Loader2
 } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { cn } from "@/lib/utils";
@@ -83,6 +84,8 @@ const Savings: React.FC = () => {
   const [isAddSavingDialogOpen, setIsAddSavingDialogOpen] = useState(false);
   const [isEditSavingDialogOpen, setIsEditSavingDialogOpen] = useState(false);
   const [isTransactionDialogOpen, setIsTransactionDialogOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  
   const [selectedSavingId, setSelectedSavingId] = useState<string | null>(null);
   const [editingSaving, setEditingSaving] = useState<any>(null);
   const [searchTerm, setSearchTerm] = useState("");
@@ -114,18 +117,24 @@ const Savings: React.FC = () => {
 
   const handleSubmitNewSaving = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
+
     let initial = evaluateExpression(newSaving.initial_balance) || 0;
     let target = newSaving.target_amount ? (evaluateExpression(newSaving.target_amount) || 0) : null;
 
-    const { data, error } = await supabase.from('savings').insert({
-      user_id: user?.id, name: newSaving.name.trim(), current_balance: initial, target_amount: target,
-      target_date: newSaving.target_date ? getLocalDateString(newSaving.target_date) : null, color: newSaving.color
-    }).select().single();
+    setIsSubmitting(true);
+    try {
+      const { data, error } = await supabase.from('savings').insert({
+        user_id: user?.id, name: newSaving.name.trim(), current_balance: initial, target_amount: target,
+        target_date: newSaving.target_date ? getLocalDateString(newSaving.target_date) : null, color: newSaving.color
+      }).select().single();
 
-    if (!error) {
+      if (error) throw error;
+
       setSavings(prev => [data, ...prev]);
       setIsAddSavingDialogOpen(false);
       setNewSaving({ name: "", initial_balance: "", target_amount: "", target_date: undefined, color: "#22C55E" });
+      
       setFeedbackOverlay({ 
         isVisible: true, 
         message: getRandomPhrase('onOpen'), 
@@ -133,93 +142,97 @@ const Savings: React.FC = () => {
         bgColor: "bg-white", 
         textColor: "text-slate-900" 
       });
+    } catch (err: any) {
+      showError(err.message);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   const handleUpdateSaving = async (e: React.FormEvent) => {
     e.preventDefault();
-    let target = newSaving.target_amount ? (evaluateExpression(newSaving.target_amount) || 0) : null;
-    const { data, error } = await supabase.from('savings').update({
-      name: newSaving.name.trim(), target_amount: target,
-      target_date: newSaving.target_date ? getLocalDateString(newSaving.target_date) : null, color: newSaving.color
-    }).eq('id', editingSaving.id).select().single();
+    if (isSubmitting) return;
 
-    if (!error) {
+    let target = newSaving.target_amount ? (evaluateExpression(newSaving.target_amount) || 0) : null;
+    
+    setIsSubmitting(true);
+    try {
+      const { data, error } = await supabase.from('savings').update({
+        name: newSaving.name.trim(), target_amount: target,
+        target_date: newSaving.target_date ? getLocalDateString(newSaving.target_date) : null, color: newSaving.color
+      }).eq('id', editingSaving.id).select().single();
+
+      if (error) throw error;
+
       setSavings(prev => prev.map(s => s.id === data.id ? data : s));
       setIsEditSavingDialogOpen(false);
       showSuccess("Meta actualizada");
+    } catch (err: any) {
+      showError(err.message);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   const handleTransaction = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting || !selectedSavingId) return;
+
     let amount = evaluateExpression(newTransaction.amount) || 0;
+    if (amount <= 0) return showError("Ingresa un monto válido");
+
     const current = savings.find(s => s.id === selectedSavingId);
     if (!current) return;
 
     let newBal = newTransaction.type === 'deposit' ? current.current_balance + amount : current.current_balance - amount;
     if (newBal < 0) return showError("No puedes retirar más de lo que tienes.");
 
-    const isCompleting = current.target_amount && newBal >= current.target_amount && !current.completion_date;
-    let completionDate = current.completion_date;
-    if (isCompleting) completionDate = getLocalDateString(new Date());
-    else if (current.target_amount && newBal < current.target_amount) completionDate = null;
+    setIsSubmitting(true);
+    try {
+      const isCompleting = current.target_amount && newBal >= current.target_amount && !current.completion_date;
+      let completionDate = current.completion_date;
+      if (isCompleting) completionDate = getLocalDateString(new Date());
+      else if (current.target_amount && newBal < current.target_amount) completionDate = null;
 
-    const { data, error } = await supabase.from('savings').update({ 
-      current_balance: newBal, 
-      completion_date: completionDate,
-      updated_at: new Date().toISOString() 
-    }).eq('id', selectedSavingId).select().single();
+      const { data, error } = await supabase.from('savings').update({ 
+        current_balance: newBal, 
+        completion_date: completionDate,
+        updated_at: new Date().toISOString() 
+      }).eq('id', selectedSavingId).select().single();
 
-    if (!error) {
+      if (error) throw error;
+
       setSavings(prev => prev.map(s => s.id === data.id ? data : s));
       setIsTransactionDialogOpen(false);
+      setNewTransaction(prev => ({ ...prev, amount: "" })); // Limpiar monto
       
       const now = Date.now();
       const isDecisionCorrected = lastAction?.type === 'withdrawal' && newTransaction.type === 'deposit' && (now - lastAction.time < 300000) && lastAction.savingId === selectedSavingId;
 
       if (isCompleting) {
-        setFeedbackOverlay({ 
-          isVisible: true, 
-          message: getRandomPhrase('onComplete'), 
-          imageSrc: GIF_FELIZ, 
-          bgColor: "bg-white", 
-          textColor: "text-slate-900" 
-        });
+        setFeedbackOverlay({ isVisible: true, message: getRandomPhrase('onComplete'), imageSrc: GIF_FELIZ, bgColor: "bg-white", textColor: "text-slate-900" });
       } else if (isDecisionCorrected) {
-        setFeedbackOverlay({ 
-          isVisible: true, 
-          message: getRandomPhrase('onWiseDecision'), 
-          imageSrc: GIF_FELIZ, 
-          bgColor: "bg-white", 
-          textColor: "text-slate-900" 
-        });
+        setFeedbackOverlay({ isVisible: true, message: getRandomPhrase('onWiseDecision'), imageSrc: GIF_FELIZ, bgColor: "bg-white", textColor: "text-slate-900" });
       } else if (newTransaction.type === 'deposit') {
-        setFeedbackOverlay({ 
-          isVisible: true, 
-          message: getRandomPhrase('onDeposit'), 
-          imageSrc: GIF_DEPOSITO, 
-          bgColor: "bg-white", 
-          textColor: "text-slate-900" 
-        });
+        setFeedbackOverlay({ isVisible: true, message: getRandomPhrase('onDeposit'), imageSrc: GIF_DEPOSITO, bgColor: "bg-white", textColor: "text-slate-900" });
       } else {
-        setFeedbackOverlay({ 
-          isVisible: true, 
-          message: getRandomPhrase('onWithdraw'), 
-          imageSrc: GIF_RETIRO, 
-          bgColor: "bg-white", 
-          textColor: "text-slate-900" 
-        });
+        setFeedbackOverlay({ isVisible: true, message: getRandomPhrase('onWithdraw'), imageSrc: GIF_RETIRO, bgColor: "bg-white", textColor: "text-slate-900" });
       }
 
       setLastAction({ type: newTransaction.type, time: now, savingId: selectedSavingId! });
+    } catch (err: any) {
+      showError(err.message);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   const deleteSaving = async (id: string) => {
-    await supabase.from('savings').delete().eq('id', id);
-    setSavings(prev => prev.filter(s => s.id !== id));
-    showSuccess("Meta eliminada");
+    const { error } = await supabase.from('savings').delete().eq('id', id);
+    if (!error) {
+      setSavings(prev => prev.filter(s => s.id !== id));
+      showSuccess("Meta eliminada");
+    }
   };
 
   const getPiggyStatus = (saving: any) => {
@@ -399,12 +412,14 @@ const Savings: React.FC = () => {
               <Label className="text-[10px] font-black uppercase text-slate-400 ml-1">Color de la meta</Label>
               <ColorPicker selectedColor={newSaving.color} onSelectColor={c => setNewSaving({...newSaving, color: c})} />
             </div>
-            <Button type="submit" className="w-full rounded-2xl h-14 font-black text-lg bg-yellow-600 shadow-xl shadow-yellow-100 mt-2">¡Empezar Ahorro!</Button>
+            <Button type="submit" className="w-full rounded-2xl h-14 font-black text-lg bg-yellow-600 shadow-xl shadow-yellow-100 mt-2" disabled={isSubmitting}>
+              {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : "¡Empezar Ahorro!"}
+            </Button>
           </form>
         </DialogContent>
       </Dialog>
 
-      <Dialog open={isTransactionDialogOpen} onOpenChange={setIsTransactionDialogOpen}>
+      <Dialog open={isTransactionDialogOpen} onOpenChange={(open) => { setIsTransactionDialogOpen(open); if(!open) setSelectedSavingId(null); }}>
         <DialogContent className="rounded-[2.5rem] p-8 max-w-[400px]">
           <DialogHeader><DialogTitle className="text-2xl font-black">Registrar Movimiento</DialogTitle></DialogHeader>
           <form onSubmit={handleTransaction} className="grid gap-6 py-4">
@@ -416,7 +431,9 @@ const Savings: React.FC = () => {
               <Label className="text-[10px] font-black uppercase text-slate-400 ml-1">Monto</Label>
               <Input value={newTransaction.amount} onChange={e => setNewTransaction({...newTransaction, amount: e.target.value})} className="rounded-2xl h-14 text-xl font-black bg-slate-50 border-none focus-visible:ring-indigo-200" placeholder="0.00" required />
             </div>
-            <Button type="submit" className="w-full rounded-2xl h-14 font-black text-lg bg-indigo-600 shadow-xl shadow-indigo-100">Confirmar</Button>
+            <Button type="submit" className="w-full rounded-2xl h-14 font-black text-lg bg-indigo-600 shadow-xl shadow-indigo-100" disabled={isSubmitting}>
+              {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : "Confirmar"}
+            </Button>
           </form>
         </DialogContent>
       </Dialog>
