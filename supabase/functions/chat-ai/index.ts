@@ -13,20 +13,33 @@ serve(async (req) => {
     const apiKey = Deno.env.get('GEMINI_API_KEY')
 
     if (!apiKey) {
-      return new Response(JSON.stringify({ error: 'Falta la GEMINI_API_KEY en Supabase Secrets.' }), {
+      return new Response(JSON.stringify({ error: 'Configuración de servidor incompleta (API Key).' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 200 // Enviamos 200 para que el cliente pueda leer el JSON del error
+        status: 200
       })
     }
 
+    // Usamos el endpoint v1 (estable) en lugar de v1beta
+    const apiUrl = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+
     const prompt = `
-      Eres "Oinkash", un asistente financiero experto.
-      CONTEXTO: Disponible: $${context.available}, Deudas: $${context.debts}, Cobrables: $${context.receivable}.
-      Responde brevemente (máx 3 párrafos), con emojis 🐷 y en español.
-      Pregunta: "${message}"
+      Eres "Oinkash", un asistente financiero experto, divertido y muy motivador.
+      
+      DATOS DEL USUARIO:
+      - Disponible: $${context.available || 0}
+      - Deudas: $${context.debts || 0}
+      - Por cobrar: $${context.receivable || 0}
+      
+      TU MISIÓN:
+      - Responde en español (México/Latinoamérica).
+      - Sé muy breve (máximo 3 párrafos).
+      - Usa emojis de cerdito 🐷 y dinero 💵.
+      - Da consejos prácticos basados en los datos (ej. si tiene poco dinero, sugiere ahorrar en comida; si tiene deudas, sugiere pagarlas).
+      
+      PREGUNTA: "${message}"
     `;
 
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+    const response = await fetch(apiUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -37,20 +50,22 @@ serve(async (req) => {
     const data = await response.json();
 
     if (!response.ok) {
-      return new Response(JSON.stringify({ error: `Error de Google: ${data.error?.message || 'Error desconocido'}` }), {
+      console.error("[chat-ai] Google API Error:", data);
+      return new Response(JSON.stringify({ error: `Google dice: ${data.error?.message || 'Error desconocido'}` }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 200
       });
     }
 
-    const aiResponse = data.candidates?.[0]?.content?.parts?.[0]?.text || "No pude generar una respuesta.";
+    const aiResponse = data.candidates?.[0]?.content?.parts?.[0]?.text || "¡Oink! Me quedé sin palabras. Inténtalo de nuevo.";
 
     return new Response(JSON.stringify({ reply: aiResponse }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
 
   } catch (error: any) {
-    return new Response(JSON.stringify({ error: error.message }), {
+    console.error("[chat-ai] Exception:", error);
+    return new Response(JSON.stringify({ error: "El cerdito se tropezó: " + error.message }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200
     });
