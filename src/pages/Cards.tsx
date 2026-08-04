@@ -24,7 +24,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { addMonths, parseISO, isWithinInterval, startOfMonth, endOfMonth } from "date-fns";
 import { fetchUsdToMxnRate } from "@/utils/currency-helper";
 
-const GIF_CARD = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/card.gif";
+const GIF_CARD = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/cardnuevo.gif";
 
 const Cards = () => {
   const { user } = useSession();
