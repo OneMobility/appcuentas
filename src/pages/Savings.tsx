@@ -37,7 +37,8 @@ const GIF_FELIZ = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/pu
 const GIF_DEPOSITO = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/metasdeposito.gif";
 const GIF_RETIRO = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/metasretiro.gif";
 
-// RECURSOS ESTÁTICOS / UI
+// RECURSOS PARA LA UI
+const GIF_CABECERA = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/nuevometa.gif";
 const PIGGY_STANDARD = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Cochinito%20Ahorro.png";
 const PIGGY_SAD = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Cochinito%20Ahorro%20Triste.png";
 
@@ -129,7 +130,7 @@ const Savings: React.FC = () => {
         isVisible: true, 
         message: getRandomPhrase('onOpen'), 
         imageSrc: GIF_INICIO, 
-        bgColor: "bg-white", // Fondo blanco (255 255 255)
+        bgColor: "bg-white", 
         textColor: "text-slate-900" 
       });
     }
@@ -175,7 +176,6 @@ const Savings: React.FC = () => {
       setIsTransactionDialogOpen(false);
       
       const now = Date.now();
-      // "Sabia decisión" si el usuario deposita poco después de haber retirado de la misma meta
       const isDecisionCorrected = lastAction?.type === 'withdrawal' && newTransaction.type === 'deposit' && (now - lastAction.time < 300000) && lastAction.savingId === selectedSavingId;
 
       if (isCompleting) {
@@ -258,7 +258,7 @@ const Savings: React.FC = () => {
               <p className="text-xs font-medium text-yellow-50/80">¡Tu futuro se construye peso a peso!</p>
             </div>
             <div className="flex-shrink-0">
-              <img src={PIGGY_STANDARD} alt="Metas" className="h-32 w-32 object-contain" />
+              <img src={GIF_CABECERA} alt="Metas" className="h-32 w-32 object-contain" />
             </div>
           </div>
         </Card>
