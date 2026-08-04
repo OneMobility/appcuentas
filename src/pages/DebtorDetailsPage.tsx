@@ -216,6 +216,32 @@ const DebtorDetailsPage: React.FC = () => {
     fetchData();
   };
 
+  const handleExport = (formatType: 'csv' | 'pdf') => {
+    if (!debtor) return;
+    const data = filteredTransactions.map(tx => ({
+      Fecha: format(parseISO(tx.date), "dd/MM/yyyy"),
+      Tipo: tx.type === "charge" ? "Cargo" : "Pago",
+      Descripción: tx.description,
+      Monto: tx.amount.toFixed(2),
+      Saldo: tx.runningBalance.toFixed(2)
+    }));
+
+    const filename = `historial_${debtor.name}_${format(currentViewDate, "MMM_yyyy")}`;
+
+    if (formatType === 'csv') {
+      exportToCsv(`${filename}.csv`, data);
+      showSuccess("Historial exportado a CSV.");
+    } else {
+      exportToPdf(
+        `${filename}.pdf`, 
+        `Estado de Cuenta: ${debtor.name} (${format(currentViewDate, "MMMM yyyy", { locale: es })})`, 
+        ["Fecha", "Tipo", "Descripción", "Monto", "Saldo"], 
+        data.map(d => Object.values(d))
+      );
+      showSuccess("Historial exportado a PDF.");
+    }
+  };
+
   const generateStatementText = () => {
     if (!debtor) return "";
     let text = `📄 *ESTADO DE CUENTA: ${debtor.name.toUpperCase()}*\n\n`;
@@ -245,6 +271,19 @@ const DebtorDetailsPage: React.FC = () => {
           </div>
         </div>
         <div className="flex gap-2">
+           <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="icon" className="h-10 w-10 rounded-xl" title="Exportar"><FileDown className="h-4 w-4" /></Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="rounded-xl">
+                <DropdownMenuItem onClick={() => handleExport('csv')} className="text-xs font-bold gap-2">
+                  <FileText className="h-3.5 w-3.5" /> Exportar CSV
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleExport('pdf')} className="text-xs font-bold gap-2">
+                  <FileText className="h-3.5 w-3.5" /> Exportar PDF
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+           </DropdownMenu>
            <Button variant="outline" size="icon" className="rounded-xl h-10 w-10" onClick={() => setIsShareDialogOpen(true)}><Share2 className="h-4 w-4" /></Button>
            <Button className="rounded-xl h-10 font-black gap-2" onClick={() => { setEditingTransaction(null); setIsTransactionDialogOpen(true); }}><PlusCircle className="h-4 w-4" /> Nuevo</Button>
         </div>
