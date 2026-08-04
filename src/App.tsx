@@ -19,6 +19,7 @@ import CreateSharedBudget from "./pages/CreateSharedBudget";
 import EditSharedBudget from "./pages/EditSharedBudget";
 import ShoppingList from "./pages/ShoppingList";
 import RecurringExpenses from "./pages/RecurringExpenses";
+import Minigames from "./pages/Minigames";
 import NotFound from "./pages/NotFound";
 import Login from "./pages/Login";
 import ResetPassword from "./pages/ResetPassword";
@@ -26,7 +27,7 @@ import { CategoryProvider } from "./context/CategoryContext";
 import { SessionProvider, useSession } from "./context/SessionContext";
 import CardNotifications from "./components/CardNotifications";
 import AppUpdater from "./components/AppUpdater";
-import LoadingSpinner from "./components/LoadingSpinner"; // Importado
+import LoadingSpinner from "./components/LoadingSpinner";
 import React from "react";
 
 const queryClient = new QueryClient();
@@ -34,7 +35,7 @@ const queryClient = new QueryClient();
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { session, isLoading } = useSession();
   
-  if (isLoading) return <LoadingSpinner />; // Usando el spinner visual en lugar de texto
+  if (isLoading) return <LoadingSpinner />;
   
   if (!session) return <Navigate to="/login" replace />;
   return <>{children}</>;
@@ -71,6 +72,7 @@ const App = () => {
                   <Route path="/shared-budgets/edit/:budgetId" element={<EditSharedBudget />} />
                   <Route path="/recurring" element={<RecurringExpenses />} />
                   <Route path="/shopping-list" element={<ShoppingList />} />
+                  <Route path="/minigames" element={<Minigames />} />
                 </Route>
                 <Route path="*" element={<NotFound />} />
               </Routes>

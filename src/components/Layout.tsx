@@ -19,6 +19,7 @@ import {
   ShoppingCart,
   CalendarDays,
   LayoutDashboard,
+  Gamepad2,
 } from "lucide-react";
 import MobileNavbar from "./MobileNavbar";
 import { useSession } from "@/context/SessionContext";
@@ -36,6 +37,7 @@ const navItems = [
   { name: "Me deben", path: "/debtors", icon: ThumbsUp },
   { name: "Debo", path: "/creditors", icon: ThumbsDown },
   { name: "Tarjetas", path: "/cards", icon: CreditCard },
+  { name: "Minijuegos", path: "/minigames", icon: Gamepad2 },
   { name: "Suscripciones", path: "/recurring", icon: CalendarDays },
   { name: "Súper", path: "/shopping-list", icon: ShoppingCart },
   { name: "Metas", path: "/savings", icon: Wallet },
