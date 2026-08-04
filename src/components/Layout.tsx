@@ -110,10 +110,13 @@ const Layout: React.FC = () => {
               <img src={APP_ICON_LOGO} className="h-9 w-9 object-cover rounded-lg" />
               <h1 className="text-lg font-black tracking-tighter">Oinkash</h1>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 sm:gap-2">
               <NotificationsPopover />
-              <Button variant="ghost" onClick={() => setIsProfileOpen(true)} className="rounded-full p-0 h-9 w-9 border border-slate-100 shadow-sm">
+              <Button variant="ghost" onClick={() => setIsProfileOpen(true)} className="rounded-full p-0 h-9 w-9 border border-slate-100 shadow-sm overflow-hidden">
                 <Avatar className="h-full w-full"><AvatarImage src={userProfile?.avatar_url} /><AvatarFallback>{initials}</AvatarFallback></Avatar>
+              </Button>
+              <Button variant="ghost" size="icon" onClick={handleLogout} className="rounded-full h-9 w-9 text-slate-400 hover:text-rose-500 active:bg-rose-50">
+                <LogOut className="h-4 w-4" />
               </Button>
             </div>
           </header>
