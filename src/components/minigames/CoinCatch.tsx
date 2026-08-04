@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 
 /**
- * 🪙 COIN CATCH — Versión Oinkash Modificada
+ * 🪙 COIN CATCH — Versión Oinkash Master
  */
 
 const STARTING_LIVES = 3;
@@ -30,11 +30,21 @@ const ITEM_DEFS: Record<Kind, ItemDef> = {
   bag: { emoji: "💰", points: 50, bad: false, weight: 1 },
   gasto: { emoji: "💸", points: 0, bad: true, weight: 4 },
   impuesto: { emoji: "🏛️", points: 0, bad: true, weight: 3 },
-  factura: { emoji: "🧾", points: -20, bad: true, weight: 3 }, // Resta puntos
+  factura: { emoji: "🧾", points: -20, bad: true, weight: 3 },
 };
 
 const GOOD_KINDS: GoodKind[] = ["coin", "bill", "bag"];
 const BAD_KINDS: BadKind[] = ["gasto", "impuesto", "factura"];
+
+const MILESTONES = [
+  { score: 100, text: "¡BIEN!", emoji: "" },
+  { score: 500, text: "¡EXCELENTE!", emoji: "" },
+  { score: 1000, text: "¡GENIAL!", emoji: "" },
+  { score: 2000, text: "¡ERES ÚNICO!", emoji: "" },
+  { score: 5000, text: "¡EXCELENTE!", emoji: "" },
+  { score: 10000, text: "¡DOMINAS!", emoji: "" },
+  { score: 15000, text: "¡EL REY!", emoji: "💎" },
+];
 
 function pickWeighted<K extends Kind>(kinds: K[]): K {
   const total = kinds.reduce((sum, k) => sum + ITEM_DEFS[k].weight, 0);
@@ -77,8 +87,10 @@ export default function CoinCatch({
   const [items, setItems] = useState<FallingItem[]>([]);
   const [basketX, setBasketX] = useState(50);
   const [flash, setFlash] = useState<"good" | "bad" | null>(null);
-  const [showBien, setShowBien] = useState(false);
-  const hasTriggeredBien = useRef(false);
+  
+  // Estado para hitos
+  const [milestone, setMilestone] = useState<{ text: string, emoji: string } | null>(null);
+  const triggeredMilestones = useRef<Set<number>>(new Set());
 
   const fieldRef = useRef<HTMLDivElement | null>(null);
   const itemsRef = useRef<FallingItem[]>([]);
@@ -122,7 +134,7 @@ export default function CoinCatch({
     livesRef.current = STARTING_LIVES;
     scoreRef.current = 0;
     basketXRef.current = 50;
-    hasTriggeredBien.current = false;
+    triggeredMilestones.current = new Set();
 
     setItems([]);
     setScore(0);
@@ -131,7 +143,7 @@ export default function CoinCatch({
     setMultiplier(1);
     setBasketX(50);
     setFlash(null);
-    setShowBien(false);
+    setMilestone(null);
     setPhase("playing");
   }, []);
 
@@ -154,10 +166,12 @@ export default function CoinCatch({
         basketXRef.current = Math.min(100 - BASKET_HALF_WIDTH, basketXRef.current + moveSpeed * dt);
       }
 
-      // Dificultad progresiva aunque no haya tiempo
-      const progress = Math.min(1, elapsedRef.current / 120); // Se estabiliza a los 2 min
-      const spawnInterval = 1.0 - 0.65 * progress; 
-      const fallDuration = 3.5 - 1.8 * progress; 
+      // Dificultad progresiva por tiempo + por cada 1000 puntos
+      const timeProgress = Math.min(1, elapsedRef.current / 120);
+      const scoreSpeedMult = 1 + (Math.floor(scoreRef.current / 1000) * 0.1); // +10% cada 1000 pts
+      
+      const spawnInterval = (1.0 - 0.65 * timeProgress) / (scoreSpeedMult * 0.8); 
+      const fallDuration = (3.5 - 1.8 * timeProgress) / scoreSpeedMult; 
 
       spawnAccumulatorRef.current += dt;
       if (spawnAccumulatorRef.current >= spawnInterval) {
@@ -186,7 +200,6 @@ export default function CoinCatch({
               livesRef.current -= 1;
               streakRef.current = 0;
               
-              // Solo la factura resta puntos
               if (item.kind === "factura") {
                 scoreRef.current = Math.max(0, scoreRef.current + def.points);
               }
@@ -201,12 +214,15 @@ export default function CoinCatch({
               const mult = Math.min(MAX_MULTIPLIER, 1 + Math.floor(streakRef.current / STREAK_PER_MULT_LEVEL));
               scoreRef.current += def.points * mult;
               
-              // Animación BIEN a los 100 puntos
-              if (scoreRef.current >= 100 && !hasTriggeredBien.current) {
-                setShowBien(true);
-                hasTriggeredBien.current = true;
-                setTimeout(() => setShowBien(false), 2000);
-              }
+              // Verificar hitos
+              const currentScore = scoreRef.current;
+              MILESTONES.forEach(m => {
+                if (currentScore >= m.score && !triggeredMilestones.current.has(m.score)) {
+                  setMilestone({ text: m.text, emoji: m.emoji });
+                  triggeredMilestones.current.add(m.score);
+                  setTimeout(() => setMilestone(null), 2500);
+                }
+              });
 
               setStreak(streakRef.current);
               setMultiplier(mult);
@@ -292,7 +308,7 @@ export default function CoinCatch({
       <div style={styles.header}>
         <div>
           <h1 style={styles.title}>🪙 COIN CATCH</h1>
-          <p style={styles.subtitle}>¡Tiempo ilimitado! Atrapa el ahorro.</p>
+          <p style={styles.subtitle}>¡Cada 1000 pts aumenta el reto!</p>
         </div>
         <div style={styles.statsRow}>
           <div style={styles.statBox}>
@@ -367,17 +383,18 @@ export default function CoinCatch({
           🐷
         </div>
 
-        {/* Animación BIEN */}
+        {/* Animación de Hitos */}
         <AnimatePresence>
-          {showBien && (
+          {milestone && (
             <motion.div
-              initial={{ scale: 0, opacity: 0, y: 0 }}
-              animate={{ scale: 1.5, opacity: 1, y: -50 }}
-              exit={{ scale: 2, opacity: 0 }}
-              className="absolute inset-0 flex items-center justify-center pointer-events-none z-30"
+              initial={{ scale: 0, opacity: 0, y: 20 }}
+              animate={{ scale: 1.2, opacity: 1, y: -80 }}
+              exit={{ scale: 1.5, opacity: 0 }}
+              className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-30"
             >
-              <span className="text-5xl font-black text-yellow-400 drop-shadow-[0_4px_4px_rgba(0,0,0,0.5)] italic">
-                ¡BIEN!
+              {milestone.emoji && <span className="text-4xl mb-2">{milestone.emoji}</span>}
+              <span className="text-4xl font-black text-yellow-400 drop-shadow-[0_4px_4px_rgba(0,0,0,0.5)] italic text-center px-4">
+                {milestone.text}
               </span>
             </motion.div>
           )}
@@ -389,9 +406,9 @@ export default function CoinCatch({
             <p style={styles.overlaySubtitle}>
               Atrapa 🪙 💵 💰 para ganar puntos.
               <br />
-              Evita 💸 🏛️. Ojo: ¡Las 🧾 restan puntos!
+              ¡Cada 1000 pts los objetos caen más rápido!
               <br />
-              Mueve a tu cerdito para no perder tus 3 vidas.
+              Ojo: ¡Las 🧾 restan puntos!
             </p>
             <button style={styles.overlayButton} onClick={startGame}>
               ¡A Ahorrar!
@@ -414,7 +431,7 @@ export default function CoinCatch({
       </div>
 
       <p style={styles.hint}>
-        Solo monedas y billetes suman · Las facturas (🧾) restan -20 pts y quitan vida
+        Velocidad actual: +{Math.round((Math.floor(score / 1000) * 10))}%
       </p>
     </div>
   );
