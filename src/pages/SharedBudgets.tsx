@@ -4,8 +4,21 @@ import React, { useState, useEffect, useMemo } from "react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
-import { PlusCircle, Users, CheckCircle, Trash2, Banknote, CheckCircle2, Clock, DollarSign, Edit, AlertCircle, Calendar as CalendarIcon, UserCheck } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { 
+  PlusCircle, 
+  Users, 
+  Trash2, 
+  Clock, 
+  DollarSign, 
+  Edit, 
+  AlertCircle, 
+  Calendar as CalendarIcon, 
+  UserCheck,
+  CheckCircle2,
+  ChevronRight,
+  TrendingUp
+} from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/context/SessionContext";
@@ -18,423 +31,203 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useCategoryContext } from "@/context/CategoryContext";
-import DynamicLucideIcon from "@/components/DynamicLucideIcon";
 import { evaluateExpression } from "@/utils/math-helpers";
 import { format, parseISO, isBefore, isSameDay, addDays } from "date-fns";
 import { es } from "date-fns/locale";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { motion, AnimatePresence } from "framer-motion";
 
-interface Debtor {
-  id: string;
-  name: string;
-  current_balance: number;
-}
-
-interface Creditor {
-  id: string;
-  name: string;
-  current_balance: number;
-}
-
-interface CardData {
-  id: string;
-  name: string;
-  bank_name: string;
-  last_four_digits: string;
-  type: "credit" | "debit";
-  current_balance: number;
-}
-
-interface Participant {
-  id: string;
-  debtor_id: string;
-  debtors: Debtor;
-  share_amount: number;
-  paid_amount: number;
-  is_paid: boolean;
-}
-
-interface SharedBudget {
-  id: string;
-  name: string;
-  total_amount: number;
-  split_type: string;
-  description: string;
-  budget_participants: Participant[];
-  creditor_id?: string | null;
-  due_date?: string | null;
-}
+const SHARED_PIGGY = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Cochinito%20Ahorro.png";
 
 const SharedBudgets = () => {
   const { user } = useSession();
   const navigate = useNavigate();
   const { incomeCategories } = useCategoryContext();
-  const [budgets, setBudgets] = useState<SharedBudget[]>([]);
-  const [debtors, setDebtors] = useState<Debtor[]>([]);
-  const [creditors, setCreditors] = useState<Creditor[]>([]);
-  const [cards, setCards] = useState<CardData[]>([]);
-  const [cashBalance, setCashBalance] = useState(0);
+  const [budgets, setBudgets] = useState<any[]>([]);
+  const [debtors, setDebtors] = useState<any[]>([]);
+  const [cards, setCards] = useState<any[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
-
   const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false);
-  const [skipLinkedTransaction, setSkipLinkedTransaction] = useState(false);
-  const [selectedParticipant, setSelectedParticipant] = useState<{
-    participantId: string;
-    budgetId: string;
-    debtorId: string;
-    debtorName: string;
-    remaining: number;
-    budgetName: string;
-  } | null>(null);
-
-  const [paymentForm, setPaymentForm] = useState({
-    amount: "",
-    destinationId: "cash",
-    categoryId: "",
-  });
+  const [selectedParticipant, setSelectedParticipant] = useState<any>(null);
+  const [paymentForm, setPaymentForm] = useState({ amount: "", destinationId: "cash", categoryId: "" });
+  const [skipLinked, setSkipLinked] = useState(false);
 
   const fetchAllData = async () => {
     if (!user) return;
-
-    const [debtorsRes, creditorsRes, cardsRes, cashRes] = await Promise.all([
-      supabase.from('debtors').select('id, name, current_balance').eq('user_id', user.id),
-      supabase.from('creditors').select('id, name, current_balance').eq('user_id', user.id),
-      supabase.from('cards').select('id, name, bank_name, last_four_digits, type, current_balance').eq('user_id', user.id),
-      supabase.from('cash_transactions').select('type, amount').eq('user_id', user.id)
+    const [debtorsRes, cardsRes, budgetsRes] = await Promise.all([
+      supabase.from('debtors').select('*').eq('user_id', user.id),
+      supabase.from('cards').select('*').eq('user_id', user.id),
+      supabase.from('shared_budgets').select('*, budget_participants(id, debtor_id, share_amount, paid_amount, is_paid, debtors(id, name))').eq('user_id', user.id).order('created_at', { ascending: false })
     ]);
-
     setDebtors(debtorsRes.data || []);
-    setCreditors(creditorsRes.data || []);
     setCards(cardsRes.data || []);
-    
-    const currentCash = (cashRes.data || []).reduce((sum, tx) => 
-      tx.type === "ingreso" ? sum + tx.amount : sum - tx.amount, 0
-    );
-    setCashBalance(currentCash);
-
-    const { data: budgetsData, error: budgetsError } = await supabase
-      .from('shared_budgets')
-      .select('*, budget_participants(id, debtor_id, share_amount, paid_amount, is_paid, debtors(id, name, current_balance))')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false });
-
-    if (budgetsError) {
-      showError('Error al cargar presupuestos: ' + budgetsError.message);
-    } else {
-      setBudgets(budgetsData || []);
-    }
+    setBudgets(budgetsRes.data || []);
+    if (incomeCategories.length > 0) setPaymentForm(p => ({...p, categoryId: incomeCategories[0].id}));
   };
 
-  useEffect(() => {
-    fetchAllData();
-  }, [user]);
+  useEffect(() => { fetchAllData(); }, [user]);
 
-  const handleOpenPaymentDialog = (p: Participant, budget: SharedBudget) => {
-    const remaining = p.share_amount - (p.paid_amount || 0);
-    setSelectedParticipant({
-      participantId: p.id,
-      budgetId: budget.id,
-      debtorId: p.debtor_id,
-      debtorName: p.debtors?.name || "Deudor",
-      remaining,
-      budgetName: budget.name
-    });
-    setPaymentForm({
-      amount: remaining.toFixed(2),
-      destinationId: "cash",
-      categoryId: incomeCategories[0]?.id || "",
-    });
-    setSkipLinkedTransaction(false);
-    setIsPaymentDialogOpen(true);
+  const handleDelete = async (id: string) => {
+     await supabase.from('shared_budgets').delete().eq('id', id);
+     setBudgets(prev => prev.filter(b => b.id !== id));
+     showSuccess("Presupuesto eliminado");
   };
 
   const handleRecordPayment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user || !selectedParticipant || isProcessing) return;
-
-    let amount: number;
-    if (paymentForm.amount.startsWith('=')) {
-      amount = evaluateExpression(paymentForm.amount.substring(1)) || 0;
-    } else {
-      amount = parseFloat(paymentForm.amount);
-    }
-
-    if (isNaN(amount) || amount <= 0) {
-      showError("Monto inválido.");
-      return;
-    }
-
     setIsProcessing(true);
-    const transactionDate = new Date().toISOString().split('T')[0];
-
+    let amt = evaluateExpression(paymentForm.amount) || 0;
+    
     try {
-      const budget = budgets.find(b => b.id === selectedParticipant.budgetId);
-      const participant = budget?.budget_participants.find(p => p.id === selectedParticipant.participantId);
-      const newPaidAmount = (participant?.paid_amount || 0) + amount;
-      const isFullyPaid = newPaidAmount >= (participant?.share_amount || 0) - 0.01;
+      const newPaid = (selectedParticipant.paid_amount || 0) + amt;
+      const fullyPaid = newPaid >= selectedParticipant.share_amount - 0.01;
 
-      await supabase.from('budget_participants').update({ paid_amount: newPaidAmount, is_paid: isFullyPaid }).eq('id', selectedParticipant.participantId);
-
-      const debtor = debtors.find(d => d.id === selectedParticipant.debtorId);
+      await supabase.from('budget_participants').update({ paid_amount: newPaid, is_paid: fullyPaid }).eq('id', selectedParticipant.id);
+      
+      const debtor = debtors.find(d => d.id === selectedParticipant.debtor_id);
       if (debtor) {
-        await supabase.from('debtors').update({ current_balance: debtor.current_balance - amount }).eq('id', debtor.id);
-        await supabase.from('debtor_transactions').insert({
-          user_id: user.id, debtor_id: debtor.id, type: "payment", amount,
-          description: `Abono: ${selectedParticipant.budgetName}`, date: transactionDate,
-        });
+        await supabase.from('debtors').update({ current_balance: debtor.current_balance - amt }).eq('id', debtor.id);
+        await supabase.from('debtor_transactions').insert({ user_id: user?.id, debtor_id: debtor.id, type: "payment", amount: amt, description: `Abono: ${selectedParticipant.budgetName}`, date: new Date().toISOString().split('T')[0] });
       }
 
-      if (!skipLinkedTransaction) {
-        if (paymentForm.destinationId === "cash") {
-          await supabase.from('cash_transactions').insert({ user_id: user.id, type: "ingreso", amount, description: `Abono ${selectedParticipant.debtorName} (${selectedParticipant.budgetName})`, date: transactionDate, income_category_id: paymentForm.categoryId || null });
-        } else {
-          const card = cards.find(c => c.id === paymentForm.destinationId);
-          if (card) {
-            const newCardBalance = card.type === "credit" ? card.current_balance - amount : card.current_balance + amount;
-            await supabase.from('cards').update({ current_balance: newCardBalance }).eq('id', card.id);
-            await supabase.from('card_transactions').insert({ user_id: user.id, card_id: card.id, type: "payment", amount, description: `Abono ${selectedParticipant.debtorName}`, date: transactionDate, income_category_id: paymentForm.categoryId || null });
-          }
-        }
+      if (!skipLinked) {
+        await supabase.from('cash_transactions').insert({ user_id: user?.id, type: "ingreso", amount: amt, description: `Abono ${selectedParticipant.debtorName}`, date: new Date().toISOString().split('T')[0], income_category_id: paymentForm.categoryId });
       }
 
-      showSuccess("Abono registrado.");
+      showSuccess("Abono registrado");
       setIsPaymentDialogOpen(false);
       fetchAllData();
-    } catch (error: any) {
-      showError('Error: ' + error.message);
-    } finally {
-      setIsProcessing(false);
-    }
+    } catch (e) {} finally { setIsProcessing(false); }
   };
 
-  const handleMarkAsPaidInternally = async (p: Participant, budget: SharedBudget) => {
-    if (!user || isProcessing) return;
-    setIsProcessing(true);
-    try {
-      // Solo actualizamos el registro del presupuesto, NO tocamos deudores ni efectivo
-      await supabase.from('budget_participants').update({ 
-        paid_amount: p.share_amount, 
-        is_paid: true 
-      }).eq('id', p.id);
-      
-      showSuccess(`Marcado como pagado internamente (la deuda de ${p.debtors?.name} se mantiene).`);
-      fetchAllData();
-    } catch (e) {
-      showError('Error al procesar');
-    } finally {
-      setIsProcessing(false);
-    }
-  };
+  const activeBudgets = budgets.filter(b => !b.budget_participants.every((p:any) => p.is_paid));
+  const completedBudgets = budgets.filter(b => b.budget_participants.every((p:any) => p.is_paid));
 
-  const handleMarkAllPaid = async (budget: SharedBudget) => {
-    if (!user || isProcessing) return;
-    setIsProcessing(true);
-    try {
-      for (const p of budget.budget_participants.filter(p => !p.is_paid)) {
-        const remaining = p.share_amount - (p.paid_amount || 0);
-        await supabase.from('budget_participants').update({ paid_amount: p.share_amount, is_paid: true }).eq('id', p.id);
-        const debtor = debtors.find(d => d.id === p.debtor_id);
-        if (debtor) {
-          await supabase.from('debtors').update({ current_balance: debtor.current_balance - remaining }).eq('id', debtor.id);
-          await supabase.from('debtor_transactions').insert({ user_id: user.id, debtor_id: debtor.id, type: "payment", amount: remaining, description: `Liquidación: ${budget.name}`, date: getLocalDateString(new Date()) });
-        }
-      }
-      showSuccess("Presupuesto liquidado.");
-      fetchAllData();
-    } catch (error: any) {
-      showError('Error');
-    } finally {
-      setIsProcessing(false);
-    }
-  };
+  const BudgetCard = ({ budget }: { budget: any }) => {
+    const isOverdue = budget.due_date && isBefore(parseISO(budget.due_date), new Date());
+    const totalPending = budget.budget_participants.reduce((s:number, p:any) => s + (p.share_amount - p.paid_amount), 0);
+    const paidCount = budget.budget_participants.filter((p:any) => p.is_paid).length;
 
-  const handleDeleteBudget = async (budgetId: string) => {
-    try {
-      const b = budgets.find(x => x.id === budgetId);
-      if (!b) return;
-      for (const p of b.budget_participants) {
-        if (!p.is_paid) {
-          const rem = p.share_amount - (p.paid_amount || 0);
-          const d = debtors.find(x => x.id === p.debtor_id);
-          if (d) await supabase.from('debtors').update({ current_balance: d.current_balance - rem }).eq('id', d.id);
-        }
-      }
-      if (b.creditor_id) {
-        const c = creditors.find(x => x.id === b.creditor_id);
-        if (c) await supabase.from('creditors').update({ current_balance: c.current_balance - b.total_amount }).eq('id', c.id);
-      }
-      await supabase.from('shared_budgets').delete().eq('id', budgetId);
-      showSuccess("Presupuesto eliminado.");
-      fetchAllData();
-    } catch (e) {}
-  };
+    return (
+      <Card className="rounded-[2.5rem] border-none shadow-sm bg-white overflow-hidden hover:shadow-md transition-all">
+        <div className="p-6 space-y-4">
+          <div className="flex justify-between items-start">
+            <div className="space-y-1">
+              <h3 className="font-black text-slate-900 text-lg">{budget.name}</h3>
+              {budget.due_date && (
+                <span className={cn("text-[10px] font-bold uppercase tracking-widest flex items-center gap-1", isOverdue ? "text-rose-500" : "text-slate-400")}>
+                  <Clock className="h-3 w-3" /> {isOverdue ? 'Vencido' : 'Vence'}: {format(parseISO(budget.due_date), 'd MMM', { locale: es })}
+                </span>
+              )}
+            </div>
+            <Badge className={cn("rounded-full border-none px-3", totalPending === 0 ? "bg-emerald-50 text-emerald-600" : "bg-indigo-50 text-indigo-600")}>
+              {totalPending === 0 ? 'Liquidado' : `Faltan $${totalPending.toFixed(0)}`}
+            </Badge>
+          </div>
 
-  const activeBudgets = useMemo(() => {
-    return budgets.filter(b => !b.budget_participants.every(p => p.is_paid));
-  }, [budgets]);
+          <div className="flex items-center gap-3 py-2">
+            <div className="flex -space-x-3 overflow-hidden">
+              {budget.budget_participants.map((p:any, i:number) => (
+                <div key={i} className={cn("h-8 w-8 rounded-full border-2 border-white flex items-center justify-center text-[10px] font-black", p.is_paid ? "bg-emerald-500 text-white" : "bg-slate-200 text-slate-500")}>
+                  {p.debtors?.name[0]}
+                </div>
+              ))}
+            </div>
+            <span className="text-[10px] font-black uppercase text-slate-400 tracking-tighter">
+              {paidCount} de {budget.budget_participants.length} pagaron
+            </span>
+          </div>
 
-  const completedBudgets = useMemo(() => {
-    return budgets.filter(b => b.budget_participants.every(p => p.is_paid));
-  }, [budgets]);
-
-  const BudgetTable = ({ list }: { list: SharedBudget[] }) => (
-    <div className="overflow-x-auto">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Nombre</TableHead>
-            <TableHead>Vencimiento</TableHead>
-            <TableHead>Estado</TableHead>
-            <TableHead>Total</TableHead>
-            <TableHead>Pendiente</TableHead>
-            <TableHead>Acreedor</TableHead>
-            <TableHead className="text-right">Acciones</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {list.map((budget) => {
-            const isFullyPaid = budget.budget_participants.every(p => p.is_paid);
-            const totalPending = budget.budget_participants.reduce((sum, p) => sum + (p.share_amount - p.paid_amount), 0);
-            const creditor = creditors.find(c => c.id === budget.creditor_id);
-            const today = new Date();
-            today.setHours(0,0,0,0);
-            const isOverdue = !isFullyPaid && budget.due_date && isBefore(parseISO(budget.due_date), today);
-            const isDueSoon = !isFullyPaid && budget.due_date && (isSameDay(parseISO(budget.due_date), today) || isSameDay(parseISO(budget.due_date), addDays(today, 2)));
-
-            return (
-              <TableRow key={budget.id} className={cn(isFullyPaid && "bg-green-50/30")}>
-                <TableCell className="font-medium">{budget.name}</TableCell>
-                <TableCell>
-                  {budget.due_date ? (
-                    <div className={cn("flex items-center gap-1 text-xs", isOverdue ? "text-red-600 font-bold" : isDueSoon ? "text-orange-600" : "")}>
-                      <CalendarIcon className="h-3 w-3" />
-                      {format(parseISO(budget.due_date), "dd/MM/yy")}
-                    </div>
-                  ) : "-"}
-                </TableCell>
-                <TableCell>
-                  <Badge variant="outline" className={cn(isFullyPaid ? "bg-green-100 text-green-800" : isOverdue ? "bg-red-100 text-red-800 animate-pulse" : "bg-yellow-100 text-yellow-800")}>
-                    {isFullyPaid ? "Pagado" : isOverdue ? "Vencido" : "Pendiente"}
-                  </Badge>
-                </TableCell>
-                <TableCell>${budget.total_amount.toFixed(2)}</TableCell>
-                <TableCell className={cn("font-bold", totalPending > 0 ? "text-red-600" : "text-green-600")}>
-                  ${totalPending.toFixed(2)}
-                </TableCell>
-                <TableCell>{creditor ? creditor.name : (budget.creditor_id ? 'Eliminado' : 'Yo')}</TableCell>
-                <TableCell className="text-right flex gap-2 justify-end">
-                  <Dialog>
-                    <DialogTrigger asChild><Button variant="outline" size="sm" className="h-8 gap-1"><Users className="h-3.5 w-3.5" /> Pagos</Button></DialogTrigger>
-                    <DialogContent className="sm:max-w-[600px]">
-                      <DialogHeader>
-                        <DialogTitle className="flex justify-between items-center">
-                          Gestión de Pagos: {budget.name}
-                          {!isFullyPaid && <Button variant="outline" size="sm" onClick={() => handleMarkAllPaid(budget)}>Abonar Todo</Button>}
-                        </DialogTitle>
-                      </DialogHeader>
-                      <div className="text-xs text-muted-foreground mb-4">
-                        <p><b>Abonar:</b> Resta la deuda al deudor y registra el ingreso en tu cuenta.</p>
-                        <p><b>Saldar (Yo cubro):</b> Marca como pagado aquí sin quitarle la deuda al deudor (tú pusiste el dinero).</p>
+          <div className="flex gap-2 pt-2">
+            <Dialog>
+              <DialogTrigger asChild><Button variant="outline" className="flex-1 rounded-xl h-10 font-bold border-slate-100 gap-2"><Users className="h-4 w-4" /> Ver Cobros</Button></DialogTrigger>
+              <DialogContent className="rounded-[2.5rem] p-8 max-w-[500px]">
+                <DialogHeader><DialogTitle className="text-2xl font-black">Pagos: {budget.name}</DialogTitle></DialogHeader>
+                <div className="space-y-3 mt-4">
+                  {budget.budget_participants.map((p:any) => (
+                    <div key={p.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl">
+                      <div className="flex items-center gap-3">
+                        <div className={cn("h-10 w-10 rounded-xl flex items-center justify-center font-black", p.is_paid ? "bg-emerald-100 text-emerald-600" : "bg-indigo-100 text-indigo-600")}>
+                          {p.debtors?.name[0]}
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="text-sm font-bold text-slate-900">{p.debtors?.name}</span>
+                          <span className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">Falta: ${(p.share_amount - p.paid_amount).toFixed(2)}</span>
+                        </div>
                       </div>
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Deudor</TableHead>
-                            <TableHead>Falta</TableHead>
-                            <TableHead className="text-right">Acciones</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {budget.budget_participants.map(p => (
-                            <TableRow key={p.id}>
-                              <TableCell className="font-medium">{p.debtors?.name || 'Eliminado'}</TableCell>
-                              <TableCell>${(p.share_amount - (p.paid_amount || 0)).toFixed(2)}</TableCell>
-                              <TableCell className="text-right flex gap-2 justify-end">
-                                {p.is_paid ? (
-                                  <Badge className="bg-green-100 text-green-800">Completado</Badge>
-                                ) : (
-                                  <>
-                                    <Button variant="outline" size="xs" className="h-7 text-[10px]" onClick={() => handleMarkAsPaidInternally(p, budget)} title="Yo lo pago">
-                                      <UserCheck className="h-3 w-3 mr-1" /> Saldar
-                                    </Button>
-                                    <Button size="xs" className="h-7 text-[10px]" onClick={() => handleOpenPaymentDialog(p, budget)}>
-                                      <DollarSign className="h-3 w-3 mr-1" /> Abonar
-                                    </Button>
-                                  </>
-                                )}
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </DialogContent>
-                  </Dialog>
-                  <Button variant="outline" size="sm" onClick={() => navigate(`/shared-budgets/edit/${budget.id}`)}><Edit className="h-3.5 w-3.5" /></Button>
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild><Button variant="destructive" size="sm" className="h-8 w-8 p-0"><Trash2 className="h-3.5 w-3.5" /></Button></AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader><AlertDialogTitle>¿Eliminar?</AlertDialogTitle><AlertDialogDescription>Se revertirán deudas y cargos.</AlertDialogDescription></AlertDialogHeader>
-                      <AlertDialogFooter><AlertDialogCancel>No</AlertDialogCancel><AlertDialogAction className="rounded-xl" onClick={() => handleDeleteBudget(budget.id)}>Sí</AlertDialogAction></AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
-                </TableCell>
-              </TableRow>
-            );
-          })}
-        </TableBody>
-      </Table>
-    </div>
-  );
+                      {p.is_paid ? (
+                        <CheckCircle2 className="h-6 w-6 text-emerald-500" />
+                      ) : (
+                        <Button size="sm" className="rounded-lg h-8 font-black text-[10px] uppercase bg-indigo-600" onClick={() => { setSelectedParticipant({...p, debtorName: p.debtors?.name, budgetName: budget.name}); setPaymentForm(f => ({...f, amount: (p.share_amount - p.paid_amount).toFixed(2)})); setIsPaymentDialogOpen(true); }}>Cobrar</Button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </DialogContent>
+            </Dialog>
+            <Button variant="ghost" size="icon" className="rounded-xl h-10 w-10 text-slate-300 hover:text-rose-500 hover:bg-rose-50" onClick={() => handleDelete(budget.id)}><Trash2 className="h-4 w-4" /></Button>
+          </div>
+        </div>
+      </Card>
+    );
+  };
 
   return (
-    <div className="flex flex-col gap-6 p-4">
-      <h1 className="text-3xl font-bold">Presupuestos Compartidos</h1>
+    <div className="flex flex-col gap-8 p-4 md:p-6 pb-24 max-w-5xl mx-auto">
+      <header className="relative">
+        <div className="absolute inset-0 bg-indigo-100/50 blur-3xl rounded-full -z-10" />
+        <Card className="bg-slate-900 text-white rounded-[2.5rem] border-none shadow-2xl overflow-hidden">
+          <div className="p-8 space-y-4 relative">
+            <div className="absolute top-0 right-0 p-4 opacity-20 pointer-events-none">
+              <img src={SHARED_PIGGY} alt="Shared" className="h-40 w-40 object-contain rotate-12" />
+            </div>
+            <p className="text-[10px] font-black uppercase tracking-widest text-indigo-200">Presupuestos en Equipo 🐷</p>
+            <div className="flex items-baseline gap-2">
+              <span className="text-5xl font-black tracking-tighter">${budgets.reduce((s, b) => s + b.total_amount, 0).toLocaleString()}</span>
+              <span className="text-xl font-bold opacity-40">MXN</span>
+            </div>
+            <div className="flex items-center gap-2 text-[10px] font-bold text-indigo-400 bg-indigo-400/10 w-fit px-4 py-1.5 rounded-full">
+              <Users className="h-3 w-3" /> {activeBudgets.length} gastos por cobrar
+            </div>
+          </div>
+        </Card>
+      </header>
 
-      <Card className="border-l-4 border-indigo-500 bg-indigo-50 text-indigo-800">
-        <CardHeader><CardTitle>Total Compartido</CardTitle></CardHeader>
-        <CardContent><div className="text-4xl font-bold">${budgets.reduce((s, b) => s + b.total_amount, 0).toFixed(2)}</div></CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>Mis Presupuestos</CardTitle>
-          <Button size="sm" onClick={() => navigate('/shared-budgets/create')}><PlusCircle className="h-4 w-4 mr-1" /> Nuevo</Button>
-        </CardHeader>
-        <CardContent>
-          <Tabs defaultValue="active">
-            <TabsList className="grid w-full grid-cols-2 mb-4">
-              <TabsTrigger value="active">Activos ({activeBudgets.length})</TabsTrigger>
-              <TabsTrigger value="completed">Completados ({completedBudgets.length})</TabsTrigger>
+      <section className="flex flex-col md:flex-row gap-4 items-center justify-between">
+        <Tabs defaultValue="active" className="w-full">
+          <div className="flex items-center justify-between mb-8">
+            <TabsList className="bg-slate-100 p-1 rounded-2xl h-11">
+              <TabsTrigger value="active" className="rounded-xl font-black text-[10px] uppercase tracking-widest data-[state=active]:bg-white data-[state=active]:shadow-sm">Activos ({activeBudgets.length})</TabsTrigger>
+              <TabsTrigger value="completed" className="rounded-xl font-black text-[10px] uppercase tracking-widest data-[state=active]:bg-white data-[state=active]:shadow-sm">Listos</TabsTrigger>
             </TabsList>
-            <TabsContent value="active">
-              <BudgetTable list={activeBudgets} />
-            </TabsContent>
-            <TabsContent value="completed">
-              <BudgetTable list={completedBudgets} />
-            </TabsContent>
-          </Tabs>
-        </CardContent>
-      </Card>
+            <Button className="rounded-2xl h-11 px-6 font-black bg-indigo-600 shadow-xl gap-2" onClick={() => navigate('/shared-budgets/create')}>
+              <PlusCircle className="h-5 w-5" /> <span className="hidden sm:inline">Nuevo Gasto</span>
+            </Button>
+          </div>
+          
+          <TabsContent value="active" className="grid grid-cols-1 sm:grid-cols-2 gap-6 outline-none">
+            {activeBudgets.map(b => <BudgetCard key={b.id} budget={b} />)}
+            {activeBudgets.length === 0 && <div className="col-span-full py-20 text-center opacity-30 font-black uppercase text-xs">¡Todo el equipo está al corriente!</div>}
+          </TabsContent>
+          <TabsContent value="completed" className="grid grid-cols-1 sm:grid-cols-2 gap-6 outline-none opacity-60 grayscale">
+            {completedBudgets.map(b => <BudgetCard key={b.id} budget={b} />)}
+          </TabsContent>
+        </Tabs>
+      </section>
 
       <Dialog open={isPaymentDialogOpen} onOpenChange={setIsPaymentDialogOpen}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Registrar Abono Real: {selectedParticipant?.debtorName}</DialogTitle></DialogHeader>
-          <form onSubmit={handleRecordPayment} className="grid gap-4 py-4">
-            <div className="grid gap-2">
-              <Label>Monto recibido</Label>
-              <Input value={paymentForm.amount} onChange={e => setPaymentForm({...paymentForm, amount: e.target.value})} required />
+        <DialogContent className="rounded-[2.5rem] p-8 max-w-[400px]">
+          <DialogHeader><DialogTitle className="text-2xl font-black">Registrar Abono</DialogTitle></DialogHeader>
+          <form onSubmit={handleRecordPayment} className="grid gap-6 py-4">
+             <div className="space-y-2">
+              <Label className="text-[10px] font-black uppercase text-slate-400 ml-1">Monto Recibido</Label>
+              <Input value={paymentForm.amount} onChange={e => setPaymentForm({...paymentForm, amount: e.target.value})} className="rounded-2xl h-14 text-xl font-black bg-slate-50 border-none" required />
             </div>
-            <div className="flex items-center space-x-2 bg-blue-50 p-2 rounded border border-blue-100">
-              <Checkbox id="skip" checked={skipLinkedTransaction} onCheckedChange={(v) => setSkipLinkedTransaction(!!v)} />
-              <Label htmlFor="skip" className="text-xs">Ya registré este dinero en mi efectivo/banco manualmente</Label>
+            <div className="flex items-center space-x-2 bg-blue-50 p-4 rounded-2xl border border-blue-100">
+              <Checkbox id="skip" checked={skipLinked} onCheckedChange={(v) => setSkipLinked(!!v)} />
+              <Label htmlFor="skip" className="text-xs font-bold text-blue-900 leading-tight">Ya registré este dinero en mi efectivo/banco manualmente</Label>
             </div>
-            {!skipLinkedTransaction && (
-              <div className="grid gap-4">
-                <div className="grid gap-2"><Label>Destino del dinero</Label><Select value={paymentForm.destinationId} onValueChange={(v) => setPaymentForm({...paymentForm, destinationId: v})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="cash">Efectivo</SelectItem>{cards.filter(c => c.type === "debit").map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent></Select></div>
-                <div className="grid gap-2"><Label>Categoría de ingreso</Label><Select value={paymentForm.categoryId} onValueChange={(v) => setPaymentForm({...paymentForm, categoryId: v})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{incomeCategories.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent></Select></div>
-              </div>
-            )}
-            <DialogFooter><Button type="submit" className="w-full">Confirmar Abono</Button></DialogFooter>
+            <Button type="submit" className="w-full rounded-2xl h-14 font-black text-lg bg-emerald-600 shadow-xl" disabled={isProcessing}>Confirmar Abono</Button>
           </form>
         </DialogContent>
       </Dialog>
