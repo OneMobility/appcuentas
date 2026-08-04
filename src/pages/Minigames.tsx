@@ -2,7 +2,8 @@
 
 import React from "react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Sparkles } from "lucide-react";
+import { Sparkles, Gamepad2 } from "lucide-react";
+import PigMerge from "@/components/minigames/PigMerge";
 
 const GIF_GAME = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/games.gif";
 
@@ -25,15 +26,31 @@ const Minigames = () => {
         </Card>
       </header>
 
-      <div className="flex flex-col items-center justify-center py-20 text-center gap-4">
-        <div className="bg-indigo-50 p-6 rounded-full">
-          <Sparkles className="h-12 w-12 text-indigo-500 animate-pulse" />
+      <section className="grid gap-8">
+        <div className="flex items-center gap-3 px-2">
+          <div className="h-10 w-10 rounded-2xl bg-white shadow-sm border border-slate-100 flex items-center justify-center text-indigo-600">
+            <Gamepad2 className="h-5 w-5" />
+          </div>
+          <h2 className="text-2xl font-black tracking-tight text-slate-900">Juegos Disponibles</h2>
         </div>
-        <div className="space-y-2">
-          <h2 className="text-2xl font-black text-slate-900">¡Nuevas experiencias en camino!</h2>
-          <p className="text-slate-500 font-medium max-w-md">Estamos preparando juegos más emocionantes para ayudarte a dominar tus finanzas mientras te diviertes.</p>
+
+        <div className="grid grid-cols-1 lg:grid-cols-1 gap-8">
+          <Card className="rounded-[3rem] border-none shadow-soft bg-white overflow-hidden">
+            <div className="p-6 md:p-10">
+              <PigMerge />
+            </div>
+          </Card>
         </div>
-        <p className="text-[10px] font-black uppercase tracking-widest text-slate-300 mt-4">Vuelve pronto para ver las novedades</p>
+      </section>
+
+      <div className="flex flex-col items-center justify-center py-10 text-center gap-4 opacity-50">
+        <div className="bg-indigo-50 p-4 rounded-full">
+          <Sparkles className="h-6 w-6 text-indigo-500 animate-pulse" />
+        </div>
+        <div className="space-y-1">
+          <h3 className="text-sm font-black text-slate-900 uppercase">Más juegos próximamente</h3>
+          <p className="text-xs text-slate-500 font-medium">Estamos horneando nuevas experiencias para ti.</p>
+        </div>
       </div>
     </div>
   );
