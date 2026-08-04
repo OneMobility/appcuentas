@@ -5,14 +5,14 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 /**
- * 🪙 COIN CATCH — Posición ajustada (más abajo)
+ * 🪙 COIN CATCH — Posición ajustada (77% de altura)
  */
 
 const STARTING_LIVES = 3;
-const PIG_Y_PERCENT = 82; // Bajado de 72 a 82 (aprox 15% de desplazamiento hacia abajo)
-const CATCH_LINE_START = 78; // Ajustado a la nueva posición
-const CATCH_LINE_END = 86;   // Ajustado a la nueva posición
-const MISS_LINE = 95;        // Desaparece justo después de pasar al puerquito
+const PIG_Y_PERCENT = 77; // Subido de 82 a 77
+const CATCH_LINE_START = 73; // Ajustado a la nueva posición
+const CATCH_LINE_END = 81;   // Ajustado a la nueva posición
+const MISS_LINE = 90;        // Desaparece poco después de pasar al puerquito
 const BASKET_HALF_WIDTH = 10; 
 const CATCH_TOLERANCE = 8; 
 const STREAK_PER_MULT_LEVEL = 3; 
