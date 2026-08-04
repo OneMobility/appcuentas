@@ -1,22 +1,33 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Maximize, Minimize, RefreshCw, Trophy } from "lucide-react";
+import { Maximize, Minimize, RefreshCw, Trophy, Lightbulb, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 /**
- * 🪙 COIN CATCH — Versión Pantalla Completa UI Integrada
+ * 🪙 COIN CATCH — Versión Mejorada con Tips y Precisión
  */
 
 const STARTING_LIVES = 3;
-const CATCH_LINE = 78; // Ajustado: el objeto se captura un poco más arriba
+const CATCH_LINE = 78; 
 const MISS_LINE = 101; 
-const BASKET_HALF_WIDTH = 12; 
-const CATCH_TOLERANCE = 12; 
+const BASKET_HALF_WIDTH = 10; 
+const CATCH_TOLERANCE = 7; // Reducido de 12 a 7 para mayor precisión
 const STREAK_PER_MULT_LEVEL = 3; 
 const MAX_MULTIPLIER = 5;
 const BASE_MOVE_SPEED = 90; 
 const SPEED_PENALTY_PER_LIFE = 20; 
+
+const SAVING_TIPS = [
+  "¡Prepara tu café en casa y ahorra hasta $1,200 al mes! ☕",
+  "¡Aplica la regla de las 48 horas antes de comprar algo por impulso! ⏱️",
+  "¡Usa efectivo para tus salidas; cuando se acaba, se acaba la fiesta! 💵",
+  "¡Revisa tus suscripciones y cancela la que no hayas usado este mes! ✂️",
+  "¡Compara precios en al menos 3 tiendas antes de una compra grande! 🔍",
+  "¡Ahorra el cambio de tus compras diarias en un frasco real! 🫙",
+  "¡Haz una lista de súper y apégate a ella estrictamente! 🛒",
+  "¡Desconecta los aparatos que no uses para evitar el consumo vampiro! 🔌"
+];
 
 type Kind = "coin" | "bill" | "bag" | "gasto" | "impuesto" | "factura";
 
@@ -41,7 +52,7 @@ interface FallingItem {
 }
 
 export default function CoinCatch() {
-  const [phase, setPhase] = useState<"idle" | "playing" | "over">("idle");
+  const [phase, setPhase] = useState<"idle" | "playing" | "over" | "tip">("idle");
   const [score, setScore] = useState(0);
   const [best, setBest] = useState(0);
   const [lives, setLives] = useState(STARTING_LIVES);
@@ -50,6 +61,8 @@ export default function CoinCatch() {
   const [basketX, setBasketX] = useState(50);
   const [flash, setFlash] = useState<"good" | "bad" | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [currentTip, setCurrentTip] = useState("");
+  const [showBien, setShowBien] = useState(false);
   
   const containerRef = useRef<HTMLDivElement>(null);
   const fieldRef = useRef<HTMLDivElement>(null);
@@ -65,6 +78,8 @@ export default function CoinCatch() {
   const scoreRef = useRef(0);
   const streakRef = useRef(0);
   const livesRef = useRef(STARTING_LIVES);
+  const lastTipThreshold = useRef(0);
+  const lastBienThreshold = useRef(0);
 
   useEffect(() => {
     const saved = localStorage.getItem("oinkash_coincatch_best");
@@ -103,6 +118,8 @@ export default function CoinCatch() {
     livesRef.current = STARTING_LIVES;
     scoreRef.current = 0;
     basketXRef.current = 50;
+    lastTipThreshold.current = 0;
+    lastBienThreshold.current = 0;
 
     setItems([]);
     setScore(0);
@@ -112,6 +129,11 @@ export default function CoinCatch() {
     setPhase("playing");
   }, []);
 
+  const continueAfterTip = () => {
+    setPhase("playing");
+    lastTimeRef.current = performance.now();
+  };
+
   useEffect(() => {
     if (phase !== "playing") return;
     lastTimeRef.current = performance.now();
@@ -120,6 +142,20 @@ export default function CoinCatch() {
       const dt = Math.min(0.05, (now - lastTimeRef.current) / 1000);
       lastTimeRef.current = now;
       elapsedRef.current += dt;
+
+      // LÓGICA DE UMBRALES (TIPS Y MENSAJES)
+      if (scoreRef.current >= lastBienThreshold.current + 2500) {
+        lastBienThreshold.current = Math.floor(scoreRef.current / 2500) * 2500;
+        setShowBien(true);
+        setTimeout(() => setShowBien(false), 1500);
+      }
+
+      if (scoreRef.current >= lastTipThreshold.current + 5000) {
+        lastTipThreshold.current = Math.floor(scoreRef.current / 5000) * 5000;
+        setCurrentTip(SAVING_TIPS[Math.floor(Math.random() * SAVING_TIPS.length)]);
+        setPhase("tip");
+        return; 
+      }
 
       const currentMoveSpeed = Math.max(30, BASE_MOVE_SPEED - ((STARTING_LIVES - livesRef.current) * SPEED_PENALTY_PER_LIFE));
 
@@ -222,6 +258,22 @@ export default function CoinCatch() {
           style={{ backgroundImage: 'url(/game-bg.png)' }} 
         />
 
+        {/* MENSAJE "BIEN" */}
+        <AnimatePresence>
+          {showBien && (
+            <motion.div 
+              initial={{ scale: 0, opacity: 0, y: 50 }}
+              animate={{ scale: 1.5, opacity: 1, y: -20 }}
+              exit={{ scale: 2, opacity: 0 }}
+              className="absolute inset-0 flex items-center justify-center z-40 pointer-events-none"
+            >
+              <div className="bg-indigo-600 text-white px-6 py-2 rounded-full font-black text-2xl shadow-2xl border-4 border-white">
+                ¡BIEN! 🐷
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* OVERLAY DE INTERFAZ (STATS) */}
         <div className="absolute top-0 left-0 right-0 p-6 flex justify-between items-start z-30 pointer-events-none">
           <div className="flex flex-col gap-1">
@@ -282,13 +334,12 @@ export default function CoinCatch() {
           className="absolute z-20 pointer-events-none transition-opacity"
           style={{ 
             left: `${basketX}%`, 
-            top: '80%', // Subido de 84% a 80%
+            top: '80%', 
             transform: 'translate(-50%, -50%)',
             width: '90px',
             height: '90px',
           }}
         >
-          {/* Sombra de contacto */}
           <div className="absolute bottom-1 left-1/2 -translate-x-1/2 w-12 h-3 bg-black/20 blur-md rounded-full" />
           <img src="/game-character.png" className="w-full h-full object-contain drop-shadow-md" />
         </div>
@@ -304,6 +355,27 @@ export default function CoinCatch() {
               <h2 className="text-4xl font-black text-white tracking-tighter mb-2">COIN CATCH</h2>
               <p className="text-slate-300 text-sm font-medium mb-8 max-w-[240px]">Atrapa monedas para ganar puntos. ¡Las facturas 🧾 te restan vida!</p>
               <Button onClick={startGame} className="h-16 px-10 rounded-[2rem] bg-indigo-600 text-white font-black text-xl shadow-xl hover:bg-indigo-700 active:scale-95 transition-all">¡A JUGAR! 🐷</Button>
+            </motion.div>
+          )}
+
+          {phase === "tip" && (
+            <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="absolute inset-0 z-50 bg-indigo-950/90 backdrop-blur-md flex flex-col items-center justify-center p-8 text-center text-white">
+              <div className="bg-white/10 p-6 rounded-[3rem] border border-white/20 shadow-2xl space-y-6">
+                <div className="flex justify-center">
+                  <div className="h-20 w-20 bg-yellow-400 rounded-3xl flex items-center justify-center shadow-lg rotate-12">
+                    <Lightbulb className="h-10 w-10 text-yellow-950" />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <h3 className="text-2xl font-black tracking-tighter flex items-center justify-center gap-2">
+                    <Sparkles className="h-5 w-5 text-yellow-400" /> CONSEJO OINKASH
+                  </h3>
+                  <p className="text-lg font-bold leading-tight italic">"{currentTip}"</p>
+                </div>
+                <Button onClick={continueAfterTip} className="w-full h-16 rounded-2xl bg-white text-indigo-900 font-black text-xl hover:bg-slate-100 active:scale-95 transition-all">
+                  ¡ENTENDIDO! 🚀
+                </Button>
+              </div>
             </motion.div>
           )}
 
