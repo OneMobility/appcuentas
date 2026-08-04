@@ -29,7 +29,7 @@ import AIChatAssistant from "./AIChatAssistant";
 import NotificationsPopover from "./NotificationsPopover";
 import PushNotificationManager from "./PushNotificationManager";
 
-const APP_ICON_LOGO = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/ChatGPT%20Image%203%20ago%202026,%2003_44_08%20p.m..png";
+const APP_ICON_LOGO = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/icono.png";
 
 const navItems = [
   { name: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
