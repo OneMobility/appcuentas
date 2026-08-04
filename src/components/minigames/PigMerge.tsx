@@ -7,7 +7,7 @@ import { Trophy, RefreshCw, Smartphone, Keyboard, Flame, Sparkles, Lightbulb } f
 import { cn } from "@/lib/utils";
 import { getRandomTip, OinkashTip } from "@/utils/oinkash-tips";
 
-// Definición de Niveles con colores VIVOS y etiquetas de ahorro solicitadas
+// Niveles del juego
 const TIERS: Record<number, { label: string; emoji: string; color: string; text: string; message?: string }> = {
   2: { label: "$1", emoji: "🪙", color: "bg-yellow-400", text: "text-yellow-950" },
   4: { label: "$2", emoji: "💰", color: "bg-pink-500", text: "text-white" },
@@ -33,13 +33,25 @@ const PigMerge = () => {
   const [achievement, setAchievement] = useState<string | null>(null);
   const [gameOverTip, setGameOverTip] = useState<OinkashTip | null>(null);
   const touchStart = useRef<{ x: number; y: number } | null>(null);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  
+  // Refs de Audio
+  const audioEndRef = useRef<HTMLAudioElement | null>(null);
+  const audioAchievementRef = useRef<HTMLAudioElement | null>(null);
+  const audioTipRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
-    audioRef.current = new Audio("/sounds/end-point.wav");
+    audioEndRef.current = new Audio("/sounds/end-point.wav");
+    audioAchievementRef.current = new Audio("/sounds/achievement.mp3");
+    audioTipRef.current = new Audio("/sounds/tip.mp3");
   }, []);
 
-  // Inicializar tablero
+  const playSound = (audio: HTMLAudioElement | null) => {
+    if (audio) {
+      audio.currentTime = 0;
+      audio.play().catch(e => console.warn("Audio play blocked", e));
+    }
+  };
+
   const initGame = useCallback(() => {
     let newBoard = Array(GRID_SIZE).fill(null).map(() => Array(GRID_SIZE).fill(null));
     newBoard = addRandomTile(addRandomTile(newBoard));
@@ -80,9 +92,8 @@ const PigMerge = () => {
   const onGameOver = useCallback(() => {
     setGameOver(true);
     setGameOverTip(getRandomTip());
-    if (audioRef.current) {
-      audioRef.current.play().catch(e => console.error("Audio play failed:", e));
-    }
+    playSound(audioEndRef.current);
+    playSound(audioTipRef.current); // Sonido para el tip que aparece al final
   }, []);
 
   const move = useCallback((direction: "up" | "down" | "left" | "right") => {
@@ -133,11 +144,11 @@ const PigMerge = () => {
       if (moved) {
         setScore(s => s + pointsGained);
         
-        // Manejar mensajes de logros
         if (highestMerged >= 1024) {
           const msg = TIERS[highestMerged]?.message || (highestMerged > 2048 ? "¡ESTÁ QUE ARDE!" : null);
           if (msg) {
             setAchievement(msg);
+            playSound(audioAchievementRef.current);
             setTimeout(() => setAchievement(null), 1500);
           }
         }
@@ -190,8 +201,6 @@ const PigMerge = () => {
 
   return (
     <div className="w-full h-full flex flex-col bg-slate-900 p-6 md:p-10 justify-center items-center select-none overflow-hidden">
-      
-      {/* Header del Juego */}
       <div className="w-full max-w-md flex items-center justify-between mb-8">
         <div className="space-y-1">
           <h3 className="text-3xl font-black tracking-tighter text-white flex items-center gap-2">
@@ -211,7 +220,6 @@ const PigMerge = () => {
         </div>
       </div>
 
-      {/* Mensajes de Logro (Achievements) */}
       <AnimatePresence>
         {achievement && (
           <motion.div 
@@ -229,7 +237,6 @@ const PigMerge = () => {
         )}
       </AnimatePresence>
 
-      {/* Tablero */}
       <div 
         className="relative aspect-square w-full max-w-md bg-slate-800 p-4 rounded-[2.5rem] shadow-2xl border-4 border-slate-700/50 touch-none"
         onTouchStart={onTouchStart}
@@ -241,7 +248,6 @@ const PigMerge = () => {
           ))}
         </div>
 
-        {/* Fichas animadas */}
         <div className="absolute inset-0 p-4 grid grid-cols-4 grid-rows-4 gap-3">
           <AnimatePresence>
             {board.map((row, r) => 
@@ -267,7 +273,6 @@ const PigMerge = () => {
           </AnimatePresence>
         </div>
 
-        {/* Overlay Game Over */}
         <AnimatePresence>
           {gameOver && (
             <motion.div 
@@ -313,7 +318,6 @@ const PigMerge = () => {
         </AnimatePresence>
       </div>
 
-      {/* Controles e Info */}
       <div className="mt-10 flex flex-col items-center gap-6">
         <div className="flex gap-10 text-slate-500">
           <div className="flex flex-col items-center gap-1">

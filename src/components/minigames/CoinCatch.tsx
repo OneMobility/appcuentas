@@ -6,14 +6,14 @@ import { cn } from "@/lib/utils";
 import { getRandomTip, OinkashTip } from "@/utils/oinkash-tips";
 
 /**
- * 🪙 COIN CATCH — Posición ajustada (77% de altura)
+ * 🪙 COIN CATCH — Con Efectos de Sonido
  */
 
 const STARTING_LIVES = 3;
-const PIG_Y_PERCENT = 77; // Subido de 82 a 77
-const CATCH_LINE_START = 73; // Ajustado a la nueva posición
-const CATCH_LINE_END = 81;   // Ajustado a la nueva posición
-const MISS_LINE = 90;        // Desaparece poco después de pasar al puerquito
+const PIG_Y_PERCENT = 77; 
+const CATCH_LINE_START = 73; 
+const CATCH_LINE_END = 81;   
+const MISS_LINE = 90;        
 const BASKET_HALF_WIDTH = 10; 
 const CATCH_TOLERANCE = 8; 
 const STREAK_PER_MULT_LEVEL = 3; 
@@ -66,7 +66,6 @@ export default function CoinCatch() {
   const [gameOverTip, setGameOverTip] = useState<OinkashTip | null>(null);
   const [showBien, setShowBien] = useState(false);
   
-  const containerRef = useRef<HTMLDivElement>(null);
   const fieldRef = useRef<HTMLDivElement>(null);
   const itemsRef = useRef<FallingItem[]>([]);
   const basketXRef = useRef(50);
@@ -82,16 +81,33 @@ export default function CoinCatch() {
   const livesRef = useRef(STARTING_LIVES);
   const lastTipThreshold = useRef(0);
   const lastBienThreshold = useRef(0);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  // Refs de Audio
+  const audioEndRef = useRef<HTMLAudioElement | null>(null);
+  const audioCoinRef = useRef<HTMLAudioElement | null>(null);
+  const audioErrorRef = useRef<HTMLAudioElement | null>(null);
+  const audioAchievementRef = useRef<HTMLAudioElement | null>(null);
+  const audioTipRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
-    audioRef.current = new Audio("/sounds/end-point.wav");
+    audioEndRef.current = new Audio("/sounds/end-point.wav");
+    audioCoinRef.current = new Audio("/sounds/coin.wav");
+    audioErrorRef.current = new Audio("/sounds/error.mp3");
+    audioAchievementRef.current = new Audio("/sounds/achievement.mp3");
+    audioTipRef.current = new Audio("/sounds/tip.mp3");
   }, []);
 
   useEffect(() => {
     const saved = localStorage.getItem("oinkash_coincatch_best");
     if (saved) setBest(parseInt(saved));
   }, []);
+
+  const playSound = (audio: HTMLAudioElement | null) => {
+    if (audio) {
+      audio.currentTime = 0;
+      audio.play().catch(e => console.warn("Audio play blocked", e));
+    }
+  };
 
   const showFlash = useCallback((kind: "good" | "bad") => {
     setFlash(kind);
@@ -101,9 +117,7 @@ export default function CoinCatch() {
   const endGame = useCallback(() => {
     setPhase("over");
     setGameOverTip(getRandomTip());
-    if (audioRef.current) {
-      audioRef.current.play().catch(e => console.error("Audio play failed:", e));
-    }
+    playSound(audioEndRef.current);
     if (scoreRef.current > best) {
       setBest(scoreRef.current);
       localStorage.setItem("oinkash_coincatch_best", scoreRef.current.toString());
@@ -148,6 +162,7 @@ export default function CoinCatch() {
       if (scoreRef.current >= lastBienThreshold.current + 2500) {
         lastBienThreshold.current = Math.floor(scoreRef.current / 2500) * 2500;
         setShowBien(true);
+        playSound(audioAchievementRef.current);
         setTimeout(() => setShowBien(false), 1500);
       }
 
@@ -155,6 +170,7 @@ export default function CoinCatch() {
         lastTipThreshold.current = Math.floor(scoreRef.current / 5000) * 5000;
         setCurrentTip(SAVING_TIPS[Math.floor(Math.random() * SAVING_TIPS.length)]);
         setPhase("tip");
+        playSound(audioTipRef.current);
         return; 
       }
 
@@ -196,12 +212,14 @@ export default function CoinCatch() {
               streakRef.current = 0;
               scoreRef.current = Math.max(0, scoreRef.current + def.points);
               showFlash("bad");
+              playSound(audioErrorRef.current);
             } else {
               streakRef.current += 1;
               const mult = Math.min(MAX_MULTIPLIER, 1 + Math.floor(streakRef.current / STREAK_PER_MULT_LEVEL));
               scoreRef.current += def.points * mult;
               setMultiplier(mult);
               showFlash("good");
+              playSound(audioCoinRef.current);
             }
             setLives(livesRef.current);
             setScore(scoreRef.current);
@@ -247,7 +265,7 @@ export default function CoinCatch() {
   };
 
   return (
-    <div ref={containerRef} className="w-full h-full bg-slate-950">
+    <div className="w-full h-full bg-slate-950">
       <div 
         ref={fieldRef}
         className={cn(
@@ -258,13 +276,11 @@ export default function CoinCatch() {
         onPointerMove={(e) => draggingRef.current && handlePointer(e)}
         onPointerUp={() => draggingRef.current = false}
       >
-        {/* FONDO */}
         <div 
           className="absolute inset-0 bg-cover bg-center" 
           style={{ backgroundImage: 'url(/game-bg.png)' }} 
         />
 
-        {/* MENSAJE "BIEN" */}
         <AnimatePresence>
           {showBien && (
             <motion.div 
@@ -280,7 +296,6 @@ export default function CoinCatch() {
           )}
         </AnimatePresence>
 
-        {/* OVERLAY DE INTERFAZ (STATS) */}
         <div className="absolute top-16 left-0 right-0 p-6 flex justify-between items-start z-30 pointer-events-none">
           <div className="flex flex-col gap-1">
             <div className="bg-black/40 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/10">
@@ -306,7 +321,6 @@ export default function CoinCatch() {
           </div>
         </div>
 
-        {/* OBJETOS CAYENDO */}
         {items.map((item) => {
           const def = ITEM_DEFS[item.kind];
           return (
@@ -324,7 +338,6 @@ export default function CoinCatch() {
           );
         })}
 
-        {/* PERSONAJE (CERDITO) */}
         <div 
           className="absolute z-20 pointer-events-none transition-opacity"
           style={{ 
@@ -339,7 +352,6 @@ export default function CoinCatch() {
           <img src="/game-character.png" className="w-full h-full object-contain drop-shadow-md" />
         </div>
 
-        {/* PANTALLAS DE ESTADO */}
         <AnimatePresence>
           {phase === "idle" && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex flex-col items-center justify-center p-8 text-center">
