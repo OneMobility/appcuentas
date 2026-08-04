@@ -7,25 +7,25 @@ import { Button } from "@/components/ui/button";
 import { getRandomTip, OinkashTip } from "@/utils/oinkash-tips";
 
 /**
- * 🐷 PIG FLAP — Versión Inmersiva
- * 3 Niveles Largos + Jefe Final
+ * 🐷 PIG FLAP — Versión Inmersiva Corregida
+ * Personaje: Nuevo diseño enviado por el usuario.
  */
 
-const pigMascot = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/3bd895fd1ea2a510faa68f516cfc88ad9408d50cff95156f2fb48a61d8d7349d.png";
+const PIG_MASCOT = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/ChatGPT%20Image%204%20ago%202026,%2003_46_40%20p.m..png";
 
 // ---------- Config física ----------
 const BIRD_X = 25; 
-const BIRD_SIZE = 60; // Aumentado ligeramente para que se vea mejor el nuevo arte
+const BIRD_SIZE = 75; // Tamaño optimizado para el nuevo arte
 const GRAVITY = 1100; 
 const FLAP_VELOCITY = -380; 
 const MAX_FALL_SPEED = 700; 
 
 // ---------- Config niveles ----------
-const PIPES_PER_LEVEL = 15; 
+const PIPES_PER_LEVEL = 12; 
 const LEVELS = [
-  { speed: 200, gapHeight: 220, spacing: 350 }, // Nivel 1
-  { speed: 250, gapHeight: 190, spacing: 320 }, // Nivel 2
-  { speed: 320, gapHeight: 160, spacing: 280 }, // Nivel 3
+  { speed: 200, gapHeight: 220, spacing: 350 }, 
+  { speed: 260, gapHeight: 190, spacing: 320 }, 
+  { speed: 330, gapHeight: 160, spacing: 280 }, 
 ];
 const PIPE_WIDTH = 60; 
 
@@ -162,7 +162,7 @@ export default function PigFlap() {
     setLevel(1);
     setGameOverTip(null);
     
-    // Resetear el tiempo para evitar el salto inicial "loco"
+    // REINICIO DE RELOJ CRÍTICO
     lastTimeRef.current = performance.now();
   }, []);
 
@@ -207,7 +207,7 @@ export default function PigFlap() {
 
   useEffect(() => {
     const tick = (now: number) => {
-      // dt debe ser pequeño, si es la primera vez o hubo pausa, lo limitamos
+      if (!lastTimeRef.current) lastTimeRef.current = now;
       const dt = Math.min(0.05, (now - lastTimeRef.current) / 1000);
       lastTimeRef.current = now;
 
@@ -247,10 +247,10 @@ export default function PigFlap() {
             
             // Colisión
             const birdXPos = (BIRD_X / 100) * width;
-            const birdLeft = birdXPos - 15;
-            const birdRight = birdXPos + 15;
-            const birdTop = birdYRef.current - 15;
-            const birdBottom = birdYRef.current + 15;
+            const birdLeft = birdXPos - 20;
+            const birdRight = birdXPos + 20;
+            const birdTop = birdYRef.current - 20;
+            const birdBottom = birdYRef.current + 20;
 
             if (pipe.x < birdRight && pipe.x + PIPE_WIDTH > birdLeft) {
               if (birdYRef.current < pipe.gapY || birdYRef.current > pipe.gapY + pipe.gapHeight) {
@@ -339,13 +339,17 @@ export default function PigFlap() {
       rafRef.current = requestAnimationFrame(tick);
     };
 
-    lastTimeRef.current = performance.now();
     rafRef.current = requestAnimationFrame(tick);
     return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
   }, [die, spawnExplosion]);
 
   useEffect(() => {
-    const handleKey = (e: KeyboardEvent) => { if (e.code === "Space") { e.preventDefault(); flap(); } };
+    const handleKey = (e: KeyboardEvent) => { 
+      if (e.code === "Space") { 
+        e.preventDefault(); 
+        flap(); 
+      } 
+    };
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
   }, [flap]);
@@ -358,11 +362,8 @@ export default function PigFlap() {
       className="relative w-full h-full overflow-hidden touch-none select-none bg-sky-400"
       onPointerDown={(e) => flap()}
     >
-      {/* Fondo personalizado */}
-      <div 
-        className="absolute inset-0 bg-cover bg-center bg-no-repeat transition-transform duration-1000"
-        style={{ backgroundImage: 'url(/flappy-bg.png)', transform: (phase === 'playing' || phase === 'boss') ? 'scale(1.05)' : 'scale(1)' }}
-      />
+      {/* Fondo Cielo */}
+      <div className="absolute inset-0 bg-gradient-to-b from-sky-400 to-sky-200" />
 
       {/* Pipes (Gastos) */}
       {pipes.map(p => (
@@ -376,7 +377,7 @@ export default function PigFlap() {
         </React.Fragment>
       ))}
 
-      {/* Jefe Final (Monstruo de las Deudas) */}
+      {/* Jefe Final */}
       {phase === "boss" && (
         <div className="absolute z-20" style={{ left: bossState.x, top: 0, width: BOSS_WIDTH, height: '100%' }}>
           <div className={cn("absolute top-0 w-full rounded-b-[3rem] border-4 border-black/20 flex items-end justify-center pb-4 transition-colors", bossState.hitFlash ? "bg-white" : "bg-slate-900")} style={{ height: bossState.gapY }}>
@@ -390,7 +391,7 @@ export default function PigFlap() {
 
       {/* HUD Superior */}
       <div className="absolute top-16 left-0 right-0 p-4 flex justify-between items-start z-30 pointer-events-none">
-        <div className="bg-black/40 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/10 text-white">
+        <div className="bg-black/40 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/10 text-white shadow-xl">
           <p className="text-[10px] font-black uppercase opacity-60">Puntos</p>
           <p className="text-2xl font-black">{score}</p>
         </div>
@@ -403,14 +404,14 @@ export default function PigFlap() {
             </div>
           </div>
         ) : (
-          <div className="bg-indigo-600 px-4 py-2 rounded-2xl border border-white/20 text-white text-center">
+          <div className="bg-indigo-600 px-4 py-2 rounded-2xl border border-white/20 text-white text-center shadow-xl">
             <p className="text-[10px] font-black uppercase opacity-60">Nivel</p>
             <p className="text-xl font-black">{level} / 3</p>
           </div>
         )}
       </div>
 
-      {/* El Cerdito */}
+      {/* El Cerdito - PERSONAJE ACTUALIZADO */}
       <motion.div
         className="absolute z-30"
         style={{ 
@@ -423,7 +424,7 @@ export default function PigFlap() {
           rotate: birdAngle 
         }}
       >
-        <img src={pigMascot} className="w-full h-full object-contain drop-shadow-2xl" />
+        <img src={PIG_MASCOT} className="w-full h-full object-contain drop-shadow-2xl" alt="Piggy" />
       </motion.div>
 
       {/* Partículas */}
@@ -437,9 +438,9 @@ export default function PigFlap() {
       <AnimatePresence>
         {phase === "idle" && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 z-50 bg-slate-900/60 backdrop-blur-md flex flex-col items-center justify-center p-8 text-center text-white">
-            <img src={pigMascot} className="h-24 w-24 mb-6 animate-bounce" />
-            <h2 className="text-5xl font-black tracking-tighter mb-2">FLAPPY OINK</h2>
-            <p className="text-sm font-medium mb-8 opacity-80 max-w-[280px]">Toca para saltar. Cruza los 3 niveles de gastos y vence al Jefe de las Deudas.</p>
+            <img src={PIG_MASCOT} className="h-44 w-44 mb-6 animate-bounce" />
+            <h2 className="text-5xl font-black tracking-tighter mb-2 italic">FLAPPY OINK</h2>
+            <p className="text-sm font-medium mb-8 opacity-80 max-w-[280px]">Toca para saltar. Esquiva los gastos innecesarios y llega a la libertad financiera.</p>
             <Button onClick={(e) => flap(e)} className="h-16 px-12 rounded-full bg-white text-indigo-900 font-black text-xl shadow-2xl active:scale-95 transition-transform">¡EMPEZAR! 🚀</Button>
           </motion.div>
         )}
@@ -462,10 +463,10 @@ export default function PigFlap() {
         {phase === "gameover" && (
           <motion.div initial={{ opacity: 0, y: 50 }} animate={{ opacity: 1, y: 0 }} className="absolute inset-0 z-50 bg-rose-950/90 backdrop-blur-xl flex flex-col items-center justify-center p-6 text-center text-white">
             <Trophy className="h-16 w-16 text-yellow-400 mb-4" />
-            <h2 className="text-4xl font-black tracking-tighter">¡BANCARROTA!</h2>
-            <div className="bg-white/10 px-8 py-4 rounded-3xl my-6 border border-white/10">
-              <p className="text-[10px] font-black uppercase text-white/50 mb-1">Tu Puntuación</p>
-              <p className="text-5xl font-black">{score}</p>
+            <h2 className="text-4xl font-black tracking-tighter uppercase italic">¡Bancarrota!</h2>
+            <div className="bg-white/10 px-10 py-6 rounded-3xl my-6 border border-white/10">
+              <p className="text-[10px] font-black uppercase text-white/50 mb-1 tracking-widest">Puntuación</p>
+              <p className="text-6xl font-black">{score}</p>
             </div>
 
             {gameOverTip && (
@@ -478,8 +479,8 @@ export default function PigFlap() {
               </div>
             )}
 
-            <Button onClick={(e) => flap(e)} className="h-14 px-10 rounded-full bg-white text-slate-900 font-black text-lg shadow-xl flex gap-3 active:scale-95 transition-transform">
-              <RefreshCw className="h-5 w-5" /> REINTENTAR
+            <Button onClick={(e) => flap(e)} className="h-16 px-12 rounded-full bg-white text-slate-900 font-black text-xl shadow-xl flex gap-3 active:scale-95 transition-transform">
+              <RefreshCw className="h-6 w-6" /> REINTENTAR
             </Button>
           </motion.div>
         )}
@@ -490,13 +491,13 @@ export default function PigFlap() {
               <Sparkles className="absolute -top-10 -right-10 h-20 w-20 text-yellow-400 animate-pulse" />
               <Trophy className="h-32 w-32 text-yellow-400 mb-6" />
             </div>
-            <h2 className="text-5xl font-black tracking-tighter mb-2">¡VICTORIA TOTAL!</h2>
+            <h2 className="text-5xl font-black tracking-tighter mb-2 italic">¡VICTORIA!</h2>
             <p className="text-xl font-bold text-indigo-200 mb-8">Venciste al Monstruo de las Deudas.</p>
             <div className="bg-white/10 px-12 py-6 rounded-[2.5rem] border border-white/20 mb-8">
-              <p className="text-sm font-black uppercase opacity-60">Puntaje Final Maestro</p>
+              <p className="text-sm font-black uppercase opacity-60">Puntaje Final</p>
               <p className="text-6xl font-black">{score}</p>
             </div>
-            <Button onClick={(e) => flap(e)} className="h-16 px-12 rounded-full bg-emerald-500 text-white font-black text-xl shadow-2xl active:scale-95 transition-transform">¡SOY UN CRACK! 🐷</Button>
+            <Button onClick={(e) => flap(e)} className="h-16 px-12 rounded-full bg-emerald-500 text-white font-black text-xl shadow-2xl active:scale-95 transition-transform">¡SIGUIENTE NIVEL! 🐷</Button>
           </motion.div>
         )}
       </AnimatePresence>
