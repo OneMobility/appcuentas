@@ -51,7 +51,6 @@ const PiggyRunner = () => {
     lastTimeRef.current = time;
 
     if (gameState === 'playing') {
-      // Física del Cochinito
       setPigY(prevY => {
         const nextY = prevY + velocity;
         if (nextY >= GROUND_Y) {
@@ -62,21 +61,18 @@ const PiggyRunner = () => {
         return nextY;
       });
 
-      // Lógica de Obstáculos (Gastos Hormiga)
       setObstacles(prev => {
-        const speed = OBSTACLE_SPEED_START + (score / 500); // Aumenta velocidad con el tiempo
+        const speed = OBSTACLE_SPEED_START + (score / 500);
         const next = prev
           .map(obs => ({ ...obs, x: obs.x - speed }))
           .filter(obs => obs.x > -50);
 
-        // Generar nuevo obstáculo
         obstacleTimerRef.current += deltaTime;
         if (obstacleTimerRef.current > (1500 + Math.random() * 2000)) {
           obstacleTimerRef.current = 0;
           next.push({ id: Date.now(), x: 400, type: 'gasto' });
         }
 
-        // Detección de colisiones
         const pigRect = { left: PIG_X + 10, right: PIG_X + 50, top: pigY + 10, bottom: pigY + 50 };
         for (const obs of next) {
           const obsRect = { left: obs.x + 5, right: obs.x + 35, top: GROUND_Y + 15, bottom: GROUND_Y + 50 };
@@ -119,7 +115,7 @@ const PiggyRunner = () => {
   }, [jump]);
 
   return (
-    <div className="flex flex-col items-center gap-6 p-4">
+    <div className="flex flex-col items-center gap-6 p-4 w-full h-full" onClick={jump}>
       <div className="w-full flex justify-between px-2">
         <div className="flex flex-col">
           <span className="text-[10px] font-black uppercase text-slate-400">Score</span>
@@ -135,17 +131,13 @@ const PiggyRunner = () => {
 
       <div 
         ref={gameRef}
-        onClick={jump}
-        className="relative w-full h-[220px] bg-slate-50 rounded-[2rem] border-2 border-slate-100 overflow-hidden cursor-pointer shadow-inner"
+        className="relative w-full h-[250px] bg-slate-50 rounded-[2rem] border-2 border-slate-100 overflow-hidden cursor-pointer shadow-inner"
       >
-        {/* Nubes de fondo decorativas */}
         <div className="absolute top-10 left-10 opacity-20"><div className="h-4 w-12 bg-white rounded-full" /></div>
         <div className="absolute top-20 right-20 opacity-20"><div className="h-4 w-16 bg-white rounded-full" /></div>
 
-        {/* Suelo */}
         <div className="absolute bottom-[20px] left-0 right-0 h-0.5 bg-slate-200" />
 
-        {/* Cochinito */}
         <motion.div
           style={{ left: PIG_X, top: pigY }}
           className="absolute w-12 h-12"
@@ -153,7 +145,6 @@ const PiggyRunner = () => {
           <img src={COCHINITO_IMG} alt="Pig" className="w-full h-full object-contain drop-shadow-md" />
         </motion.div>
 
-        {/* Obstáculos (Gastos Hormiga) */}
         {obstacles.map(obs => (
           <div
             key={obs.id}
@@ -167,7 +158,6 @@ const PiggyRunner = () => {
           </div>
         ))}
 
-        {/* Overlays de Estado */}
         <AnimatePresence>
           {gameState === 'waiting' && (
             <motion.div 
@@ -177,7 +167,7 @@ const PiggyRunner = () => {
               <Play className="h-12 w-12 text-white mb-4 animate-pulse" />
               <h3 className="text-xl font-black text-white">Piggy Run</h3>
               <p className="text-white/80 text-xs font-medium mt-2">Salta sobre los gastos hormiga para proteger tu ahorro.</p>
-              <p className="text-white/40 text-[10px] font-bold uppercase mt-6 tracking-widest">Toca o pulsa espacio para empezar</p>
+              <p className="text-white/40 text-[10px] font-bold uppercase mt-6 tracking-widest">Toca en cualquier parte para empezar</p>
             </motion.div>
           )}
 
@@ -200,9 +190,8 @@ const PiggyRunner = () => {
         </AnimatePresence>
       </div>
 
-      <div className="flex gap-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-        <div className="flex items-center gap-1.5"><div className="h-2 w-2 rounded-full bg-indigo-600" /> Toca para Saltar</div>
-        <div className="flex items-center gap-1.5"><div className="h-2 w-2 rounded-full bg-rose-500" /> Evita el Gasto</div>
+      <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">
+        Toca cualquier parte de la pantalla para saltar
       </div>
     </div>
   );
