@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "730107045228",
+    "project_id": "oinkash",
+    "storage_bucket": "oinkash.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:730107045228:android:c3a5317405af03caee7f49",
+        "android_client_info": {
+          "package_name": "com.oinkash.ahorro"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAjR16lOZT3c4DBzbP7fTL4XrbGZ8WNJaI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
