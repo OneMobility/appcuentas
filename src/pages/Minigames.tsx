@@ -1,36 +1,12 @@
 "use client";
 
-import React, { useState } from "react";
+import React from "react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Gamepad2, Trophy, Coins, Brain, ArrowLeft, Sparkles, Zap } from "lucide-react";
-import FinanceQuiz from "@/components/minigames/FinanceQuiz";
-import PiggyRunner from "@/components/minigames/PiggyRunner";
-import { cn } from "@/lib/utils";
+import { Sparkles } from "lucide-react";
 
-const GIF_GAME = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/metasfeliz.gif";
+const GIF_GAME = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/games.gif";
 
 const Minigames = () => {
-  const [activeGame, setActiveGame] = useState<'none' | 'quiz' | 'runner'>('none');
-
-  if (activeGame !== 'none') {
-    return (
-      <div className="flex flex-col gap-4 p-2 h-full">
-        <div className="flex items-center">
-          <Button variant="ghost" size="icon" onClick={() => setActiveGame('none')} className="rounded-full h-12 w-12 bg-white shadow-sm border border-slate-100">
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-        </div>
-        
-        <Card className="rounded-[2.5rem] border-none shadow-2xl bg-white overflow-hidden max-w-lg mx-auto w-full flex-1 md:flex-none">
-          <CardContent className="p-0 h-full">
-            {activeGame === 'quiz' ? <FinanceQuiz /> : <PiggyRunner />}
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
   return (
     <div className="flex flex-col gap-8 p-4 md:p-6 pb-24 max-w-5xl mx-auto">
       <header className="relative">
@@ -49,45 +25,15 @@ const Minigames = () => {
         </Card>
       </header>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-        <Card 
-          className="rounded-[2rem] border-none shadow-sm hover:shadow-xl transition-all bg-white overflow-hidden cursor-pointer group"
-          onClick={() => setActiveGame('runner')}
-        >
-          <div className="p-6 space-y-4">
-            <div className="h-14 w-14 rounded-2xl bg-rose-50 flex items-center justify-center text-rose-600 group-hover:scale-110 transition-transform">
-              <Zap className="h-7 w-7" />
-            </div>
-            <div>
-              <h3 className="text-xl font-black text-slate-900">Piggy Run</h3>
-              <p className="text-xs font-bold text-slate-400 mt-1 uppercase tracking-widest">Juego de Reflejos</p>
-            </div>
-            <p className="text-sm text-slate-500">Salta sobre los gastos hormiga para que no se coman tu ahorro. ¡Estilo Dino de Chrome!</p>
-            <Button className="w-full rounded-xl font-black bg-rose-500 hover:bg-rose-600">¡Correr Ahora!</Button>
-          </div>
-        </Card>
-
-        <Card 
-          className="rounded-[2rem] border-none shadow-sm hover:shadow-xl transition-all bg-white overflow-hidden cursor-pointer group"
-          onClick={() => setActiveGame('quiz')}
-        >
-          <div className="p-6 space-y-4">
-            <div className="h-14 w-14 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-600 group-hover:scale-110 transition-transform">
-              <Brain className="h-7 w-7" />
-            </div>
-            <div>
-              <h3 className="text-xl font-black text-slate-900">Oinkash Quiz</h3>
-              <p className="text-xs font-bold text-slate-400 mt-1 uppercase tracking-widest">Conocimiento</p>
-            </div>
-            <p className="text-sm text-slate-500">Demuestra que eres un experto en finanzas respondiendo correctamente nuestras trivias.</p>
-            <Button className="w-full rounded-xl font-black bg-indigo-600 hover:bg-indigo-700">Comenzar</Button>
-          </div>
-        </Card>
-      </div>
-
-      <div className="flex flex-col items-center justify-center py-10 opacity-30 text-center gap-2">
-        <Sparkles className="h-8 w-8 text-indigo-500" />
-        <p className="text-[10px] font-black uppercase tracking-widest">Más juegos próximamente...</p>
+      <div className="flex flex-col items-center justify-center py-20 text-center gap-4">
+        <div className="bg-indigo-50 p-6 rounded-full">
+          <Sparkles className="h-12 w-12 text-indigo-500 animate-pulse" />
+        </div>
+        <div className="space-y-2">
+          <h2 className="text-2xl font-black text-slate-900">¡Nuevas experiencias en camino!</h2>
+          <p className="text-slate-500 font-medium max-w-md">Estamos preparando juegos más emocionantes para ayudarte a dominar tus finanzas mientras te diviertes.</p>
+        </div>
+        <p className="text-[10px] font-black uppercase tracking-widest text-slate-300 mt-4">Vuelve pronto para ver las novedades</p>
       </div>
     </div>
   );
