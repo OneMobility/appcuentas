@@ -24,7 +24,8 @@ import {
   Search,
   Sparkles,
   Zap,
-  Info
+  Info,
+  AlertCircle
 } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { cn } from "@/lib/utils";
