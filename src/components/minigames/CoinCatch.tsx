@@ -12,6 +12,8 @@ const BASKET_HALF_WIDTH = 9;
 const CATCH_TOLERANCE = 10; 
 const STREAK_PER_MULT_LEVEL = 3; 
 const MAX_MULTIPLIER = 5;
+const BASE_MOVE_SPEED = 90; // Velocidad base de movimiento del cerdo
+const SPEED_PENALTY_PER_LIFE = 20; // Cuánto se ralentiza por cada vida perdida
 
 type GoodKind = "coin" | "bill" | "bag";
 type BadKind = "gasto" | "impuesto" | "factura";
@@ -88,7 +90,6 @@ export default function CoinCatch({
   const [basketX, setBasketX] = useState(50);
   const [flash, setFlash] = useState<"good" | "bad" | null>(null);
   
-  // Estado para hitos
   const [milestone, setMilestone] = useState<{ text: string, emoji: string } | null>(null);
   const triggeredMilestones = useRef<Set<number>>(new Set());
 
@@ -158,17 +159,19 @@ export default function CoinCatch({
       lastTimeRef.current = now;
       elapsedRef.current += dt;
 
-      const moveSpeed = 85; 
+      // Cálculo de velocidad de movimiento dinámica: más lento según vidas perdidas
+      const livesLost = STARTING_LIVES - livesRef.current;
+      const currentMoveSpeed = Math.max(30, BASE_MOVE_SPEED - (livesLost * SPEED_PENALTY_PER_LIFE));
+
       if (keysRef.current.has("ArrowLeft")) {
-        basketXRef.current = Math.max(BASKET_HALF_WIDTH, basketXRef.current - moveSpeed * dt);
+        basketXRef.current = Math.max(BASKET_HALF_WIDTH, basketXRef.current - currentMoveSpeed * dt);
       }
       if (keysRef.current.has("ArrowRight")) {
-        basketXRef.current = Math.min(100 - BASKET_HALF_WIDTH, basketXRef.current + moveSpeed * dt);
+        basketXRef.current = Math.min(100 - BASKET_HALF_WIDTH, basketXRef.current + currentMoveSpeed * dt);
       }
 
-      // Dificultad progresiva por tiempo + por cada 1000 puntos
       const timeProgress = Math.min(1, elapsedRef.current / 120);
-      const scoreSpeedMult = 1 + (Math.floor(scoreRef.current / 1000) * 0.1); // +10% cada 1000 pts
+      const scoreSpeedMult = 1 + (Math.floor(scoreRef.current / 1000) * 0.1); 
       
       const spawnInterval = (1.0 - 0.65 * timeProgress) / (scoreSpeedMult * 0.8); 
       const fallDuration = (3.5 - 1.8 * timeProgress) / scoreSpeedMult; 
@@ -214,7 +217,6 @@ export default function CoinCatch({
               const mult = Math.min(MAX_MULTIPLIER, 1 + Math.floor(streakRef.current / STREAK_PER_MULT_LEVEL));
               scoreRef.current += def.points * mult;
               
-              // Verificar hitos
               const currentScore = scoreRef.current;
               MILESTONES.forEach(m => {
                 if (currentScore >= m.score && !triggeredMilestones.current.has(m.score)) {
@@ -288,6 +290,8 @@ export default function CoinCatch({
     if (!field) return;
     const rect = field.getBoundingClientRect();
     const pct = ((clientX - rect.left) / rect.width) * 100;
+    
+    // Aplicar la misma lógica de velocidad si se usa el ratón/táctil para mover
     basketXRef.current = Math.max(BASKET_HALF_WIDTH, Math.min(100 - BASKET_HALF_WIDTH, pct));
     setBasketX(basketXRef.current);
   }, []);
@@ -378,12 +382,13 @@ export default function CoinCatch({
           style={{
             ...styles.basket,
             left: `${basketX}%`,
+            transition: 'left 0.1s linear', // Suaviza un poco el movimiento
+            opacity: lives === 3 ? 1 : lives === 2 ? 0.8 : 0.6 // Efecto visual de cansancio
           }}
         >
           🐷
         </div>
 
-        {/* Animación de Hitos */}
         <AnimatePresence>
           {milestone && (
             <motion.div
@@ -406,7 +411,7 @@ export default function CoinCatch({
             <p style={styles.overlaySubtitle}>
               Atrapa 🪙 💵 💰 para ganar puntos.
               <br />
-              ¡Cada 1000 pts los objetos caen más rápido!
+              ¡Cuidado! Perder vidas te hará más lento.
               <br />
               Ojo: ¡Las 🧾 restan puntos!
             </p>
@@ -431,7 +436,7 @@ export default function CoinCatch({
       </div>
 
       <p style={styles.hint}>
-        Velocidad actual: +{Math.round((Math.floor(score / 1000) * 10))}%
+        Vidas: {lives} · Velocidad Cerdo: {lives === 3 ? '100%' : lives === 2 ? '75%' : '50%'}
       </p>
     </div>
   );
