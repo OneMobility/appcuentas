@@ -25,16 +25,17 @@ import ResetPassword from "./pages/ResetPassword";
 import { CategoryProvider } from "./context/CategoryContext";
 import { SessionProvider, useSession } from "./context/SessionContext";
 import CardNotifications from "./components/CardNotifications";
-import SavingsNotifications from "./components/SavingsNotifications"; // Importado
 import AppUpdater from "./components/AppUpdater";
-import LoadingSpinner from "./components/LoadingSpinner";
+import LoadingSpinner from "./components/LoadingSpinner"; // Importado
 import React from "react";
 
 const queryClient = new QueryClient();
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { session, isLoading } = useSession();
-  if (isLoading) return <LoadingSpinner />;
+  
+  if (isLoading) return <LoadingSpinner />; // Usando el spinner visual en lugar de texto
+  
   if (!session) return <Navigate to="/login" replace />;
   return <>{children}</>;
 };
@@ -50,7 +51,6 @@ const App = () => {
             <CategoryProvider>
               <AppUpdater />
               <CardNotifications />
-              <SavingsNotifications /> {/* Añadido sistema de notificaciones de metas */}
               <Routes>
                 <Route path="/login" element={<Login />} />
                 <Route path="/reset-password" element={<ProtectedRoute><ResetPassword /></ProtectedRoute>} />

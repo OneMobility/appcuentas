@@ -32,35 +32,82 @@ import { evaluateExpression } from "@/utils/math-helpers";
 import { motion, AnimatePresence } from "framer-motion";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
-const BUCKET_URL = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/metas";
+// RECURSOS PARA ANIMACIONES DE PANTALLA COMPLETA
+const GIF_INICIO = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/metasinicios.gif";
+const GIF_FELIZ = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/metasfeliz.gif";
+const GIF_DEPOSITO = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/metasdeposito.gif";
+const GIF_RETIRO = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/metasretiro.gif";
+
+// RECURSOS PARA LA UI
+const GIF_CABECERA = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/nuevometa.gif";
+const PIGGY_STANDARD = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Cochinito%20Ahorro.png";
+const PIGGY_SAD = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Cochinito%20Ahorro%20Triste.png";
 
 const FEEDBACK_MESSAGES = {
   onOpen: [
     "¡Una nueva aventura financiera comienza! 🐷",
     "¡Meta creada! El primer paso es el más importante.",
+    "¡Felicidades por definir tu próximo gran objetivo!",
+    "¡Tu plan de ahorro acaba de nacer! Cuídalo mucho.",
+    "¡Ese sueño ya tiene nombre y cuenta! Vamos por él.",
     "Plantaste una semilla de abundancia. ¡A regarla! 🌿",
+    "¡Objetivo fijado! Oinkash te acompañará en cada peso.",
+    "¡Qué emoción! Un nuevo propósito para tu dinero.",
+    "El futuro te lo agradecerá. ¡Meta registrada con éxito!",
     "¡Oficialmente en camino a lograrlo! 🚀"
   ],
   onWithdraw: [
     "Retiraste un poco, pero sé que es por algo necesario. 📉",
+    "Un ajuste en el camino no detiene tu meta.",
+    "El dinero está para usarse, pero recuerda volver pronto.",
     "¡Ouch! El cochinito sintió ese pellizco. 🐷",
+    "¡Cuidado! No dejes que el impulso le gane al largo plazo.",
+    "A veces hay que retroceder un paso para dar dos adelante.",
     "¡Ánimo! Recuperaremos este saldo muy pronto.",
+    "Prioridades son prioridades, úsalo con sabiduría.",
+    "¡No pasa nada! El plan sigue en pie, solo se ajustó.",
+    "¡Vuelve pronto a llenar este espacio vacío! ✨"
   ],
   onDeposit: [
     "¡Eso! Un paso más cerca de lo que sueñas. 🚀",
     "¡Tu cochinito está sonriendo con este abono!",
+    "¡Cada peso cuenta y hoy sumaste una victoria!",
+    "¡Pum! El saldo sube y tu estrés baja.",
     "¡Estás alimentando tus sueños! Sigue así. 🍬",
+    "Un pequeño depósito hoy, una gran alegría mañana.",
+    "¡Hábito de acero! Otro abono a la saca.",
+    "¡Ese progreso se ve increíble! No te detengas.",
+    "¡Ahorrar es el mejor regalo que te puedes dar!",
+    "¡Tu dinero está trabajando para tu felicidad! 💰"
   ],
   onComplete: [
     "¡LO LOGRASTE! Eres un maestro del ahorro. 🏆",
     "¡Meta cumplida! Disfruta tu recompensa, te la ganaste.",
+    "¡Increíble! Sabíamos que podías hacerlo.",
     "¡Misión cumplida! El cochinito está listo para la fiesta. 🎉",
+    "¡Sueño alcanzado! ¿Cuál será el siguiente reto?",
+    "Eres la prueba de que la disciplina paga. ¡Felicidades!",
+    "¡Meta desbloqueada! Disfruta el fruto de tu esfuerzo.",
+    "¡Bravo! Hoy eres más rico de lo que eras al empezar.",
+    "¡Tu constancia dio frutos! Disfrútalo al máximo. 🍎",
     "¡Oinkash celebra contigo! ¡Objetivo terminado! 🐷✨"
   ],
   onWiseDecision: [
+    "¡Esa es la actitud! Rectificar es de sabios financieros. ✨",
     "¡Wow! Te arrepentiste de gastar y preferiste ahorrar. ¡Genial!",
+    "¡Prioridades claras! El sueño vale más que el gasto.",
     "¡Victoria mental! Le ganaste al impulso de gasto. 🏆",
+    "¡Héroe del ahorro! Devolviste el dinero a su lugar.",
+    "El arrepentimiento positivo es el mejor maestro.",
+    "¡Tu meta saltó de alegría al ver que regresaste! 🐷",
+    "¡Decisión de crack! Tu futuro acaba de sonreír.",
     "¡Nivel de madurez financiera: Experto! 🌟",
+    "¡Nada como la paz de saber que tu ahorro sigue intacto!"
+  ],
+  onInactivityReminder: [
+    "Tu meta te extraña... ¿hace cuánto no le das amor? 🐷",
+    "¡Oye! El cochinito está empezando a pasar hambre.",
+    "Un ahorro a la semana mantiene el estrés fuera."
   ]
 };
 
@@ -101,41 +148,6 @@ const Savings: React.FC = () => {
     return list[Math.floor(Math.random() * list.length)];
   };
 
-  const getPiggyStatus = (saving: any) => {
-    const progress = saving.target_amount ? (saving.current_balance / saving.target_amount) * 100 : 0;
-    
-    // Calcular inactividad (usando created_at como fallback si no hay updated_at)
-    const daysSinceUpdate = differenceInDays(new Date(), parseISO(saving.updated_at || saving.created_at));
-
-    // Prioridad 1: Meta Cumplida (08)
-    if (saving.completion_date || progress >= 100) {
-      return { img: `${BUCKET_URL}/08.gif`, label: "¡Logrado!", sub: "¡Eres un campeón!" };
-    }
-    
-    // Prioridad 2: Inactividad Crítica (>30 días) (07)
-    if (daysSinceUpdate > 30) {
-      return { img: `${BUCKET_URL}/07.gif`, label: "Abandonada", sub: "¡Tu meta te extraña mucho!" };
-    }
-
-    // Prioridad 3: Inactividad Media (30 días) (06)
-    if (daysSinceUpdate === 30) {
-      return { img: `${BUCKET_URL}/06.gif`, label: "En riesgo", sub: "Ya pasó un mes..." };
-    }
-
-    // Prioridad 4: Inactividad Inicial (15 días) (05)
-    if (daysSinceUpdate >= 15) {
-      return { img: `${BUCKET_URL}/05.gif`, label: "Hambriento", sub: "Hace 15 días no ahorras." };
-    }
-
-    // Prioridad 5: Progreso
-    if (progress >= 75) return { img: `${BUCKET_URL}/04.gif`, label: "Casi listo", sub: "¡Ya huelo el éxito!" };
-    if (progress >= 50) return { img: `${BUCKET_URL}/03.gif`, label: "A la mitad", sub: "¡Medio camino recorrido!" };
-    if (progress >= 25) return { img: `${BUCKET_URL}/02.gif`, label: "Creciendo", sub: "¡Buen comienzo!" };
-    
-    // Por defecto: Recién creada o < 25% (01)
-    return { img: `${BUCKET_URL}/01.gif`, label: "Nueva", sub: "¡Empecemos con todo!" };
-  };
-
   const handleSubmitNewSaving = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isSubmitting) return;
@@ -163,7 +175,7 @@ const Savings: React.FC = () => {
       setFeedbackOverlay({ 
         isVisible: true, 
         message: getRandomPhrase('onOpen'), 
-        imageSrc: `${BUCKET_URL}/01.gif`, 
+        imageSrc: GIF_INICIO, 
         bgColor: "bg-white", 
         textColor: "text-slate-900" 
       });
@@ -223,8 +235,7 @@ const Savings: React.FC = () => {
 
       const { data, error } = await supabase.from('savings').update({ 
         current_balance: newBal, 
-        completion_date: completionDate,
-        updated_at: new Date().toISOString() // Marcamos actividad
+        completion_date: completionDate
       }).eq('id', selectedSavingId).select().single();
 
       if (error) throw error;
@@ -234,14 +245,16 @@ const Savings: React.FC = () => {
       setNewTransaction(prev => ({ ...prev, amount: "" })); 
       
       const now = Date.now();
-      const status = getPiggyStatus(data);
+      const isDecisionCorrected = lastAction?.type === 'withdrawal' && newTransaction.type === 'deposit' && (now - lastAction.time < 300000) && lastAction.savingId === selectedSavingId;
 
       if (isCompleting) {
-        setFeedbackOverlay({ isVisible: true, message: getRandomPhrase('onComplete'), imageSrc: `${BUCKET_URL}/08.gif`, bgColor: "bg-white", textColor: "text-slate-900" });
+        setFeedbackOverlay({ isVisible: true, message: getRandomPhrase('onComplete'), imageSrc: GIF_FELIZ, bgColor: "bg-white", textColor: "text-slate-900" });
+      } else if (isDecisionCorrected) {
+        setFeedbackOverlay({ isVisible: true, message: getRandomPhrase('onWiseDecision'), imageSrc: GIF_FELIZ, bgColor: "bg-white", textColor: "text-slate-900" });
       } else if (newTransaction.type === 'deposit') {
-        setFeedbackOverlay({ isVisible: true, message: getRandomPhrase('onDeposit'), imageSrc: status.img, bgColor: "bg-white", textColor: "text-slate-900" });
+        setFeedbackOverlay({ isVisible: true, message: getRandomPhrase('onDeposit'), imageSrc: GIF_DEPOSITO, bgColor: "bg-white", textColor: "text-slate-900" });
       } else {
-        setFeedbackOverlay({ isVisible: true, message: getRandomPhrase('onWithdraw'), imageSrc: status.img, bgColor: "bg-white", textColor: "text-slate-900" });
+        setFeedbackOverlay({ isVisible: true, message: getRandomPhrase('onWithdraw'), imageSrc: GIF_RETIRO, bgColor: "bg-white", textColor: "text-slate-900" });
       }
 
       setLastAction({ type: newTransaction.type, time: now, savingId: selectedSavingId! });
@@ -258,6 +271,24 @@ const Savings: React.FC = () => {
       setSavings(prev => prev.filter(s => s.id !== id));
       showSuccess("Meta eliminada");
     }
+  };
+
+  const getPiggyStatus = (saving: any) => {
+    if (saving.completion_date || (saving.target_amount && saving.current_balance >= saving.target_amount)) {
+      return { img: GIF_FELIZ, label: "¡Logrado!", sub: "Cochinito fiestero" };
+    }
+    
+    const daysSinceUpdate = differenceInDays(new Date(), parseISO(saving.created_at));
+    if (daysSinceUpdate > 30) {
+      return { img: PIGGY_SAD, label: "Abandonada", sub: getRandomPhrase('onInactivityReminder') };
+    }
+
+    const progress = saving.target_amount ? (saving.current_balance / saving.target_amount) * 100 : 0;
+    if (progress < 30) {
+      return { img: PIGGY_SAD, label: "Hambriento", sub: "Necesito comida..." };
+    }
+    
+    return { img: PIGGY_STANDARD, label: "Creciendo", sub: "¡Vamos bien!" };
   };
 
   const filteredSavings = savings.filter(s => s.name.toLowerCase().includes(searchTerm.toLowerCase()));
@@ -278,7 +309,7 @@ const Savings: React.FC = () => {
               <p className="text-xs font-medium text-yellow-50/80">¡Tu futuro se construye peso a peso!</p>
             </div>
             <div className="flex-shrink-0">
-              <img src={`${BUCKET_URL}/08.gif`} alt="Metas" className="h-32 w-32 object-contain" />
+              <img src={GIF_CABECERA} alt="Metas" className="h-32 w-32 object-contain" />
             </div>
           </div>
         </Card>
@@ -299,18 +330,17 @@ const Savings: React.FC = () => {
           {filteredSavings.map((saving, i) => {
             const status = getPiggyStatus(saving);
             const progress = saving.target_amount ? Math.min(100, (saving.current_balance / saving.target_amount) * 100) : 0;
-            const isCompleted = saving.completion_date || progress >= 100;
-            const isAbandoned = status.label === "Abandonada" || status.label === "En riesgo";
+            const isCompleted = saving.completion_date || (saving.target_amount && saving.current_balance >= saving.target_amount);
 
             return (
               <motion.div key={saving.id} layout initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: i * 0.05 }}>
                 <Card className={cn(
                   "rounded-[2.5rem] border-none shadow-sm hover:shadow-xl transition-all bg-white overflow-hidden group relative",
-                  isAbandoned && "bg-slate-50/80 border-dashed border-2 border-slate-200"
+                  status.label === "Abandonada" && "bg-slate-50/80 border-dashed border-2 border-slate-200"
                 )}>
-                  {isAbandoned && (
+                  {status.label === "Abandonada" && (
                     <div className="absolute top-4 right-14 bg-amber-100 text-amber-700 text-[8px] font-black uppercase px-2 py-0.5 rounded-full flex items-center gap-1 z-20 animate-pulse">
-                      <AlertCircle className="h-2.5 w-2.5" /> Meta en Riesgo
+                      <AlertCircle className="h-2.5 w-2.5" /> Meta Abandonada
                     </div>
                   )}
 
@@ -324,14 +354,14 @@ const Savings: React.FC = () => {
                           >
                             <img 
                               src={status.img} 
-                              className={cn("h-16 w-16 object-contain opacity-100")} 
+                              className={cn("h-14 w-14 object-contain opacity-100", status.label === "Abandonada" && "grayscale")} 
                               alt="Status" 
                             />
                           </div>
                           {isCompleted && <div className="absolute -top-2 -right-2 bg-yellow-400 rounded-full p-1.5 shadow-lg animate-bounce"><Trophy className="h-4 w-4 text-white" /></div>}
                         </div>
                         <div className="flex flex-col">
-                          <span className={cn("font-black text-slate-900 text-lg leading-tight", isAbandoned && "text-slate-500")}>{saving.name}</span>
+                          <span className={cn("font-black text-slate-900 text-lg leading-tight", status.label === "Abandonada" && "text-slate-400")}>{saving.name}</span>
                           <span className="text-[9px] font-black uppercase text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full w-fit mt-1">{status.label}</span>
                           <span className="text-[10px] font-bold text-slate-400 mt-1 flex items-center gap-1">
                             <Clock className="h-3 w-3" /> {saving.target_date ? format(parseISO(saving.target_date), 'dd MMM yyyy', { locale: es }) : 'Sin fecha'}
@@ -440,7 +470,7 @@ const Savings: React.FC = () => {
               <Input value={newTransaction.amount} onChange={e => setNewTransaction({...newTransaction, amount: e.target.value})} className="rounded-2xl h-14 text-xl font-black bg-slate-50 border-none focus-visible:ring-indigo-200" placeholder="0.00" required />
             </div>
             <Button type="submit" className="w-full rounded-2xl h-14 font-black text-lg bg-indigo-600 shadow-xl shadow-indigo-100" disabled={isSubmitting}>
-              {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Confirmar"}
+              {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : "Confirmar"}
             </Button>
           </form>
         </DialogContent>
