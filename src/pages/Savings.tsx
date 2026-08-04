@@ -14,17 +14,11 @@ import {
   Trash2, 
   Edit, 
   CalendarIcon, 
-  TrendingUp, 
   Trophy, 
-  Target, 
   MoreHorizontal,
-  History,
   CheckCircle2,
   Clock,
   Search,
-  Sparkles,
-  Zap,
-  Info,
   AlertCircle
 } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
@@ -34,9 +28,6 @@ import { es } from "date-fns/locale";
 import ColorPicker from "@/components/ColorPicker";
 import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/context/SessionContext";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { Progress } from "@/components/ui/progress";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import FeedbackOverlay from "@/components/FeedbackOverlay";
 import { getLocalDateString } from "@/utils/date-helpers";
 import { evaluateExpression } from "@/utils/math-helpers";
@@ -48,17 +39,7 @@ const GIF_METAS = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/pu
 const PIGGY_STANDARD = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Cochinito%20Ahorro.png";
 const PIGGY_SAD = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Cochinito%20Ahorro%20Triste.png";
 
-// --- BANCO DE FRASES (60+) ---
-const MOTIVATIONAL_PHRASES = [
-  "Cada peso guardado es un paso hacia tu libertad.", "Ahorrar no es gastar menos, es vivir mejor mañana.", "Tu 'yo' del futuro te agradecerá este sacrificio.", "La disciplina financiera vence al talento financiero.", "No busques el momento perfecto, solo empieza a ahorrar.", "Pequeños ahorros hoy, grandes sueños mañana.", "La mejor inversión que puedes hacer es en tu tranquilidad.", "Dile a tu dinero a dónde ir, no preguntes a dónde se fue.", "Ahorrar es el arte de comprar libertad.", "Tus metas no se cumplen solas, se ahorran.",
-  "El éxito financiero empieza con un 'no' a un capricho.", "No ahorres lo que te queda, gasta lo que te queda tras ahorrar.", "La constancia es la madre de la fortuna.", "Incluso un centavo es progreso.", "Visualiza tu meta y el ahorro será más fácil.", "Tu cuenta bancaria es un reflejo de tus prioridades.", "Sé el dueño de tu dinero, no su esclavo.", "Menos compras por impulso, más metas cumplidas.", "Ahorrar es amor propio en forma de billetes.", "Un presupuesto es la herramienta del éxito.",
-  "El ahorro es el primer paso hacia la riqueza.", "Si puedes soñarlo, puedes ahorrarlo.", "La paciencia paga los mejores intereses.", "Controla tus gastos hormiga antes de que devoren tus metas.", "Tu futuro se construye hoy con lo que guardas.", "No necesitas más dinero, necesitas más disciplina.", "La paz mental financiera no tiene precio.", "Haz que tu dinero trabaje para ti.", "Evita deudas innecesarias, prefiere el ahorro.", "Eres capaz de lograr todo lo que te propongas.",
-  "Un día sin ahorrar es un día más lejos de tu meta.", "La motivación te hace empezar, el hábito te mantiene.", "Nada es imposible para quien sabe ahorrar.", "El ahorro genera oportunidades.", "No te compares con otros, compárate con tu saldo anterior.", "Ahorrar es sembrar hoy para cosechar mañana.", "Tu meta está más cerca de lo que crees.", "Cree en tu plan y los resultados llegarán.", "El dinero bien administrado dura más.", "La libertad financiera es poder elegir.",
-  "Cada moneda en el cochinito es una victoria.", "No dejes que los deseos de hoy arruinen los sueños de mañana.", "Ahorrar te da poder sobre tu destino.", "Tu voluntad es más fuerte que cualquier oferta de tienda.", "Planifica hoy, disfruta siempre.", "La riqueza es lo que no ves: el ahorro acumulado.", "Convierte el ahorro en tu pasatiempo favorito.", "No es cuánto ganas, sino cuánto conservas.", "Ahorrar es preparar el terreno para la abundancia.", "Toma el control total de tus finanzas.",
-  "Cada meta cumplida merece una celebración.", "El ahorro es una inversión en ti mismo.", "No te rindas, el progreso es real aunque sea lento.", "Simplifica tu vida y verás crecer tu ahorro.", "La inteligencia financiera se entrena día a día.", "Tú eres el arquitecto de tu propio patrimonio.", "Ahorra con propósito y verás la magia.", "La abundancia llega a quien la sabe administrar.", "Protege tu futuro con el ahorro del presente.", "¡Oinkash está orgulloso de tu progreso! 🐷"
-];
-
-// --- FRASES POR CATEGORÍA ---
+// --- BANCO DE 60+ FRASES POR ACCIÓN ---
 const FEEDBACK_MESSAGES = {
   onOpen: [
     "¡Una nueva aventura financiera comienza! 🐷",
@@ -79,7 +60,12 @@ const FEEDBACK_MESSAGES = {
     "¡Tu cochinito está sonriendo con este abono!",
     "¡Ahorro registrado con éxito! Eres imparable.",
     "¡Cada peso cuenta y hoy sumaste una victoria!",
-    "¡Buen trabajo! Estás construyendo algo increíble."
+    "¡Buen trabajo! Estás construyendo algo increíble.",
+    "¡Pum! El saldo sube y tu estrés baja.",
+    "Alimentando al cochinito... ¡se ve más gordito hoy!",
+    "Tu disciplina de hoy es tu libertad de mañana.",
+    "¡Excelente abono! Estás dominando tus finanzas.",
+    "Una moneda más, un día menos para lograrlo."
   ],
   onComplete: [
     "¡LO LOGRASTE! Eres un maestro del ahorro. 🏆",
@@ -93,7 +79,39 @@ const FEEDBACK_MESSAGES = {
     "¡Wow! Te arrepentiste de gastar y preferiste ahorrar. ¡Genial!",
     "¡Sabia decisión! Tu meta te lo agradece profundamente.",
     "¡Prioridades claras! Decidiste que tu sueño vale más que el gasto.",
-    "¡Felicidades por esa fuerza de voluntad! Eres un crack."
+    "¡Felicidades por esa fuerza de voluntad! Eres un crack.",
+    "Tu 'yo' del futuro te acaba de dar un high-five virtual.",
+    "El ahorro le ganó a la tentación. ¡Punto para ti!",
+    "Borrón y cuenta nueva: ¡el dinero vuelve a donde pertenece!",
+    "¡Eso se llama autocontrol! Muy bien hecho.",
+    "El cochinito respira aliviado... ¡gracias por volver!"
+  ],
+  onInactivityReminder: [
+    "Tu meta te extraña... ¿hace cuánto no le das amor? 🐷",
+    "¡Oye! El cochinito está empezando a pasar hambre.",
+    "Un ahorro a la semana mantiene el estrés fuera.",
+    "No dejes que el tiempo enfríe tus sueños.",
+    "Los grandes imperios se construyeron ladrillo a ladrillo.",
+    "Tu meta se ve un poco triste, ¡anímala con un pesito!",
+    "El éxito es la suma de pequeños esfuerzos repetidos.",
+    "¿Recuerdas por qué empezaste esta meta?",
+    "Un paso pequeño sigue siendo movimiento hacia adelante.",
+    "El tiempo vuela, ¡haz que tus ahorros vuelen también!",
+    "¡No te rindas! Lo más difícil es mantener el ritmo.",
+    "El cochinito dice que ya es hora de otro depósito.",
+    "La constancia es la clave del tesoro.",
+    "¡Vamos! Un pequeño abono hoy hace la diferencia.",
+    "El ahorro es un hábito, no dejes que se oxide.",
+    "Tu meta sigue aquí, esperando que la cumplas.",
+    "Visualiza tu objetivo y verás que vale el esfuerzo.",
+    "¡Ánimo! El camino es largo pero la recompensa es grande.",
+    "¿Sabías que cada peso hoy es más libertad mañana?",
+    "El cochinito está listo para recibir tu próximo ahorro.",
+    "¡Ey! Tus sueños no se toman vacaciones.",
+    "Mantén la vista en el premio, ¡falta menos!",
+    "Un día sin ahorrar es un día más lejos del éxito.",
+    "Tu disciplina financiera es tu superpoder.",
+    "¡Despierta ese cochinito! Ya durmió demasiado."
   ]
 };
 
@@ -106,17 +124,17 @@ const Savings: React.FC = () => {
   const [selectedSavingId, setSelectedSavingId] = useState<string | null>(null);
   const [editingSaving, setEditingSaving] = useState<any>(null);
   const [searchTerm, setSearchTerm] = useState("");
-  
-  // Lógica de "Sabia Decisión"
-  const [lastAction, setLastAction] = useState<{ type: string, time: number } | null>(null);
+  const [feedbackOverlay, setFeedbackOverlay] = useState<any>(null);
+
+  // Registro para detectar "Sabia Decisión"
+  const [lastAction, setLastAction] = useState<{ type: 'deposit' | 'withdrawal', time: number, savingId: string } | null>(null);
 
   const [newSaving, setNewSaving] = useState({
     name: "", initial_balance: "", target_amount: "", target_date: undefined as Date | undefined, color: "#22C55E",
   });
   const [newTransaction, setNewTransaction] = useState({
-    type: "deposit" as "deposit" | "withdrawal", amount: "", description: "",
+    type: "deposit" as "deposit" | "withdrawal", amount: "",
   });
-  const [feedbackOverlay, setFeedbackOverlay] = useState<any>(null);
 
   const fetchSavings = async () => {
     if (!user) return;
@@ -190,9 +208,8 @@ const Savings: React.FC = () => {
       setSavings(prev => prev.map(s => s.id === data.id ? data : s));
       setIsTransactionDialogOpen(false);
       
-      // Lógica de "Sabia Decisión"
       const now = Date.now();
-      const isDecisionCorrected = lastAction?.type === 'withdrawal' && newTransaction.type === 'deposit' && (now - lastAction.time < 300000); // 5 minutos
+      const isDecisionCorrected = lastAction?.type === 'withdrawal' && newTransaction.type === 'deposit' && (now - lastAction.time < 300000) && lastAction.savingId === selectedSavingId;
 
       if (isCompleting) {
         setFeedbackOverlay({ isVisible: true, message: getRandomPhrase('onComplete'), imageSrc: GIF_METAS, bgColor: "bg-yellow-500", textColor: "text-white" });
@@ -204,7 +221,7 @@ const Savings: React.FC = () => {
         setFeedbackOverlay({ isVisible: true, message: getRandomPhrase('onWithdraw'), imageSrc: PIGGY_SAD, bgColor: "bg-slate-900", textColor: "text-white" });
       }
 
-      setLastAction({ type: newTransaction.type, time: now });
+      setLastAction({ type: newTransaction.type, time: now, savingId: selectedSavingId! });
     }
   };
 
@@ -214,20 +231,23 @@ const Savings: React.FC = () => {
     showSuccess("Meta eliminada");
   };
 
-  // Lógica de Cochinitos Evolutivos
-  const getPiggyImage = (saving: any) => {
+  // Cochinitos Evolutivos
+  const getPiggyStatus = (saving: any) => {
     if (saving.completion_date || (saving.target_amount && saving.current_balance >= saving.target_amount)) {
-      return GIF_METAS; // Completado
+      return { img: GIF_METAS, label: "¡Logrado!", sub: "Cochinito fiestero" };
     }
     
-    // Inactividad > 7 días
     const daysSinceUpdate = differenceInDays(new Date(), parseISO(saving.updated_at || saving.created_at));
-    if (daysSinceUpdate > 7) return PIGGY_SAD;
+    if (daysSinceUpdate > 7) {
+      return { img: PIGGY_SAD, label: "Abandonada", sub: getRandomPhrase('onInactivityReminder') };
+    }
 
     const progress = saving.target_amount ? (saving.current_balance / saving.target_amount) * 100 : 0;
+    if (progress < 30) {
+      return { img: PIGGY_SAD, label: "Hambriento", sub: "Necesito comida..." };
+    }
     
-    if (progress < 30) return PIGGY_SAD; // Muy poco ahorro
-    return PIGGY_STANDARD; // Ahorro normal o avanzado
+    return { img: PIGGY_STANDARD, label: "Creciendo", sub: "¡Vamos bien!" };
   };
 
   const filteredSavings = savings.filter(s => s.name.toLowerCase().includes(searchTerm.toLowerCase()));
@@ -255,24 +275,7 @@ const Savings: React.FC = () => {
         </Card>
       </header>
 
-      {/* MARQUESINA MOTIVACIONAL (60 FRASES) */}
-      <section className="bg-indigo-50/50 border border-indigo-100 rounded-2xl p-4 overflow-hidden relative">
-        <div className="flex items-center gap-3 absolute left-4 top-1/2 -translate-y-1/2 z-10 bg-indigo-50/80 backdrop-blur-sm pr-4">
-          <Zap className="h-4 w-4 text-indigo-600 fill-indigo-600 animate-pulse" />
-          <span className="text-[10px] font-black uppercase text-indigo-600 tracking-tighter">Recordatorio:</span>
-        </div>
-        <div className="whitespace-nowrap overflow-hidden">
-           <motion.div 
-            animate={{ x: ["100%", "-200%"] }}
-            transition={{ duration: 40, repeat: Infinity, ease: "linear" }}
-            className="inline-block pl-[20%] text-sm font-bold text-slate-600"
-           >
-             {MOTIVATIONAL_PHRASES.join(" • ")}
-           </motion.div>
-        </div>
-      </section>
-
-      {/* FILTROS Y BUSQUEDA */}
+      {/* BUSQUEDA Y ACCIÓN */}
       <section className="flex flex-col md:flex-row gap-4 items-center justify-between">
         <div className="relative flex-1 w-full">
           <Search className="absolute left-4 top-3.5 h-4 w-4 text-slate-400" />
@@ -283,23 +286,22 @@ const Savings: React.FC = () => {
         </Button>
       </section>
 
-      {/* LISTA DE METAS (TARJETAS) */}
+      {/* LISTA DE METAS */}
       <section className="grid grid-cols-1 sm:grid-cols-2 gap-6">
         <AnimatePresence mode="popLayout">
           {filteredSavings.map((saving, i) => {
+            const status = getPiggyStatus(saving);
             const progress = saving.target_amount ? Math.min(100, (saving.current_balance / saving.target_amount) * 100) : 0;
             const isCompleted = saving.completion_date || (saving.target_amount && saving.current_balance >= saving.target_amount);
-            const daysSinceUpdate = differenceInDays(new Date(), parseISO(saving.updated_at || saving.created_at));
-            const isInactive = !isCompleted && daysSinceUpdate > 7;
 
             return (
               <motion.div key={saving.id} layout initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: i * 0.05 }}>
                 <Card className={cn(
                   "rounded-[2.5rem] border-none shadow-sm hover:shadow-xl transition-all bg-white overflow-hidden group relative",
-                  isInactive && "bg-slate-50/80 border-dashed border-2 border-slate-200"
+                  status.label === "Abandonada" && "bg-slate-50/80 border-dashed border-2 border-slate-200"
                 )}>
-                  {isInactive && (
-                    <div className="absolute top-4 right-14 bg-amber-100 text-amber-700 text-[8px] font-black uppercase px-2 py-0.5 rounded-full flex items-center gap-1 z-20">
+                  {status.label === "Abandonada" && (
+                    <div className="absolute top-4 right-14 bg-amber-100 text-amber-700 text-[8px] font-black uppercase px-2 py-0.5 rounded-full flex items-center gap-1 z-20 animate-pulse">
                       <AlertCircle className="h-2.5 w-2.5" /> Meta Abandonada
                     </div>
                   )}
@@ -309,16 +311,17 @@ const Savings: React.FC = () => {
                       <div className="flex items-center gap-4">
                         <div className="relative">
                           <div 
-                            className="h-16 w-16 rounded-2xl flex items-center justify-center shadow-inner shrink-0 overflow-hidden"
+                            className="h-20 w-20 rounded-3xl flex items-center justify-center shadow-inner shrink-0 overflow-hidden"
                             style={{ backgroundColor: `${saving.color}15` }}
                           >
-                            <img src={getPiggyImage(saving)} className={cn("h-12 w-12 object-contain", isInactive && "grayscale opacity-60")} alt="Status" />
+                            <img src={status.img} className={cn("h-14 w-14 object-contain", status.label === "Abandonada" && "grayscale opacity-60")} alt="Status" />
                           </div>
-                          {isCompleted && <div className="absolute -top-2 -right-2 bg-yellow-400 rounded-full p-1 shadow-lg animate-bounce"><Trophy className="h-4 w-4 text-white" /></div>}
+                          {isCompleted && <div className="absolute -top-2 -right-2 bg-yellow-400 rounded-full p-1.5 shadow-lg animate-bounce"><Trophy className="h-4 w-4 text-white" /></div>}
                         </div>
                         <div className="flex flex-col">
-                          <span className={cn("font-black text-slate-900 text-lg leading-tight", isInactive && "text-slate-400")}>{saving.name}</span>
-                          <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest flex items-center gap-1">
+                          <span className={cn("font-black text-slate-900 text-lg leading-tight", status.label === "Abandonada" && "text-slate-400")}>{saving.name}</span>
+                          <span className="text-[9px] font-black uppercase text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full w-fit mt-1">{status.label}</span>
+                          <span className="text-[10px] font-bold text-slate-400 mt-1 flex items-center gap-1">
                             <Clock className="h-3 w-3" /> {saving.target_date ? format(parseISO(saving.target_date), 'dd MMM yyyy', { locale: es }) : 'Sin fecha'}
                           </span>
                         </div>
@@ -335,10 +338,16 @@ const Savings: React.FC = () => {
                       </DropdownMenu>
                     </div>
 
+                    <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                      <p className="text-[10px] font-black text-slate-400 uppercase italic leading-tight">
+                        "{status.sub}"
+                      </p>
+                    </div>
+
                     <div className="space-y-2">
                       <div className="flex justify-between items-end">
                         <div className="flex flex-col">
-                          <span className="text-[10px] font-black uppercase text-slate-400">Llevas ahorrado</span>
+                          <span className="text-[10px] font-black uppercase text-slate-400">Ahorrado</span>
                           <span className="text-2xl font-black text-slate-900">${saving.current_balance.toLocaleString()}</span>
                         </div>
                         {saving.target_amount && (
@@ -352,10 +361,10 @@ const Savings: React.FC = () => {
                       {saving.target_amount && (
                         <div className="space-y-1.5 pt-2">
                           <div className="flex justify-between text-[10px] font-black uppercase tracking-tighter">
-                            <span style={{ color: saving.color }}>{progress.toFixed(0)}% Completado</span>
-                            <span className="text-slate-300">Faltan ${(saving.target_amount - saving.current_balance).toLocaleString()}</span>
+                            <span style={{ color: saving.color }}>{progress.toFixed(0)}%</span>
+                            <span className="text-slate-300">Falta ${(saving.target_amount - saving.current_balance).toLocaleString()}</span>
                           </div>
-                          <div className="h-3 w-full bg-slate-100 rounded-full overflow-hidden">
+                          <div className="h-2.5 w-full bg-slate-100 rounded-full overflow-hidden">
                             <motion.div initial={{ width: 0 }} animate={{ width: `${progress}%` }} className="h-full rounded-full" style={{ backgroundColor: saving.color }} />
                           </div>
                         </div>
