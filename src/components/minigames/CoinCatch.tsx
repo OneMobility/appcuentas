@@ -1,42 +1,37 @@
+"use client";
+
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Maximize, Minimize, RefreshCw, Trophy, Lightbulb, Sparkles } from "lucide-react";
+import { Trophy, RefreshCw, Lightbulb, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { getRandomTip, OinkashTip } from "@/utils/oinkash-tips";
 
 /**
- * 🪙 COIN CATCH — Con Efectos de Sonido
+ * 🪙 COIN CATCH — Versión Corregida
  */
 
 const STARTING_LIVES = 3;
 const PIG_Y_PERCENT = 77; 
-const CATCH_LINE_START = 73; 
-const CATCH_LINE_END = 81;   
-const MISS_LINE = 90;        
-const BASKET_HALF_WIDTH = 10; 
-const CATCH_TOLERANCE = 8; 
+const CATCH_LINE_START = 70; 
+const CATCH_LINE_END = 85;   
+const MISS_LINE = 95;        
+const BASKET_HALF_WIDTH = 12; 
+const CATCH_TOLERANCE = 10; 
 const STREAK_PER_MULT_LEVEL = 3; 
 const MAX_MULTIPLIER = 5;
-const BASE_MOVE_SPEED = 100; 
+const BASE_MOVE_SPEED = 120; 
 
-const SAVING_TIPS = [
-  "¡Prepara tu café en casa y ahorra hasta $1,200 al mes! ☕",
-  "¡Aplica la regla de las 48 horas antes de comprar algo por impulso! ⏱️",
-  "¡Usa efectivo para tus salidas; cuando se acaba, se acaba la fiesta! 💵",
-  "¡Revisa tus suscripciones y cancela la que no hayas usado este mes! ✂️",
-  "¡Compara precios en al menos 3 tiendas antes de una compra grande! 🔍",
-  "¡Ahorra el cambio de tus compras diarias en un frasco real! 🫙",
-  "¡Haz una lista de súper y apégate a ella estrictamente! 🛒",
-  "¡Desconecta los aparatos que no uses para evitar el consumo vampiro! 🔌"
-];
+// URLs de recursos desde Supabase
+const PIG_MASCOT = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/3bd895fd1ea2a510faa68f516cfc88ad9408d50cff95156f2fb48a61d8d7349d.png";
+const COIN_IMG = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/IconoJuego2.png";
 
 type Kind = "coin" | "bill" | "bag" | "gasto" | "impuesto" | "factura";
 
 const ITEM_DEFS: Record<Kind, { emoji?: string; image?: string; points: number; bad: boolean; weight: number }> = {
-  coin: { image: "/game-coin.png", points: 10, bad: false, weight: 5 },
-  bill: { image: "/game-coin.png", points: 25, bad: false, weight: 3 },
-  bag: { image: "/game-coin.png", points: 50, bad: false, weight: 1 },
+  coin: { image: COIN_IMG, points: 10, bad: false, weight: 5 },
+  bill: { emoji: "💵", points: 25, bad: false, weight: 3 },
+  bag: { emoji: "💰", points: 50, bad: false, weight: 1 },
   gasto: { emoji: "💸", points: 0, bad: true, weight: 4 },
   impuesto: { emoji: "🏛️", points: 0, bad: true, weight: 3 },
   factura: { emoji: "🧾", points: -20, bad: true, weight: 3 },
@@ -82,7 +77,7 @@ export default function CoinCatch() {
   const lastTipThreshold = useRef(0);
   const lastBienThreshold = useRef(0);
 
-  // Refs de Audio
+  // Audio Refs
   const audioEndRef = useRef<HTMLAudioElement | null>(null);
   const audioCoinRef = useRef<HTMLAudioElement | null>(null);
   const audioErrorRef = useRef<HTMLAudioElement | null>(null);
@@ -95,9 +90,7 @@ export default function CoinCatch() {
     audioErrorRef.current = new Audio("/sounds/error.mp3");
     audioAchievementRef.current = new Audio("/sounds/achievement.mp3");
     audioTipRef.current = new Audio("/sounds/tip.mp3");
-  }, []);
-
-  useEffect(() => {
+    
     const saved = localStorage.getItem("oinkash_coincatch_best");
     if (saved) setBest(parseInt(saved));
   }, []);
@@ -105,7 +98,7 @@ export default function CoinCatch() {
   const playSound = (audio: HTMLAudioElement | null) => {
     if (audio) {
       audio.currentTime = 0;
-      audio.play().catch(e => console.warn("Audio play blocked", e));
+      audio.play().catch(() => {});
     }
   };
 
@@ -122,9 +115,11 @@ export default function CoinCatch() {
       setBest(scoreRef.current);
       localStorage.setItem("oinkash_coincatch_best", scoreRef.current.toString());
     }
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
   }, [best]);
 
   const startGame = useCallback(() => {
+    // Resetear TODAS las referencias de juego
     itemsRef.current = [];
     nextIdRef.current = 0;
     spawnAccumulatorRef.current = 0;
@@ -135,6 +130,7 @@ export default function CoinCatch() {
     basketXRef.current = 50;
     lastTipThreshold.current = 0;
     lastBienThreshold.current = 0;
+    lastTimeRef.current = performance.now(); // Resetear tiempo base
 
     setItems([]);
     setScore(0);
@@ -145,13 +141,9 @@ export default function CoinCatch() {
     setPhase("playing");
   }, []);
 
-  const continueAfterTip = () => {
-    setPhase("playing");
-    lastTimeRef.current = performance.now();
-  };
-
   useEffect(() => {
     if (phase !== "playing") return;
+    
     lastTimeRef.current = performance.now();
 
     const tick = (now: number) => {
@@ -159,6 +151,7 @@ export default function CoinCatch() {
       lastTimeRef.current = now;
       elapsedRef.current += dt;
 
+      // Eventos por puntaje
       if (scoreRef.current >= lastBienThreshold.current + 2500) {
         lastBienThreshold.current = Math.floor(scoreRef.current / 2500) * 2500;
         setShowBien(true);
@@ -166,23 +159,14 @@ export default function CoinCatch() {
         setTimeout(() => setShowBien(false), 1500);
       }
 
-      if (scoreRef.current >= lastTipThreshold.current + 5000) {
-        lastTipThreshold.current = Math.floor(scoreRef.current / 5000) * 5000;
-        setCurrentTip(SAVING_TIPS[Math.floor(Math.random() * SAVING_TIPS.length)]);
-        setPhase("tip");
-        playSound(audioTipRef.current);
-        return; 
-      }
-
       const currentMoveSpeed = BASE_MOVE_SPEED;
-
       if (keysRef.current.has("ArrowLeft")) basketXRef.current = Math.max(BASKET_HALF_WIDTH, basketXRef.current - currentMoveSpeed * dt);
       if (keysRef.current.has("ArrowRight")) basketXRef.current = Math.min(100 - BASKET_HALF_WIDTH, basketXRef.current + currentMoveSpeed * dt);
 
-      const timeProgress = Math.min(1, elapsedRef.current / 120);
-      const scoreSpeedMult = 1 + (Math.floor(scoreRef.current / 2000) * 0.12); 
-      const spawnInterval = (0.8 - 0.4 * timeProgress) / scoreSpeedMult; 
-      const fallDuration = (3.0 - 1.2 * timeProgress) / scoreSpeedMult; 
+      // Spawn
+      const scoreSpeedMult = 1 + (Math.floor(scoreRef.current / 2000) * 0.15); 
+      const spawnInterval = 1.0 / scoreSpeedMult; 
+      const fallDuration = Math.max(1.5, 3.5 - (scoreSpeedMult * 0.2)); 
 
       spawnAccumulatorRef.current += dt;
       if (spawnAccumulatorRef.current >= spawnInterval) {
@@ -199,10 +183,12 @@ export default function CoinCatch() {
         });
       }
 
+      // Actualizar Items
       const remaining: FallingItem[] = [];
       for (const item of itemsRef.current) {
         const newY = item.y + item.speed * dt;
         
+        // Colisión
         if (newY >= CATCH_LINE_START && newY <= CATCH_LINE_END) {
           const dx = Math.abs(item.x - basketXRef.current);
           if (dx <= CATCH_TOLERANCE) {
@@ -228,14 +214,13 @@ export default function CoinCatch() {
         }
         
         if (newY > MISS_LINE) {
-          if (!ITEM_DEFS[item.kind].bad && item.y <= CATCH_LINE_END) {
-             streakRef.current = 0;
-          }
+          if (!ITEM_DEFS[item.kind].bad) streakRef.current = 0;
           continue; 
         }
 
         remaining.push({ ...item, y: newY });
       }
+      
       itemsRef.current = remaining;
       setItems([...itemsRef.current]);
       setBasketX(basketXRef.current);
@@ -243,6 +228,7 @@ export default function CoinCatch() {
       if (livesRef.current <= 0) { endGame(); return; }
       rafRef.current = requestAnimationFrame(tick);
     };
+    
     rafRef.current = requestAnimationFrame(tick);
     return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
   }, [phase, endGame, showFlash]);
@@ -265,28 +251,24 @@ export default function CoinCatch() {
   };
 
   return (
-    <div className="w-full h-full bg-slate-950">
+    <div className="w-full h-full bg-slate-950 flex flex-col">
       <div 
         ref={fieldRef}
         className={cn(
-          "relative w-full h-full overflow-hidden touch-none select-none transition-all duration-300",
+          "relative flex-1 overflow-hidden touch-none select-none transition-all duration-300",
           flash === "good" ? "ring-8 ring-emerald-500/30 ring-inset" : flash === "bad" ? "ring-8 ring-rose-500/30 ring-inset" : ""
         )}
         onPointerDown={(e) => { draggingRef.current = true; handlePointer(e); }}
         onPointerMove={(e) => draggingRef.current && handlePointer(e)}
         onPointerUp={() => draggingRef.current = false}
       >
-        <div 
-          className="absolute inset-0 bg-cover bg-center" 
-          style={{ backgroundImage: 'url(/game-bg.png)' }} 
-        />
+        {/* Fondo con degradado si la imagen falla */}
+        <div className="absolute inset-0 bg-gradient-to-b from-indigo-950 via-slate-900 to-indigo-900 opacity-50" />
 
         <AnimatePresence>
           {showBien && (
             <motion.div 
-              initial={{ scale: 0, opacity: 0, y: 50 }}
-              animate={{ scale: 1.5, opacity: 1, y: -20 }}
-              exit={{ scale: 2, opacity: 0 }}
+              initial={{ scale: 0, opacity: 0 }} animate={{ scale: 1.5, opacity: 1 }} exit={{ scale: 2, opacity: 0 }}
               className="absolute inset-0 flex items-center justify-center z-40 pointer-events-none"
             >
               <div className="bg-indigo-600 text-white px-6 py-2 rounded-full font-black text-2xl shadow-2xl border-4 border-white">
@@ -296,12 +278,11 @@ export default function CoinCatch() {
           )}
         </AnimatePresence>
 
+        {/* HUD */}
         <div className="absolute top-16 left-0 right-0 p-6 flex justify-between items-start z-30 pointer-events-none">
-          <div className="flex flex-col gap-1">
-            <div className="bg-black/40 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/10">
-              <p className="text-[10px] font-black text-white/60 uppercase tracking-widest">Puntos</p>
-              <p className="text-2xl font-black text-white tracking-tighter">{score.toLocaleString()}</p>
-            </div>
+          <div className="bg-black/40 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/10 text-white">
+            <p className="text-[10px] font-black uppercase opacity-60">Score</p>
+            <p className="text-2xl font-black">{score.toLocaleString()}</p>
           </div>
 
           <div className="flex flex-col items-end gap-2">
@@ -310,104 +291,80 @@ export default function CoinCatch() {
                 <span key={i} className={cn("text-xl transition-all duration-300", i >= lives && "grayscale opacity-20 scale-75")}>🐷</span>
               ))}
             </div>
-            {multiplier > 1 && (
-              <motion.div 
-                initial={{ scale: 0 }} animate={{ scale: 1 }}
-                className="bg-yellow-400 text-yellow-950 text-[10px] font-black px-3 py-1 rounded-full shadow-lg"
-              >
-                x{multiplier} 🔥
-              </motion.div>
-            )}
           </div>
         </div>
 
+        {/* Items Cayendo */}
         {items.map((item) => {
           const def = ITEM_DEFS[item.kind];
           return (
             <div 
               key={item.id} 
-              className="absolute pointer-events-none transform -translate-x-1/2 -translate-y-1/2 drop-shadow-lg z-20"
+              className="absolute pointer-events-none transform -translate-x-1/2 -translate-y-1/2 z-20"
               style={{ left: `${item.x}%`, top: `${item.y}%` }}
             >
               {def.image ? (
-                <img src={def.image} className="w-10 h-10 object-contain" />
+                <img src={def.image} className="w-12 h-12 object-contain drop-shadow-lg" alt="coin" />
               ) : (
-                <span className="text-4xl">{def.emoji}</span>
+                <span className="text-4xl drop-shadow-md">{def.emoji}</span>
               )}
             </div>
           );
         })}
 
+        {/* El Personaje (Cerdito) */}
         <div 
-          className="absolute z-20 pointer-events-none transition-opacity"
+          className="absolute z-20 pointer-events-none"
           style={{ 
             left: `${basketX}%`, 
             top: `${PIG_Y_PERCENT}%`, 
             transform: 'translate(-50%, -50%)',
-            width: '90px',
-            height: '90px',
+            width: '100px',
+            height: '100px',
           }}
         >
-          <div className="absolute bottom-1 left-1/2 -translate-x-1/2 w-12 h-3 bg-black/20 blur-md rounded-full" />
-          <img src="/game-character.png" className="w-full h-full object-contain drop-shadow-md" />
+          <div className="absolute bottom-1 left-1/2 -translate-x-1/2 w-14 h-4 bg-black/30 blur-md rounded-full" />
+          <img src={PIG_MASCOT} className="w-full h-full object-contain drop-shadow-xl" alt="piggy" />
         </div>
 
+        {/* Overlays */}
         <AnimatePresence>
           {phase === "idle" && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex flex-col items-center justify-center p-8 text-center">
-              <img src="/game-character.png" className="h-32 w-32 object-contain mb-8" />
-              <h2 className="text-4xl font-black text-white tracking-tighter mb-2">COIN CATCH</h2>
-              <p className="text-slate-300 text-sm font-medium mb-8 max-w-[240px]">Atrapa monedas para ganar puntos. ¡Las facturas 🧾 te restan vida!</p>
-              <Button onClick={startGame} className="h-16 px-12 rounded-full bg-indigo-600 text-white font-black text-xl shadow-2xl hover:bg-indigo-700">¡INICIAR! 🐷</Button>
-            </motion.div>
-          )}
-
-          {phase === "tip" && (
-            <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="absolute inset-0 z-[100] bg-indigo-950/95 backdrop-blur-md flex flex-col items-center justify-center p-8 text-center text-white">
-              <div className="bg-white/10 p-8 rounded-[3rem] border border-white/20 shadow-2xl space-y-6">
-                <div className="h-20 w-20 bg-yellow-400 rounded-3xl flex items-center justify-center shadow-lg rotate-12 mx-auto">
-                  <Lightbulb className="h-10 w-10 text-yellow-950" />
-                </div>
-                <div className="space-y-2">
-                  <h3 className="text-2xl font-black tracking-tighter flex items-center justify-center gap-2">
-                    <Sparkles className="h-5 w-5 text-yellow-400" /> CONSEJO OINKASH
-                  </h3>
-                  <p className="text-lg font-bold leading-tight italic">"{currentTip}"</p>
-                </div>
-                <Button onClick={continueAfterTip} className="w-full h-16 rounded-3xl bg-white text-indigo-900 font-black text-xl">
-                  ¡VAMOS! 🚀
-                </Button>
-              </div>
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex flex-col items-center justify-center p-8 text-center text-white">
+              <img src={PIG_MASCOT} className="h-40 w-40 object-contain mb-8 animate-bounce" alt="start" />
+              <h2 className="text-5xl font-black tracking-tighter mb-4">COIN CATCH</h2>
+              <p className="text-slate-300 text-sm font-medium mb-10 max-w-[280px]">
+                Desliza para atrapar monedas y billetes. Evita las facturas 🧾 y deudas.
+              </p>
+              <Button onClick={startGame} className="h-16 px-12 rounded-full bg-indigo-600 text-white font-black text-xl shadow-2xl active:scale-95 transition-transform">
+                ¡EMPEZAR! 🚀
+              </Button>
             </motion.div>
           )}
 
           {phase === "over" && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="absolute inset-0 z-[100] bg-rose-950/95 backdrop-blur-xl flex flex-col items-center justify-center p-6 text-center text-white overflow-y-auto">
-              <Trophy className="h-16 w-16 text-yellow-400 mb-4 shrink-0" />
-              <h2 className="text-3xl font-black tracking-tighter mb-2">¡FIN DEL JUEGO!</h2>
-              <div className="bg-white/10 px-8 py-4 rounded-3xl mb-6 border border-white/10 shrink-0">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="absolute inset-0 z-[100] bg-rose-950/95 backdrop-blur-xl flex flex-col items-center justify-center p-6 text-center text-white">
+              <Trophy className="h-20 w-20 text-yellow-400 mb-4" />
+              <h2 className="text-4xl font-black tracking-tighter mb-2">¡GAME OVER!</h2>
+              <div className="bg-white/10 px-10 py-6 rounded-3xl mb-8 border border-white/10">
                 <p className="text-[10px] font-black uppercase text-white/50 mb-1">Puntaje Final</p>
-                <p className="text-4xl font-black text-white">{score.toLocaleString()}</p>
+                <p className="text-5xl font-black">{score.toLocaleString()}</p>
               </div>
 
               {gameOverTip && (
-                <motion.div 
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="bg-indigo-600/30 border border-indigo-500/30 p-4 rounded-3xl mb-8 max-w-xs"
-                >
+                <div className="bg-indigo-600/30 border border-indigo-500/30 p-5 rounded-3xl mb-10 max-w-xs">
                   <div className="flex items-center justify-center gap-2 mb-2">
                     <Lightbulb className="h-4 w-4 text-yellow-400" />
-                    <span className="text-[10px] font-black uppercase tracking-widest text-indigo-200">Consejo Oinkash</span>
+                    <span className="text-[10px] font-black uppercase tracking-widest text-indigo-200">Tip del Cerdito</span>
                   </div>
                   <p className="text-sm font-bold italic leading-tight text-indigo-50">
                     "{gameOverTip.text}"
                   </p>
-                </motion.div>
+                </div>
               )}
 
-              <Button onClick={startGame} className="h-14 px-10 rounded-full bg-white text-slate-900 font-black text-lg shadow-xl flex gap-3 shrink-0">
-                <RefreshCw className="h-5 w-5" /> REINTENTAR
+              <Button onClick={startGame} className="h-16 px-12 rounded-full bg-white text-slate-900 font-black text-xl shadow-xl flex gap-3 active:scale-95 transition-transform">
+                <RefreshCw className="h-6 w-6" /> VOLVER A INTENTAR
               </Button>
             </motion.div>
           )}
