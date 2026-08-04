@@ -8,22 +8,22 @@ import { cn } from "@/lib/utils";
 import { getRandomTip, OinkashTip } from "@/utils/oinkash-tips";
 
 /**
- * 🪙 COIN CATCH — Versión Premium con Niveles y Metas
+ * 🪙 COIN CATCH — Versión Premium Corregida
  */
 
 const STARTING_LIVES = 3;
-const PIG_Y_PERCENT = 77; 
-const CATCH_LINE_START = 70; 
+const PIG_Y_PERCENT = 75; 
+const CATCH_LINE_START = 65; 
 const CATCH_LINE_END = 85;   
 const MISS_LINE = 95;        
 const BASKET_HALF_WIDTH = 12; 
-const CATCH_TOLERANCE = 10; 
+const CATCH_TOLERANCE = 12; 
 const STREAK_PER_MULT_LEVEL = 3; 
 const MAX_MULTIPLIER = 5;
-const BASE_MOVE_SPEED = 140; 
+const BASE_MOVE_SPEED = 150; 
 
 // Metas por nivel
-const LEVEL_GOALS = [500, 1500, 3000, 5000, 10000];
+const LEVEL_GOALS = [500, 1500, 3000, 6000, 12000];
 
 // URLs de recursos
 const PIG_MASCOT = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/3bd895fd1ea2a510faa68f516cfc88ad9408d50cff95156f2fb48a61d8d7349d.png";
@@ -62,6 +62,7 @@ export default function CoinCatch() {
   const [basketX, setBasketX] = useState(50);
   const [flash, setFlash] = useState<"good" | "bad" | null>(null);
   const [gameOverTip, setGameOverTip] = useState<OinkashTip | null>(null);
+  const [imgError, setImgError] = useState(false);
   
   const fieldRef = useRef<HTMLDivElement>(null);
   const itemsRef = useRef<FallingItem[]>([]);
@@ -117,7 +118,9 @@ export default function CoinCatch() {
   }, [best]);
 
   const startGame = useCallback(() => {
-    // Resetear todo al estado inicial
+    // RESET TOTAL
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    
     itemsRef.current = [];
     nextIdRef.current = 0;
     spawnAccumulatorRef.current = 0;
@@ -126,6 +129,7 @@ export default function CoinCatch() {
     scoreRef.current = 0;
     levelRef.current = 1;
     basketXRef.current = 50;
+    lastTimeRef.current = performance.now();
     
     setItems([]);
     setScore(0);
@@ -135,8 +139,6 @@ export default function CoinCatch() {
     setBasketX(50);
     setGameOverTip(null);
     setPhase("playing");
-    
-    lastTimeRef.current = performance.now();
   }, []);
 
   useEffect(() => {
@@ -147,44 +149,45 @@ export default function CoinCatch() {
       const dt = Math.min(0.05, (now - lastTimeRef.current) / 1000);
       lastTimeRef.current = now;
 
-      // Movimiento con teclado
+      // Teclado
       if (keysRef.current.has("ArrowLeft")) basketXRef.current = Math.max(BASKET_HALF_WIDTH, basketXRef.current - BASE_MOVE_SPEED * dt);
       if (keysRef.current.has("ArrowRight")) basketXRef.current = Math.min(100 - BASKET_HALF_WIDTH, basketXRef.current + BASE_MOVE_SPEED * dt);
 
-      // Lógica de Niveles
+      // Metas de nivel
       const currentGoal = LEVEL_GOALS[levelRef.current - 1] || 100000;
       if (scoreRef.current >= currentGoal) {
         levelRef.current += 1;
         setLevel(levelRef.current);
         playSound(audioLevelUpRef.current);
+        livesRef.current = Math.min(STARTING_LIVES, livesRef.current + 1);
+        setLives(livesRef.current);
       }
 
-      // Spawn según dificultad del nivel
-      const difficultyMult = 1 + (levelRef.current - 1) * 0.25;
-      const spawnInterval = 1.0 / (0.8 * difficultyMult); 
-      const fallSpeed = 50 * (1 + (levelRef.current - 1) * 0.15);
+      // Spawn
+      const difficultyMult = 1 + (levelRef.current - 1) * 0.3;
+      const spawnInterval = 1.2 / difficultyMult; 
+      const fallSpeed = 55 * (1 + (levelRef.current - 1) * 0.2);
 
       spawnAccumulatorRef.current += dt;
       if (spawnAccumulatorRef.current >= spawnInterval) {
         spawnAccumulatorRef.current = 0;
-        const isBad = Math.random() < 0.35;
+        const isBad = Math.random() < (0.3 + (levelRef.current * 0.05));
         const kinds = isBad ? BAD_KINDS : GOOD_KINDS;
         const kind = kinds[Math.floor(Math.random() * kinds.length)];
         itemsRef.current.push({
           id: nextIdRef.current++,
           kind,
-          x: 10 + Math.random() * 80,
+          x: 15 + Math.random() * 70,
           y: -10,
-          speed: fallSpeed + Math.random() * 20,
+          speed: fallSpeed + Math.random() * 15,
         });
       }
 
-      // Actualizar Items
+      // Update Items
       const remaining: FallingItem[] = [];
       for (const item of itemsRef.current) {
         const newY = item.y + item.speed * dt;
         
-        // Colisión con el cerdito
         if (newY >= CATCH_LINE_START && newY <= CATCH_LINE_END) {
           const dx = Math.abs(item.x - basketXRef.current);
           if (dx <= CATCH_TOLERANCE) {
@@ -213,7 +216,6 @@ export default function CoinCatch() {
           if (!ITEM_DEFS[item.kind].bad) streakRef.current = 0;
           continue; 
         }
-
         remaining.push({ ...item, y: newY });
       }
       
@@ -229,12 +231,13 @@ export default function CoinCatch() {
     return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
   }, [phase, endGame, showFlash]);
 
-  // Manejo de controles Globales
+  // Controles Globales (Espacio e interacción)
   useEffect(() => {
     const handleDown = (e: KeyboardEvent) => {
       if (e.key === "ArrowLeft" || e.key === "ArrowRight") keysRef.current.add(e.key);
       if (e.code === "Space") {
-        if (phase === "idle" || phase === "over") startGame();
+        e.preventDefault();
+        if (phase !== "playing") startGame();
       }
     };
     const handleUp = (e: KeyboardEvent) => keysRef.current.delete(e.key);
@@ -244,10 +247,12 @@ export default function CoinCatch() {
   }, [phase, startGame]);
 
   const handlePointer = (e: React.PointerEvent | React.TouchEvent) => {
-    if (phase !== "playing") return;
+    if (phase !== "playing") {
+      startGame(); // Si haces clic fuera del juego (idle o over), inicia
+      return;
+    }
     const rect = fieldRef.current?.getBoundingClientRect();
     if (!rect) return;
-    
     const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
     const pct = ((clientX - rect.left) / rect.width) * 100;
     basketXRef.current = Math.max(BASKET_HALF_WIDTH, Math.min(100 - BASKET_HALF_WIDTH, pct));
@@ -260,11 +265,10 @@ export default function CoinCatch() {
 
   return (
     <div className="w-full h-full bg-slate-950 flex flex-col relative overflow-hidden font-sans select-none touch-none">
-      {/* Zona de Juego */}
       <div 
         ref={fieldRef}
         className={cn(
-          "relative flex-1 transition-all duration-200",
+          "relative flex-1 transition-all duration-200 z-10",
           flash === "good" ? "bg-emerald-500/10" : flash === "bad" ? "bg-rose-500/10" : "bg-transparent"
         )}
         onPointerDown={(e) => { draggingRef.current = true; handlePointer(e); }}
@@ -275,19 +279,19 @@ export default function CoinCatch() {
         onTouchEnd={() => draggingRef.current = false}
       >
         {/* HUD Superior */}
-        <div className="absolute top-16 left-0 right-0 p-6 flex flex-col gap-4 z-40 pointer-events-none">
+        <div className="absolute top-16 left-0 right-0 p-6 flex flex-col gap-4 z-50 pointer-events-none">
           <div className="flex justify-between items-start">
-            <div className="bg-black/40 backdrop-blur-xl px-5 py-3 rounded-2xl border border-white/10 text-white shadow-2xl">
+            <div className="bg-black/60 backdrop-blur-xl px-5 py-3 rounded-2xl border border-white/10 text-white shadow-2xl">
               <p className="text-[10px] font-black uppercase opacity-60 tracking-widest">Saldo Ahorrado</p>
-              <p className="text-3xl font-black">${score.toLocaleString()}</p>
+              <p className="text-3xl font-black text-indigo-400">${score.toLocaleString()}</p>
             </div>
 
             <div className="flex flex-col items-end gap-2">
-              <div className="flex gap-2 bg-black/40 backdrop-blur-xl p-3 rounded-2xl border border-white/10 shadow-2xl">
+              <div className="flex gap-2 bg-black/60 backdrop-blur-xl p-3 rounded-2xl border border-white/10 shadow-2xl">
                 {Array.from({ length: STARTING_LIVES }).map((_, i) => (
                   <motion.span 
                     key={i} 
-                    animate={i >= lives ? { scale: 0.8, opacity: 0.2, filter: 'grayscale(1)' } : { scale: 1 }}
+                    animate={i >= lives ? { scale: 0.8, opacity: 0.1, filter: 'grayscale(1)' } : { scale: 1.1 }}
                     className="text-2xl"
                   >
                     🐷
@@ -308,45 +312,57 @@ export default function CoinCatch() {
           {/* Barra de Meta de Nivel */}
           <div className="w-full max-w-xs mx-auto space-y-1.5">
             <div className="flex justify-between items-end px-1">
-              <span className="text-[10px] font-black text-indigo-300 uppercase tracking-tighter">NIVEL {level}</span>
-              <span className="text-[10px] font-black text-indigo-300 uppercase tracking-tighter">META: ${currentLevelGoal}</span>
+              <span className="text-[10px] font-black text-white uppercase tracking-widest">Nivel {level}</span>
+              <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">Meta: ${currentLevelGoal}</span>
             </div>
             <div className="h-3 w-full bg-white/5 rounded-full border border-white/10 p-0.5 overflow-hidden">
                <motion.div 
-                 className="h-full bg-indigo-500 rounded-full shadow-[0_0_15px_rgba(99,102,241,0.5)]" 
+                 className="h-full bg-indigo-500 rounded-full shadow-[0_0_15px_rgba(99,102,241,0.6)]" 
                  animate={{ width: `${progressPercent}%` }}
                />
             </div>
           </div>
         </div>
 
-        {/* Personaje (Cerdito) */}
+        {/* Personaje (Cerdito) con Garantía de Visibilidad */}
         <div 
-          className="absolute z-30 pointer-events-none transition-transform duration-75"
+          className="absolute z-40 pointer-events-none transition-transform duration-75"
           style={{ 
             left: `${basketX}%`, 
             top: `${PIG_Y_PERCENT}%`, 
             transform: 'translate(-50%, -50%)',
-            width: '120px',
-            height: '120px',
+            width: '140px',
+            height: '140px',
           }}
         >
-          {/* Sombra */}
-          <div className="absolute bottom-2 left-1/2 -translate-x-1/2 w-16 h-4 bg-black/40 blur-lg rounded-full" />
-          {/* Imagen Principal */}
-          <img src={PIG_MASCOT} className="w-full h-full object-contain drop-shadow-2xl" alt="Oinkash" />
+          {/* Sombra Dinámica */}
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 w-20 h-4 bg-black/50 blur-xl rounded-full" />
           
-          {/* Efectos de Flash */}
+          {/* Fallback visual: si la imagen falla o tarda, se ve el círculo de color */}
+          <div className={cn("w-full h-full rounded-full flex items-center justify-center transition-opacity", imgError ? "bg-indigo-600/20" : "bg-transparent")}>
+             {!imgError ? (
+               <img 
+                src={PIG_MASCOT} 
+                className="w-full h-full object-contain drop-shadow-[0_10px_10px_rgba(0,0,0,0.5)]" 
+                alt="Oinkash" 
+                onError={() => setImgError(true)}
+              />
+             ) : (
+               <span className="text-7xl animate-pulse">🐷</span>
+             )}
+          </div>
+          
+          {/* Indicadores de Impacto */}
           <AnimatePresence>
             {flash && (
               <motion.div 
-                initial={{ opacity: 0, scale: 0.5 }} animate={{ opacity: 1, scale: 1.2 }} exit={{ opacity: 0 }}
+                initial={{ opacity: 0, scale: 0.5, y: 0 }} animate={{ opacity: 1, scale: 1.5, y: -40 }} exit={{ opacity: 0 }}
                 className={cn(
-                  "absolute -top-10 left-1/2 -translate-x-1/2 font-black text-xl italic",
+                  "absolute top-0 left-1/2 -translate-x-1/2 font-black text-2xl drop-shadow-lg",
                   flash === "good" ? "text-emerald-400" : "text-rose-500"
                 )}
               >
-                {flash === "good" ? "+$" : "¡OUCH!"}
+                {flash === "good" ? "+$" : "¡CRISIS!"}
               </motion.div>
             )}
           </AnimatePresence>
@@ -358,13 +374,13 @@ export default function CoinCatch() {
           return (
             <div 
               key={item.id} 
-              className="absolute pointer-events-none transform -translate-x-1/2 -translate-y-1/2 z-20"
+              className="absolute pointer-events-none transform -translate-x-1/2 -translate-y-1/2 z-30"
               style={{ left: `${item.x}%`, top: `${item.y}%` }}
             >
               {def.image ? (
-                <img src={def.image} className="w-12 h-12 object-contain drop-shadow-lg animate-pulse" alt="money" />
+                <img src={def.image} className="w-14 h-14 object-contain drop-shadow-xl animate-pulse" alt="item" />
               ) : (
-                <span className="text-4xl drop-shadow-md select-none">{def.emoji}</span>
+                <span className="text-5xl drop-shadow-xl select-none">{def.emoji}</span>
               )}
             </div>
           );
@@ -375,21 +391,20 @@ export default function CoinCatch() {
           {phase === "idle" && (
             <motion.div 
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} 
-              className="absolute inset-0 z-50 bg-slate-900/80 backdrop-blur-md flex flex-col items-center justify-center p-8 text-center text-white"
+              className="absolute inset-0 z-[60] bg-slate-900/90 backdrop-blur-md flex flex-col items-center justify-center p-8 text-center text-white"
             >
-              <div className="relative mb-8">
-                <div className="absolute inset-0 bg-indigo-500/20 blur-3xl rounded-full" />
-                <img src={PIG_MASCOT} className="h-40 w-40 object-contain relative z-10 animate-bounce" alt="Start" />
+              <div className="relative mb-10">
+                <div className="absolute inset-0 bg-indigo-500/30 blur-[60px] rounded-full" />
+                <img src={PIG_MASCOT} className="h-44 w-44 object-contain relative z-10 animate-bounce" alt="Logo" />
               </div>
-              <h2 className="text-5xl font-black tracking-tighter mb-4 italic">COIN CATCH</h2>
-              <div className="space-y-2 mb-10 max-w-[280px]">
-                <p className="text-indigo-200 text-sm font-bold uppercase tracking-widest">Atrapa la Prosperidad 💰</p>
-                <p className="text-slate-400 text-xs font-medium">Mueve el cerdito para recolectar monedas. Evita las facturas y deudas a toda costa.</p>
+              <h2 className="text-6xl font-black tracking-tighter mb-4 italic text-indigo-400">COIN CATCH</h2>
+              <div className="space-y-3 mb-12 max-w-[300px]">
+                <p className="text-white text-lg font-black uppercase tracking-widest">¡ATRAPA TUS SUEÑOS!</p>
+                <p className="text-slate-400 text-sm font-medium leading-relaxed">Recolecta monedas y billetes. Cuidado con las facturas 🧾, ¡te restan vida!</p>
               </div>
-              <Button onClick={startGame} className="h-20 px-12 rounded-3xl bg-indigo-600 text-white font-black text-2xl shadow-[0_15px_30px_-5px_rgba(79,70,229,0.5)] active:scale-95 transition-all">
-                ¡JUGAR AHORA!
+              <Button onClick={startGame} className="h-20 px-16 rounded-[2rem] bg-indigo-600 text-white font-black text-2xl shadow-[0_20px_40px_-10px_rgba(79,70,229,0.6)] active:scale-95 transition-all">
+                ¡JUGAR AHORA! 🚀
               </Button>
-              <p className="mt-6 text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em]">Presiona Espacio o Toca la pantalla</p>
             </motion.div>
           )}
 
@@ -398,39 +413,45 @@ export default function CoinCatch() {
               initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} 
               className="absolute inset-0 z-[100] bg-rose-950/95 backdrop-blur-2xl flex flex-col items-center justify-center p-6 text-center text-white"
             >
-              <div className="bg-white/10 p-4 rounded-3xl mb-4 border border-white/10">
-                <Trophy className="h-16 w-16 text-yellow-400 animate-pulse" />
+              <div className="bg-white/10 p-5 rounded-[2rem] mb-6 border border-white/10 shadow-2xl">
+                <Trophy className="h-20 w-20 text-yellow-400 animate-pulse" />
               </div>
-              <h2 className="text-4xl font-black tracking-tighter mb-2 italic">¡BANCARROTA!</h2>
+              <h2 className="text-5xl font-black tracking-tighter mb-2 italic">¡BANCARROTA!</h2>
               
-              <div className="bg-white/10 px-10 py-6 rounded-[2.5rem] mb-8 border border-white/10 shadow-inner">
-                <p className="text-[10px] font-black uppercase text-white/40 mb-1 tracking-widest">Puntaje Final</p>
-                <p className="text-6xl font-black text-white">${score.toLocaleString()}</p>
+              <div className="bg-black/40 px-12 py-8 rounded-[3rem] mb-8 border border-white/5 shadow-inner">
+                <p className="text-[11px] font-black uppercase text-slate-400 mb-2 tracking-[0.3em]">Ahorro Final</p>
+                <p className="text-7xl font-black text-white tracking-tighter">${score.toLocaleString()}</p>
                 {score >= best && score > 0 && (
-                  <p className="text-[9px] font-black text-yellow-400 uppercase mt-2">🌟 ¡NUEVO RÉCORD! 🌟</p>
+                  <p className="text-[10px] font-black text-yellow-400 uppercase mt-4 tracking-widest animate-bounce">🌟 ¡NUEVO RÉCORD MAESTRO! 🌟</p>
                 )}
               </div>
 
               {gameOverTip && (
-                <div className="bg-indigo-600/30 border border-indigo-500/20 p-5 rounded-[2rem] mb-10 max-w-xs backdrop-blur-sm">
+                <div className="bg-indigo-600/30 border border-indigo-500/20 p-6 rounded-[2.5rem] mb-12 max-w-xs shadow-xl backdrop-blur-sm">
                   <div className="flex items-center justify-center gap-2 mb-2">
-                    <Lightbulb className="h-4 w-4 text-yellow-400" />
-                    <span className="text-[10px] font-black uppercase tracking-widest text-indigo-200">Consejo del Día</span>
+                    <Lightbulb className="h-5 w-5 text-yellow-400" />
+                    <span className="text-[11px] font-black uppercase tracking-widest text-indigo-100">Consejo Oinkash</span>
                   </div>
-                  <p className="text-sm font-bold italic leading-tight text-indigo-50">"{gameOverTip.text}"</p>
+                  <p className="text-sm font-bold italic leading-snug text-indigo-50">"{gameOverTip.text}"</p>
                 </div>
               )}
 
               <Button 
                 onClick={startGame} 
-                className="h-16 px-12 rounded-full bg-white text-rose-950 font-black text-xl shadow-2xl flex gap-3 hover:bg-slate-100 active:scale-95 transition-all"
+                className="h-20 px-14 rounded-full bg-white text-rose-950 font-black text-xl shadow-2xl flex gap-4 hover:bg-slate-100 active:scale-95 transition-all"
               >
-                <RefreshCw className="h-6 w-6" /> REINTENTAR
+                <RefreshCw className="h-7 w-7" /> VOLVER A INTENTAR
               </Button>
+              <p className="mt-8 text-[10px] font-bold text-white/30 uppercase tracking-[0.3em]">O presiona ESPACIO</p>
             </motion.div>
           )}
         </AnimatePresence>
       </div>
+
+      {/* Fondos decorativos */}
+      <div className="absolute inset-0 bg-gradient-to-br from-slate-950 via-indigo-950 to-slate-950 pointer-events-none" />
+      <div className="absolute top-1/4 left-1/4 h-96 w-96 bg-indigo-500/5 blur-[120px] rounded-full pointer-events-none" />
+      <div className="absolute bottom-1/4 right-1/4 h-96 w-96 bg-purple-500/5 blur-[120px] rounded-full pointer-events-none" />
     </div>
   );
 }
