@@ -100,7 +100,7 @@ const RecurringExpenses = () => {
         <div className="absolute inset-0 bg-purple-100/50 blur-3xl rounded-full -z-10" />
         <Card className="bg-slate-900 text-white rounded-[2.5rem] border-none shadow-2xl overflow-hidden">
           <div className="p-8 space-y-6 relative">
-            <div className="absolute top-0 right-0 p-4 opacity-20">
+            <div className="absolute top-0 right-0 p-4 opacity-20 pointer-events-none">
               <img src={COCHINITO_PLANNER} alt="Planner" className="h-40 w-40 object-contain rotate-6" />
             </div>
 

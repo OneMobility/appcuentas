@@ -491,7 +491,7 @@ const ShoppingList: React.FC = () => {
         <div className="absolute inset-0 bg-blue-100/50 blur-3xl rounded-full -z-10" />
         <Card className="bg-blue-600 text-white rounded-[2.5rem] border-none shadow-2xl overflow-hidden">
           <div className="p-8 space-y-4 relative">
-            <div className="absolute top-0 right-0 p-4 opacity-30">
+            <div className="absolute top-0 right-0 p-4 opacity-30 pointer-events-none">
               <img src={SHOPPING_PIGGY} alt="Súper" className="h-32 w-32 object-contain -rotate-12" />
             </div>
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
