@@ -10,23 +10,23 @@ const PigMergePage = () => {
   const navigate = useNavigate();
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950 flex flex-col overflow-hidden">
-      {/* Header flotante minimalista */}
-      <div className="absolute top-0 left-0 right-0 z-[60] flex items-center gap-3 p-4 pointer-events-none">
+    <div className="fixed inset-0 z-[100] bg-slate-950 flex flex-col overflow-hidden">
+      {/* Header flotante minimalista sobre el juego */}
+      <div className="absolute top-0 left-0 right-0 z-[110] flex items-center gap-3 p-4 pointer-events-none">
         <Button 
           variant="ghost" 
           size="icon" 
           onClick={() => navigate('/minigames')} 
-          className="rounded-full bg-black/20 backdrop-blur-md text-white border border-white/10 pointer-events-auto h-10 w-10"
+          className="rounded-full bg-black/40 backdrop-blur-md text-white border border-white/10 pointer-events-auto h-12 w-12 active:scale-90 transition-transform"
         >
-          <ArrowLeft className="h-5 w-5" />
+          <ArrowLeft className="h-6 w-6" />
         </Button>
-        <div className="bg-black/20 backdrop-blur-md px-3 py-1 rounded-xl border border-white/10">
+        <div className="bg-black/40 backdrop-blur-md px-4 py-1.5 rounded-2xl border border-white/10">
           <h1 className="text-sm font-black text-white tracking-tighter leading-none uppercase">PIG MERGE</h1>
         </div>
       </div>
 
-      {/* El juego ocupa el 100% de la pantalla */}
+      {/* El juego ocupa el 100% de la pantalla sin menús de la app */}
       <div className="flex-1 w-full h-full">
         <PigMerge />
       </div>

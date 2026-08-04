@@ -58,6 +58,12 @@ const App = () => {
                 <Route path="/login" element={<Login />} />
                 <Route path="/reset-password" element={<ProtectedRoute><ResetPassword /></ProtectedRoute>} />
                 <Route path="/" element={<Navigate to="/dashboard" replace />} />
+                
+                {/* Rutas de Minijuegos INMERSIVOS (Fuera del Layout normal) */}
+                <Route path="/minigames/pig-merge" element={<ProtectedRoute><PigMergePage /></ProtectedRoute>} />
+                <Route path="/minigames/coin-catch" element={<ProtectedRoute><CoinCatchPage /></ProtectedRoute>} />
+
+                {/* Rutas con Menú y Navegación estándar */}
                 <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
                   <Route path="/dashboard" element={<Dashboard />} />
                   <Route path="/cash" element={<Cash />} />
@@ -75,9 +81,8 @@ const App = () => {
                   <Route path="/recurring" element={<RecurringExpenses />} />
                   <Route path="/shopping-list" element={<ShoppingList />} />
                   <Route path="/minigames" element={<Minigames />} />
-                  <Route path="/minigames/pig-merge" element={<PigMergePage />} />
-                  <Route path="/minigames/coin-catch" element={<CoinCatchPage />} />
                 </Route>
+                
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </CategoryProvider>
