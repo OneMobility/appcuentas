@@ -5,26 +5,31 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import PigMerge from "@/components/minigames/PigMerge";
-import { Card } from "@/components/ui/card";
 
 const PigMergePage = () => {
   const navigate = useNavigate();
 
   return (
-    <div className="flex flex-col gap-6 p-4 md:p-6 pb-24 max-w-2xl mx-auto">
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={() => navigate('/minigames')} className="rounded-full">
+    <div className="fixed inset-0 z-50 bg-slate-950 flex flex-col overflow-hidden">
+      {/* Header flotante minimalista */}
+      <div className="absolute top-0 left-0 right-0 z-[60] flex items-center gap-3 p-4 pointer-events-none">
+        <Button 
+          variant="ghost" 
+          size="icon" 
+          onClick={() => navigate('/minigames')} 
+          className="rounded-full bg-black/20 backdrop-blur-md text-white border border-white/10 pointer-events-auto h-10 w-10"
+        >
           <ArrowLeft className="h-5 w-5" />
         </Button>
-        <div>
-          <h1 className="text-2xl font-black tracking-tighter">Pig Merge</h1>
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Desafío de Ahorro</p>
+        <div className="bg-black/20 backdrop-blur-md px-3 py-1 rounded-xl border border-white/10">
+          <h1 className="text-sm font-black text-white tracking-tighter leading-none uppercase">PIG MERGE</h1>
         </div>
       </div>
 
-      <Card className="rounded-[3rem] border-none shadow-soft bg-white overflow-hidden p-6 md:p-10">
+      {/* El juego ocupa el 100% de la pantalla */}
+      <div className="flex-1 w-full h-full">
         <PigMerge />
-      </Card>
+      </div>
     </div>
   );
 };

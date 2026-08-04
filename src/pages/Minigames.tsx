@@ -13,8 +13,8 @@ const games = [
     id: "pig-merge",
     name: "Pig Merge",
     description: "Combina monedas y billetes para llenar tu alcancía.",
-    icon: "🐷",
-    type: "emoji",
+    icon: "/pig-merge-icon.png",
+    type: "image",
     color: "bg-pink-500",
     path: "/minigames/pig-merge"
   },
@@ -70,13 +70,8 @@ const Minigames = () => {
                   <div className={cn(
                     "h-16 w-16 rounded-2xl flex items-center justify-center text-3xl shadow-inner shrink-0 overflow-hidden",
                     game.color,
-                    game.type === "emoji" ? "bg-opacity-10" : ""
                   )}>
-                    {game.type === "image" ? (
-                      <img src={game.icon} alt={game.name} className="h-full w-full object-cover" />
-                    ) : (
-                      <span className="text-4xl">{game.icon}</span>
-                    )}
+                    <img src={game.icon} alt={game.name} className="h-full w-full object-cover" />
                   </div>
                   <div className="space-y-1">
                     <h3 className="text-xl font-black text-slate-900">{game.name}</h3>
