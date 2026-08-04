@@ -13,14 +13,15 @@ serve(async (req) => {
     const apiKey = Deno.env.get('GEMINI_API_KEY')
 
     if (!apiKey) {
+      console.error("[chat-ai] GEMINI_API_KEY not found in environment.");
       return new Response(JSON.stringify({ error: 'Configuración de servidor incompleta (API Key).' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 200
       })
     }
 
-    // Usamos el endpoint v1 (estable) en lugar de v1beta
-    const apiUrl = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+    // Cambiamos a v1beta para asegurar compatibilidad con gemini-1.5-flash
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
 
     const prompt = `
       Eres "Oinkash", un asistente financiero experto, divertido y muy motivador.
@@ -34,7 +35,7 @@ serve(async (req) => {
       - Responde en español (México/Latinoamérica).
       - Sé muy breve (máximo 3 párrafos).
       - Usa emojis de cerdito 🐷 y dinero 💵.
-      - Da consejos prácticos basados en los datos (ej. si tiene poco dinero, sugiere ahorrar en comida; si tiene deudas, sugiere pagarlas).
+      - Da consejos prácticos basados en los datos financieros del usuario.
       
       PREGUNTA: "${message}"
     `;
