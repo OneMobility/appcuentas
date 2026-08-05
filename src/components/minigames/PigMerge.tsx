@@ -43,6 +43,9 @@ const PigMerge = () => {
     audioEndRef.current = new Audio("/sounds/end-point.wav");
     audioAchievementRef.current = new Audio("/sounds/achievement.mp3");
     audioTipRef.current = new Audio("/sounds/tip.mp3");
+    
+    const savedBest = localStorage.getItem("oinkash_pigmerge_best");
+    if (savedBest) setBestScore(parseInt(savedBest));
   }, []);
 
   const playSound = (audio: HTMLAudioElement | null) => {
@@ -64,8 +67,6 @@ const PigMerge = () => {
 
   useEffect(() => {
     initGame();
-    const savedBest = localStorage.getItem("oinkash_pigmerge_best");
-    if (savedBest) setBestScore(parseInt(savedBest));
   }, [initGame]);
 
   useEffect(() => {
@@ -93,7 +94,7 @@ const PigMerge = () => {
     setGameOver(true);
     setGameOverTip(getRandomTip());
     playSound(audioEndRef.current);
-    playSound(audioTipRef.current); // Sonido para el tip que aparece al final
+    playSound(audioTipRef.current);
   }, []);
 
   const move = useCallback((direction: "up" | "down" | "left" | "right") => {
@@ -183,14 +184,20 @@ const PigMerge = () => {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [move]);
 
-  const onTouchStart = (e: React.TouchEvent) => {
-    touchStart.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+  const onTouchStart = (e: React.TouchEvent | React.PointerEvent) => {
+    const clientX = 'touches' in e ? e.touches[0].clientX : (e as React.PointerEvent).clientX;
+    const clientY = 'touches' in e ? e.touches[0].clientY : (e as React.PointerEvent).clientY;
+    touchStart.current = { x: clientX, y: clientY };
   };
 
-  const onTouchEnd = (e: React.TouchEvent) => {
+  const onTouchEnd = (e: React.TouchEvent | React.PointerEvent) => {
     if (!touchStart.current) return;
-    const dx = e.changedTouches[0].clientX - touchStart.current.x;
-    const dy = e.changedTouches[0].clientY - touchStart.current.y;
+    const clientX = 'changedTouches' in e ? (e as React.TouchEvent).changedTouches[0].clientX : (e as React.PointerEvent).clientX;
+    const clientY = 'changedTouches' in e ? (e as React.TouchEvent).changedTouches[0].clientY : (e as React.PointerEvent).clientY;
+    
+    const dx = clientX - touchStart.current.x;
+    const dy = clientY - touchStart.current.y;
+    
     if (Math.abs(dx) > Math.abs(dy)) {
       if (Math.abs(dx) > 30) move(dx > 0 ? "right" : "left");
     } else {
@@ -200,22 +207,27 @@ const PigMerge = () => {
   };
 
   return (
-    <div className="w-full h-full flex flex-col bg-slate-900 p-6 md:p-10 justify-center items-center select-none overflow-hidden">
-      <div className="w-full max-w-md flex items-center justify-between mb-8">
-        <div className="space-y-1">
-          <h3 className="text-3xl font-black tracking-tighter text-white flex items-center gap-2">
-            PIG MERGE <span className="text-2xl animate-bounce">🐷</span>
+    <div 
+      className="w-full h-full flex flex-col bg-slate-900 p-4 md:p-10 justify-center items-center select-none overflow-hidden touch-none"
+      onPointerDown={onTouchStart}
+      onPointerUp={onTouchEnd}
+    >
+      {/* Header Integrado */}
+      <div className="w-full max-w-md flex items-center justify-between mb-6 pointer-events-none">
+        <div className="space-y-0.5">
+          <h3 className="text-2xl font-black tracking-tighter text-white flex items-center gap-2">
+            PIG MERGE <span className="text-xl animate-bounce">🐷</span>
           </h3>
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Combina y Ahorra</p>
+          <p className="text-[9px] font-black text-slate-500 uppercase tracking-[0.2em]">Oinkash Arcade</p>
         </div>
         <div className="flex gap-2">
-          <div className="bg-white/10 backdrop-blur-md border border-white/10 px-4 py-2 rounded-2xl text-center min-w-[80px]">
-            <p className="text-[8px] font-black text-slate-400 uppercase">Score</p>
-            <p className="text-xl font-black text-white leading-none">{score}</p>
+          <div className="bg-white/10 backdrop-blur-md border border-white/10 px-3 py-1.5 rounded-xl text-center min-w-[70px]">
+            <p className="text-[7px] font-black text-slate-400 uppercase">Score</p>
+            <p className="text-lg font-black text-white leading-none">{score}</p>
           </div>
-          <div className="bg-indigo-600 px-4 py-2 rounded-2xl text-center min-w-[80px] text-white shadow-lg">
-            <p className="text-[8px] font-black opacity-60 uppercase">Best</p>
-            <p className="text-xl font-black leading-none">{bestScore}</p>
+          <div className="bg-indigo-600 px-3 py-1.5 rounded-xl text-center min-w-[70px] text-white shadow-lg shadow-indigo-900/20">
+            <p className="text-[7px] font-black opacity-60 uppercase">Best</p>
+            <p className="text-lg font-black leading-none">{bestScore}</p>
           </div>
         </div>
       </div>
@@ -226,29 +238,25 @@ const PigMerge = () => {
             initial={{ scale: 0, opacity: 0, y: 20 }}
             animate={{ scale: 1.2, opacity: 1, y: 0 }}
             exit={{ scale: 1.5, opacity: 0 }}
-            className="absolute top-1/4 z-50 pointer-events-none"
+            className="absolute top-1/4 z-[120] pointer-events-none"
           >
-            <div className="bg-orange-500 text-white px-8 py-3 rounded-full font-black text-3xl shadow-2xl border-4 border-white flex items-center gap-3">
-              {achievement.includes("ARDE") && <Flame className="h-8 w-8 text-yellow-300 animate-pulse" />}
+            <div className="bg-orange-500 text-white px-8 py-3 rounded-full font-black text-2xl shadow-2xl border-4 border-white flex items-center gap-3">
+              {achievement.includes("ARDE") && <Flame className="h-6 w-6 text-yellow-300 animate-pulse" />}
               {achievement}
-              {achievement.includes("ARDE") && <Flame className="h-8 w-8 text-yellow-300 animate-pulse" />}
             </div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      <div 
-        className="relative aspect-square w-full max-w-md bg-slate-800 p-4 rounded-[2.5rem] shadow-2xl border-4 border-slate-700/50 touch-none"
-        onTouchStart={onTouchStart}
-        onTouchEnd={onTouchEnd}
-      >
-        <div className="grid grid-cols-4 grid-rows-4 gap-3 h-full w-full">
+      {/* Tablero de Juego */}
+      <div className="relative aspect-square w-full max-w-md bg-slate-800 p-3 rounded-[2rem] shadow-2xl border-4 border-slate-700/50">
+        <div className="grid grid-cols-4 grid-rows-4 gap-2.5 h-full w-full">
           {Array.from({ length: 16 }).map((_, i) => (
-            <div key={i} className="bg-slate-700/30 rounded-2xl w-full h-full shadow-inner" />
+            <div key={i} className="bg-slate-700/30 rounded-xl w-full h-full shadow-inner" />
           ))}
         </div>
 
-        <div className="absolute inset-0 p-4 grid grid-cols-4 grid-rows-4 gap-3">
+        <div className="absolute inset-0 p-3 grid grid-cols-4 grid-rows-4 gap-2.5">
           <AnimatePresence>
             {board.map((row, r) => 
               row.map((cell, c) => cell && (
@@ -258,13 +266,13 @@ const PigMerge = () => {
                   animate={{ scale: 1, opacity: 1 }}
                   layout
                   className={cn(
-                    "w-full h-full rounded-2xl flex flex-col items-center justify-center shadow-xl border-b-4 border-black/20",
+                    "w-full h-full rounded-xl flex flex-col items-center justify-center shadow-xl border-b-4 border-black/20",
                     TIERS[cell]?.color || "bg-slate-300"
                   )}
                   style={{ gridRow: r + 1, gridColumn: c + 1 }}
                 >
-                  <span className="text-2xl md:text-4xl mb-1 drop-shadow-md">{TIERS[cell]?.emoji}</span>
-                  <span className={cn("text-xs md:text-sm font-black drop-shadow-sm", TIERS[cell]?.text)}>
+                  <span className="text-xl md:text-3xl mb-0.5 drop-shadow-md">{TIERS[cell]?.emoji}</span>
+                  <span className={cn("text-[10px] md:text-xs font-black drop-shadow-sm", TIERS[cell]?.text)}>
                     {TIERS[cell]?.label}
                   </span>
                 </motion.div>
@@ -273,69 +281,72 @@ const PigMerge = () => {
           </AnimatePresence>
         </div>
 
+        {/* Game Over Modal Integrado */}
         <AnimatePresence>
           {gameOver && (
             <motion.div 
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="absolute inset-0 bg-slate-950/95 backdrop-blur-md rounded-[2.5rem] flex flex-col items-center justify-center text-white p-6 text-center z-20 overflow-y-auto"
+              className="absolute inset-0 bg-slate-950/95 backdrop-blur-md rounded-[1.8rem] flex flex-col items-center justify-center text-white p-6 text-center z-[130] overflow-y-auto"
             >
               <div className="relative mb-4 shrink-0">
-                <Trophy className="h-16 w-16 text-yellow-400 animate-bounce" />
-                <Sparkles className="absolute -top-2 -right-2 h-6 w-6 text-yellow-300 animate-pulse" />
+                <Trophy className="h-14 w-14 text-yellow-400 animate-bounce" />
+                <Sparkles className="absolute -top-2 -right-2 h-5 w-5 text-yellow-300 animate-pulse" />
               </div>
               
-              <h4 className="text-3xl font-black mb-1 tracking-tighter">¡Meta Alcanzada!</h4>
-              <p className="text-xs font-medium text-slate-400 mb-4 leading-relaxed">
-                Lograste un ahorro acumulado de <br />
-                <span className="text-xl font-black text-white">${score.toLocaleString()}</span>
-              </p>
+              <h4 className="text-2xl font-black mb-1 tracking-tighter uppercase">¡Ahorro Total!</h4>
+              <p className="text-[10px] font-bold text-slate-400 mb-4 uppercase tracking-widest">Puntaje Final</p>
+              
+              <div className="bg-white/10 px-8 py-3 rounded-2xl mb-6 border border-white/10">
+                <span className="text-4xl font-black text-white">${score.toLocaleString()}</span>
+              </div>
 
               {gameOverTip && (
                 <motion.div 
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="bg-indigo-600/30 border border-indigo-500/30 p-4 rounded-3xl mb-6 max-w-xs"
+                  className="bg-indigo-600/20 border border-indigo-500/30 p-4 rounded-2xl mb-6 max-w-[280px]"
                 >
-                  <div className="flex items-center justify-center gap-2 mb-2">
-                    <Lightbulb className="h-4 w-4 text-yellow-400" />
-                    <span className="text-[10px] font-black uppercase tracking-widest text-indigo-200">Consejo Oinkash</span>
+                  <div className="flex items-center justify-center gap-2 mb-1.5">
+                    <Lightbulb className="h-3.5 w-3.5 text-yellow-400" />
+                    <span className="text-[9px] font-black uppercase tracking-widest text-indigo-200">Tip de Ahorro</span>
                   </div>
-                  <p className="text-sm font-bold italic leading-tight text-indigo-50">
+                  <p className="text-[11px] font-bold italic leading-tight text-indigo-50">
                     "{gameOverTip.text}"
                   </p>
                 </motion.div>
               )}
 
               <Button 
-                onClick={initGame}
-                className="rounded-full h-14 px-10 font-black bg-indigo-600 text-white hover:bg-indigo-700 shadow-xl shadow-indigo-900/40 text-lg"
+                onClick={(e) => { e.stopPropagation(); initGame(); }}
+                className="rounded-full h-12 px-10 font-black bg-indigo-600 text-white hover:bg-indigo-700 shadow-xl shadow-indigo-900/40 text-sm"
               >
-                Volver a Juntar
+                VOLVER A JUNTAR 🐷
               </Button>
             </motion.div>
           )}
         </AnimatePresence>
       </div>
 
-      <div className="mt-10 flex flex-col items-center gap-6">
-        <div className="flex gap-10 text-slate-500">
+      {/* Footer / Info */}
+      <div className="mt-8 flex flex-col items-center gap-4 pointer-events-none">
+        <div className="flex gap-8 text-slate-600">
           <div className="flex flex-col items-center gap-1">
-            <Keyboard className="h-5 w-5" />
-            <span className="text-[9px] font-black uppercase tracking-tighter">Flechas</span>
+            <Smartphone className="h-4 w-4" />
+            <span className="text-[8px] font-black uppercase tracking-widest">Desliza en pantalla</span>
           </div>
           <div className="flex flex-col items-center gap-1">
-            <Smartphone className="h-5 w-5" />
-            <span className="text-[9px] font-black uppercase tracking-tighter">Deslizar</span>
+            <Keyboard className="h-4 w-4" />
+            <span className="text-[8px] font-black uppercase tracking-widest">Usa las Flechas</span>
           </div>
         </div>
         
         <Button 
           variant="ghost" 
-          onClick={initGame}
-          className="rounded-2xl text-slate-400 hover:text-white hover:bg-white/5 font-bold gap-2"
+          onClick={(e) => { e.stopPropagation(); initGame(); }}
+          className="rounded-xl text-slate-500 hover:text-white hover:bg-white/5 font-black text-[10px] uppercase tracking-widest gap-2 h-9 pointer-events-auto"
         >
-          <RefreshCw className="h-4 w-4" /> Reiniciar
+          <RefreshCw className="h-3.5 w-3.5" /> Reiniciar
         </Button>
       </div>
     </div>
