@@ -64,6 +64,7 @@ export default function PigFlap() {
     audioCoinRef.current = new Audio("/sounds/coin.wav");
     audioEndRef.current = new Audio("/sounds/end-point.wav");
     
+    // Cargar Récord guardado
     const saved = localStorage.getItem("oinkash_flap_best");
     if (saved) setBest(parseInt(saved));
   }, []);
@@ -76,12 +77,11 @@ export default function PigFlap() {
   };
 
   const getDifficulty = (currentScore: number) => {
-    // Aumentar velocidad y reducir hueco según score
-    const factor = Math.min(1, currentScore / 500); 
+    const factor = Math.min(1, currentScore / 1000); 
     return {
-      speed: 220 + (130 * factor),
-      gapHeight: 220 - (60 * factor),
-      spacing: 380 - (50 * factor)
+      speed: 220 + (140 * factor),
+      gapHeight: 220 - (50 * factor),
+      spacing: 380 - (60 * factor)
     };
   };
 
@@ -108,6 +108,15 @@ export default function PigFlap() {
     rafRef.current = requestAnimationFrame(tick);
   }, []);
 
+  const saveHighScore = useCallback((currentScore: number) => {
+    const saved = localStorage.getItem("oinkash_flap_best");
+    const currentBest = saved ? parseInt(saved) : 0;
+    if (currentScore > currentBest) {
+      setBest(currentScore);
+      localStorage.setItem("oinkash_flap_best", currentScore.toString());
+    }
+  }, []);
+
   const die = useCallback(() => {
     if (phaseRef.current === "gameover") return;
     
@@ -115,12 +124,8 @@ export default function PigFlap() {
     phaseRef.current = "gameover";
     setGameOverTip(getRandomTip());
     playSound(audioEndRef.current);
-    
-    if (scoreRef.current > best) {
-      setBest(scoreRef.current);
-      localStorage.setItem("oinkash_flap_best", scoreRef.current.toString());
-    }
-  }, [best]);
+    saveHighScore(scoreRef.current);
+  }, [saveHighScore]);
 
   const flap = useCallback(() => {
     if (phaseRef.current === "gameover") return;
@@ -160,7 +165,7 @@ export default function PigFlap() {
         const margin = 80;
         pipesRef.current.push({
           id: nextPipeIdRef.current++,
-          x: width + 50,
+          x: width + 100,
           gapY: margin + Math.random() * (height - margin * 2 - diff.gapHeight),
           gapHeight: diff.gapHeight,
           coinCollected: false,
@@ -200,6 +205,12 @@ export default function PigFlap() {
             scoreRef.current += 10;
             setScore(scoreRef.current);
             playSound(audioCoinRef.current);
+            
+            // Actualizar mejor récord si lo superamos en tiempo real
+            const currentBest = parseInt(localStorage.getItem("oinkash_flap_best") || "0");
+            if (scoreRef.current > currentBest) {
+              setBest(scoreRef.current);
+            }
           }
         }
 
@@ -230,20 +241,16 @@ export default function PigFlap() {
       className="relative w-full h-full overflow-hidden touch-none select-none bg-sky-400"
       onPointerDown={flap}
     >
-      {/* Background */}
       <div 
         className="absolute inset-0 bg-cover bg-center bg-no-repeat transition-all duration-1000"
         style={{ backgroundImage: 'url(/flappy-bg.png)' }}
       />
 
-      {/* Obstáculos y Monedas */}
       {pipes.map(p => (
         <React.Fragment key={p.id}>
-          {/* Tubos */}
           <div className="absolute bg-rose-600 border-x-4 border-rose-800 rounded-b-3xl z-10 shadow-lg" style={{ left: p.x, top: 0, width: PIPE_WIDTH, height: p.gapY }}></div>
           <div className="absolute bg-rose-600 border-x-4 border-rose-800 rounded-t-3xl z-10 shadow-lg" style={{ left: p.x, top: p.gapY + p.gapHeight, width: PIPE_WIDTH, height: 1000 }}></div>
           
-          {/* Moneda */}
           {!p.coinCollected && (
             <motion.div 
               className="absolute z-20"
@@ -262,7 +269,6 @@ export default function PigFlap() {
         </React.Fragment>
       ))}
 
-      {/* Personaje */}
       <motion.div
         className="absolute z-40 pointer-events-none"
         animate={{ top: birdY, rotate: birdAngle }}
@@ -272,7 +278,6 @@ export default function PigFlap() {
         <img src={pigMascot} className="w-full h-full object-contain drop-shadow-2xl" />
       </motion.div>
 
-      {/* HUD Superior */}
       <div className="absolute top-16 left-0 right-0 p-6 flex justify-between items-start z-30 pointer-events-none">
         <div className="bg-black/50 backdrop-blur-md px-5 py-2 rounded-2xl border border-white/20 text-white shadow-2xl">
           <p className="text-[10px] font-black uppercase opacity-60 flex items-center gap-1">
@@ -281,13 +286,12 @@ export default function PigFlap() {
           <p className="text-3xl font-black tracking-tighter">{score}</p>
         </div>
         
-        <div className="bg-white/10 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/5 text-white/40 text-right">
-          <p className="text-[8px] font-black uppercase">Mejor Record</p>
-          <p className="text-lg font-black">{best}</p>
+        <div className="bg-white/10 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/5 text-white shadow-lg text-right">
+          <p className="text-[8px] font-black uppercase opacity-50">Récord Máximo</p>
+          <p className="text-lg font-black text-yellow-400">{best}</p>
         </div>
       </div>
 
-      {/* Pantallas de estado */}
       <AnimatePresence>
         {phase === "idle" && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="absolute inset-0 z-50 bg-slate-900/70 backdrop-blur-md flex flex-col items-center justify-center p-8 text-center text-white">
@@ -306,11 +310,15 @@ export default function PigFlap() {
           <motion.div initial={{ opacity: 0, y: 50 }} animate={{ opacity: 1, y: 0 }} className="absolute inset-0 z-50 bg-rose-950/90 backdrop-blur-xl flex flex-col items-center justify-center p-6 text-center text-white pointer-events-auto">
             <Trophy className="h-20 w-20 text-yellow-400 mb-4" />
             <h2 className="text-3xl font-black mb-2 uppercase tracking-tight">¡Bancarrota!</h2>
-            <p className="text-sm text-rose-200 mb-6 font-medium">Te quedaste sin monedas esta vez.</p>
             
-            <div className="bg-white/10 px-10 py-6 rounded-[2rem] mb-8 border border-white/10 shadow-inner">
+            <div className="bg-white/10 px-10 py-6 rounded-[2rem] mb-6 border border-white/10 shadow-inner">
                <p className="text-6xl font-black mb-1">{score}</p>
                <p className="text-[10px] font-black uppercase opacity-40">Puntos recolectados</p>
+            </div>
+
+            <div className="mb-8 flex flex-col items-center">
+              <p className="text-[10px] font-black uppercase text-rose-300">Mejor Récord Personal</p>
+              <p className="text-2xl font-black text-yellow-400 tracking-tight">{best}</p>
             </div>
 
             {gameOverTip && (
