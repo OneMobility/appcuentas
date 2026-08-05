@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { motion, AnimatePresence } from "framer-motion";
 import { Trophy, RefreshCw, Heart, AlertCircle, Lightbulb } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { getRandomTip, OinkashTip } from "@/utils/oinkash-tips";
 
 /**
@@ -51,7 +52,7 @@ function generateSolution(n: number): number[] {
     return false;
   }
 
-  if (!backtrack(0)) return generateSolution(n); // Reintentar si falla
+  if (!backtrack(0)) return generateSolution(n); 
   return solution;
 }
 
@@ -94,7 +95,6 @@ function generateRegions(n: number, solution: number[]): number[][] {
     if (!expanded) {
       stuck++;
       if (stuck > n * 10) {
-        // Fuerza asignación de celdas huérfanas
         for (let rr = 0; rr < n; rr++) {
           for (let cc = 0; cc < n; cc++) {
             if (regions[rr][cc] === -1) {
@@ -120,7 +120,7 @@ function generatePuzzle(n: number): Puzzle {
   const solution = generateSolution(n);
   const regions = generateRegions(n, solution);
   const colors = Array.from({ length: n }, (_, i) => {
-    const hue = (140 + (360 / n) * i) % 360; // Tonos verdes/azules
+    const hue = (140 + (360 / n) * i) % 360; 
     return `hsl(${hue}, 60%, 85%)`;
   });
   return { n, regions, colors };
@@ -176,17 +176,16 @@ export default function PigSudoku() {
     const region = puzzle.regions[r][c];
 
     for (let i = 0; i < n; i++) {
-      if (i !== c && currentGrid[r][i] === "pig") return true; // Fila
-      if (i !== r && currentGrid[i][c] === "pig") return true; // Columna
+      if (i !== c && currentGrid[r][i] === "pig") return true; 
+      if (i !== r && currentGrid[i][c] === "pig") return true; 
     }
 
-    // Región de color y Contacto (adyacencia)
     for (let i = 0; i < n; i++) {
       for (let j = 0; j < n; j++) {
         if (i === r && j === c) continue;
         if (currentGrid[i][j] === "pig") {
-          if (puzzle.regions[i][j] === region) return true; // Mismo color
-          if (Math.abs(i - r) <= 1 && Math.abs(j - c) <= 1) return true; // Adyacente
+          if (puzzle.regions[i][j] === region) return true; 
+          if (Math.abs(i - r) <= 1 && Math.abs(j - c) <= 1) return true; 
         }
       }
     }
@@ -203,7 +202,6 @@ export default function PigSudoku() {
       if (current === "empty") {
         next[r][c] = "mark";
       } else if (current === "mark") {
-        // Intenta poner un cochinito
         const hasConflict = checkConflict(r, c, next);
         if (hasConflict) {
           setLives(l => {
@@ -220,10 +218,9 @@ export default function PigSudoku() {
             }
             return newLives;
           });
-          next[r][c] = "empty"; // No permite el error, lo limpia
+          next[r][c] = "empty"; 
         } else {
           next[r][c] = "pig";
-          // Verificar si el puzzle se resolvió
           const totalPigs = next.flat().filter(s => s === "pig").length;
           if (totalPigs === puzzle.n) {
             setPhase("solved");
@@ -243,7 +240,6 @@ export default function PigSudoku() {
 
   const mm = Math.floor(seconds / 60).toString().padStart(2, "0");
   const ss = (seconds % 60).toString().padStart(2, "0");
-  const pigsFound = grid.flat().filter(s => s === "pig").length;
 
   return (
     <div className={cn(
@@ -251,7 +247,6 @@ export default function PigSudoku() {
       errorFlash ? "bg-rose-500/20" : "bg-slate-50"
     )}>
       
-      {/* Header UI */}
       <div className="w-full max-w-md flex justify-between items-end mb-6">
         <div className="space-y-1">
           <h2 className="text-2xl font-black tracking-tighter text-slate-900">COCHIDOKU 🐷</h2>
@@ -273,7 +268,6 @@ export default function PigSudoku() {
         </div>
       </div>
 
-      {/* Tablero */}
       <motion.div 
         animate={errorFlash ? { x: [-10, 10, -10, 10, 0] } : {}}
         className="relative aspect-square w-full max-w-md bg-slate-900 p-2 rounded-[2rem] shadow-2xl border-4 border-slate-800"
@@ -288,7 +282,6 @@ export default function PigSudoku() {
           {grid.map((row, r) => row.map((state, c) => {
             const region = puzzle.regions[r][c];
             const n = puzzle.n;
-            // Bordes gruesos para separar regiones
             const bRight = c < n - 1 && puzzle.regions[r][c+1] !== region ? "2px solid #1e293b" : "1px solid rgba(30,41,59,0.1)";
             const bBottom = r < n - 1 && puzzle.regions[r+1][c] !== region ? "2px solid #1e293b" : "1px solid rgba(30,41,59,0.1)";
             
@@ -316,7 +309,6 @@ export default function PigSudoku() {
           }))}
         </div>
 
-        {/* Overlays (Win / Game Over) */}
         <AnimatePresence>
           {phase === "solved" && (
             <motion.div initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} className="absolute inset-0 z-40 bg-indigo-600/95 backdrop-blur-md rounded-[1.8rem] flex flex-col items-center justify-center p-8 text-white text-center">
@@ -353,7 +345,6 @@ export default function PigSudoku() {
         </AnimatePresence>
       </motion.div>
 
-      {/* Instrucciones Rápidas */}
       <div className="mt-8 grid grid-cols-2 gap-4 w-full max-w-md">
         <div className="bg-white p-3 rounded-2xl border border-slate-100 shadow-sm flex flex-col items-center text-center">
           <span className="text-lg font-black text-slate-800">1</span>
