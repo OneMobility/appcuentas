@@ -1,30 +1,27 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Trophy, RefreshCw, Heart, AlertCircle, Lightbulb } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { getRandomTip, OinkashTip } from "@/utils/oinkash-tips";
 
 /**
- * 🐷 SUDOKU DE COCHINITOS — puzzle de lógica por niveles
+ * 🐷 COCHIDOKU — Versión con Vidas y Errores
  */
 
-// Imagen oficial de la mascota
-const pigMascot = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/ChatGPT%20Image%204%20ago%202026,%2003_46_40%20p.m..png";
+const pigMascot = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/ChatGPT%20Image%204%20ago%202026,%2003_44_08%20p.m..png";
 
-// ---------- Config ----------
-const LEVEL_SIZES = [6, 8, 10];
+const LEVEL_SIZES = [6, 7, 8, 9, 10];
+const MAX_LIVES = 3;
 
 type CellState = "empty" | "mark" | "pig";
 
 interface Puzzle {
   n: number;
-  regions: number[][]; // regions[row][col] = id de región 0..n-1
-  colors: string[]; // color por región
+  regions: number[][]; 
+  colors: string[]; 
 }
 
-interface PigSudokuProps {
-  initialBestScore?: number;
-  onBestScoreChange?: (best: number) => void;
-  onPuzzleSolved?: (level: number, seconds: number) => void;
-}
-
-// ---------- Utilidades ----------
+// --- Utilidades de Generación ---
 function shuffle<T>(arr: T[]): T[] {
   const a = [...arr];
   for (let i = a.length - 1; i > 0; i--) {
@@ -43,6 +40,7 @@ function generateSolution(n: number): number[] {
     if (row === n) return true;
     const candidates = shuffle(allCols.filter((c) => !used[c]));
     for (const c of candidates) {
+      // Regla de no contacto (adyacencia diagonal/ortogonal en fila anterior)
       if (row > 0 && Math.abs(solution[row - 1] - c) <= 1) continue;
       solution[row] = c;
       used[c] = true;
@@ -53,7 +51,7 @@ function generateSolution(n: number): number[] {
     return false;
   }
 
-  backtrack(0);
+  if (!backtrack(0)) return generateSolution(n); // Reintentar si falla
   return solution;
 }
 
@@ -80,12 +78,7 @@ function generateRegions(n: number, solution: number[]): number[][] {
     let expanded = false;
 
     for (const [fr, fc] of frontier) {
-      const neighbors = shuffle([
-        [fr - 1, fc],
-        [fr + 1, fc],
-        [fr, fc - 1],
-        [fr, fc + 1],
-      ]);
+      const neighbors = shuffle([[fr - 1, fc], [fr + 1, fc], [fr, fc - 1], [fr, fc + 1]]);
       for (const [nr, nc] of neighbors) {
         if (nr >= 0 && nr < n && nc >= 0 && nc < n && regions[nr][nc] === -1) {
           regions[nr][nc] = region;
@@ -100,322 +93,279 @@ function generateRegions(n: number, solution: number[]): number[][] {
 
     if (!expanded) {
       stuck++;
-      if (stuck > n * 6) {
-        for (let rr = 0; rr < n && stuck > 0; rr++) {
+      if (stuck > n * 10) {
+        // Fuerza asignación de celdas huérfanas
+        for (let rr = 0; rr < n; rr++) {
           for (let cc = 0; cc < n; cc++) {
             if (regions[rr][cc] === -1) {
-              let target = 0;
-              const neigh = [
-                [rr - 1, cc],
-                [rr + 1, cc],
-                [rr, cc - 1],
-                [rr, cc + 1],
-              ];
-              for (const [nr, nc] of neigh) {
-                if (nr >= 0 && nr < n && nc >= 0 && nc < n && regions[nr][nc] !== -1) {
-                  target = regions[nr][nc];
+              const nbrs = [[rr-1,cc],[rr+1,cc],[rr,cc-1],[rr,cc+1]];
+              for(const [nr, nc] of nbrs) {
+                if(nr >= 0 && nr < n && nc >= 0 && nc < n && regions[nr][nc] !== -1) {
+                  regions[rr][cc] = regions[nr][nc];
+                  assigned++;
                   break;
                 }
               }
-              regions[rr][cc] = target;
-              frontiers[target].push([rr, cc]);
-              assigned++;
-              stuck = 0;
-              rr = n;
-              break;
             }
           }
         }
+        break;
       }
-    } else {
-      stuck = 0;
-    }
+    } else stuck = 0;
   }
-
   return regions;
-}
-
-function generateColors(n: number): string[] {
-  const baseHue = Math.random() * 360;
-  return Array.from({ length: n }, (_, i) => {
-    const hue = (baseHue + (360 / n) * i) % 360;
-    return `hsl(${hue.toFixed(0)}, 62%, 80%)`;
-  });
 }
 
 function generatePuzzle(n: number): Puzzle {
   const solution = generateSolution(n);
   const regions = generateRegions(n, solution);
-  const colors = generateColors(n);
+  const colors = Array.from({ length: n }, (_, i) => {
+    const hue = (140 + (360 / n) * i) % 360; // Tonos verdes/azules
+    return `hsl(${hue}, 60%, 85%)`;
+  });
   return { n, regions, colors };
 }
 
-function emptyGrid(n: number): CellState[][] {
-  return Array.from({ length: n }, () => new Array(n).fill("empty" as CellState));
-}
-
-export default function PigSudoku({
-  initialBestScore = 0,
-  onBestScoreChange,
-  onPuzzleSolved,
-}: PigSudokuProps) {
+export default function PigSudoku() {
   const [level, setLevel] = useState(1);
+  const [lives, setLives] = useState(MAX_LIVES);
   const [puzzle, setPuzzle] = useState<Puzzle>(() => generatePuzzle(LEVEL_SIZES[0]));
-  const [grid, setGrid] = useState<CellState[][]>(() => emptyGrid(puzzle.n));
-  const [solved, setSolved] = useState(false);
-  const [solvedCount, setSolvedCount] = useState(0);
-  const [best, setBest] = useState(() => {
-    const saved = localStorage.getItem("oinkash_sudoku_best");
-    return saved ? parseInt(saved) : initialBestScore;
-  });
+  const [grid, setGrid] = useState<CellState[][]>(() => Array.from({ length: puzzle.n }, () => Array(puzzle.n).fill("empty")));
+  const [phase, setPhase] = useState<"playing" | "solved" | "over">("playing");
   const [seconds, setSeconds] = useState(0);
+  const [best, setBest] = useState(() => parseInt(localStorage.getItem("oinkash_sudoku_best") || "0"));
+  const [errorFlash, setErrorFlash] = useState(false);
+  const [gameOverTip, setGameOverTip] = useState<OinkashTip | null>(null);
 
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  const startTimer = useCallback(() => {
-    if (timerRef.current) clearInterval(timerRef.current);
-    timerRef.current = setInterval(() => setSeconds((s) => s + 1), 1000);
-  }, []);
-
-  const stopTimer = useCallback(() => {
-    if (timerRef.current) clearInterval(timerRef.current);
-    timerRef.current = null;
-  }, []);
+  const audioCoin = useRef<HTMLAudioElement | null>(null);
+  const audioError = useRef<HTMLAudioElement | null>(null);
+  const audioEnd = useRef<HTMLAudioElement | null>(null);
+  const timerRef = useRef<any>(null);
 
   useEffect(() => {
+    audioCoin.current = new Audio("/sounds/coin.wav");
+    audioError.current = new Audio("/sounds/error.mp3");
+    audioEnd.current = new Audio("/sounds/end-point.wav");
     startTimer();
-    return stopTimer;
+    return () => stopTimer();
   }, []);
 
-  const newPuzzleForLevel = useCallback(
-    (lvl: number) => {
-      const n = LEVEL_SIZES[(lvl - 1) % LEVEL_SIZES.length];
-      const p = generatePuzzle(n);
-      setPuzzle(p);
-      setGrid(emptyGrid(n));
-      setSolved(false);
-      setSeconds(0);
-      startTimer();
-    },
-    [startTimer]
-  );
+  const startTimer = () => {
+    stopTimer();
+    timerRef.current = setInterval(() => setSeconds(s => s + 1), 1000);
+  };
+  const stopTimer = () => clearInterval(timerRef.current);
 
-  const cycleCell = (r: number, c: number) => {
-    if (solved) return;
-    setGrid((prev) => {
-      const next = prev.map((row) => [...row]);
-      const cur = next[r][c];
-      next[r][c] = cur === "empty" ? "mark" : cur === "mark" ? "pig" : "empty";
+  const initLevel = (lvl: number) => {
+    const n = LEVEL_SIZES[Math.min(lvl - 1, LEVEL_SIZES.length - 1)];
+    const p = generatePuzzle(n);
+    setPuzzle(p);
+    setGrid(Array.from({ length: n }, () => Array(n).fill("empty")));
+    setLives(MAX_LIVES);
+    setPhase("playing");
+    setSeconds(0);
+    startTimer();
+  };
+
+  const playSound = (audio: HTMLAudioElement | null) => {
+    if (audio) { audio.currentTime = 0; audio.play().catch(() => {}); }
+  };
+
+  const checkConflict = (r: number, c: number, currentGrid: CellState[][]) => {
+    const n = puzzle.n;
+    const region = puzzle.regions[r][c];
+
+    for (let i = 0; i < n; i++) {
+      if (i !== c && currentGrid[r][i] === "pig") return true; // Fila
+      if (i !== r && currentGrid[i][c] === "pig") return true; // Columna
+    }
+
+    // Región de color y Contacto (adyacencia)
+    for (let i = 0; i < n; i++) {
+      for (let j = 0; j < n; j++) {
+        if (i === r && j === c) continue;
+        if (currentGrid[i][j] === "pig") {
+          if (puzzle.regions[i][j] === region) return true; // Mismo color
+          if (Math.abs(i - r) <= 1 && Math.abs(j - c) <= 1) return true; // Adyacente
+        }
+      }
+    }
+    return false;
+  };
+
+  const handleCellClick = (r: number, c: number) => {
+    if (phase !== "playing") return;
+
+    setGrid(prev => {
+      const next = prev.map(row => [...row]);
+      const current = next[r][c];
+
+      if (current === "empty") {
+        next[r][c] = "mark";
+      } else if (current === "mark") {
+        // Intenta poner un cochinito
+        const hasConflict = checkConflict(r, c, next);
+        if (hasConflict) {
+          setLives(l => {
+            const newLives = l - 1;
+            if (newLives <= 0) {
+              setPhase("over");
+              setGameOverTip(getRandomTip());
+              playSound(audioEnd.current);
+              stopTimer();
+            } else {
+              playSound(audioError.current);
+              setErrorFlash(true);
+              setTimeout(() => setErrorFlash(false), 400);
+            }
+            return newLives;
+          });
+          next[r][c] = "empty"; // No permite el error, lo limpia
+        } else {
+          next[r][c] = "pig";
+          // Verificar si el puzzle se resolvió
+          const totalPigs = next.flat().filter(s => s === "pig").length;
+          if (totalPigs === puzzle.n) {
+            setPhase("solved");
+            playSound(audioCoin.current);
+            stopTimer();
+            const newBest = level > best ? level : best;
+            setBest(newBest);
+            localStorage.setItem("oinkash_sudoku_best", newBest.toString());
+          }
+        }
+      } else {
+        next[r][c] = "empty";
+      }
       return next;
     });
   };
 
-  const { conflicts, pigCount } = useMemo(() => {
-    const n = puzzle.n;
-    const pigCells: [number, number][] = [];
-    for (let r = 0; r < n; r++) {
-      for (let c = 0; c < n; c++) {
-        if (grid[r]?.[c] === "pig") pigCells.push([r, c]);
-      }
-    }
-
-    const rowCount = new Array(n).fill(0);
-    const colCount = new Array(n).fill(0);
-    const regionCount = new Array(n).fill(0);
-    for (const [r, c] of pigCells) {
-      rowCount[r]++;
-      colCount[c]++;
-      regionCount[puzzle.regions[r][c]]++;
-    }
-
-    const bad = new Set<string>();
-    for (const [r, c] of pigCells) {
-      if (rowCount[r] > 1 || colCount[c] > 1 || regionCount[puzzle.regions[r][c]] > 1) {
-        bad.add(`${r},${c}`);
-      }
-    }
-    for (let i = 0; i < pigCells.length; i++) {
-      for (let j = i + 1; j < pigCells.length; j++) {
-        const [r1, c1] = pigCells[i];
-        const [r2, c2] = pigCells[j];
-        if (Math.abs(r1 - r2) <= 1 && Math.abs(c1 - c2) <= 1) {
-          bad.add(`${r1},${c1}`);
-          bad.add(`${r2},${c2}`);
-        }
-      }
-    }
-
-    return { conflicts: bad, pigCount: pigCells.length };
-  }, [grid, puzzle]);
-
-  useEffect(() => {
-    if (solved) return;
-    if (pigCount === puzzle.n && conflicts.size === 0) {
-      setSolved(true);
-      stopTimer();
-      setSolvedCount((prevSolved) => {
-        const nextSolved = prevSolved + 1;
-        setBest((prevBest) => {
-          const newBest = nextSolved > prevBest ? nextSolved : prevBest;
-          localStorage.setItem("oinkash_sudoku_best", newBest.toString());
-          onBestScoreChange?.(newBest);
-          return newBest;
-        });
-        return nextSolved;
-      });
-      onPuzzleSolved?.(level, seconds);
-    }
-  }, [pigCount, conflicts, puzzle.n, solved, stopTimer, onBestScoreChange, onPuzzleSolved, level, seconds]);
-
-  const nextLevel = () => {
-    const nextLvl = level + 1;
-    setLevel(nextLvl);
-    newPuzzleForLevel(nextLvl);
-  };
-
-  const shuffleBoard = () => {
-    newPuzzleForLevel(level);
-  };
-
-  const clearMarks = () => {
-    if (solved) return;
-    setGrid(emptyGrid(puzzle.n));
-  };
-
   const mm = Math.floor(seconds / 60).toString().padStart(2, "0");
   const ss = (seconds % 60).toString().padStart(2, "0");
-
-  const n = puzzle.n;
+  const pigsFound = grid.flat().filter(s => s === "pig").length;
 
   return (
-    <div style={styles.wrapper}>
-      <div style={styles.header}>
-        <div>
-          <h1 style={styles.title}>🐷 Cochidoku</h1>
-          <p style={styles.subtitle}>
-            Un cochinito por fila, columna y color — sin que se toquen
-          </p>
-        </div>
-        <div style={styles.statsRow}>
-          <div style={styles.statBox}>
-            <span style={styles.statLabel}>RESUELTOS</span>
-            <span style={styles.statValue}>{solvedCount}</span>
-          </div>
-          <div style={styles.statBox}>
-            <span style={styles.statLabel}>MEJOR</span>
-            <span style={styles.statValue}>{best}</span>
+    <div className={cn(
+      "w-full h-full flex flex-col items-center justify-center p-4 transition-all duration-300",
+      errorFlash ? "bg-rose-500/20" : "bg-slate-50"
+    )}>
+      
+      {/* Header UI */}
+      <div className="w-full max-w-md flex justify-between items-end mb-6">
+        <div className="space-y-1">
+          <h2 className="text-2xl font-black tracking-tighter text-slate-900">COCHIDOKU 🐷</h2>
+          <div className="flex gap-2">
+            <div className="bg-indigo-600 text-white px-3 py-1 rounded-xl font-black text-[10px] uppercase tracking-widest">Nivel {level}</div>
+            <div className="bg-slate-200 text-slate-600 px-3 py-1 rounded-xl font-black text-[10px] uppercase tracking-widest">{mm}:{ss}</div>
           </div>
         </div>
+        <div className="flex flex-col items-end gap-2">
+          <div className="flex gap-1">
+            {Array.from({ length: MAX_LIVES }).map((_, i) => (
+              <Heart 
+                key={i} 
+                className={cn("h-5 w-5 transition-all", i < lives ? "text-rose-500 fill-rose-500" : "text-slate-300")} 
+              />
+            ))}
+          </div>
+          <p className="text-[10px] font-black text-slate-400 uppercase">Encuentra {puzzle.n} cerditos</p>
+        </div>
       </div>
 
-      <div style={styles.hudRow}>
-        <div style={styles.hudItem}>
-          🚩 <strong style={styles.hudStrong}>Nivel {level}</strong> ({n}x{n})
-        </div>
-        <div style={styles.hudItem}>
-          ⏱️ <strong style={styles.hudStrong}>{mm}:{ss}</strong>
-        </div>
-        <div style={styles.hudItem}>
-          🐷 <strong style={styles.hudStrong}>{pigCount}/{n}</strong>
-        </div>
-      </div>
-
-      <div style={styles.toolbar}>
-        <button style={styles.secondaryButton} onClick={clearMarks}>Limpiar</button>
-        <button style={styles.secondaryButton} onClick={shuffleBoard}>Nuevo</button>
-      </div>
-
-      <div style={styles.boardOuter}>
-        <div
-          style={{
-            ...styles.boardGrid,
-            gridTemplateColumns: `repeat(${n}, 1fr)`,
-            gridTemplateRows: `repeat(${n}, 1fr)`,
+      {/* Tablero */}
+      <motion.div 
+        animate={errorFlash ? { x: [-10, 10, -10, 10, 0] } : {}}
+        className="relative aspect-square w-full max-w-md bg-slate-900 p-2 rounded-[2rem] shadow-2xl border-4 border-slate-800"
+      >
+        <div 
+          className="grid h-full w-full rounded-2xl overflow-hidden"
+          style={{ 
+            gridTemplateColumns: `repeat(${puzzle.n}, 1fr)`,
+            gridTemplateRows: `repeat(${puzzle.n}, 1fr)` 
           }}
         >
-          {grid.map((row, r) =>
-            row.map((state, c) => {
-              const region = puzzle.regions[r][c];
-              const isConflict = conflicts.has(`${r},${c}`);
-              const borderRight =
-                c < n - 1 && puzzle.regions[r][c + 1] !== region ? "2px solid #5C3300" : "1px solid rgba(92,51,0,0.12)";
-              const borderBottom =
-                r < n - 1 && puzzle.regions[r + 1][c] !== region ? "2px solid #5C3300" : "1px solid rgba(92,51,0,0.12)";
-              return (
-                <button
-                  key={`${r}-${c}`}
-                  onClick={() => cycleCell(r, c)}
-                  style={{
-                    ...styles.cell,
-                    background: puzzle.colors[region],
-                    borderRight,
-                    borderBottom,
-                    boxShadow: isConflict ? "inset 0 0 0 3px #E4572E" : "none",
-                  }}
-                >
-                  {state === "pig" && (
-                    <img src={pigMascot} alt="Pig" style={styles.pigIcon} />
-                  )}
-                  {state === "mark" && <span style={styles.markIcon}>✕</span>}
-                </button>
-              );
-            })
-          )}
+          {grid.map((row, r) => row.map((state, c) => {
+            const region = puzzle.regions[r][c];
+            const n = puzzle.n;
+            // Bordes gruesos para separar regiones
+            const bRight = c < n - 1 && puzzle.regions[r][c+1] !== region ? "2px solid #1e293b" : "1px solid rgba(30,41,59,0.1)";
+            const bBottom = r < n - 1 && puzzle.regions[r+1][c] !== region ? "2px solid #1e293b" : "1px solid rgba(30,41,59,0.1)";
+            
+            return (
+              <button
+                key={`${r}-${c}`}
+                onClick={() => handleCellClick(r, c)}
+                className="relative flex items-center justify-center transition-colors active:scale-95"
+                style={{ 
+                  backgroundColor: puzzle.colors[region],
+                  borderRight: bRight,
+                  borderBottom: bBottom
+                }}
+              >
+                {state === "pig" && (
+                  <motion.img 
+                    initial={{ scale: 0 }} animate={{ scale: 0.8 }} 
+                    src={pigMascot} 
+                    className="w-full h-full object-contain"
+                  />
+                )}
+                {state === "mark" && <span className="text-slate-400 font-black text-lg">✕</span>}
+              </button>
+            );
+          }))}
         </div>
 
-        {solved && (
-          <div style={styles.overlay}>
-            <img src={pigMascot} alt="" style={styles.overlayMascot} />
-            <p style={styles.overlayTitle}>🎉 ¡Logrado!</p>
-            <p style={styles.overlaySubtitle}>Nivel {level} superado en {mm}:{ss}</p>
-            <button style={styles.overlayButton} onClick={nextLevel}>Siguiente</button>
-          </div>
-        )}
-      </div>
+        {/* Overlays (Win / Game Over) */}
+        <AnimatePresence>
+          {phase === "solved" && (
+            <motion.div initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} className="absolute inset-0 z-40 bg-indigo-600/95 backdrop-blur-md rounded-[1.8rem] flex flex-col items-center justify-center p-8 text-white text-center">
+              <Trophy className="h-20 w-20 text-yellow-400 mb-4 animate-bounce" />
+              <h3 className="text-3xl font-black tracking-tighter mb-2">¡NIVEL SUPERADO!</h3>
+              <p className="text-sm font-medium opacity-80 mb-8">Resolviste el puzzle en {mm}:{ss}</p>
+              <Button onClick={() => { setLevel(l => l + 1); initLevel(level + 1); }} className="h-16 px-12 rounded-full bg-white text-indigo-900 font-black text-xl shadow-2xl">
+                SIGUIENTE NIVEL 🚀
+              </Button>
+            </motion.div>
+          )}
 
-      <p style={styles.hint}>
-        Vacío → ✕ → 🐷 → vacío. Sin repetir en fila, columna o color, y sin contacto directo.
-      </p>
+          {phase === "over" && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="absolute inset-0 z-40 bg-rose-950/95 backdrop-blur-md rounded-[1.8rem] flex flex-col items-center justify-center p-6 text-white text-center">
+              <AlertCircle className="h-16 w-16 text-rose-500 mb-4" />
+              <h3 className="text-2xl font-black tracking-tighter mb-2">¡SIN VIDAS!</h3>
+              <p className="text-xs font-bold text-rose-300 uppercase mb-6">El cochinito se cansó de los errores</p>
+              
+              {gameOverTip && (
+                <div className="bg-white/10 p-4 rounded-2xl mb-8 border border-white/10 max-w-[260px]">
+                  <div className="flex items-center justify-center gap-2 mb-2">
+                    <Lightbulb className="h-4 w-4 text-yellow-400" />
+                    <span className="text-[10px] font-black uppercase tracking-widest text-indigo-200">Consejo de Ahorro</span>
+                  </div>
+                  <p className="text-xs font-bold italic leading-tight">"{gameOverTip.text}"</p>
+                </div>
+              )}
+
+              <Button onClick={() => initLevel(level)} className="h-14 px-10 rounded-full bg-white text-rose-900 font-black text-lg shadow-xl flex gap-3">
+                <RefreshCw className="h-5 w-5" /> REINTENTAR
+              </Button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </motion.div>
+
+      {/* Instrucciones Rápidas */}
+      <div className="mt-8 grid grid-cols-2 gap-4 w-full max-w-md">
+        <div className="bg-white p-3 rounded-2xl border border-slate-100 shadow-sm flex flex-col items-center text-center">
+          <span className="text-lg font-black text-slate-800">1</span>
+          <p className="text-[9px] font-bold text-slate-400 uppercase leading-none mt-1">Por Fila, Columna y Color</p>
+        </div>
+        <div className="bg-white p-3 rounded-2xl border border-slate-100 shadow-sm flex flex-col items-center text-center">
+          <span className="text-lg font-black text-slate-800">0</span>
+          <p className="text-[9px] font-bold text-slate-400 uppercase leading-none mt-1">Cerditos tocándose</p>
+        </div>
+      </div>
+      
+      <p className="mt-6 text-[10px] font-black text-slate-300 uppercase tracking-widest">Toca una vez para marcar (✕), dos para el cerdito (🐷)</p>
     </div>
   );
 }
-
-const styles: Record<string, React.CSSProperties> = {
-  wrapper: {
-    width: "100%",
-    maxWidth: 480,
-    margin: "0 auto",
-    padding: "20px",
-    fontFamily: "'Segoe UI', system-ui, -apple-system, sans-serif",
-    background: "#FDF6EC",
-    borderRadius: 20,
-    boxSizing: "border-box",
-    height: "100%",
-    display: "flex",
-    flexDirection: "column",
-    justifyContent: "center",
-  },
-  header: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: 8, flexWrap: "wrap" },
-  title: { margin: 0, fontSize: "24px", color: "#5C3300", fontWeight: 900 },
-  subtitle: { margin: "4px 0 0", fontSize: 11, color: "#8A5A00", maxWidth: 240, fontWeight: 700 },
-  statsRow: { display: "flex", gap: 8 },
-  statBox: { background: "#FFB13D", borderRadius: 10, padding: "6px 12px", display: "flex", flexDirection: "column", alignItems: "center", minWidth: 60 },
-  statLabel: { fontSize: 9, fontWeight: 900, color: "#5C3300" },
-  statValue: { fontSize: 17, fontWeight: 800, color: "#3A2100" },
-  hudRow: { display: "flex", justifyContent: "space-between", alignItems: "center", background: "#F3DCB4", borderRadius: 10, padding: "6px 12px", marginBottom: 8, fontSize: 12, color: "#5C3300", gap: 8 },
-  hudItem: { display: "flex", alignItems: "center", gap: 4, whiteSpace: "nowrap" },
-  hudStrong: { color: "#3A2100", fontWeight: 800 },
-  toolbar: { display: "flex", justifyContent: "flex-end", gap: 8, marginBottom: 8 },
-  secondaryButton: { background: "#5C3300", color: "#FFF6E5", border: "none", borderRadius: 10, padding: "8px 12px", fontWeight: 700, fontSize: 11, cursor: "pointer" },
-  boardOuter: { position: "relative", width: "100%", background: "#5C3300", borderRadius: 14, padding: "1.5%", boxSizing: "border-box" },
-  boardGrid: { display: "grid", width: "100%", aspectRatio: "1 / 1", borderRadius: 8, overflow: "hidden" },
-  cell: { position: "relative", border: "none", display: "flex", alignItems: "center", justifyConnection: "center", padding: 0, cursor: "pointer" },
-  pigIcon: { width: "75%", height: "72%", objectFit: "contain", pointerEvents: "none" },
-  markIcon: { fontSize: "18px", color: "rgba(58,33,0,0.55)", fontWeight: 800, pointerEvents: "none" },
-  overlay: { position: "absolute", inset: "1.5%", background: "rgba(253, 246, 236, 0.95)", borderRadius: 10, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", padding: 16, zIndex: 10 },
-  overlayMascot: { width: 60, height: "auto", marginBottom: 6 },
-  overlayTitle: { fontSize: 22, fontWeight: 900, color: "#3A2100", margin: 0 },
-  overlaySubtitle: { fontSize: 13, color: "#8A5A00", margin: "8px 0 16px", fontWeight: 700 },
-  overlayButton: { background: "#4CAF83", color: "#fff", border: "none", borderRadius: 12, padding: "12px 24px", fontWeight: 900, fontSize: 14, cursor: "pointer" },
-  hint: { fontSize: 10, color: "#8A5A00", textAlign: "center", marginTop: 10, fontWeight: 600 },
-};
