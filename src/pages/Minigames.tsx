@@ -35,6 +35,15 @@ const games = [
     type: "image",
     color: "bg-sky-500",
     path: "/minigames/flappy-oink"
+  },
+  {
+    id: "pig-sudoku",
+    name: "Cochidoku",
+    description: "El clásico Sudoku con un toque de ahorro para tu mente.",
+    icon: "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/IconoJuego1.png",
+    type: "image",
+    color: "bg-indigo-500",
+    path: "/minigames/pig-sudoku"
   }
 ];
 

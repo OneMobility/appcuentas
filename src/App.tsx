@@ -23,6 +23,7 @@ import Minigames from "./pages/Minigames";
 import PigMergePage from "./pages/PigMergePage";
 import CoinCatchPage from "./pages/CoinCatchPage";
 import FlappyOinkPage from "./pages/FlappyOinkPage";
+import PigSudokuPage from "./pages/PigSudokuPage"; // Nuevo import
 import NotFound from "./pages/NotFound";
 import Login from "./pages/Login";
 import ResetPassword from "./pages/ResetPassword";
@@ -35,7 +36,7 @@ import React from "react";
 
 const queryClient = new QueryClient();
 
-const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
+const ProtectedRoute = ({ children }: { children: React.Node }) => {
   const { session, isLoading } = useSession();
   
   if (isLoading) return <LoadingSpinner />;
@@ -64,6 +65,7 @@ const App = () => {
                 <Route path="/minigames/pig-merge" element={<ProtectedRoute><PigMergePage /></ProtectedRoute>} />
                 <Route path="/minigames/coin-catch" element={<ProtectedRoute><CoinCatchPage /></ProtectedRoute>} />
                 <Route path="/minigames/flappy-oink" element={<ProtectedRoute><FlappyOinkPage /></ProtectedRoute>} />
+                <Route path="/minigames/pig-sudoku" element={<ProtectedRoute><PigSudokuPage /></ProtectedRoute>} />
 
                 {/* Rutas con Menú y Navegación estándar */}
                 <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
