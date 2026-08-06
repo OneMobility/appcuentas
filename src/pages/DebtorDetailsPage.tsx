@@ -223,10 +223,10 @@ const DebtorDetailsPage: React.FC = () => {
                 filteredTransactions.map(tx => (
                   <TableRow key={tx.id}>
                     <TableCell className="text-xs font-medium pl-4">{format(parseISO(tx.date), "dd/MM/yy")}</TableCell>
-                    <TableCell>
-                      <div className="flex flex-col">
-                        <span className="font-bold text-xs">{tx.description}</span>
-                        <Badge variant="outline" className={cn("w-fit text-[9px] px-1 py-0 border-none", tx.type === 'charge' ? "bg-rose-50 text-rose-600" : "bg-emerald-50 text-emerald-600")}>
+                    <TableCell className="max-w-[150px] sm:max-w-xs">
+                      <div className="flex flex-col min-w-0">
+                        <span className="font-bold text-xs leading-snug line-clamp-3 break-words whitespace-normal">{tx.description}</span>
+                        <Badge variant="outline" className={cn("w-fit text-[9px] px-1 py-0 border-none mt-0.5", tx.type === 'charge' ? "bg-rose-50 text-rose-600" : "bg-emerald-50 text-emerald-600")}>
                           {tx.type === 'charge' ? 'Cargo' : 'Abono'}
                         </Badge>
                       </div>
@@ -240,7 +240,7 @@ const DebtorDetailsPage: React.FC = () => {
                         <Button 
                           variant="ghost" 
                           size="icon" 
-                          className="h-8 w-8 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg"
+                          className="h-8 w-8 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg shrink-0"
                           onClick={() => {
                             setEditingTransaction(tx);
                             setTransactionForm({
@@ -262,7 +262,7 @@ const DebtorDetailsPage: React.FC = () => {
                             <Button 
                               variant="ghost" 
                               size="icon" 
-                              className="h-8 w-8 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg"
+                              className="h-8 w-8 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg shrink-0"
                               title="Eliminar"
                             >
                               <Trash2 className="h-4 w-4" />
@@ -273,8 +273,8 @@ const DebtorDetailsPage: React.FC = () => {
                               <AlertDialogTitle>¿Eliminar movimiento?</AlertDialogTitle>
                               <AlertDialogDescription>Esta acción no se puede deshacer.</AlertDialogDescription>
                             </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel className="rounded-xl">Cancelar</AlertDialogCancel>
+                            <AlertDialogFooter className="flex-col sm:flex-row gap-2">
+                              <AlertDialogCancel className="rounded-xl mt-0">Cancelar</AlertDialogCancel>
                               <AlertDialogAction onClick={() => handleDeleteTransaction(tx.id)} className="rounded-xl bg-rose-600">Eliminar</AlertDialogAction>
                             </AlertDialogFooter>
                           </AlertDialogContent>

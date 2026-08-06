@@ -328,7 +328,7 @@ const Cash = () => {
         </div>
       </section>
 
-      {/* HISTORIAL CON BOTONES DIRECTOS DE EDITAR Y ELIMINAR */}
+      {/* HISTORIAL CON DESCRIPCIÓN MULTILÍNEA DE 2-3 LÍNEAS */}
       <section className="space-y-6">
         <div className="flex items-center gap-2 px-2">
           <History className="h-4 w-4 text-slate-400" />
@@ -357,11 +357,11 @@ const Cash = () => {
                     return (
                       <div 
                         key={tx.id}
-                        className="group bg-white p-3.5 sm:p-4 rounded-3xl shadow-sm border border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-all hover:shadow-md"
+                        className="group bg-white p-3.5 sm:p-4 rounded-3xl shadow-sm border border-slate-100 flex flex-col sm:flex-row sm:items-start justify-between gap-3 transition-all hover:shadow-md"
                       >
-                        <div className="flex items-center gap-3 min-w-0">
+                        <div className="flex items-start gap-3 flex-1 min-w-0">
                           <div 
-                            className="h-10 w-10 rounded-2xl flex items-center justify-center shrink-0 shadow-inner"
+                            className="h-10 w-10 rounded-2xl flex items-center justify-center shrink-0 shadow-inner mt-0.5"
                             style={{ 
                               backgroundColor: category?.color || '#f1f5f9',
                               color: getContrastColor(category?.color || '#f1f5f9')
@@ -369,16 +369,22 @@ const Cash = () => {
                           >
                             <DynamicLucideIcon iconName={category?.icon || "Tag"} className="h-5 w-5" />
                           </div>
-                          <div className="flex flex-col min-w-0">
-                            <span className="font-bold text-slate-900 text-sm truncate">{tx.description}</span>
-                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{category?.name || "Sin categoría"}</span>
+                          
+                          {/* Texto de descripción que permite 2-3 líneas completas */}
+                          <div className="flex flex-col flex-1 min-w-0">
+                            <span className="font-bold text-slate-900 text-xs sm:text-sm leading-snug line-clamp-3 break-words whitespace-normal">
+                              {tx.description}
+                            </span>
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">
+                              {category?.name || "Sin categoría"}
+                            </span>
                           </div>
                         </div>
 
-                        <div className="flex items-center justify-between sm:justify-end gap-3 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-50">
+                        <div className="flex items-center justify-between sm:justify-end gap-3 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-50 shrink-0">
                           <div className="text-left sm:text-right flex flex-col">
                             <span className={cn(
-                              "text-base font-black tracking-tight",
+                              "text-sm sm:text-base font-black tracking-tight",
                               tx.type === 'egreso' ? 'text-rose-600' : 'text-emerald-600'
                             )}>
                               {tx.type === 'egreso' ? '-' : '+'}${tx.amount.toLocaleString()}
@@ -391,7 +397,7 @@ const Cash = () => {
                             <Button 
                               variant="ghost" 
                               size="icon" 
-                              className="h-9 w-9 rounded-xl text-slate-500 hover:text-indigo-600 hover:bg-indigo-50"
+                              className="h-9 w-9 rounded-xl text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 shrink-0"
                               onClick={() => handleOpenEdit(tx)}
                               title="Editar movimiento"
                             >
@@ -403,7 +409,7 @@ const Cash = () => {
                                 <Button 
                                   variant="ghost" 
                                   size="icon" 
-                                  className="h-9 w-9 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50"
+                                  className="h-9 w-9 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 shrink-0"
                                   title="Eliminar movimiento"
                                 >
                                   <Trash2 className="h-4 w-4" />

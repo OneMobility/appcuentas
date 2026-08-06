@@ -380,25 +380,6 @@ const CardDetailsPage: React.FC = () => {
     }
   };
 
-  const handleAdvanceInstallment = async (tx: any) => {
-    if (!user || !card) return;
-    try {
-      const todayStr = getLocalDateString(new Date());
-      
-      const { error: updateTxError } = await supabase
-        .from('card_transactions')
-        .update({ date: todayStr })
-        .eq('id', tx.id);
-
-      if (updateTxError) throw updateTxError;
-
-      showSuccess("Mensualidad adelantada al periodo actual.");
-      fetchCardDetails();
-    } catch (error: any) {
-      showError('Error al adelantar mensualidad: ' + error.message);
-    }
-  };
-
   const upcomingCutOffDate = useMemo(() => {
     if (card?.type === "credit" && card?.cut_off_day) {
       return getUpcomingCutOffDate(card.cut_off_day);
@@ -656,7 +637,7 @@ const CardDetailsPage: React.FC = () => {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="pl-4 w-[50px]"></TableHead>
+                    <TableHead className="pl-4 w-[40px]"></TableHead>
                     <TableHead>Detalle</TableHead>
                     <TableHead className="text-right">Monto</TableHead>
                     <TableHead className="text-right pr-4">Saldo / Acciones</TableHead>
@@ -684,9 +665,9 @@ const CardDetailsPage: React.FC = () => {
                             const category = getCategoryById(tx.income_category_id || tx.expense_category_id);
                             return (
                               <TableRow key={tx.id} className="border-b last:border-none">
-                                <TableCell className="pl-4 py-2.5">
+                                <TableCell className="pl-3 py-2.5 align-top">
                                   <div 
-                                    className="h-7 w-7 rounded-full flex items-center justify-center shadow-sm" 
+                                    className="h-7 w-7 rounded-full flex items-center justify-center shadow-sm shrink-0 mt-0.5" 
                                     style={{ 
                                       backgroundColor: category?.color || '#cbd5e1', 
                                       color: getContrastColor(category?.color || '#cbd5e1') 
@@ -696,41 +677,41 @@ const CardDetailsPage: React.FC = () => {
                                   </div>
                                 </TableCell>
                                 
-                                <TableCell className="py-2.5">
-                                  <div className="flex flex-col">
-                                    <span className="font-bold text-xs">
+                                <TableCell className="py-2.5 max-w-[160px] sm:max-w-xs align-top">
+                                  <div className="flex flex-col min-w-0">
+                                    <span className="font-bold text-xs leading-snug line-clamp-3 break-words whitespace-normal">
                                       {tx.description}
                                       {tx.installments_count && (
-                                        <span className="ml-1.5 text-[9px] text-primary font-black bg-primary/10 px-1.5 py-0.5 rounded-full">
+                                        <span className="ml-1.5 text-[9px] text-primary font-black bg-primary/10 px-1.5 py-0.5 rounded-full inline-block">
                                           {tx.installment_number}/{tx.installments_count}
                                         </span>
                                       )}
                                     </span>
-                                    <span className="text-[9px] text-muted-foreground">{category?.name || "Sin categoría"}</span>
+                                    <span className="text-[9px] text-muted-foreground font-medium mt-0.5">{category?.name || "Sin categoría"}</span>
                                   </div>
                                 </TableCell>
                                 
-                                <TableCell className="text-right py-2.5">
+                                <TableCell className="text-right py-2.5 align-top">
                                   <span className={cn("font-black text-xs", tx.type === "charge" ? "text-red-600" : "text-green-600")}>
                                     {tx.type === "charge" ? "-" : "+"}${tx.amount.toFixed(2)}
                                   </span>
                                 </TableCell>
 
                                 {/* Saldo Acumulado y Botones Directos de Acción */}
-                                <TableCell className="text-right pr-4 py-2.5">
-                                  <div className="flex items-center justify-end gap-1.5">
+                                <TableCell className="text-right pr-3 py-2.5 align-top">
+                                  <div className="flex items-center justify-end gap-1">
                                     <span className="font-black text-xs text-muted-foreground mr-1">
                                       ${tx.runningBalance.toFixed(2)}
                                     </span>
                                     {tx.image_url && (
-                                      <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-500 hover:text-primary rounded-lg" onClick={() => window.open(tx.image_url, '_blank')} title="Ver ticket">
+                                      <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-500 hover:text-primary rounded-lg shrink-0" onClick={() => window.open(tx.image_url, '_blank')} title="Ver ticket">
                                         <ImageIcon className="h-4 w-4" />
                                       </Button>
                                     )}
                                     <Button 
                                       variant="ghost" 
                                       size="icon" 
-                                      className="h-8 w-8 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg" 
+                                      className="h-8 w-8 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg shrink-0" 
                                       onClick={() => handleOpenEdit(tx)}
                                       title="Editar movimiento"
                                     >
@@ -741,7 +722,7 @@ const CardDetailsPage: React.FC = () => {
                                         <Button 
                                           variant="ghost" 
                                           size="icon" 
-                                          className="h-8 w-8 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg"
+                                          className="h-8 w-8 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg shrink-0"
                                           title="Eliminar movimiento"
                                         >
                                           <Trash2 className="h-4 w-4" />
@@ -754,8 +735,8 @@ const CardDetailsPage: React.FC = () => {
                                             Esta acción no se puede deshacer. Se ajustará el saldo de la tarjeta automáticamente.
                                           </AlertDialogDescription>
                                         </AlertDialogHeader>
-                                        <AlertDialogFooter>
-                                          <AlertDialogCancel className="rounded-xl">Cancelar</AlertDialogCancel>
+                                        <AlertDialogFooter className="flex-col sm:flex-row gap-2">
+                                          <AlertDialogCancel className="rounded-xl mt-0">Cancelar</AlertDialogCancel>
                                           <AlertDialogAction className="rounded-xl bg-rose-600" onClick={() => handleDeleteTransaction(tx)}>
                                             Eliminar
                                           </AlertDialogAction>
