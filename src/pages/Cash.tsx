@@ -8,12 +8,6 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { 
-  DropdownMenu, 
-  DropdownMenuContent, 
-  DropdownMenuItem, 
-  DropdownMenuTrigger 
-} from "@/components/ui/dropdown-menu";
-import { 
   PlusCircle, 
   ChevronLeft, 
   ChevronRight, 
@@ -41,7 +35,6 @@ import DynamicLucideIcon from "@/components/DynamicLucideIcon";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import CashReconciliationDialog from "@/components/CashReconciliationDialog";
 import CardTransferDialog from "@/components/CardTransferDialog";
-import { motion } from "framer-motion";
 import { getContrastColor } from "@/utils/color-helpers";
 
 const GIF_EFECTIVO = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/efectivnuevo.gif";
@@ -245,19 +238,19 @@ const Cash = () => {
   };
 
   return (
-    <div className="flex flex-col gap-6 p-4 md:p-6 pb-24 max-w-4xl mx-auto">
+    <div className="flex flex-col gap-6 p-2 sm:p-4 md:p-6 pb-24 max-w-4xl mx-auto">
       
       {/* HEADER: BILLETERA VISUAL */}
       <header className="relative">
         <div className="absolute inset-0 bg-primary/20 blur-3xl rounded-full -z-10" />
         <Card className="bg-slate-950 text-white rounded-[2.5rem] border-none shadow-2xl overflow-hidden">
-          <div className="p-8 relative flex flex-col md:flex-row items-center justify-between gap-6">
+          <div className="p-6 sm:p-8 relative flex flex-col md:flex-row items-center justify-between gap-6">
             <div className="space-y-6 flex-1 text-center md:text-left">
               <div className="space-y-1">
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Saldo Total en Efectivo 🐷</p>
                 <div className="flex items-baseline justify-center md:justify-start gap-2">
-                  <span className="text-5xl font-black tracking-tighter">${balance.toLocaleString()}</span>
-                  <span className="text-xl font-bold text-slate-500">MXN</span>
+                  <span className="text-4xl sm:text-5xl font-black tracking-tighter">${balance.toLocaleString()}</span>
+                  <span className="text-lg sm:text-xl font-bold text-slate-500">MXN</span>
                 </div>
               </div>
 
@@ -268,7 +261,7 @@ const Cash = () => {
                   </div>
                   <div className="flex flex-col text-left">
                     <span className="text-[8px] font-bold uppercase text-slate-500">Entradas</span>
-                    <span className="text-sm font-black text-emerald-400">+${monthStats.ingresos.toLocaleString()}</span>
+                    <span className="text-xs sm:text-sm font-black text-emerald-400">+${monthStats.ingresos.toLocaleString()}</span>
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
@@ -277,14 +270,14 @@ const Cash = () => {
                   </div>
                   <div className="flex flex-col text-left">
                     <span className="text-[8px] font-bold uppercase text-slate-500">Salidas</span>
-                    <span className="text-sm font-black text-rose-400">-${monthStats.egresos.toLocaleString()}</span>
+                    <span className="text-xs sm:text-sm font-black text-rose-400">-${monthStats.egresos.toLocaleString()}</span>
                   </div>
                 </div>
               </div>
             </div>
             
             <div className="flex-shrink-0">
-              <img src={GIF_EFECTIVO} alt="Efectivo" className="h-32 w-32 object-contain" />
+              <img src={GIF_EFECTIVO} alt="Efectivo" className="h-28 w-28 sm:h-32 sm:w-32 object-contain" />
             </div>
           </div>
         </Card>
@@ -316,7 +309,7 @@ const Cash = () => {
           <Button variant="ghost" size="icon" className="rounded-xl h-10 w-10" onClick={() => setCurrentViewDate(subMonths(currentViewDate, 1))}>
             <ChevronLeft className="h-5 w-5" />
           </Button>
-          <div className="px-4 text-sm font-black uppercase tracking-widest min-w-[120px] text-center">
+          <div className="px-4 text-xs sm:text-sm font-black uppercase tracking-widest min-w-[120px] text-center">
             {format(currentViewDate, "MMMM yyyy", { locale: es })}
           </div>
           <Button variant="ghost" size="icon" className="rounded-xl h-10 w-10" onClick={() => setCurrentViewDate(addMonths(currentViewDate, 1))}>
@@ -327,15 +320,15 @@ const Cash = () => {
         <div className="flex gap-2 w-full md:w-auto">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
-            <Input placeholder="Buscar..." className="pl-9 rounded-2xl h-11 border-none shadow-sm bg-white" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+            <Input placeholder="Buscar..." className="pl-9 rounded-2xl h-11 border-none shadow-sm bg-white text-xs sm:text-sm" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
           </div>
-          <Button className="rounded-2xl h-11 px-6 font-black bg-primary shadow-lg shadow-primary/20 gap-2" onClick={handleOpenAdd}>
-            <PlusCircle className="h-5 w-5" /> <span className="hidden sm:inline">Nuevo</span>
+          <Button className="rounded-2xl h-11 px-5 sm:px-6 font-black bg-primary shadow-lg shadow-primary/20 gap-2 text-xs sm:text-sm" onClick={handleOpenAdd}>
+            <PlusCircle className="h-5 w-5" /> <span className="inline">Nuevo</span>
           </Button>
         </div>
       </section>
 
-      {/* HISTORIAL */}
+      {/* HISTORIAL CON BOTONES DIRECTOS DE EDITAR Y ELIMINAR */}
       <section className="space-y-6">
         <div className="flex items-center gap-2 px-2">
           <History className="h-4 w-4 text-slate-400" />
@@ -345,28 +338,28 @@ const Cash = () => {
         {filteredTransactions.length === 0 ? (
           <Card className="border-dashed border-2 p-12 flex flex-col items-center justify-center text-center bg-transparent opacity-50">
             <Coins className="h-8 w-8 text-slate-400 mb-2" />
-            <p className="text-xs font-bold text-slate-500">Sin movimientos</p>
+            <p className="text-xs font-bold text-slate-500">Sin movimientos en este periodo</p>
           </Card>
         ) : (
-          <div className="space-y-8">
+          <div className="space-y-6">
             {Object.keys(groupedByDate).sort((a, b) => b.localeCompare(a)).map(dateStr => (
-              <div key={dateStr} className="space-y-3">
-                <div className="flex items-center gap-4 px-2">
+              <div key={dateStr} className="space-y-2">
+                <div className="flex items-center gap-3 px-1">
                   <span className="text-[10px] font-black uppercase tracking-widest text-primary bg-primary/10 px-3 py-1 rounded-full">
                     {isSameDay(parseISO(dateStr), new Date()) ? 'Hoy' : format(parseISO(dateStr), "eee d 'de' MMM", { locale: es })}
                   </span>
                   <div className="h-px bg-slate-100 flex-1" />
                 </div>
 
-                <div className="grid gap-3">
+                <div className="grid gap-2">
                   {groupedByDate[dateStr].map(tx => {
                     const category = getCategoryById(tx.income_category_id || tx.expense_category_id);
                     return (
                       <div 
                         key={tx.id}
-                        className="group bg-white p-4 rounded-3xl shadow-sm border border-slate-50 flex items-center justify-between hover:shadow-md transition-all active:scale-[0.98]"
+                        className="group bg-white p-3.5 sm:p-4 rounded-3xl shadow-sm border border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-all hover:shadow-md"
                       >
-                        <div className="flex items-center gap-4 overflow-hidden">
+                        <div className="flex items-center gap-3 min-w-0">
                           <div 
                             className="h-10 w-10 rounded-2xl flex items-center justify-center shrink-0 shadow-inner"
                             style={{ 
@@ -376,37 +369,62 @@ const Cash = () => {
                           >
                             <DynamicLucideIcon iconName={category?.icon || "Tag"} className="h-5 w-5" />
                           </div>
-                          <div className="flex flex-col truncate">
-                            <span className="font-black text-slate-900 text-sm truncate">{tx.description}</span>
-                            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">{category?.name || "Sin categoría"}</span>
+                          <div className="flex flex-col min-w-0">
+                            <span className="font-bold text-slate-900 text-sm truncate">{tx.description}</span>
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{category?.name || "Sin categoría"}</span>
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-4 shrink-0">
-                          <div className="text-right flex flex-col">
+                        <div className="flex items-center justify-between sm:justify-end gap-3 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-50">
+                          <div className="text-left sm:text-right flex flex-col">
                             <span className={cn(
                               "text-base font-black tracking-tight",
-                              tx.type === 'egreso' ? 'text-rose-500' : 'text-emerald-500'
+                              tx.type === 'egreso' ? 'text-rose-600' : 'text-emerald-600'
                             )}>
                               {tx.type === 'egreso' ? '-' : '+'}${tx.amount.toLocaleString()}
                             </span>
-                            <span className="text-[8px] font-bold text-slate-300 uppercase">Saldo: ${tx.runningBalance.toLocaleString()}</span>
+                            <span className="text-[9px] font-bold text-slate-400 uppercase">Saldo: ${tx.runningBalance.toLocaleString()}</span>
                           </div>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full">
-                                <PlusCircle className="h-4 w-4 text-slate-300 rotate-45" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="rounded-xl">
-                              <DropdownMenuItem onClick={() => handleOpenEdit(tx)} className="text-xs font-bold gap-2">
-                                <Edit className="h-3.5 w-3.5" /> Editar
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => handleDeleteTransaction(tx)} className="text-xs font-bold gap-2 text-rose-500 focus:text-rose-500">
-                                <Trash2 className="h-3.5 w-3.5" /> Eliminar
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
+
+                          {/* Botones Visibles Directos de Editar y Eliminar */}
+                          <div className="flex items-center gap-1 shrink-0">
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-9 w-9 rounded-xl text-slate-500 hover:text-indigo-600 hover:bg-indigo-50"
+                              onClick={() => handleOpenEdit(tx)}
+                              title="Editar movimiento"
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button 
+                                  variant="ghost" 
+                                  size="icon" 
+                                  className="h-9 w-9 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50"
+                                  title="Eliminar movimiento"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent className="rounded-3xl w-[90vw] max-w-md">
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>¿Eliminar movimiento?</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Esta acción no se puede deshacer. Se reajustará el saldo de efectivo automáticamente.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter className="flex-col sm:flex-row gap-2">
+                                  <AlertDialogCancel className="rounded-xl mt-0">Cancelar</AlertDialogCancel>
+                                  <AlertDialogAction onClick={() => handleDeleteTransaction(tx)} className="rounded-xl bg-rose-600 hover:bg-rose-700">
+                                    Eliminar
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          </div>
                         </div>
                       </div>
                     );
@@ -420,49 +438,49 @@ const Cash = () => {
 
       {/* DIÁLOGO MOVIMIENTO */}
       <Dialog open={isAddDialogOpen || isEditDialogOpen} onOpenChange={(open) => { if(!open) { setIsAddDialogOpen(false); setIsEditDialogOpen(false); setEditingTransaction(null); } }}>
-        <DialogContent className="w-[90vw] max-w-[400px] rounded-[2.5rem] p-8">
-          <DialogHeader><DialogTitle className="text-2xl font-black tracking-tight">{editingTransaction ? "Editar" : "Nuevo"} Movimiento</DialogTitle></DialogHeader>
-          <form onSubmit={handleTransactionSubmit} className="grid gap-6 py-4">
+        <DialogContent className="w-[95vw] max-w-[400px] rounded-3xl p-6 sm:p-8">
+          <DialogHeader><DialogTitle className="text-xl font-bold tracking-tight">{editingTransaction ? "Editar" : "Nuevo"} Movimiento</DialogTitle></DialogHeader>
+          <form onSubmit={handleTransactionSubmit} className="grid gap-4 py-2">
             <div className="grid gap-2">
               <div className="grid grid-cols-2 gap-2 bg-slate-50 p-1 rounded-2xl">
                 <Button 
                   type="button" 
                   variant={transactionForm.type === 'ingreso' ? 'default' : 'ghost'}
-                  className={cn("rounded-xl font-bold h-10", transactionForm.type === 'ingreso' && "bg-emerald-500 hover:bg-emerald-600 shadow-md shadow-emerald-200")}
+                  className={cn("rounded-xl font-bold h-10 text-xs", transactionForm.type === 'ingreso' && "bg-emerald-500 hover:bg-emerald-600 text-white shadow-sm")}
                   onClick={() => setTransactionForm({...transactionForm, type: 'ingreso'})}
                 >Entrada</Button>
                 <Button 
                   type="button" 
                   variant={transactionForm.type === 'egreso' ? 'default' : 'ghost'}
-                  className={cn("rounded-xl font-bold h-10", transactionForm.type === 'egreso' && "bg-rose-500 hover:bg-rose-600 shadow-md shadow-rose-200")}
+                  className={cn("rounded-xl font-bold h-10 text-xs", transactionForm.type === 'egreso' && "bg-rose-500 hover:bg-rose-600 text-white shadow-sm")}
                   onClick={() => setTransactionForm({...transactionForm, type: 'egreso'})}
                 >Salida</Button>
               </div>
             </div>
             
-            <div className="grid gap-2">
+            <div className="grid gap-1.5">
                <div className="flex justify-between items-center mb-1">
-                <Label className="text-[10px] font-black uppercase text-slate-400 ml-1">Monto</Label>
-                <div className="flex bg-slate-100 p-0.5 rounded-lg text-[9px] gap-1">
+                <Label className="text-xs font-bold text-slate-600">Monto</Label>
+                <div className="flex bg-slate-100 p-0.5 rounded-lg text-[10px] gap-1">
                   <button type="button" onClick={() => setCurrency("MXN")} className={cn("px-2 py-0.5 rounded-md font-bold", currency === "MXN" ? "bg-white shadow-sm" : "text-slate-400")}>MXN</button>
                   <button type="button" onClick={() => setCurrency("USD")} className={cn("px-2 py-0.5 rounded-md font-bold", currency === "USD" ? "bg-white shadow-sm" : "text-slate-400")}>USD</button>
                 </div>
               </div>
               <div className="relative">
-                <Input value={transactionForm.amount} onChange={e => setTransactionForm({...transactionForm, amount: e.target.value})} className="rounded-2xl h-14 text-xl font-black bg-slate-50 border-none pr-12 focus-visible:ring-primary/20" placeholder="0.00" required />
-                <span className="absolute right-4 top-4 text-xs font-black text-slate-300">{currency}</span>
+                <Input value={transactionForm.amount} onChange={e => setTransactionForm({...transactionForm, amount: e.target.value})} className="rounded-xl h-12 text-lg font-bold bg-slate-50 border-slate-200 pr-12" placeholder="0.00" required />
+                <span className="absolute right-4 top-3.5 text-xs font-bold text-slate-400">{currency}</span>
               </div>
             </div>
 
-            <div className="grid gap-2">
-              <Label className="text-[10px] font-black uppercase text-slate-400 ml-1">Descripción</Label>
-              <Input value={transactionForm.description} onChange={e => setTransactionForm({...transactionForm, description: e.target.value})} className="rounded-2xl h-12 bg-slate-50 border-none focus-visible:ring-primary/20 font-bold" placeholder="¿En qué lo usaste?" required />
+            <div className="grid gap-1.5">
+              <Label className="text-xs font-bold text-slate-600">Descripción</Label>
+              <Input value={transactionForm.description} onChange={e => setTransactionForm({...transactionForm, description: e.target.value})} className="rounded-xl h-11 bg-slate-50 border-slate-200 font-medium" placeholder="¿En qué lo usaste?" required />
             </div>
 
-            <div className="grid gap-2">
-              <Label className="text-[10px] font-black uppercase text-slate-400 ml-1">Categoría</Label>
+            <div className="grid gap-1.5">
+              <Label className="text-xs font-bold text-slate-600">Categoría</Label>
               <Select value={transactionForm.selectedCategoryId} onValueChange={(v) => setTransactionForm({...transactionForm, selectedCategoryId: v})}>
-                <SelectTrigger className="rounded-2xl h-12 bg-slate-50 border-none focus-visible:ring-primary/20 font-bold">
+                <SelectTrigger className="rounded-xl h-11 bg-slate-50 border-slate-200 font-medium">
                   <SelectValue placeholder="Selecciona" />
                 </SelectTrigger>
                 <SelectContent className="rounded-2xl">
@@ -475,7 +493,7 @@ const Cash = () => {
               </Select>
             </div>
 
-            <DialogFooter><Button type="submit" className="w-full rounded-2xl font-black h-14 text-lg shadow-xl shadow-primary/20" disabled={isSubmitting}>{isSubmitting ? "Guardando..." : "Confirmar Movimiento"}</Button></DialogFooter>
+            <DialogFooter className="pt-2"><Button type="submit" className="w-full rounded-xl font-bold h-12 bg-primary hover:bg-primary/90 text-white" disabled={isSubmitting}>{isSubmitting ? "Guardando..." : "Confirmar Movimiento"}</Button></DialogFooter>
           </form>
         </DialogContent>
       </Dialog>

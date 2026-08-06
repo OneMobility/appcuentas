@@ -57,13 +57,11 @@ const CardDetailsPage: React.FC = () => {
     imageUrl: "",
   });
 
-  // Estados para diferir compras
   const [isDeferred, setIsDeferred] = useState(false);
   const [deferredType, setDeferredType] = useState<"msi" | "interest">("msi");
   const [installmentsCount, setInstallmentsCount] = useState("3");
   const [totalWithInterest, setTotalWithInterest] = useState("");
 
-  // Monedas y conversión
   const [currency, setCurrency] = useState<"MXN" | "USD">("MXN");
   const [usdToMxnRate, setUsdToMxnRate] = useState<number>(20.00);
 
@@ -93,7 +91,6 @@ const CardDetailsPage: React.FC = () => {
     if (user && !isLoadingCategories) fetchCardDetails();
   }, [cardId, user, isLoadingCategories]);
 
-  // Obtener el rango de fechas para filtrar (periodo de facturación para crédito, mes calendario para débito)
   const filterInterval = useMemo(() => {
     if (!card) return { start: new Date(), end: new Date() };
     if (card.type === "credit" && card.cut_off_day) {
@@ -106,7 +103,6 @@ const CardDetailsPage: React.FC = () => {
     }
   }, [card, currentViewDate]);
 
-  // Filtrar transacciones por periodo primero
   const periodTransactions = useMemo(() => {
     if (!card) return [];
     return (card.card_transactions || []).filter((tx: any) => 
@@ -114,27 +110,22 @@ const CardDetailsPage: React.FC = () => {
     );
   }, [card, filterInterval]);
 
-  // Calcular transacciones con saldo acumulado relativo al periodo seleccionado
   const filteredTransactions = useMemo(() => {
     if (!card) return [];
 
-    // 1. Filtrar por término de búsqueda y tipo
     const matches = periodTransactions.filter((tx: any) => {
       const matchesSearch = tx.description.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesType = filterType === "all" || tx.type === filterType;
       return matchesSearch && matchesType;
     });
 
-    // 2. Ordenar cronológicamente (ascendente) para calcular el saldo acumulado
     const sortedAsc = [...matches].sort((a, b) => 
       parseISO(a.date).getTime() - parseISO(b.date).getTime() ||
       new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
     );
 
-    // 3. Calcular el saldo inicial del periodo
     let runningPoint = 0;
     if (card.type === "debit") {
-      // Para débito, calculamos el saldo al inicio del periodo revirtiendo transacciones posteriores
       let bal = card.current_balance;
       const postPeriodTxs = (card.card_transactions || []).filter((tx: any) => 
         parseISO(tx.date) > filterInterval.end
@@ -143,7 +134,6 @@ const CardDetailsPage: React.FC = () => {
         bal = tx.type === "charge" ? bal + tx.amount : bal - tx.amount;
       });
 
-      // Ahora 'bal' es el saldo al final del periodo. Revertimos las del periodo para hallar el saldo inicial.
       const sortedPeriodTxs = [...periodTransactions].sort((a, b) => 
         parseISO(a.date).getTime() - parseISO(b.date).getTime() ||
         new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
@@ -155,11 +145,9 @@ const CardDetailsPage: React.FC = () => {
 
       runningPoint = startBal;
     } else {
-      // Para crédito, el saldo del periodo representa la deuda acumulada del ciclo (inicia en 0)
       runningPoint = 0;
     }
 
-    // 4. Calcular saldo acumulado hacia adelante
     const computedAsc = sortedAsc.map(tx => {
       if (card.type === "debit") {
         runningPoint = tx.type === "charge" ? runningPoint - tx.amount : runningPoint + tx.amount;
@@ -169,15 +157,13 @@ const CardDetailsPage: React.FC = () => {
       return { ...tx, runningBalance: runningPoint };
     });
 
-    // 5. Devolver en orden descendente (más reciente primero) para mostrar en la tabla
     return computedAsc.reverse();
   }, [card, periodTransactions, searchTerm, filterType, filterInterval]);
 
-  // Agrupar transacciones por día
   const groupedTransactions = useMemo(() => {
     const groups: Record<string, any[]> = {};
     filteredTransactions.forEach(tx => {
-      const dateStr = tx.date; // Formato YYYY-MM-DD
+      const dateStr = tx.date;
       if (!groups[dateStr]) {
         groups[dateStr] = [];
       }
@@ -186,12 +172,10 @@ const CardDetailsPage: React.FC = () => {
     return groups;
   }, [filteredTransactions]);
 
-  // Obtener las fechas ordenadas de forma descendente
   const sortedDateKeys = useMemo(() => {
     return Object.keys(groupedTransactions).sort((a, b) => b.localeCompare(a));
   }, [groupedTransactions]);
 
-  // Formatear el encabezado del grupo de fecha
   const formatGroupHeader = (dateStr: string) => {
     const date = parseISO(dateStr);
     const today = new Date();
@@ -211,7 +195,6 @@ const CardDetailsPage: React.FC = () => {
     }
   };
 
-  // Obtener todas las mensualidades diferidas futuras (que vencen después del periodo actual)
   const futureInstallments = useMemo(() => {
     if (!card || card.type !== "credit") return [];
     return (card.card_transactions || [])
@@ -219,7 +202,6 @@ const CardDetailsPage: React.FC = () => {
       .sort((a: any, b: any) => parseISO(a.date).getTime() - parseISO(b.date).getTime());
   }, [card, filterInterval]);
 
-  // Calcular la deuda o saldo del periodo seleccionado
   const periodMetrics = useMemo(() => {
     if (!card) return { charges: 0, payments: 0, net: 0 };
     const periodTxs = (card.card_transactions || []).filter((tx: any) => 
@@ -255,7 +237,6 @@ const CardDetailsPage: React.FC = () => {
     let baseAmount = evaluateExpression(transactionForm.amount) || 0;
     if (baseAmount <= 0) { showError("Monto inválido"); return; }
 
-    // Convertir de USD a MXN si es necesario
     let finalAmount = baseAmount;
     let finalDescription = transactionForm.description;
     if (currency === "USD" && !editingTransaction) {
@@ -266,7 +247,6 @@ const CardDetailsPage: React.FC = () => {
     const isCreditCard = card.type === "credit";
     const isCharge = transactionForm.type === "charge";
 
-    // Lógica para diferir compras
     if (isCreditCard && isCharge && isDeferred && !editingTransaction) {
       const count = parseInt(installmentsCount);
       if (isNaN(count) || count < 1) {
@@ -340,7 +320,6 @@ const CardDetailsPage: React.FC = () => {
       return;
     }
 
-    // Lógica normal no diferida (o edición)
     let newBalance = card.current_balance;
     if (editingTransaction) {
       if (card.type === "debit") newBalance = editingTransaction.type === "charge" ? newBalance + editingTransaction.amount : newBalance - editingTransaction.amount;
@@ -401,13 +380,11 @@ const CardDetailsPage: React.FC = () => {
     }
   };
 
-  // Adelantar una mensualidad futura al periodo actual
   const handleAdvanceInstallment = async (tx: any) => {
     if (!user || !card) return;
     try {
       const todayStr = getLocalDateString(new Date());
       
-      // Cambiar la fecha de la transacción para que caiga en el periodo actual
       const { error: updateTxError } = await supabase
         .from('card_transactions')
         .update({ date: todayStr })
@@ -420,19 +397,6 @@ const CardDetailsPage: React.FC = () => {
     } catch (error: any) {
       showError('Error al adelantar mensualidad: ' + error.message);
     }
-  };
-
-  const handleExport = (formatType: 'csv' | 'pdf') => {
-    if (!card) return;
-    const data = filteredTransactions.map(tx => ({
-      Fecha: format(parseISO(tx.date), "dd/MM/yyyy"),
-      Tipo: tx.type === "charge" ? "Gasto" : "Abono",
-      Descripción: tx.description,
-      Monto: tx.amount.toFixed(2),
-      Saldo: tx.runningBalance.toFixed(2)
-    }));
-    if (formatType === 'csv') exportToCsv(`historial_${card.name}.csv`, data);
-    else exportToPdf(`historial_${card.name}.pdf`, `Historial: ${card.name}`, ["Fecha", "Tipo", "Descripción", "Monto", "Saldo"], data.map(d => Object.values(d)));
   };
 
   const upcomingCutOffDate = useMemo(() => {
@@ -459,16 +423,13 @@ const CardDetailsPage: React.FC = () => {
     return (card.credit_limit || 0) - card.current_balance;
   }, [card]);
 
-  // Calcular colores de contraste dinámicos
   const textColor = useMemo(() => card ? getContrastColor(card.color) : "#FFFFFF", [card?.color]);
   const isDarkText = textColor === "#0F172A";
   const isDarkCard = !isDarkText;
   const badgeBg = isDarkText ? "bg-black/10" : "bg-white/20";
   const borderStyle = isDarkText ? "border-black/10" : "border-white/10";
-  const opacityClass = isDarkText ? "opacity-80" : "opacity-90";
   const subOpacityClass = isDarkText ? "opacity-60" : "opacity-75";
 
-  // Estado para manejar la URL del logo y sus fallbacks
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [logoAttempt, setLogoAttempt] = useState<"primary" | "fallback" | "failed">("primary");
 
@@ -515,12 +476,9 @@ const CardDetailsPage: React.FC = () => {
       <div className="grid gap-4 lg:grid-cols-3">
         <div className={cn("lg:col-span-2 flex flex-col gap-4", card.type !== "debit" && "lg:col-span-3")}>
           
-          {/* Tarjeta de Información Principal (Diseño Realista de Tarjeta Física) */}
+          {/* Tarjeta de Información Principal */}
           <div className="w-full max-w-sm h-[240px] relative rounded-2xl shadow-2xl overflow-hidden mx-auto md:mx-1" style={{ backgroundColor: card.color }}>
-            {/* Brillo de plástico de tarjeta */}
             <div className="absolute inset-0 bg-gradient-to-tr from-white/0 via-white/5 to-white/20 pointer-events-none rounded-2xl" />
-            
-            {/* Chip de la tarjeta */}
             <div className="absolute top-12 left-6 w-10 h-8 bg-gradient-to-r from-yellow-200 via-yellow-400 to-yellow-300 rounded-md opacity-90 shadow-inner flex items-center justify-center overflow-hidden border border-yellow-600/30">
               <div className="w-full h-full grid grid-cols-3 grid-rows-3 gap-0.5 p-1 opacity-40">
                 {Array.from({ length: 9 }).map((_, i) => (
@@ -529,9 +487,7 @@ const CardDetailsPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Contenido de la Tarjeta */}
             <div className="p-5 flex flex-col h-full justify-between relative z-10" style={{ color: textColor }}>
-              {/* Encabezado */}
               <div className="flex justify-between items-start">
                 <div className="flex items-center gap-2">
                   {logoUrl ? (
@@ -552,7 +508,6 @@ const CardDetailsPage: React.FC = () => {
                 </span>
               </div>
 
-              {/* Saldo / Crédito */}
               <div className="space-y-1 mt-2">
                 {card.type === "credit" ? (
                   <>
@@ -583,7 +538,6 @@ const CardDetailsPage: React.FC = () => {
                 )}
               </div>
 
-              {/* Número de Tarjeta y Fechas */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <p className="font-mono text-sm tracking-widest drop-shadow-md opacity-90">
@@ -594,7 +548,6 @@ const CardDetailsPage: React.FC = () => {
                   </svg>
                 </div>
 
-                {/* Fila Inferior: Nombre, Expiración y Red de Pago */}
                 <div className="flex justify-between items-end border-t border-white/10 pt-2">
                   <div className="text-[9px] uppercase tracking-wider opacity-80">
                     <p className="font-bold truncate max-w-[120px]">{card.name || "Oinkash Member"}</p>
@@ -613,7 +566,7 @@ const CardDetailsPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Resumen del Periodo / Fechas (Crédito y Débito) */}
+          {/* Resumen de Fechas */}
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mx-1 p-4 bg-muted/30 rounded-2xl border text-xs">
             {card.type === "credit" ? (
               <>
@@ -674,7 +627,7 @@ const CardDetailsPage: React.FC = () => {
             )}
           </div>
 
-          {/* Tabla de Movimientos con Filtro de Periodo */}
+          {/* Tabla de Movimientos */}
           <Card className="border-none shadow-sm mx-1 overflow-hidden">
             <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-muted/10 gap-2">
               <div className="flex flex-col">
@@ -684,7 +637,6 @@ const CardDetailsPage: React.FC = () => {
                 </span>
               </div>
               
-              {/* Navegación de Periodos */}
               <div className="flex items-center gap-2">
                 <div className="flex items-center bg-background rounded-lg p-0.5 border">
                   <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setCurrentViewDate(subMonths(currentViewDate, 1))}><ChevronLeft className="h-4 w-4" /></Button>
@@ -707,7 +659,7 @@ const CardDetailsPage: React.FC = () => {
                     <TableHead className="pl-4 w-[50px]"></TableHead>
                     <TableHead>Detalle</TableHead>
                     <TableHead className="text-right">Monto</TableHead>
-                    <TableHead className="text-right pr-4">Saldo</TableHead>
+                    <TableHead className="text-right pr-4">Saldo / Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -722,19 +674,16 @@ const CardDetailsPage: React.FC = () => {
                       const txs = groupedTransactions[dateStr];
                       return (
                         <React.Fragment key={dateStr}>
-                          {/* Encabezado de Día */}
                           <TableRow className="bg-muted/30 hover:bg-muted/30 border-b border-muted/50">
                             <TableCell colSpan={4} className="font-bold text-[11px] text-primary py-2 pl-4 capitalize">
                               {formatGroupHeader(dateStr)}
                             </TableCell>
                           </TableRow>
                           
-                          {/* Transacciones del Día */}
                           {txs.map((tx: any) => {
                             const category = getCategoryById(tx.income_category_id || tx.expense_category_id);
                             return (
                               <TableRow key={tx.id} className="border-b last:border-none">
-                                {/* Icono de Categoría */}
                                 <TableCell className="pl-4 py-2.5">
                                   <div 
                                     className="h-7 w-7 rounded-full flex items-center justify-center shadow-sm" 
@@ -747,7 +696,6 @@ const CardDetailsPage: React.FC = () => {
                                   </div>
                                 </TableCell>
                                 
-                                {/* Detalle */}
                                 <TableCell className="py-2.5">
                                   <div className="flex flex-col">
                                     <span className="font-bold text-xs">
@@ -762,48 +710,53 @@ const CardDetailsPage: React.FC = () => {
                                   </div>
                                 </TableCell>
                                 
-                                {/* Monto */}
                                 <TableCell className="text-right py-2.5">
                                   <span className={cn("font-black text-xs", tx.type === "charge" ? "text-red-600" : "text-green-600")}>
                                     {tx.type === "charge" ? "-" : "+"}${tx.amount.toFixed(2)}
                                   </span>
                                 </TableCell>
 
-                                {/* Saldo Acumulado del Periodo */}
+                                {/* Saldo Acumulado y Botones Directos de Acción */}
                                 <TableCell className="text-right pr-4 py-2.5">
-                                  <div className="flex items-center justify-end gap-2">
-                                    <span className="font-black text-xs text-muted-foreground">
+                                  <div className="flex items-center justify-end gap-1.5">
+                                    <span className="font-black text-xs text-muted-foreground mr-1">
                                       ${tx.runningBalance.toFixed(2)}
                                     </span>
                                     {tx.image_url && (
-                                      <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => window.open(tx.image_url, '_blank')}>
-                                        <ImageIcon className="h-3 w-3" />
+                                      <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-500 hover:text-primary rounded-lg" onClick={() => window.open(tx.image_url, '_blank')} title="Ver ticket">
+                                        <ImageIcon className="h-4 w-4" />
                                       </Button>
                                     )}
-                                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleOpenEdit(tx)}>
-                                      <Edit className="h-3 w-3" />
+                                    <Button 
+                                      variant="ghost" 
+                                      size="icon" 
+                                      className="h-8 w-8 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg" 
+                                      onClick={() => handleOpenEdit(tx)}
+                                      title="Editar movimiento"
+                                    >
+                                      <Edit className="h-4 w-4" />
                                     </Button>
                                     <AlertDialog>
                                       <AlertDialogTrigger asChild>
-                                        <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive">
-                                          <Trash2 className="h-3 w-3" />
+                                        <Button 
+                                          variant="ghost" 
+                                          size="icon" 
+                                          className="h-8 w-8 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg"
+                                          title="Eliminar movimiento"
+                                        >
+                                          <Trash2 className="h-4 w-4" />
                                         </Button>
                                       </AlertDialogTrigger>
-                                      <AlertDialogContent className="w-[90vw] rounded-2xl">
+                                      <AlertDialogContent className="w-[90vw] max-w-md rounded-2xl">
                                         <AlertDialogHeader>
                                           <AlertDialogTitle>¿Eliminar movimiento?</AlertDialogTitle>
                                           <AlertDialogDescription>
                                             Esta acción no se puede deshacer. Se ajustará el saldo de la tarjeta automáticamente.
-                                            {tx.installments_count && (
-                                              <p className="mt-2 text-red-500 font-semibold">
-                                                Nota: Esta es una mensualidad diferida. Eliminarla solo borrará esta mensualidad en particular.
-                                              </p>
-                                            )}
                                           </AlertDialogDescription>
                                         </AlertDialogHeader>
                                         <AlertDialogFooter>
                                           <AlertDialogCancel className="rounded-xl">Cancelar</AlertDialogCancel>
-                                          <AlertDialogAction className="rounded-xl" onClick={() => handleDeleteTransaction(tx)}>
+                                          <AlertDialogAction className="rounded-xl bg-rose-600" onClick={() => handleDeleteTransaction(tx)}>
                                             Eliminar
                                           </AlertDialogAction>
                                         </AlertDialogFooter>
@@ -837,67 +790,6 @@ const CardDetailsPage: React.FC = () => {
         onNoAdjustmentSuccess={() => showSuccess("El saldo ya está cuadrado.")}
       />
 
-      {/* Diálogo para Adelantar Mensualidades */}
-      <Dialog open={isAdvanceDialogOpen} onOpenChange={setIsAdvanceDialogOpen}>
-        <DialogContent className="w-[90vw] max-w-[500px] rounded-3xl max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <FastForward className="h-5 w-5 text-primary" /> Adelantar Mensualidades
-            </DialogTitle>
-          </DialogHeader>
-          <div className="py-4">
-            <p className="text-xs text-muted-foreground mb-4">
-              Selecciona una mensualidad diferida futura para traerla al periodo de facturación actual. Esto sumará el cargo a tu pago de este mes.
-            </p>
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Detalle</TableHead>
-                    <TableHead>Fecha Programada</TableHead>
-                    <TableHead className="text-right">Monto</TableHead>
-                    <TableHead className="text-right">Acción</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {futureInstallments.map((tx: any) => (
-                    <TableRow key={tx.id}>
-                      <TableCell>
-                        <div className="flex flex-col">
-                          <span className="font-bold text-xs truncate max-w-[150px]">{tx.description}</span>
-                          <span className="text-[9px] text-primary font-black bg-primary/10 px-1.5 py-0.5 rounded-full w-fit mt-1">
-                            {tx.installment_number}/{tx.installments_count}
-                          </span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-xs capitalize">
-                        {format(parseISO(tx.date), "MMM yyyy", { locale: es })}
-                      </TableCell>
-                      <TableCell className="text-right font-bold text-xs">
-                        ${tx.amount.toFixed(2)}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Button 
-                          size="xs" 
-                          variant="outline" 
-                          className="h-7 text-[10px] font-bold gap-1"
-                          onClick={() => handleAdvanceInstallment(tx)}
-                        >
-                          <FastForward className="h-3 w-3" /> Adelantar
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsAdvanceDialogOpen(false)} className="w-full rounded-xl">Cerrar</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
       <Dialog open={isAddTransactionDialogOpen} onOpenChange={setIsAddTransactionDialogOpen}>
         <DialogContent className="w-[90vw] max-w-[400px] rounded-3xl">
           <DialogHeader><DialogTitle>{editingTransaction ? "Editar" : "Nuevo"} Movimiento</DialogTitle></DialogHeader>
@@ -922,11 +814,6 @@ const CardDetailsPage: React.FC = () => {
                 <Input value={transactionForm.amount} onChange={e => setTransactionForm({...transactionForm, amount: e.target.value})} className="rounded-xl pr-12" placeholder="0.00" required />
                 <span className="absolute right-3.5 top-2.5 text-xs text-muted-foreground font-black">{currency}</span>
               </div>
-              {currency === "USD" && transactionForm.amount && (
-                <p className="text-[10px] text-indigo-700 font-bold flex items-center gap-1">
-                  <Coins className="h-3 w-3 animate-pulse" /> Equivale a ~ ${(parseFloat(transactionForm.amount) * usdToMxnRate || 0).toFixed(2)} MXN (tasa: ${usdToMxnRate.toFixed(2)})
-                </p>
-              )}
             </div>
 
             <div className="grid gap-2">
@@ -940,84 +827,6 @@ const CardDetailsPage: React.FC = () => {
                 <SelectContent>{(transactionForm.type === "charge" ? expenseCategories : incomeCategories).map(cat => <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>)}</SelectContent>
               </Select>
             </div>
-
-            {/* Opciones de diferido para tarjetas de crédito en cargos */}
-            {card?.type === "credit" && transactionForm.type === "charge" && !editingTransaction && (
-              <div className="border-t pt-4 mt-2 space-y-4">
-                <div className="flex items-center space-x-2">
-                  <Checkbox 
-                    id="defer-purchase-details" 
-                    checked={isDeferred} 
-                    onCheckedChange={(v) => setIsDeferred(!!v)} 
-                  />
-                  <Label htmlFor="defer-purchase-details" className="font-semibold cursor-pointer">¿Diferir esta compra?</Label>
-                </div>
-
-                {isDeferred && (
-                  <div className="bg-muted/50 p-3 rounded-2xl space-y-3 border">
-                    <div className="grid gap-1.5">
-                      <Label>Tipo de diferido</Label>
-                      <Select value={deferredType} onValueChange={(v: any) => setDeferredType(v)}>
-                        <SelectTrigger className="rounded-xl bg-background"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="msi">Meses sin intereses (MSI)</SelectItem>
-                          <SelectItem value="interest">Con intereses</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    {deferredType === "interest" && (
-                      <div className="grid gap-1.5">
-                        <Label>Monto total a pagar (con intereses)</Label>
-                        <Input 
-                          value={totalWithInterest} 
-                          onChange={e => setTotalWithInterest(e.target.value)} 
-                          placeholder="Ej. 630" 
-                          className="rounded-xl bg-background"
-                          required
-                        />
-                      </div>
-                    )}
-
-                    <div className="grid gap-1.5">
-                      <Label>Número de meses</Label>
-                      <Select value={installmentsCount} onValueChange={setInstallmentsCount}>
-                        <SelectTrigger className="rounded-xl bg-background"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          {Array.from({ length: 12 }, (_, i) => i + 1).map(num => (
-                            <SelectItem key={num} value={num.toString()}>{num} {num === 1 ? 'mes' : 'meses'}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    {/* Vista previa del cálculo */}
-                    <div className="text-xs text-muted-foreground border-t pt-2 mt-1">
-                      {(() => {
-                        const count = parseInt(installmentsCount);
-                        const base = evaluateExpression(transactionForm.amount) || 0;
-                        if (deferredType === "msi") {
-                          const monthly = base / count;
-                          return (
-                            <p className="font-medium text-primary">
-                              Pagarás <span className="font-bold">{count} mensualidades</span> de <span className="font-bold">${monthly.toFixed(2)}</span> cada una (Sin intereses).
-                            </p>
-                          );
-                        } else {
-                          const total = evaluateExpression(totalWithInterest) || 0;
-                          const monthly = total / count;
-                          return (
-                            <p className="font-medium text-primary">
-                              Pagarás <span className="font-bold">{count} mensualidades</span> de <span className="font-bold">${monthly.toFixed(2)}</span> cada una (Total con intereses: ${total.toFixed(2)}).
-                            </p>
-                          );
-                        }
-                      })()}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
 
             <div className="grid gap-2">
               <Label>Imagen/Ticket</Label>
