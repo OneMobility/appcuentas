@@ -1,28 +1,23 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import React, { useState, useEffect } from "react";
+import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { 
   PlusCircle, 
   Trash2, 
-  Eye, 
-  Phone, 
   Edit, 
   DollarSign, 
-  AlertCircle, 
-  CalendarIcon, 
-  Coins, 
   MessageSquare, 
   Search, 
   UserPlus,
   History,
   CheckCircle2,
-  Clock
+  Clock,
+  Coins
 } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -33,12 +28,8 @@ import { evaluateExpression } from "@/utils/math-helpers";
 import { useNavigate } from "react-router-dom";
 import { getLocalDateString } from "@/utils/date-helpers";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Checkbox } from "@/components/ui/checkbox";
 import { useCategoryContext } from "@/context/CategoryContext";
-import DynamicLucideIcon from "@/components/DynamicLucideIcon";
 import { cn } from "@/lib/utils";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Calendar } from "@/components/ui/calendar";
 import { format, parseISO, isBefore, isSameDay } from "date-fns";
 import { es } from "date-fns/locale";
 import { fetchUsdToMxnRate } from "@/utils/currency-helper";
@@ -46,6 +37,21 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Badge } from "@/components/ui/badge";
 
 const GIF_COBRANDO = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/debtorsnuevos.gif";
+
+interface DebtorTransaction {
+  type: "charge" | "payment";
+  amount: number;
+}
+
+interface Debtor {
+  id: string;
+  name: string;
+  initial_balance: number;
+  current_balance: number;
+  phone?: string;
+  due_date?: string;
+  debtor_transactions: DebtorTransaction[];
+}
 
 const Debtors = () => {
   const { user } = useSession();
@@ -56,10 +62,15 @@ const Debtors = () => {
   const [cashBalance, setCashBalance] = useState(0);
   
   const [isAddDebtorDialogOpen, setIsAddDebtorDialogOpen] = useState(false);
+  const [isEditDebtorDialogOpen, setIsEditDebtorDialogOpen] = useState(false);
   const [isTransactionDialogOpen, setIsTransactionDialogOpen] = useState(false);
+  
   const [selectedDebtor, setSelectedDebtor] = useState<Debtor | null>(null);
+  const [editingDebtor, setEditingDebtor] = useState<Debtor | null>(null);
   
   const [newDebtor, setNewDebtor] = useState({ name: "", initial_balance: "", phone: "", due_date: undefined as Date | undefined });
+  const [editDebtorForm, setEditDebtorForm] = useState({ id: "", name: "", phone: "", due_date: "" });
+  
   const [newTransaction, setNewTransaction] = useState({
     type: "payment" as "charge" | "payment",
     amount: "",
@@ -119,18 +130,62 @@ const Debtors = () => {
     let finalBal = addDebtorCurrency === "USD" ? base * usdToMxnRate : base;
     let name = addDebtorCurrency === "USD" ? `${newDebtor.name} (USD)` : newDebtor.name;
 
-    const { data, error } = await supabase.from('debtors').insert({
-      user_id: user?.id, name, initial_balance: finalBal, current_balance: finalBal,
+    const { error } = await supabase.from('debtors').insert({
+      user_id: user?.id, 
+      name, 
+      initial_balance: finalBal, 
+      current_balance: finalBal,
       phone: newDebtor.phone.trim() || null,
       due_date: newDebtor.due_date ? getLocalDateString(newDebtor.due_date) : null,
-    }).select().single();
+    });
 
     if (error) showError(error.message);
     else {
-      showSuccess("Deudor registrado");
+      showSuccess("Deudor registrado exitosamente.");
       fetchData();
       setIsAddDebtorDialogOpen(false);
       setNewDebtor({ name: "", initial_balance: "", phone: "", due_date: undefined });
+    }
+  };
+
+  const handleOpenEditDebtor = (debtor: Debtor) => {
+    setEditingDebtor(debtor);
+    setEditDebtorForm({
+      id: debtor.id,
+      name: debtor.name,
+      phone: debtor.phone || "",
+      due_date: debtor.due_date || "",
+    });
+    setIsEditDebtorDialogOpen(true);
+  };
+
+  const handleUpdateDebtor = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editDebtorForm.id) return;
+
+    const { error } = await supabase.from('debtors').update({
+      name: editDebtorForm.name.trim(),
+      phone: editDebtorForm.phone.trim() || null,
+      due_date: editDebtorForm.due_date || null,
+    }).eq('id', editDebtorForm.id);
+
+    if (error) showError("Error al actualizar: " + error.message);
+    else {
+      showSuccess("Datos del deudor actualizados.");
+      setIsEditDebtorDialogOpen(false);
+      fetchData();
+    }
+  };
+
+  const handleDeleteDebtor = async (debtorId: string) => {
+    try {
+      await supabase.from('debtor_transactions').delete().eq('debtor_id', debtorId);
+      const { error } = await supabase.from('debtors').delete().eq('id', debtorId);
+      if (error) throw error;
+      showSuccess("Deudor eliminado.");
+      fetchData();
+    } catch (err: any) {
+      showError("Error al eliminar deudor: " + err.message);
     }
   };
 
@@ -146,23 +201,23 @@ const Debtors = () => {
     try {
       await supabase.from('debtor_transactions').insert({
         user_id: user?.id, debtor_id: selectedDebtor.id, type: newTransaction.type,
-        amount: finalAmt, description: newTransaction.description, date
+        amount: finalAmt, description: newTransaction.description || "Abono a cuenta", date
       });
 
       if (newTransaction.type === "payment" && !skipLinkedTransaction) {
         if (newTransaction.destinationAccountId === "cash") {
-          await supabase.from('cash_transactions').insert({ user_id: user?.id, type: "ingreso", amount: finalAmt, description: `Abono: ${selectedDebtor.name}`, date, income_category_id: newTransaction.selectedIncomeCategoryId });
+          await supabase.from('cash_transactions').insert({ user_id: user?.id, type: "ingreso", amount: finalAmt, description: `Abono de ${selectedDebtor.name}`, date, income_category_id: newTransaction.selectedIncomeCategoryId || null });
         } else {
           const card = cards.find(c => c.id === newTransaction.destinationAccountId);
           if (card) {
             const newBal = card.type === "credit" ? card.current_balance - finalAmt : card.current_balance + finalAmt;
             await supabase.from('cards').update({ current_balance: newBal }).eq('id', card.id);
-            await supabase.from('card_transactions').insert({ user_id: user?.id, card_id: card.id, type: "payment", amount: finalAmt, description: `Abono: ${selectedDebtor.name}`, date, income_category_id: newTransaction.selectedIncomeCategoryId });
+            await supabase.from('card_transactions').insert({ user_id: user?.id, card_id: card.id, type: "payment", amount: finalAmt, description: `Abono de ${selectedDebtor.name}`, date, income_category_id: newTransaction.selectedIncomeCategoryId || null });
           }
         }
       }
 
-      showSuccess("Abono registrado");
+      showSuccess("Abono registrado exitosamente");
       setIsTransactionDialogOpen(false);
       fetchData();
     } catch (err: any) { showError(err.message); }
@@ -182,51 +237,95 @@ const Debtors = () => {
     const initials = debtor.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
 
     return (
-      <motion.div layout initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="group relative">
-        <Card className="rounded-[2rem] border-none shadow-sm hover:shadow-xl transition-all overflow-hidden bg-white">
-          <div className="p-6">
-            <div className="flex justify-between items-start mb-4">
-              <div className="flex items-center gap-3">
-                <div className="h-12 w-12 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-600 font-black text-lg shadow-inner">
+      <motion.div layout initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="group relative">
+        <Card className="rounded-3xl border border-slate-100 shadow-sm hover:shadow-md transition-all overflow-hidden bg-white">
+          <div className="p-5 flex flex-col gap-4">
+            <div className="flex justify-between items-start gap-2">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="h-12 w-12 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-600 font-black text-base shadow-inner shrink-0">
                   {initials}
                 </div>
-                <div className="flex flex-col">
-                  <span className="font-black text-slate-900 truncate max-w-[120px]">{debtor.name}</span>
+                <div className="flex flex-col min-w-0">
+                  <span className="font-black text-slate-900 truncate text-base">{debtor.name}</span>
                   {debtor.due_date && (
-                    <span className={cn("text-[10px] font-bold uppercase flex items-center gap-1", isOverdue ? "text-rose-500" : "text-slate-400")}>
-                      <Clock className="h-3 w-3" /> {isOverdue ? 'Vencido' : 'Vence'}: {format(parseISO(debtor.due_date), 'd MMM', { locale: es })}
+                    <span className={cn("text-[10px] font-bold uppercase flex items-center gap-1", isOverdue ? "text-rose-500 font-black" : "text-slate-400")}>
+                      <Clock className="h-3 w-3 shrink-0" /> {isOverdue ? 'Vencido' : 'Vence'}: {format(parseISO(debtor.due_date), 'd MMM', { locale: es })}
                     </span>
                   )}
                 </div>
               </div>
-              <div className="text-right">
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Saldo</p>
-                <p className="text-xl font-black text-indigo-600">${debtor.current_balance.toLocaleString()}</p>
+
+              {/* Botones rápidos de Editar / Eliminar */}
+              <div className="flex items-center gap-1 shrink-0">
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className="h-8 w-8 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl"
+                  onClick={() => handleOpenEditDebtor(debtor)}
+                  title="Editar Deudor"
+                >
+                  <Edit className="h-4 w-4" />
+                </Button>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="h-8 w-8 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl"
+                      title="Eliminar Deudor"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent className="rounded-3xl w-[90vw] max-w-md">
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>¿Eliminar deudor?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Se eliminará a <b>{debtor.name}</b> junto con todos sus registros asociados de préstamos y abonos.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter className="flex-col sm:flex-row gap-2">
+                      <AlertDialogCancel className="rounded-xl mt-0">Cancelar</AlertDialogCancel>
+                      <AlertDialogAction onClick={() => handleDeleteDebtor(debtor.id)} className="rounded-xl bg-rose-600 hover:bg-rose-700">
+                        Eliminar
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-2 mt-6">
+            <div className="bg-slate-50 p-3 rounded-2xl flex justify-between items-center border border-slate-100">
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Deuda Pendiente:</span>
+              <span className="text-2xl font-black text-indigo-600">${debtor.current_balance.toLocaleString()}</span>
+            </div>
+
+            {/* Acciones principales */}
+            <div className="grid grid-cols-2 gap-2 pt-1">
               <Button 
-                variant="outline" 
-                className="rounded-xl h-10 font-bold border-slate-100 bg-slate-50/50 hover:bg-indigo-50 hover:text-indigo-600"
+                variant="default" 
+                className="rounded-xl h-11 font-bold text-xs gap-1 bg-indigo-600 hover:bg-indigo-700 text-white"
                 onClick={() => { setSelectedDebtor(debtor); setIsTransactionDialogOpen(true); }}
               >
-                <DollarSign className="h-4 w-4 mr-1" /> Abonar
+                <DollarSign className="h-4 w-4" /> Abonar
               </Button>
               <Button 
                 variant="outline" 
-                className="rounded-xl h-10 font-bold border-slate-100 bg-slate-50/50 hover:bg-green-50 hover:text-green-600"
+                className="rounded-xl h-11 font-bold text-xs gap-1 border-slate-200 text-slate-700 hover:bg-emerald-50 hover:text-emerald-700"
                 onClick={() => handleWhatsApp(debtor)}
               >
-                <MessageSquare className="h-4 w-4 mr-1" /> Cobrar
+                <MessageSquare className="h-4 w-4 text-emerald-600" /> Cobrar
               </Button>
             </div>
             
-            <div className="flex justify-center mt-3">
-              <Button variant="ghost" size="sm" className="text-[10px] font-black uppercase text-slate-400 hover:text-primary rounded-lg" onClick={() => navigate(`/debtors/${debtor.id}`)}>
-                Ver Historial <History className="h-3 w-3 ml-1" />
-              </Button>
-            </div>
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              className="w-full text-xs font-bold text-slate-500 hover:text-indigo-600 hover:bg-indigo-50/50 rounded-xl h-9" 
+              onClick={() => navigate(`/debtors/${debtor.id}`)}
+            >
+              Ver Historial Completo <History className="h-3.5 w-3.5 ml-1.5" />
+            </Button>
           </div>
         </Card>
       </motion.div>
@@ -234,136 +333,265 @@ const Debtors = () => {
   };
 
   return (
-    <div className="flex flex-col gap-8 p-4 md:p-6 pb-24 max-w-5xl mx-auto">
+    <div className="flex flex-col gap-6 p-2 sm:p-4 md:p-6 pb-24 max-w-5xl mx-auto">
       
       {/* HEADER COBRANZA */}
       <header className="relative">
         <div className="absolute inset-0 bg-emerald-100/50 blur-3xl rounded-full -z-10" />
-        <Card className="bg-emerald-600 text-white rounded-[2.5rem] border-none shadow-2xl overflow-hidden">
-          <div className="p-8 relative flex flex-col md:flex-row items-center justify-between gap-6">
-            <div className="space-y-4 flex-1 text-center md:text-left">
+        <Card className="bg-emerald-600 text-white rounded-3xl md:rounded-[2.5rem] border-none shadow-xl overflow-hidden">
+          <div className="p-6 md:p-8 relative flex flex-col sm:flex-row items-center justify-between gap-6 text-center sm:text-left">
+            <div className="space-y-3 flex-1">
               <p className="text-[10px] font-black uppercase tracking-widest text-emerald-100">Dinero por Cobrar 🐷</p>
-              <div className="flex items-baseline justify-center md:justify-start gap-2">
-                <span className="text-5xl font-black tracking-tighter">
+              <div className="flex items-baseline justify-center sm:justify-start gap-2">
+                <span className="text-4xl md:text-5xl font-black tracking-tight">
                   ${debtors.filter(d => d.current_balance > 0.01).reduce((s, d) => s + d.current_balance, 0).toLocaleString()}
                 </span>
-                <span className="text-xl font-bold opacity-60">MXN</span>
+                <span className="text-lg font-bold opacity-70">MXN</span>
               </div>
-              <p className="text-xs font-medium text-emerald-50/80">¡Es hora de que esos cerditos vuelvan a casa!</p>
+              <p className="text-xs font-medium text-emerald-50/90">¡Lleva el control de quién te debe y cobra a tiempo!</p>
             </div>
             <div className="flex-shrink-0">
-              <img src={GIF_COBRANDO} alt="Cobrando" className="h-36 w-36 object-contain" />
+              <img src={GIF_COBRANDO} alt="Cobrando" className="h-28 w-28 md:h-36 md:w-36 object-contain" />
             </div>
           </div>
         </Card>
       </header>
 
-      {/* FILTROS Y BUSQUEDA */}
-      <section className="flex flex-col md:flex-row gap-4 items-center justify-between">
+      {/* FILTROS Y BÚSQUEDA */}
+      <section className="flex flex-col sm:flex-row gap-3 items-center justify-between">
         <div className="relative flex-1 w-full">
-          <Search className="absolute left-4 top-3.5 h-4 w-4 text-slate-400" />
-          <Input placeholder="Buscar por nombre..." className="pl-10 rounded-2xl h-12 border-none shadow-sm bg-white" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+          <Search className="absolute left-3.5 top-3 h-4 w-4 text-slate-400" />
+          <Input 
+            placeholder="Buscar deudor..." 
+            className="pl-10 rounded-2xl h-11 border-slate-200 shadow-sm bg-white text-sm" 
+            value={searchTerm} 
+            onChange={e => setSearchTerm(e.target.value)} 
+          />
         </div>
-        <Button className="rounded-2xl h-12 px-6 font-black bg-slate-900 shadow-xl gap-2 w-full md:w-auto" onClick={() => setIsAddDebtorDialogOpen(true)}>
-          <UserPlus className="h-5 w-5" /> Nuevo Deudor
+        <Button 
+          className="rounded-2xl h-11 px-5 font-bold bg-slate-900 hover:bg-slate-800 text-white shadow-md gap-2 w-full sm:w-auto" 
+          onClick={() => setIsAddDebtorDialogOpen(true)}
+        >
+          <UserPlus className="h-4 w-4" /> Nuevo Deudor
         </Button>
       </section>
 
-      {/* LISTA DE DEUDORES */}
+      {/* LISTA DE DEUDORES CON TABS */}
       <Tabs defaultValue="active" className="w-full">
         <TabsList className="grid w-full grid-cols-2 bg-slate-100 p-1 rounded-2xl h-12">
-          <TabsTrigger value="active" className="rounded-xl font-black text-xs uppercase tracking-widest data-[state=active]:bg-white data-[state=active]:shadow-sm">Activos ({activeDebtors.length})</TabsTrigger>
-          <TabsTrigger value="settled" className="rounded-xl font-black text-xs uppercase tracking-widest data-[state=active]:bg-white data-[state=active]:shadow-sm">Saldados ({settledDebtors.length})</TabsTrigger>
+          <TabsTrigger value="active" className="rounded-xl font-bold text-xs uppercase tracking-wider data-[state=active]:bg-white data-[state=active]:shadow-sm">
+            Activos ({activeDebtors.length})
+          </TabsTrigger>
+          <TabsTrigger value="settled" className="rounded-xl font-bold text-xs uppercase tracking-wider data-[state=active]:bg-white data-[state=active]:shadow-sm">
+            Saldados ({settledDebtors.length})
+          </TabsTrigger>
         </TabsList>
         
-        <TabsContent value="active" className="mt-8">
+        <TabsContent value="active" className="mt-6">
           {activeDebtors.length === 0 ? (
-            <div className="text-center py-20 opacity-30">
-              <CheckCircle2 className="h-12 w-12 mx-auto mb-4" />
-              <p className="font-black uppercase tracking-widest text-xs">¡Todo cobrado!</p>
+            <div className="text-center py-16 bg-white rounded-3xl border border-dashed border-slate-200 p-6">
+              <CheckCircle2 className="h-12 w-12 mx-auto mb-3 text-emerald-500" />
+              <p className="font-bold text-slate-700 text-base">¡No tienes deudores activos!</p>
+              <p className="text-xs text-slate-400 mt-1">Usa el botón "Nuevo Deudor" para registrar un nuevo préstamo.</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
               {activeDebtors.map(d => <DebtorCard key={d.id} debtor={d} />)}
             </div>
           )}
         </TabsContent>
 
-        <TabsContent value="settled" className="mt-8">
-           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 opacity-60">
+        <TabsContent value="settled" className="mt-6">
+          {settledDebtors.length === 0 ? (
+            <div className="text-center py-12 bg-white rounded-3xl border border-slate-100 p-6 text-slate-400 text-xs">
+              No hay cuentas saldadas aún.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {settledDebtors.map(d => (
-                <Card key={d.id} className="rounded-[2rem] border-none shadow-sm grayscale bg-slate-50">
-                  <div className="p-6 flex justify-between items-center">
-                    <div className="flex items-center gap-3">
-                      <div className="h-10 w-10 rounded-xl bg-slate-200 flex items-center justify-center text-slate-400 font-bold text-sm">
+                <Card key={d.id} className="rounded-3xl border border-slate-100 shadow-sm bg-slate-50/80">
+                  <div className="p-5 flex justify-between items-center gap-2">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="h-10 w-10 rounded-xl bg-slate-200 flex items-center justify-center text-slate-500 font-bold text-sm shrink-0">
                         {d.name[0]}
                       </div>
-                      <span className="font-bold text-slate-400">{d.name}</span>
+                      <span className="font-bold text-slate-700 text-sm truncate">{d.name}</span>
                     </div>
-                    <Badge className="bg-emerald-100 text-emerald-700 border-none rounded-full">Saldado</Badge>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <Badge className="bg-emerald-100 text-emerald-800 border-none rounded-full text-[10px] font-bold">
+                        Saldado
+                      </Badge>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-rose-600 rounded-xl">
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent className="rounded-3xl w-[90vw] max-w-md">
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>¿Eliminar registro saldado?</AlertDialogTitle>
+                            <AlertDialogDescription>Se borrará la ficha de {d.name}.</AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel className="rounded-xl">Cancelar</AlertDialogCancel>
+                            <AlertDialogAction onClick={() => handleDeleteDebtor(d.id)} className="rounded-xl bg-rose-600">Eliminar</AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </div>
                   </div>
                 </Card>
               ))}
-           </div>
+            </div>
+          )}
         </TabsContent>
       </Tabs>
 
-      {/* DIALOGOS */}
+      {/* DIÁLOGO AÑADIR DEUDOR */}
       <Dialog open={isAddDebtorDialogOpen} onOpenChange={setIsAddDebtorDialogOpen}>
-        <DialogContent className="rounded-[2.5rem] p-8 max-w-[400px]">
-          <DialogHeader><DialogTitle className="text-2xl font-black">Nuevo Deudor</DialogTitle></DialogHeader>
-          <form onSubmit={handleSubmitNewDebtor} className="grid gap-5 py-4">
-            <div className="space-y-2">
-              <Label className="text-[10px] font-black uppercase text-slate-400 ml-1">Nombre</Label>
-              <Input value={newDebtor.name} onChange={e => setNewDebtor({...newDebtor, name: e.target.value})} className="rounded-2xl h-12 bg-slate-50 border-none font-bold" required />
+        <DialogContent className="rounded-3xl p-6 sm:p-8 w-[95vw] max-w-[420px]">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold">Nuevo Deudor</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleSubmitNewDebtor} className="grid gap-4 py-2">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-slate-600">Nombre del deudor</Label>
+              <Input 
+                value={newDebtor.name} 
+                onChange={e => setNewDebtor({...newDebtor, name: e.target.value})} 
+                className="rounded-xl h-11 bg-slate-50 border-slate-200 font-medium" 
+                placeholder="Ej. Juan Pérez"
+                required 
+              />
             </div>
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               <div className="flex justify-between items-center mb-1">
-                <Label className="text-[10px] font-black uppercase text-slate-400 ml-1">Saldo Inicial</Label>
-                <div className="flex bg-slate-100 p-0.5 rounded-lg text-[9px] gap-1">
-                  <button type="button" onClick={() => setAddDebtorCurrency("MXN")} className={cn("px-2 py-0.5 rounded-md font-bold", addDebtorCurrency === "MXN" ? "bg-white shadow-sm" : "text-slate-400")}>MXN</button>
-                  <button type="button" onClick={() => setAddDebtorCurrency("USD")} className={cn("px-2 py-0.5 rounded-md font-bold", addDebtorCurrency === "USD" ? "bg-white shadow-sm" : "text-slate-400")}>USD</button>
+                <Label className="text-xs font-bold text-slate-600">Monto Inicial que te debe</Label>
+                <div className="flex bg-slate-100 p-0.5 rounded-lg text-[10px] gap-1">
+                  <button type="button" onClick={() => setAddDebtorCurrency("MXN")} className={cn("px-2 py-0.5 rounded-md font-bold transition-all", addDebtorCurrency === "MXN" ? "bg-white shadow-sm text-slate-900" : "text-slate-400")}>MXN</button>
+                  <button type="button" onClick={() => setAddDebtorCurrency("USD")} className={cn("px-2 py-0.5 rounded-md font-bold transition-all", addDebtorCurrency === "USD" ? "bg-white shadow-sm text-slate-900" : "text-slate-400")}>USD</button>
                 </div>
               </div>
               <div className="relative">
-                <Input value={newDebtor.initial_balance} onChange={e => setNewDebtor({...newDebtor, initial_balance: e.target.value})} className="rounded-2xl h-14 text-xl font-black bg-slate-50 border-none pr-12" required />
-                <span className="absolute right-4 top-4 text-xs font-black text-slate-300">{addDebtorCurrency}</span>
+                <Input 
+                  value={newDebtor.initial_balance} 
+                  onChange={e => setNewDebtor({...newDebtor, initial_balance: e.target.value})} 
+                  className="rounded-xl h-12 text-lg font-bold bg-slate-50 border-slate-200 pr-12" 
+                  placeholder="0.00"
+                  required 
+                />
+                <span className="absolute right-3.5 top-3.5 text-xs font-bold text-slate-400">{addDebtorCurrency}</span>
               </div>
             </div>
-            <div className="space-y-2">
-              <Label className="text-[10px] font-black uppercase text-slate-400 ml-1">Teléfono (WhatsApp)</Label>
-              <Input value={newDebtor.phone} onChange={e => setNewDebtor({...newDebtor, phone: e.target.value})} placeholder="521..." className="rounded-2xl h-12 bg-slate-50 border-none font-bold" />
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-slate-600">Teléfono (para WhatsApp, Opcional)</Label>
+              <Input 
+                value={newDebtor.phone} 
+                onChange={e => setNewDebtor({...newDebtor, phone: e.target.value})} 
+                placeholder="Ej. 5215512345678" 
+                className="rounded-xl h-11 bg-slate-50 border-slate-200" 
+              />
             </div>
-            <Button type="submit" className="w-full rounded-2xl h-14 font-black text-lg bg-emerald-600 shadow-xl shadow-emerald-100">Registrar Deuda</Button>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-slate-600">Fecha de Vencimiento (Opcional)</Label>
+              <Input 
+                type="date"
+                value={newDebtor.due_date ? getLocalDateString(newDebtor.due_date) : ""}
+                onChange={e => setNewDebtor({...newDebtor, due_date: e.target.value ? parseISO(e.target.value) : undefined})}
+                className="rounded-xl h-11 bg-slate-50 border-slate-200"
+              />
+            </div>
+            <DialogFooter className="pt-2">
+              <Button type="submit" className="w-full rounded-xl h-12 font-bold bg-emerald-600 hover:bg-emerald-700 text-white">
+                Registrar Deudor
+              </Button>
+            </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
 
+      {/* DIÁLOGO EDITAR DEUDOR */}
+      <Dialog open={isEditDebtorDialogOpen} onOpenChange={setIsEditDebtorDialogOpen}>
+        <DialogContent className="rounded-3xl p-6 sm:p-8 w-[95vw] max-w-[420px]">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold">Editar Deudor</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleUpdateDebtor} className="grid gap-4 py-2">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-slate-600">Nombre</Label>
+              <Input 
+                value={editDebtorForm.name} 
+                onChange={e => setEditDebtorForm({...editDebtorForm, name: e.target.value})} 
+                className="rounded-xl h-11 bg-slate-50 border-slate-200 font-medium" 
+                required 
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-slate-600">Teléfono (WhatsApp)</Label>
+              <Input 
+                value={editDebtorForm.phone} 
+                onChange={e => setEditDebtorForm({...editDebtorForm, phone: e.target.value})} 
+                className="rounded-xl h-11 bg-slate-50 border-slate-200" 
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-slate-600">Fecha de Vencimiento</Label>
+              <Input 
+                type="date"
+                value={editDebtorForm.due_date} 
+                onChange={e => setEditDebtorForm({...editDebtorForm, due_date: e.target.value})} 
+                className="rounded-xl h-11 bg-slate-50 border-slate-200" 
+              />
+            </div>
+            <DialogFooter className="pt-2">
+              <Button type="submit" className="w-full rounded-xl h-12 font-bold bg-indigo-600 hover:bg-indigo-700 text-white">
+                Guardar Cambios
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* DIÁLOGO ABONAR DEUDOR */}
       <Dialog open={isTransactionDialogOpen} onOpenChange={setIsTransactionDialogOpen}>
-        <DialogContent className="rounded-[2.5rem] p-8 max-w-[400px]">
-          <DialogHeader><DialogTitle className="text-2xl font-black">Abono: {selectedDebtor?.name}</DialogTitle></DialogHeader>
-          <form onSubmit={handleTransactionSubmit} className="grid gap-6 py-4">
-            <div className="space-y-2">
+        <DialogContent className="rounded-3xl p-6 sm:p-8 w-[95vw] max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold">Registrar Abono: {selectedDebtor?.name}</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleTransactionSubmit} className="grid gap-4 py-2">
+            <div className="space-y-1.5">
               <div className="flex justify-between items-center mb-1">
-                <Label className="text-[10px] font-black uppercase text-slate-400 ml-1">Monto del Pago</Label>
-                <div className="flex bg-slate-100 p-0.5 rounded-lg text-[9px] gap-1">
-                  <button type="button" onClick={() => setTxCurrency("MXN")} className={cn("px-2 py-0.5 rounded-md font-bold", txCurrency === "MXN" ? "bg-white shadow-sm" : "text-slate-400")}>MXN</button>
-                  <button type="button" onClick={() => setTxCurrency("USD")} className={cn("px-2 py-0.5 rounded-md font-bold", txCurrency === "USD" ? "bg-white shadow-sm" : "text-slate-400")}>USD</button>
+                <Label className="text-xs font-bold text-slate-600">Monto del Abono</Label>
+                <div className="flex bg-slate-100 p-0.5 rounded-lg text-[10px] gap-1">
+                  <button type="button" onClick={() => setTxCurrency("MXN")} className={cn("px-2 py-0.5 rounded-md font-bold transition-all", txCurrency === "MXN" ? "bg-white shadow-sm text-slate-900" : "text-slate-400")}>MXN</button>
+                  <button type="button" onClick={() => setTxCurrency("USD")} className={cn("px-2 py-0.5 rounded-md font-bold transition-all", txCurrency === "USD" ? "bg-white shadow-sm text-slate-900" : "text-slate-400")}>USD</button>
                 </div>
               </div>
-              <Input value={newTransaction.amount} onChange={e => setNewTransaction({...newTransaction, amount: e.target.value})} className="rounded-2xl h-14 text-xl font-black bg-slate-50 border-none" required />
+              <Input 
+                value={newTransaction.amount} 
+                onChange={e => setNewTransaction({...newTransaction, amount: e.target.value})} 
+                className="rounded-xl h-12 text-lg font-bold bg-slate-50 border-slate-200" 
+                placeholder="0.00"
+                required 
+              />
             </div>
-            <div className="space-y-2">
-              <Label className="text-[10px] font-black uppercase text-slate-400 ml-1">¿A dónde entró el dinero?</Label>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-slate-600">¿A qué cuenta ingresa el dinero?</Label>
               <Select value={newTransaction.destinationAccountId} onValueChange={v => setNewTransaction({...newTransaction, destinationAccountId: v})}>
-                <SelectTrigger className="rounded-2xl h-12 bg-slate-50 border-none font-bold"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="rounded-xl h-11 bg-slate-50 border-slate-200 font-medium">
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent className="rounded-2xl">
-                  <SelectItem value="cash" className="rounded-xl">Efectivo (${cashBalance.toFixed(0)})</SelectItem>
+                  <SelectItem value="cash" className="rounded-xl">Efectivo (${cashBalance.toFixed(2)})</SelectItem>
                   {cards.map(c => <SelectItem key={c.id} value={c.id} className="rounded-xl">{c.name} ({c.bank_name})</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
-            <Button type="submit" className="w-full rounded-2xl h-14 font-black text-lg bg-primary shadow-xl">Confirmar Abono</Button>
+            <DialogFooter className="pt-2">
+              <Button type="submit" className="w-full rounded-xl h-12 font-bold bg-indigo-600 hover:bg-indigo-700 text-white">
+                Confirmar Abono
+              </Button>
+            </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
