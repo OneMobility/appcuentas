@@ -439,9 +439,9 @@ const CardDetailsPage: React.FC = () => {
   }, [card?.last_four_digits]);
 
   const networkLogoUrl = useMemo(() => {
-    return isVisa 
-      ? "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Iconos/VISA.png"
-      : "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/Iconos/MASTERCARD.png";
+    const filename = isVisa ? "VISA.png" : "MASTERCARD.png";
+    const { data } = supabase.storage.from('Iconos').getPublicUrl(filename);
+    return data.publicUrl;
   }, [isVisa]);
 
   if (isLoading) return <LoadingSpinner />;
@@ -529,7 +529,7 @@ const CardDetailsPage: React.FC = () => {
                   </svg>
                 </div>
 
-                <div className="flex justify-between items-end border-t border-white/10 pt-2">
+                <div className={cn("flex justify-between items-end border-t pt-2", borderStyle)}>
                   <div className="text-[9px] uppercase tracking-wider opacity-80">
                     <p className="font-bold truncate max-w-[120px]">{card.name || "Oinkash Member"}</p>
                     <p className="opacity-60">Vence: {card.expiration_date}</p>
@@ -539,7 +539,7 @@ const CardDetailsPage: React.FC = () => {
                     <img 
                       src={networkLogoUrl} 
                       alt="Network" 
-                      className="h-6 object-contain max-w-[45px] filter brightness-0 invert drop-shadow-md"
+                      className={cn("h-6 object-contain max-w-[45px] drop-shadow-md", isDarkText ? "brightness-0" : "brightness-0 invert")}
                     />
                   </div>
                 </div>
@@ -637,7 +637,7 @@ const CardDetailsPage: React.FC = () => {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="pl-4 w-[40px]"></TableHead>
+                    <TableHead className="pl-4 w-[50px]"></TableHead>
                     <TableHead>Detalle</TableHead>
                     <TableHead className="text-right">Monto</TableHead>
                     <TableHead className="text-right pr-4">Saldo / Acciones</TableHead>
@@ -665,9 +665,9 @@ const CardDetailsPage: React.FC = () => {
                             const category = getCategoryById(tx.income_category_id || tx.expense_category_id);
                             return (
                               <TableRow key={tx.id} className="border-b last:border-none">
-                                <TableCell className="pl-3 py-2.5 align-top">
+                                <TableCell className="pl-4 py-2.5">
                                   <div 
-                                    className="h-7 w-7 rounded-full flex items-center justify-center shadow-sm shrink-0 mt-0.5" 
+                                    className="h-7 w-7 rounded-full flex items-center justify-center shadow-sm" 
                                     style={{ 
                                       backgroundColor: category?.color || '#cbd5e1', 
                                       color: getContrastColor(category?.color || '#cbd5e1') 
@@ -677,8 +677,8 @@ const CardDetailsPage: React.FC = () => {
                                   </div>
                                 </TableCell>
                                 
-                                <TableCell className="py-2.5 max-w-[160px] sm:max-w-xs align-top">
-                                  <div className="flex flex-col min-w-0">
+                                <TableCell className="py-2.5">
+                                  <div className="flex flex-col">
                                     <span className="font-bold text-xs leading-snug line-clamp-3 break-words whitespace-normal">
                                       {tx.description}
                                       {tx.installments_count && (
@@ -687,31 +687,31 @@ const CardDetailsPage: React.FC = () => {
                                         </span>
                                       )}
                                     </span>
-                                    <span className="text-[9px] text-muted-foreground font-medium mt-0.5">{category?.name || "Sin categoría"}</span>
+                                    <span className="text-[9px] text-muted-foreground">{category?.name || "Sin categoría"}</span>
                                   </div>
                                 </TableCell>
                                 
-                                <TableCell className="text-right py-2.5 align-top">
+                                <TableCell className="text-right py-2.5">
                                   <span className={cn("font-black text-xs", tx.type === "charge" ? "text-red-600" : "text-green-600")}>
                                     {tx.type === "charge" ? "-" : "+"}${tx.amount.toFixed(2)}
                                   </span>
                                 </TableCell>
 
                                 {/* Saldo Acumulado y Botones Directos de Acción */}
-                                <TableCell className="text-right pr-3 py-2.5 align-top">
-                                  <div className="flex items-center justify-end gap-1">
+                                <TableCell className="text-right pr-4 py-2.5">
+                                  <div className="flex items-center justify-end gap-1.5">
                                     <span className="font-black text-xs text-muted-foreground mr-1">
                                       ${tx.runningBalance.toFixed(2)}
                                     </span>
                                     {tx.image_url && (
-                                      <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-500 hover:text-primary rounded-lg shrink-0" onClick={() => window.open(tx.image_url, '_blank')} title="Ver ticket">
+                                      <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-500 hover:text-primary rounded-lg" onClick={() => window.open(tx.image_url, '_blank')} title="Ver ticket">
                                         <ImageIcon className="h-4 w-4" />
                                       </Button>
                                     )}
                                     <Button 
                                       variant="ghost" 
                                       size="icon" 
-                                      className="h-8 w-8 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg shrink-0" 
+                                      className="h-8 w-8 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg" 
                                       onClick={() => handleOpenEdit(tx)}
                                       title="Editar movimiento"
                                     >
@@ -722,7 +722,7 @@ const CardDetailsPage: React.FC = () => {
                                         <Button 
                                           variant="ghost" 
                                           size="icon" 
-                                          className="h-8 w-8 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg shrink-0"
+                                          className="h-8 w-8 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg"
                                           title="Eliminar movimiento"
                                         >
                                           <Trash2 className="h-4 w-4" />
@@ -735,8 +735,8 @@ const CardDetailsPage: React.FC = () => {
                                             Esta acción no se puede deshacer. Se ajustará el saldo de la tarjeta automáticamente.
                                           </AlertDialogDescription>
                                         </AlertDialogHeader>
-                                        <AlertDialogFooter className="flex-col sm:flex-row gap-2">
-                                          <AlertDialogCancel className="rounded-xl mt-0">Cancelar</AlertDialogCancel>
+                                        <AlertDialogFooter>
+                                          <AlertDialogCancel className="rounded-xl">Cancelar</AlertDialogCancel>
                                           <AlertDialogAction className="rounded-xl bg-rose-600" onClick={() => handleDeleteTransaction(tx)}>
                                             Eliminar
                                           </AlertDialogAction>
