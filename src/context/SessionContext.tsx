@@ -31,8 +31,8 @@ export const SessionProvider = ({ children }: { children: ReactNode }) => {
         if (event === 'PASSWORD_RECOVERY') {
           navigate('/reset-password', { replace: true });
         } else if (event === 'SIGNED_IN') {
-          // Evitar redirigir a dashboard si estamos en medio de una recuperación de contraseña
-          if (location.pathname !== '/reset-password') {
+          // Solo redirigir si el usuario realmente estaba en la pantalla de login
+          if (location.pathname === '/login') {
             const lastVisitedRoute = localStorage.getItem('lastVisitedRoute');
             if (lastVisitedRoute && lastVisitedRoute !== '/login') {
               navigate(lastVisitedRoute, { replace: true });
