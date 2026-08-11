@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { DollarSign, ArrowLeft, FileDown, FileText, ChevronLeft, ChevronRight, Scale, Search, Filter, Trash2, Edit, Image as ImageIcon, CalendarDays, Eye, FastForward, PiggyBank, Wallet, Coins } from "lucide-react";
+import { DollarSign, ArrowLeft, FileDown, FileText, ChevronLeft, ChevronRight, Scale, Search, Filter, Trash2, Edit, Image as ImageIcon, CalendarDays, Eye, FastForward, PiggyBank, Wallet, Coins, Zap } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { cn } from "@/lib/utils";
 import { format, parseISO, isWithinInterval, startOfMonth, endOfMonth, addMonths, subMonths, isSameDay } from "date-fns";
@@ -27,6 +27,7 @@ import { getLocalDateString, getUpcomingCutOffDate, getUpcomingPaymentDueDate, g
 import { getContrastColor } from "@/utils/color-helpers";
 import { getBankLogoUrl, getFallbackBankLogoUrl } from "@/utils/logo-helper";
 import CardReconciliationDialog from "@/components/CardReconciliationDialog";
+import BulkTransactionsDialog from "@/components/BulkTransactionsDialog";
 import ImageUpload from "@/components/ImageUpload";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -44,6 +45,7 @@ const CardDetailsPage: React.FC = () => {
   const [isAddTransactionDialogOpen, setIsAddTransactionDialogOpen] = useState(false);
   const [isReconcileDialogOpen, setIsReconcileDialogOpen] = useState(false);
   const [isAdvanceDialogOpen, setIsAdvanceDialogOpen] = useState(false);
+  const [isBulkDialogOpen, setIsBulkDialogOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<any>(null);
   
   const [searchTerm, setSearchTerm] = useState("");
@@ -618,7 +620,7 @@ const CardDetailsPage: React.FC = () => {
                 </span>
               </div>
               
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
                 <div className="flex items-center bg-background rounded-lg p-0.5 border">
                   <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setCurrentViewDate(subMonths(currentViewDate, 1))}><ChevronLeft className="h-4 w-4" /></Button>
                   <span className="px-2 text-[10px] font-bold min-w-[80px] text-center capitalize">{format(currentViewDate, "MMM yyyy", { locale: es })}</span>
@@ -629,8 +631,17 @@ const CardDetailsPage: React.FC = () => {
                     <FastForward className="h-3.5 w-3.5" /> Adelantar ({futureInstallments.length})
                   </Button>
                 )}
-                <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setIsReconcileDialogOpen(true)}><Scale className="h-4 w-4" /></Button>
-                <Button variant="default" size="icon" className="h-8 w-8" onClick={() => { setEditingTransaction(null); setIsDeferred(false); setCurrency("MXN"); setTransactionForm({ type: "charge", amount: "", description: "", selectedCategoryId: "", imageUrl: "" }); setIsAddTransactionDialogOpen(true); }}><DollarSign className="h-4 w-4" /></Button>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="h-8 gap-1 text-xs font-bold border-amber-200 text-amber-800 bg-amber-50 hover:bg-amber-100" 
+                  onClick={() => setIsBulkDialogOpen(true)}
+                >
+                  <Zap className="h-3.5 w-3.5 text-amber-500 fill-amber-400" />
+                  <span className="hidden sm:inline">Carga Masiva</span>
+                </Button>
+                <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setIsReconcileDialogOpen(true)} title="Cuadrar Saldo"><Scale className="h-4 w-4" /></Button>
+                <Button variant="default" size="icon" className="h-8 w-8" onClick={() => { setEditingTransaction(null); setIsDeferred(false); setCurrency("MXN"); setTransactionForm({ type: "charge", amount: "", description: "", selectedCategoryId: "", imageUrl: "" }); setIsAddTransactionDialogOpen(true); }} title="Nuevo Movimiento"><DollarSign className="h-4 w-4" /></Button>
               </div>
             </CardHeader>
             <CardContent className="p-0">
@@ -769,6 +780,14 @@ const CardDetailsPage: React.FC = () => {
         }}
         onReconciliationSuccess={fetchCardDetails}
         onNoAdjustmentSuccess={() => showSuccess("El saldo ya está cuadrado.")}
+      />
+
+      <BulkTransactionsDialog
+        isOpen={isBulkDialogOpen}
+        onClose={() => setIsBulkDialogOpen(false)}
+        onSuccess={fetchCardDetails}
+        cards={[card]}
+        initialAccountId={card.id}
       />
 
       <Dialog open={isAddTransactionDialogOpen} onOpenChange={setIsAddTransactionDialogOpen}>
