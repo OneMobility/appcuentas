@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { PlusCircle, DollarSign, Search, Scale, ArrowRightLeft, Wallet, CreditCard, AlertCircle, PiggyBank, CalendarDays, Coins } from "lucide-react";
+import { PlusCircle, DollarSign, Search, Scale, ArrowRightLeft, Wallet, CreditCard, AlertCircle, PiggyBank, CalendarDays, Coins, Zap } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { cn } from "@/lib/utils";
 import CardDisplay from "@/components/CardDisplay";
@@ -16,6 +16,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/context/SessionContext";
 import CardTransferDialog from "@/components/CardTransferDialog";
 import CardReconciliationDialog from "@/components/CardReconciliationDialog";
+import BulkTransactionsDialog from "@/components/BulkTransactionsDialog";
 import { useCategoryContext } from "@/context/CategoryContext";
 import { evaluateExpression } from "@/utils/math-helpers";
 import DynamicLucideIcon from "@/components/DynamicLucideIcon";
@@ -39,6 +40,7 @@ const Cards = () => {
   const [isAddTransactionDialogOpen, setIsAddTransactionDialogOpen] = useState(false);
   const [isReconcileDialogOpen, setIsReconcileDialogOpen] = useState(false);
   const [isSelectCardForReconcileOpen, setIsSelectCardForReconcileOpen] = useState(false);
+  const [isBulkDialogOpen, setIsBulkDialogOpen] = useState(false);
   
   const [selectedCard, setSelectedCard] = useState<any>(null);
   const [transferSourceId, setTransferSourceId] = useState<string>(""); 
@@ -380,7 +382,7 @@ const Cards = () => {
           <CardHeader className="pb-2"><CardTitle className="text-xs font-medium flex items-center gap-2"><CalendarDays className="h-3 w-3" /> DEUDA CRÉDITO (MES)</CardTitle></CardHeader>
           <CardContent><div className="text-xl font-bold">${totalCreditDebtMonth.toFixed(2)}</div></CardContent>
         </Card>
-        <Card className="border-l-4 border-red-600 bg-red-50 text-red-800">
+        <Card className="border-l-4 border-red-600 bg-red-600 text-white">
           <CardHeader className="pb-2"><CardTitle className="text-xs font-medium flex items-center gap-2"><CalendarDays className="h-3 w-3" /> DEUDA CRÉDITO (GLOBAL)</CardTitle></CardHeader>
           <CardContent><div className="text-xl font-bold">${totalCreditDebtGlobal.toFixed(2)}</div></CardContent>
         </Card>
@@ -396,14 +398,21 @@ const Cards = () => {
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
-        <div className="flex items-center gap-2 w-full md:w-auto">
-          <Button variant="outline" className="flex-1 md:flex-none h-10 rounded-xl font-bold" onClick={handleOpenReconcile}>
-            <Scale className="h-4 w-4 mr-1" /> Cuadrar Tarjeta
+        <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
+          <Button 
+            variant="outline" 
+            className="flex-1 md:flex-none h-10 rounded-xl font-bold border-amber-200 text-amber-800 bg-amber-50 hover:bg-amber-100 gap-1.5 text-xs sm:text-sm" 
+            onClick={() => setIsBulkDialogOpen(true)}
+          >
+            <Zap className="h-4 w-4 text-amber-500 fill-amber-400" /> Carga Masiva
           </Button>
-          <Button variant="outline" className="flex-1 md:flex-none h-10 rounded-xl font-bold" onClick={() => setIsTransferDialogOpen(true)}>
+          <Button variant="outline" className="flex-1 md:flex-none h-10 rounded-xl font-bold text-xs sm:text-sm" onClick={handleOpenReconcile}>
+            <Scale className="h-4 w-4 mr-1" /> Cuadrar
+          </Button>
+          <Button variant="outline" className="flex-1 md:flex-none h-10 rounded-xl font-bold text-xs sm:text-sm" onClick={() => setIsTransferDialogOpen(true)}>
             <ArrowRightLeft className="h-4 w-4 mr-1" /> Transferir
           </Button>
-          <Button className="flex-1 md:flex-none h-10 rounded-xl font-bold" onClick={handleOpenAddCard}>
+          <Button className="flex-1 md:flex-none h-10 rounded-xl font-bold text-xs sm:text-sm" onClick={handleOpenAddCard}>
             <PlusCircle className="h-4 w-4 mr-1" /> Nueva Tarjeta
           </Button>
         </div>
@@ -478,6 +487,14 @@ const Cards = () => {
         cashBalance={cashBalance}
         onTransferSuccess={fetchAllData}
         initialSourceId={transferSourceId}
+      />
+
+      <BulkTransactionsDialog
+        isOpen={isBulkDialogOpen}
+        onClose={() => setIsBulkDialogOpen(false)}
+        onSuccess={fetchAllData}
+        cards={cards}
+        initialAccountId="cash"
       />
 
       <Dialog open={isSelectCardForReconcileOpen} onOpenChange={setIsSelectCardForReconcileOpen}>

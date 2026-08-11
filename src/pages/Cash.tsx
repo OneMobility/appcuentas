@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,10 +17,10 @@ import {
   Scale, 
   ArrowUpCircle, 
   ArrowDownCircle,
-  Wallet,
   ArrowRightLeft,
   History,
-  Coins
+  Coins,
+  Zap
 } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { cn } from "@/lib/utils";
@@ -35,6 +35,7 @@ import DynamicLucideIcon from "@/components/DynamicLucideIcon";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import CashReconciliationDialog from "@/components/CashReconciliationDialog";
 import CardTransferDialog from "@/components/CardTransferDialog";
+import BulkTransactionsDialog from "@/components/BulkTransactionsDialog";
 import { getContrastColor } from "@/utils/color-helpers";
 
 const GIF_EFECTIVO = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object/public/Media/efectivnuevo.gif";
@@ -55,6 +56,7 @@ const Cash = () => {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isReconcileDialogOpen, setIsReconcileDialogOpen] = useState(false);
   const [isTransferDialogOpen, setIsTransferDialogOpen] = useState(false);
+  const [isBulkDialogOpen, setIsBulkDialogOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<any>(null);
 
   const [currency, setCurrency] = useState<"MXN" | "USD">("MXN");
@@ -322,13 +324,20 @@ const Cash = () => {
             <Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
             <Input placeholder="Buscar..." className="pl-9 rounded-2xl h-11 border-none shadow-sm bg-white text-xs sm:text-sm" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
           </div>
-          <Button className="rounded-2xl h-11 px-5 sm:px-6 font-black bg-primary shadow-lg shadow-primary/20 gap-2 text-xs sm:text-sm" onClick={handleOpenAdd}>
+          <Button 
+            variant="outline"
+            className="rounded-2xl h-11 px-4 font-bold border-amber-200 text-amber-800 bg-amber-50 hover:bg-amber-100 gap-1.5 text-xs sm:text-sm shrink-0" 
+            onClick={() => setIsBulkDialogOpen(true)}
+          >
+            <Zap className="h-4 w-4 text-amber-500 fill-amber-400" /> Carga Masiva
+          </Button>
+          <Button className="rounded-2xl h-11 px-5 sm:px-6 font-black bg-primary shadow-lg shadow-primary/20 gap-2 text-xs sm:text-sm shrink-0" onClick={handleOpenAdd}>
             <PlusCircle className="h-5 w-5" /> <span className="inline">Nuevo</span>
           </Button>
         </div>
       </section>
 
-      {/* HISTORIAL CON DESCRIPCIÓN MULTILÍNEA DE 2-3 LÍNEAS */}
+      {/* HISTORIAL */}
       <section className="space-y-6">
         <div className="flex items-center gap-2 px-2">
           <History className="h-4 w-4 text-slate-400" />
@@ -370,7 +379,6 @@ const Cash = () => {
                             <DynamicLucideIcon iconName={category?.icon || "Tag"} className="h-5 w-5" />
                           </div>
                           
-                          {/* Texto de descripción que permite 2-3 líneas completas */}
                           <div className="flex flex-col flex-1 min-w-0">
                             <span className="font-bold text-slate-900 text-xs sm:text-sm leading-snug line-clamp-3 break-words whitespace-normal">
                               {tx.description}
@@ -392,7 +400,6 @@ const Cash = () => {
                             <span className="text-[9px] font-bold text-slate-400 uppercase">Saldo: ${tx.runningBalance.toLocaleString()}</span>
                           </div>
 
-                          {/* Botones Visibles Directos de Editar y Eliminar */}
                           <div className="flex items-center gap-1 shrink-0">
                             <Button 
                               variant="ghost" 
@@ -442,7 +449,7 @@ const Cash = () => {
         )}
       </section>
 
-      {/* DIÁLOGO MOVIMIENTO */}
+      {/* DIÁLOGO MOVIMIENTO INDIVIDUAL */}
       <Dialog open={isAddDialogOpen || isEditDialogOpen} onOpenChange={(open) => { if(!open) { setIsAddDialogOpen(false); setIsEditDialogOpen(false); setEditingTransaction(null); } }}>
         <DialogContent className="w-[95vw] max-w-[400px] rounded-3xl p-6 sm:p-8">
           <DialogHeader><DialogTitle className="text-xl font-bold tracking-tight">{editingTransaction ? "Editar" : "Nuevo"} Movimiento</DialogTitle></DialogHeader>
@@ -507,6 +514,15 @@ const Cash = () => {
       {/* DIÁLOGOS DE APOYO */}
       <CardTransferDialog isOpen={isTransferDialogOpen} onClose={() => setIsTransferDialogOpen(false)} cards={cards} cashBalance={balance} onTransferSuccess={fetchData} />
       <CashReconciliationDialog isOpen={isReconcileDialogOpen} onClose={() => setIsReconcileDialogOpen(false)} appBalance={balance} transactionCount={transactions.length} onReconciliationSuccess={fetchData} onNoAdjustmentSuccess={() => showSuccess("Saldo cuadrado.")} />
+      
+      {/* CARGA MASIVA DIALOG */}
+      <BulkTransactionsDialog 
+        isOpen={isBulkDialogOpen}
+        onClose={() => setIsBulkDialogOpen(false)}
+        onSuccess={fetchData}
+        cards={cards}
+        initialAccountId="cash"
+      />
     </div>
   );
 };

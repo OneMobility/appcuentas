@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { DollarSign, RefreshCw, ArrowRightLeft, Coins, Wallet, CreditCard, Users, Heart, Star } from "lucide-react";
+import { DollarSign, RefreshCw, ArrowRightLeft, Coins, Wallet, CreditCard, Users, Heart, Star, Zap } from "lucide-react";
 import { useCategoryContext } from "@/context/CategoryContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/context/SessionContext";
@@ -18,6 +18,7 @@ import { fetchUsdToMxnRate } from "@/utils/currency-helper";
 import FinancialHealthCard from "@/components/FinancialHealthCard";
 import FinancialPredictionCard from "@/components/FinancialPredictionCard";
 import SmartTipsCard from "@/components/SmartTipsCard";
+import BulkTransactionsDialog from "@/components/BulkTransactionsDialog";
 import { cn } from "@/lib/utils";
 import { showSuccess, showError } from "@/utils/toast";
 
@@ -37,6 +38,8 @@ const Dashboard = () => {
   const [exchangeRate, setExchangeRate] = useState<number>(20.00);
   const [usdInput, setUsdInput] = useState<string>("1");
   const [mxnInput, setMxnInput] = useState<string>("20.00");
+
+  const [isBulkDialogOpen, setIsBulkDialogOpen] = useState(false);
 
   useEffect(() => {
     const loadRate = async () => {
@@ -137,14 +140,25 @@ const Dashboard = () => {
             <p className="text-lg font-medium text-slate-500 mt-1">Qué bueno verte por aquí. Tu dinero está en buenas manos.</p>
           </div>
         </div>
-        <Button 
-          variant="outline" 
-          size="icon" 
-          onClick={() => setRefreshKey(k => k + 1)} 
-          className="rounded-full h-12 w-12 bg-white shadow-soft border-none hover:rotate-180 transition-transform duration-500 hidden md:flex"
-        >
-          <RefreshCw className="h-5 w-5 text-slate-600" />
-        </Button>
+        
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            onClick={() => setIsBulkDialogOpen(true)}
+            className="rounded-2xl h-12 px-5 font-bold border-amber-200 text-amber-800 bg-amber-50 hover:bg-amber-100 gap-2 shadow-sm text-sm"
+          >
+            <Zap className="h-4 w-4 text-amber-500 fill-amber-400" /> Carga Masiva ⚡
+          </Button>
+          <Button 
+            variant="outline" 
+            size="icon" 
+            onClick={() => setRefreshKey(k => k + 1)} 
+            className="rounded-full h-12 w-12 bg-white shadow-soft border-none hover:rotate-180 transition-transform duration-500"
+            title="Recargar datos"
+          >
+            <RefreshCw className="h-5 w-5 text-slate-600" />
+          </Button>
+        </div>
       </header>
 
       {/* 2. TARJETAS DE RESUMEN */}
@@ -258,6 +272,13 @@ const Dashboard = () => {
         </Card>
       </section>
 
+      {/* DIÁLOGO CARGA MASIVA */}
+      <BulkTransactionsDialog
+        isOpen={isBulkDialogOpen}
+        onClose={() => setIsBulkDialogOpen(false)}
+        onSuccess={() => setRefreshKey((k) => k + 1)}
+        cards={cards}
+      />
     </div>
   );
 };
