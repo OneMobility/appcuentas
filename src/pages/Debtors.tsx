@@ -17,7 +17,9 @@ import {
   History,
   CheckCircle2,
   Clock,
-  Coins
+  Coins,
+  Plus,
+  Minus
 } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -50,13 +52,14 @@ interface Debtor {
   current_balance: number;
   phone?: string;
   due_date?: string;
+  created_at: string;
   debtor_transactions: DebtorTransaction[];
 }
 
 const Debtors = () => {
   const { user } = useSession();
   const navigate = useNavigate();
-  const { incomeCategories } = useCategoryContext();
+  const { incomeCategories, expenseCategories } = useCategoryContext();
   const [debtors, setDebtors] = useState<Debtor[]>([]);
   const [cards, setCards] = useState<any[]>([]);
   const [cashBalance, setCashBalance] = useState(0);
@@ -68,7 +71,13 @@ const Debtors = () => {
   const [selectedDebtor, setSelectedDebtor] = useState<Debtor | null>(null);
   const [editingDebtor, setEditingDebtor] = useState<Debtor | null>(null);
   
-  const [newDebtor, setNewDebtor] = useState({ name: "", initial_balance: "", phone: "", due_date: undefined as Date | undefined });
+  const [newDebtor, setNewDebtor] = useState({ 
+    name: "", 
+    initial_balance: "", 
+    initial_motive: "",
+    phone: "", 
+    due_date: undefined as Date | undefined 
+  });
   const [editDebtorForm, setEditDebtorForm] = useState({ id: "", name: "", phone: "", due_date: "" });
   
   const [newTransaction, setNewTransaction] = useState({
@@ -103,8 +112,8 @@ const Debtors = () => {
       .order('created_at', { ascending: false });
 
     const debtorsWithRealBalance = (data || []).map((d: any) => {
-      const totalCharges = d.debtor_transactions.filter((t: any) => t.type === 'charge').reduce((s: number, t: any) => s + t.amount, 0);
-      const totalPayments = d.debtor_transactions.filter((t: any) => t.type === 'payment').reduce((s: number, t: any) => s + t.amount, 0);
+      const totalCharges = (d.debtor_transactions || []).filter((t: any) => t.type === 'charge').reduce((s: number, t: any) => s + t.amount, 0);
+      const totalPayments = (d.debtor_transactions || []).filter((t: any) => t.type === 'payment').reduce((s: number, t: any) => s + t.amount, 0);
       const realBalance = d.initial_balance + totalCharges - totalPayments;
       return { ...d, current_balance: realBalance };
     });
@@ -125,26 +134,42 @@ const Debtors = () => {
   const handleSubmitNewDebtor = async (e: React.FormEvent) => {
     e.preventDefault();
     let base = evaluateExpression(newDebtor.initial_balance) || 0;
-    if (base <= 0) return showError("Monto inválido");
+    if (base < 0) return showError("El monto no puede ser negativo");
 
     let finalBal = addDebtorCurrency === "USD" ? base * usdToMxnRate : base;
     let name = addDebtorCurrency === "USD" ? `${newDebtor.name} (USD)` : newDebtor.name;
+    const initialDescription = newDebtor.initial_motive.trim() || "Préstamo inicial / Apertura de cuenta";
 
-    const { error } = await supabase.from('debtors').insert({
+    const { data: createdDebtor, error } = await supabase.from('debtors').insert({
       user_id: user?.id, 
       name, 
       initial_balance: finalBal, 
       current_balance: finalBal,
       phone: newDebtor.phone.trim() || null,
       due_date: newDebtor.due_date ? getLocalDateString(newDebtor.due_date) : null,
-    });
+    }).select().single();
 
-    if (error) showError(error.message);
-    else {
+    if (error) {
+      showError(error.message);
+    } else {
+      // Guardar también la transacción de apertura si hubo un monto inicial
+      if (finalBal > 0 && createdDebtor) {
+        await supabase.from('debtor_transactions').insert({
+          user_id: user?.id,
+          debtor_id: createdDebtor.id,
+          type: "charge",
+          amount: finalBal,
+          description: initialDescription,
+          date: getLocalDateString(new Date()),
+        });
+        // Como ya registramos el primer cargo en transacciones, ajustamos initial_balance a 0 para no duplicar el cálculo
+        await supabase.from('debtors').update({ initial_balance: 0 }).eq('id', createdDebtor.id);
+      }
+
       showSuccess("Deudor registrado exitosamente.");
       fetchData();
       setIsAddDebtorDialogOpen(false);
-      setNewDebtor({ name: "", initial_balance: "", phone: "", due_date: undefined });
+      setNewDebtor({ name: "", initial_balance: "", initial_motive: "", phone: "", due_date: undefined });
     }
   };
 
@@ -189,6 +214,19 @@ const Debtors = () => {
     }
   };
 
+  const handleOpenQuickTransaction = (debtor: Debtor, type: "payment" | "charge") => {
+    setSelectedDebtor(debtor);
+    setNewTransaction({
+      type,
+      amount: "",
+      description: type === "payment" ? "Abono recibido" : "Préstamo / Cargo adicional",
+      destinationAccountId: "cash",
+      selectedIncomeCategoryId: incomeCategories[0]?.id || "",
+    });
+    setSkipLinkedTransaction(false);
+    setIsTransactionDialogOpen(true);
+  };
+
   const handleTransactionSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedDebtor) return;
@@ -197,30 +235,82 @@ const Debtors = () => {
 
     let finalAmt = txCurrency === "USD" ? base * usdToMxnRate : base;
     const date = getLocalDateString(new Date());
+    const desc = newTransaction.description.trim() || (newTransaction.type === "payment" ? "Abono a cuenta" : "Cargo / Préstamo");
 
     try {
       await supabase.from('debtor_transactions').insert({
-        user_id: user?.id, debtor_id: selectedDebtor.id, type: newTransaction.type,
-        amount: finalAmt, description: newTransaction.description || "Abono a cuenta", date
+        user_id: user?.id,
+        debtor_id: selectedDebtor.id,
+        type: newTransaction.type,
+        amount: finalAmt,
+        description: desc,
+        date
       });
 
-      if (newTransaction.type === "payment" && !skipLinkedTransaction) {
-        if (newTransaction.destinationAccountId === "cash") {
-          await supabase.from('cash_transactions').insert({ user_id: user?.id, type: "ingreso", amount: finalAmt, description: `Abono de ${selectedDebtor.name}`, date, income_category_id: newTransaction.selectedIncomeCategoryId || null });
+      if (!skipLinkedTransaction) {
+        if (newTransaction.type === "payment") {
+          // El deudor me paga -> entra dinero
+          if (newTransaction.destinationAccountId === "cash") {
+            await supabase.from('cash_transactions').insert({
+              user_id: user?.id,
+              type: "ingreso",
+              amount: finalAmt,
+              description: `Abono de ${selectedDebtor.name}: ${desc}`,
+              date,
+              income_category_id: newTransaction.selectedIncomeCategoryId || null
+            });
+          } else {
+            const card = cards.find(c => c.id === newTransaction.destinationAccountId);
+            if (card) {
+              const newBal = card.type === "credit" ? card.current_balance - finalAmt : card.current_balance + finalAmt;
+              await supabase.from('cards').update({ current_balance: newBal }).eq('id', card.id);
+              await supabase.from('card_transactions').insert({
+                user_id: user?.id,
+                card_id: card.id,
+                type: "payment",
+                amount: finalAmt,
+                description: `Abono de ${selectedDebtor.name}: ${desc}`,
+                date,
+                income_category_id: newTransaction.selectedIncomeCategoryId || null
+              });
+            }
+          }
         } else {
-          const card = cards.find(c => c.id === newTransaction.destinationAccountId);
-          if (card) {
-            const newBal = card.type === "credit" ? card.current_balance - finalAmt : card.current_balance + finalAmt;
-            await supabase.from('cards').update({ current_balance: newBal }).eq('id', card.id);
-            await supabase.from('card_transactions').insert({ user_id: user?.id, card_id: card.id, type: "payment", amount: finalAmt, description: `Abono de ${selectedDebtor.name}`, date, income_category_id: newTransaction.selectedIncomeCategoryId || null });
+          // Es un Cargo / Préstamo adicional -> sale dinero de mi cuenta
+          if (newTransaction.destinationAccountId === "cash") {
+            await supabase.from('cash_transactions').insert({
+              user_id: user?.id,
+              type: "egreso",
+              amount: finalAmt,
+              description: `Préstamo a ${selectedDebtor.name}: ${desc}`,
+              date,
+              expense_category_id: null
+            });
+          } else {
+            const card = cards.find(c => c.id === newTransaction.destinationAccountId);
+            if (card) {
+              const newBal = card.type === "credit" ? card.current_balance + finalAmt : card.current_balance - finalAmt;
+              await supabase.from('cards').update({ current_balance: newBal }).eq('id', card.id);
+              await supabase.from('card_transactions').insert({
+                user_id: user?.id,
+                card_id: card.id,
+                type: "charge",
+                amount: finalAmt,
+                description: `Préstamo a ${selectedDebtor.name}: ${desc}`,
+                date,
+                expense_category_id: null
+              });
+            }
           }
         }
       }
 
-      showSuccess("Abono registrado exitosamente");
+      showSuccess(newTransaction.type === "payment" ? "Abono registrado con éxito" : "Cargo registrado con éxito");
       setIsTransactionDialogOpen(false);
       fetchData();
-    } catch (err: any) { showError(err.message); }
+    } catch (err: any) { 
+      showError("Error: " + err.message); 
+    }
   };
 
   const handleWhatsApp = (debtor: Debtor) => {
@@ -255,8 +345,19 @@ const Debtors = () => {
                 </div>
               </div>
 
-              {/* Botones rápidos de Editar / Eliminar */}
+              {/* Botones de acción complementarios: WhatsApp, Editar, Eliminar */}
               <div className="flex items-center gap-1 shrink-0">
+                {debtor.phone && (
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="h-8 w-8 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-xl"
+                    onClick={() => handleWhatsApp(debtor)}
+                    title="Cobrar por WhatsApp"
+                  >
+                    <MessageSquare className="h-4 w-4" />
+                  </Button>
+                )}
                 <Button 
                   variant="ghost" 
                   size="icon" 
@@ -295,26 +396,26 @@ const Debtors = () => {
               </div>
             </div>
 
-            <div className="bg-slate-50 p-3 rounded-2xl flex justify-between items-center border border-slate-100">
+            <div className="bg-slate-50 p-3.5 rounded-2xl flex justify-between items-center border border-slate-100">
               <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Deuda Pendiente:</span>
               <span className="text-2xl font-black text-indigo-600">${debtor.current_balance.toLocaleString()}</span>
             </div>
 
-            {/* Acciones principales */}
+            {/* ACCIONES RÁPIDAS: ABONAR Y CARGO */}
             <div className="grid grid-cols-2 gap-2 pt-1">
               <Button 
                 variant="default" 
-                className="rounded-xl h-11 font-bold text-xs gap-1 bg-indigo-600 hover:bg-indigo-700 text-white"
-                onClick={() => { setSelectedDebtor(debtor); setIsTransactionDialogOpen(true); }}
+                className="rounded-xl h-11 font-bold text-xs gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
+                onClick={() => handleOpenQuickTransaction(debtor, "payment")}
               >
                 <DollarSign className="h-4 w-4" /> Abonar
               </Button>
               <Button 
                 variant="outline" 
-                className="rounded-xl h-11 font-bold text-xs gap-1 border-slate-200 text-slate-700 hover:bg-emerald-50 hover:text-emerald-700"
-                onClick={() => handleWhatsApp(debtor)}
+                className="rounded-xl h-11 font-bold text-xs gap-1.5 border-rose-200 text-rose-700 hover:bg-rose-50 bg-rose-50/40"
+                onClick={() => handleOpenQuickTransaction(debtor, "charge")}
               >
-                <MessageSquare className="h-4 w-4 text-emerald-600" /> Cobrar
+                <Plus className="h-4 w-4 text-rose-600" /> Cargo
               </Button>
             </div>
             
@@ -348,7 +449,7 @@ const Debtors = () => {
                 </span>
                 <span className="text-lg font-bold opacity-70">MXN</span>
               </div>
-              <p className="text-xs font-medium text-emerald-50/90">¡Lleva el control de quién te debe y cobra a tiempo!</p>
+              <p className="text-xs font-medium text-emerald-50/90">¡Lleva el control de quién te debe, aplica abonos y cargos rápidos!</p>
             </div>
             <div className="flex-shrink-0">
               <img src={GIF_COBRANDO} alt="Cobrando" className="h-28 w-28 md:h-36 md:w-36 object-contain" />
@@ -464,6 +565,7 @@ const Debtors = () => {
                 required 
               />
             </div>
+
             <div className="space-y-1.5">
               <div className="flex justify-between items-center mb-1">
                 <Label className="text-xs font-bold text-slate-600">Monto Inicial que te debe</Label>
@@ -483,8 +585,19 @@ const Debtors = () => {
                 <span className="absolute right-3.5 top-3.5 text-xs font-bold text-slate-400">{addDebtorCurrency}</span>
               </div>
             </div>
+
             <div className="space-y-1.5">
-              <Label className="text-xs font-bold text-slate-600">Teléfono (para WhatsApp, Opcional)</Label>
+              <Label className="text-xs font-bold text-slate-600">Motivo / Concepto del préstamo inicial</Label>
+              <Input 
+                value={newDebtor.initial_motive} 
+                onChange={e => setNewDebtor({...newDebtor, initial_motive: e.target.value})} 
+                placeholder="Ej. Préstamo para colegiatura, Cena..." 
+                className="rounded-xl h-11 bg-slate-50 border-slate-200" 
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-slate-600">Teléfono (WhatsApp, Opcional)</Label>
               <Input 
                 value={newDebtor.phone} 
                 onChange={e => setNewDebtor({...newDebtor, phone: e.target.value})} 
@@ -492,6 +605,7 @@ const Debtors = () => {
                 className="rounded-xl h-11 bg-slate-50 border-slate-200" 
               />
             </div>
+
             <div className="space-y-1.5">
               <Label className="text-xs font-bold text-slate-600">Fecha de Vencimiento (Opcional)</Label>
               <Input 
@@ -501,6 +615,7 @@ const Debtors = () => {
                 className="rounded-xl h-11 bg-slate-50 border-slate-200"
               />
             </div>
+
             <DialogFooter className="pt-2">
               <Button type="submit" className="w-full rounded-xl h-12 font-bold bg-emerald-600 hover:bg-emerald-700 text-white">
                 Registrar Deudor
@@ -552,16 +667,39 @@ const Debtors = () => {
         </DialogContent>
       </Dialog>
 
-      {/* DIÁLOGO ABONAR DEUDOR */}
+      {/* DIÁLOGO RÁPIDO: ABONO O CARGO */}
       <Dialog open={isTransactionDialogOpen} onOpenChange={setIsTransactionDialogOpen}>
-        <DialogContent className="rounded-3xl p-6 sm:p-8 w-[95vw] max-w-[400px]">
+        <DialogContent className="rounded-3xl p-6 sm:p-8 w-[95vw] max-w-[420px]">
           <DialogHeader>
-            <DialogTitle className="text-xl font-bold">Registrar Abono: {selectedDebtor?.name}</DialogTitle>
+            <DialogTitle className="text-xl font-bold flex items-center gap-2">
+              {newTransaction.type === "payment" ? "Registrar Abono" : "Registrar Cargo"} a {selectedDebtor?.name}
+            </DialogTitle>
           </DialogHeader>
           <form onSubmit={handleTransactionSubmit} className="grid gap-4 py-2">
+            <div className="grid grid-cols-2 gap-2 bg-slate-100 p-1 rounded-2xl">
+              <Button 
+                type="button" 
+                variant={newTransaction.type === 'payment' ? 'default' : 'ghost'} 
+                className={cn("rounded-xl font-bold text-xs uppercase h-10", newTransaction.type === 'payment' && "bg-emerald-600 text-white shadow-sm hover:bg-emerald-700")}
+                onClick={() => setNewTransaction(prev => ({ ...prev, type: 'payment', description: 'Abono recibido' }))}
+              >
+                <DollarSign className="h-4 w-4 mr-1" /> Abono (Resta)
+              </Button>
+              <Button 
+                type="button" 
+                variant={newTransaction.type === 'charge' ? 'default' : 'ghost'} 
+                className={cn("rounded-xl font-bold text-xs uppercase h-10", newTransaction.type === 'charge' && "bg-rose-600 text-white shadow-sm hover:bg-rose-700")}
+                onClick={() => setNewTransaction(prev => ({ ...prev, type: 'charge', description: 'Préstamo / Cargo adicional' }))}
+              >
+                <Plus className="h-4 w-4 mr-1" /> Cargo (Suma)
+              </Button>
+            </div>
+
             <div className="space-y-1.5">
               <div className="flex justify-between items-center mb-1">
-                <Label className="text-xs font-bold text-slate-600">Monto del Abono</Label>
+                <Label className="text-xs font-bold text-slate-600">
+                  {newTransaction.type === "payment" ? "Monto del Abono" : "Monto del Cargo"}
+                </Label>
                 <div className="flex bg-slate-100 p-0.5 rounded-lg text-[10px] gap-1">
                   <button type="button" onClick={() => setTxCurrency("MXN")} className={cn("px-2 py-0.5 rounded-md font-bold transition-all", txCurrency === "MXN" ? "bg-white shadow-sm text-slate-900" : "text-slate-400")}>MXN</button>
                   <button type="button" onClick={() => setTxCurrency("USD")} className={cn("px-2 py-0.5 rounded-md font-bold transition-all", txCurrency === "USD" ? "bg-white shadow-sm text-slate-900" : "text-slate-400")}>USD</button>
@@ -571,25 +709,50 @@ const Debtors = () => {
                 value={newTransaction.amount} 
                 onChange={e => setNewTransaction({...newTransaction, amount: e.target.value})} 
                 className="rounded-xl h-12 text-lg font-bold bg-slate-50 border-slate-200" 
-                placeholder="0.00"
+                placeholder="0.00 o =50+50"
                 required 
               />
             </div>
+
             <div className="space-y-1.5">
-              <Label className="text-xs font-bold text-slate-600">¿A qué cuenta ingresa el dinero?</Label>
+              <Label className="text-xs font-bold text-slate-600">Motivo / Descripción</Label>
+              <Input 
+                value={newTransaction.description} 
+                onChange={e => setNewTransaction({...newTransaction, description: e.target.value})} 
+                placeholder="Ej. Pago parcial, Comida fin de semana..." 
+                className="rounded-xl h-11 bg-slate-50 border-slate-200 font-medium text-sm" 
+                required 
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-slate-600">
+                {newTransaction.type === "payment" ? "¿A qué cuenta ingresa el dinero?" : "¿De qué cuenta salió el dinero?"}
+              </Label>
               <Select value={newTransaction.destinationAccountId} onValueChange={v => setNewTransaction({...newTransaction, destinationAccountId: v})}>
                 <SelectTrigger className="rounded-xl h-11 bg-slate-50 border-slate-200 font-medium">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent className="rounded-2xl">
                   <SelectItem value="cash" className="rounded-xl">Efectivo (${cashBalance.toFixed(2)})</SelectItem>
-                  {cards.map(c => <SelectItem key={c.id} value={c.id} className="rounded-xl">{c.name} ({c.bank_name})</SelectItem>)}
+                  {cards.map(c => (
+                    <SelectItem key={c.id} value={c.id} className="rounded-xl">
+                      {c.name} ({c.bank_name}) - Saldo: ${c.current_balance.toFixed(2)}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
+
             <DialogFooter className="pt-2">
-              <Button type="submit" className="w-full rounded-xl h-12 font-bold bg-indigo-600 hover:bg-indigo-700 text-white">
-                Confirmar Abono
+              <Button 
+                type="submit" 
+                className={cn(
+                  "w-full rounded-xl h-12 font-bold text-white shadow-md",
+                  newTransaction.type === "payment" ? "bg-emerald-600 hover:bg-emerald-700" : "bg-rose-600 hover:bg-rose-700"
+                )}
+              >
+                {newTransaction.type === "payment" ? "Confirmar Abono" : "Confirmar Cargo"}
               </Button>
             </DialogFooter>
           </form>
