@@ -29,7 +29,8 @@ import {
   TrendingDown,
   Building2,
   Calendar,
-  Eye
+  Eye,
+  RefreshCw
 } from "lucide-react";
 import { 
   ResponsiveContainer, 
@@ -156,13 +157,11 @@ const DebtorDetailsPage: React.FC = () => {
 
     const list: DebtorTransaction[] = [...(debtor.debtor_transactions || [])];
 
-    // Verificar si ya existe un cargo registrado en transacciones que represente la apertura inicial
     const hasInitialTx = list.some(t => 
       t.description.toLowerCase().includes("inicial") || 
       t.description.toLowerCase().includes("apertura")
     );
 
-    // Solo agregar el registro virtual si initial_balance > 0 y NO existe en la lista de transacciones
     if (debtor.initial_balance > 0 && !hasInitialTx) {
       list.push({
         id: "initial-balance-record",
@@ -206,7 +205,6 @@ const DebtorDetailsPage: React.FC = () => {
     });
   }, [allTimelineTransactions, timeViewMode, filterInterval, searchTerm, filterType]);
 
-  // Cálculo canónico y matemático: Total Cargos, Total Abonos y Saldo Pendiente exacto
   const stats = useMemo(() => {
     const charges = allTimelineTransactions
       .filter(t => t.type === 'charge')
@@ -220,7 +218,6 @@ const DebtorDetailsPage: React.FC = () => {
     return { charges, payments, pending };
   }, [allTimelineTransactions]);
 
-  // Sincronizar en segundo plano el saldo correcto en la tabla de debtors si difería
   useEffect(() => {
     if (debtor && Math.abs(debtor.current_balance - stats.pending) > 0.01) {
       supabase
@@ -233,7 +230,6 @@ const DebtorDetailsPage: React.FC = () => {
     }
   }, [debtor, stats.pending]);
 
-  // Datos para la gráfica interactiva
   const chartData = useMemo(() => {
     const ascList = [...allTimelineTransactions].reverse();
     if (ascList.length === 0) return [];
@@ -304,7 +300,7 @@ const DebtorDetailsPage: React.FC = () => {
           }
         }
       }
-      showSuccess("Movimiento guardado con éxito");
+      showSuccess(stats.pending <= 0.01 && transactionForm.type === "charge" ? "¡Cuenta reabierta con éxito!" : "Movimiento guardado con éxito");
       setIsTransactionDialogOpen(false);
       fetchData();
     } catch (err: any) { 
@@ -437,7 +433,12 @@ const DebtorDetailsPage: React.FC = () => {
         <Card className="rounded-3xl border-none shadow-sm bg-slate-900 text-white p-5">
           <div className="flex items-center justify-between">
             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Saldo Pendiente</p>
-            <span className="text-[10px] bg-white/10 px-2 py-0.5 rounded-full font-bold">Por cobrar</span>
+            <span className={cn(
+              "text-[10px] px-2 py-0.5 rounded-full font-bold",
+              stats.pending <= 0.01 ? "bg-emerald-500/20 text-emerald-300" : "bg-white/10 text-white"
+            )}>
+              {stats.pending <= 0.01 ? "Liquidado" : "Por cobrar"}
+            </span>
           </div>
           <p className="text-3xl font-black mt-2 tracking-tight text-white">${stats.pending.toLocaleString()}</p>
           <span className="text-[10px] font-medium text-slate-400 mt-1 block">Cargos (${stats.charges.toFixed(0)}) − Abonos (${stats.payments.toFixed(0)})</span>
@@ -542,41 +543,63 @@ const DebtorDetailsPage: React.FC = () => {
             </div>
 
             <div className="flex items-center gap-2">
-              <Button 
-                size="sm" 
-                className="h-10 px-4 gap-1.5 rounded-xl font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm" 
-                onClick={() => {
-                  setEditingTransaction(null);
-                  setTransactionForm({
-                    type: "payment",
-                    amount: "",
-                    description: "Abono recibido",
-                    destinationAccountId: "cash",
-                    selectedIncomeCategoryId: incomeCategories[0]?.id || "",
-                  });
-                  setIsTransactionDialogOpen(true);
-                }}
-              >
-                <DollarSign className="h-4 w-4" /> Abonar
-              </Button>
-              <Button 
-                size="sm" 
-                variant="outline"
-                className="h-10 px-4 gap-1.5 rounded-xl font-bold border-rose-200 text-rose-700 hover:bg-rose-50 bg-rose-50/40" 
-                onClick={() => {
-                  setEditingTransaction(null);
-                  setTransactionForm({
-                    type: "charge",
-                    amount: "",
-                    description: "Préstamo / Cargo adicional",
-                    destinationAccountId: "cash",
-                    selectedIncomeCategoryId: "",
-                  });
-                  setIsTransactionDialogOpen(true);
-                }}
-              >
-                <Plus className="h-4 w-4 text-rose-600" /> Nuevo Cargo
-              </Button>
+              {stats.pending <= 0.01 ? (
+                <Button 
+                  size="sm" 
+                  className="h-10 px-4 gap-1.5 rounded-xl font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm" 
+                  onClick={() => {
+                    setEditingTransaction(null);
+                    setTransactionForm({
+                      type: "charge",
+                      amount: "",
+                      description: "Reapertura de cuenta / Nuevo préstamo",
+                      destinationAccountId: "cash",
+                      selectedIncomeCategoryId: "",
+                    });
+                    setIsTransactionDialogOpen(true);
+                  }}
+                >
+                  <RefreshCw className="h-4 w-4" /> Reabrir Cuenta
+                </Button>
+              ) : (
+                <>
+                  <Button 
+                    size="sm" 
+                    className="h-10 px-4 gap-1.5 rounded-xl font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm" 
+                    onClick={() => {
+                      setEditingTransaction(null);
+                      setTransactionForm({
+                        type: "payment",
+                        amount: "",
+                        description: "Abono recibido",
+                        destinationAccountId: "cash",
+                        selectedIncomeCategoryId: incomeCategories[0]?.id || "",
+                      });
+                      setIsTransactionDialogOpen(true);
+                    }}
+                  >
+                    <DollarSign className="h-4 w-4" /> Abonar
+                  </Button>
+                  <Button 
+                    size="sm" 
+                    variant="outline"
+                    className="h-10 px-4 gap-1.5 rounded-xl font-bold border-rose-200 text-rose-700 hover:bg-rose-50 bg-rose-50/40" 
+                    onClick={() => {
+                      setEditingTransaction(null);
+                      setTransactionForm({
+                        type: "charge",
+                        amount: "",
+                        description: "Préstamo / Cargo adicional",
+                        destinationAccountId: "cash",
+                        selectedIncomeCategoryId: "",
+                      });
+                      setIsTransactionDialogOpen(true);
+                    }}
+                  >
+                    <Plus className="h-4 w-4 text-rose-600" /> Nuevo Cargo
+                  </Button>
+                </>
+              )}
             </div>
           </div>
 
@@ -787,7 +810,7 @@ const DebtorDetailsPage: React.FC = () => {
                     OK
                   </div>
                   <DialogTitle className="text-xl font-black tracking-tight text-slate-900">
-                    OINKASH FINANCIAL
+                    OINKASH REGISTRO CONTABLE
                   </DialogTitle>
                 </div>
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Estado de Cuenta Oficial</p>

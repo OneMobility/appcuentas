@@ -19,7 +19,8 @@ import {
   Clock,
   Coins,
   Plus,
-  Minus
+  Minus,
+  RefreshCw
 } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -227,7 +228,7 @@ const Debtors = () => {
     setNewTransaction({
       type,
       amount: "",
-      description: type === "payment" ? "Abono recibido" : "Préstamo / Cargo adicional",
+      description: type === "payment" ? "Abono recibido" : (debtor.current_balance <= 0.01 ? "Reapertura de cuenta / Nuevo préstamo" : "Préstamo / Cargo adicional"),
       destinationAccountId: "cash",
       selectedIncomeCategoryId: incomeCategories[0]?.id || "",
     });
@@ -311,7 +312,7 @@ const Debtors = () => {
         }
       }
 
-      showSuccess(newTransaction.type === "payment" ? "Abono registrado con éxito" : "Cargo registrado con éxito");
+      showSuccess(newTransaction.type === "payment" ? "Abono registrado con éxito" : "Cargo registrado. ¡Cuenta activa!");
       setIsTransactionDialogOpen(false);
       fetchData();
     } catch (err: any) { 
@@ -514,35 +515,40 @@ const Debtors = () => {
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {settledDebtors.map(d => (
-                <Card key={d.id} className="rounded-3xl border border-slate-100 shadow-sm bg-slate-50/80">
-                  <div className="p-5 flex justify-between items-center gap-2">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="h-10 w-10 rounded-xl bg-slate-200 flex items-center justify-center text-slate-500 font-bold text-sm shrink-0">
-                        {d.name[0]}
+                <Card key={d.id} className="rounded-3xl border border-slate-100 shadow-sm bg-white hover:shadow-md transition-all">
+                  <div className="p-5 flex flex-col gap-3">
+                    <div className="flex justify-between items-center gap-2">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="h-10 w-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-500 font-bold text-sm shrink-0">
+                          {d.name[0]}
+                        </div>
+                        <div className="flex flex-col min-w-0">
+                          <span className="font-bold text-slate-800 text-sm truncate">{d.name}</span>
+                          <span className="text-[10px] font-bold text-emerald-600">Saldo: $0.00 (Liquidado)</span>
+                        </div>
                       </div>
-                      <span className="font-bold text-slate-700 text-sm truncate">{d.name}</span>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
                       <Badge className="bg-emerald-100 text-emerald-800 border-none rounded-full text-[10px] font-bold">
                         Saldado
                       </Badge>
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-rose-600 rounded-xl">
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent className="rounded-3xl w-[90vw] max-w-md">
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>¿Eliminar registro saldado?</AlertDialogTitle>
-                            <AlertDialogDescription>Se borrará la ficha de {d.name}.</AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel className="rounded-xl">Cancelar</AlertDialogCancel>
-                            <AlertDialogAction onClick={() => handleDeleteDebtor(d.id)} className="rounded-xl bg-rose-600">Eliminar</AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100">
+                      <Button 
+                        size="sm" 
+                        variant="default"
+                        className="rounded-xl h-9 text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white gap-1.5 shadow-sm"
+                        onClick={() => handleOpenQuickTransaction(d, "charge")}
+                      >
+                        <RefreshCw className="h-3.5 w-3.5" /> Reabrir Cuenta
+                      </Button>
+                      <Button 
+                        size="sm" 
+                        variant="outline" 
+                        className="rounded-xl h-9 text-xs font-bold text-slate-600"
+                        onClick={() => navigate(`/debtors/${d.id}`)}
+                      >
+                        <History className="h-3.5 w-3.5 mr-1" /> Historial
+                      </Button>
                     </div>
                   </div>
                 </Card>

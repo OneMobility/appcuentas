@@ -64,14 +64,14 @@ export const exportBankStatementPdf = (options: BankStatementPdfOptions) => {
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.getWidth();
 
-  // Encabezado Banco / Oinkash
+  // Encabezado Oinkash Registro Contable
   doc.setFillColor(30, 27, 75); // Slate 950
   doc.rect(0, 0, pageWidth, 40, 'F');
 
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(18);
   doc.setFont('helvetica', 'bold');
-  doc.text('OINKASH FINANCIAL', 14, 18);
+  doc.text('OINKASH REGISTRO CONTABLE', 14, 18);
 
   doc.setFontSize(9);
   doc.setFont('helvetica', 'normal');
