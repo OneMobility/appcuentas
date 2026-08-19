@@ -24,7 +24,9 @@ import {
   Clock, 
   History, 
   MessageSquare,
-  Sparkles
+  Sparkles,
+  FileDown,
+  FileSpreadsheet
 } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { cn } from "@/lib/utils";
@@ -39,6 +41,8 @@ import { evaluateExpression } from "@/utils/math-helpers";
 import { getLocalDateString } from "@/utils/date-helpers";
 import { Badge } from "@/components/ui/badge";
 import { fetchUsdToMxnRate } from "@/utils/currency-helper";
+import { exportToCsv, exportToPdf } from "@/utils/export";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
 interface DebtorTransaction {
   id: string;
@@ -263,7 +267,6 @@ const DebtorDetailsPage: React.FC = () => {
 
   const handleDeleteTransaction = async (txId: string) => {
     if (txId === "initial-balance-record") {
-      // Si borran el saldo inicial simulado, limpiar initial_balance del deudor
       if (debtor) {
         await supabase.from('debtors').update({ initial_balance: 0 }).eq('id', debtor.id);
         showSuccess("Saldo inicial removido");
@@ -282,12 +285,51 @@ const DebtorDetailsPage: React.FC = () => {
     window.open(`https://wa.me/${debtor.phone.replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`, '_blank');
   };
 
+  // EXPORTACIONES DE ESTADO DE CUENTA
+  const handleExportCsv = () => {
+    if (!debtor || filteredTransactions.length === 0) {
+      showError("No hay transacciones para exportar.");
+      return;
+    }
+
+    const dataToExport = filteredTransactions.map((tx) => ({
+      Fecha: format(parseISO(tx.date), "dd/MM/yyyy"),
+      Tipo: tx.isInitial ? "Apertura Inicial" : (tx.type === "charge" ? "Cargo / Préstamo" : "Abono / Pago"),
+      "Concepto / Motivo": tx.description,
+      "Monto ($)": (tx.type === "charge" ? "+" : "-") + tx.amount.toFixed(2),
+      "Saldo Acumulado ($)": tx.runningBalance.toFixed(2),
+    }));
+
+    exportToCsv(`Estado_Cuenta_${debtor.name.replace(/\s+/g, "_")}.csv`, dataToExport);
+    showSuccess("Estado de cuenta exportado en CSV.");
+  };
+
+  const handleExportPdf = () => {
+    if (!debtor || filteredTransactions.length === 0) {
+      showError("No hay transacciones para exportar.");
+      return;
+    }
+
+    const headers = ["Fecha", "Tipo", "Concepto / Motivo", "Monto ($)", "Saldo ($)"];
+    const rows = filteredTransactions.map((tx) => [
+      format(parseISO(tx.date), "dd/MM/yyyy"),
+      tx.isInitial ? "Apertura Inicial" : (tx.type === "charge" ? "Cargo" : "Abono"),
+      tx.description,
+      (tx.type === "charge" ? "+" : "-") + `$${tx.amount.toFixed(2)}`,
+      `$${tx.runningBalance.toFixed(2)}`,
+    ]);
+
+    const title = `Estado de Cuenta - ${debtor.name} (Saldo Pendiente: $${debtor.current_balance.toFixed(2)})`;
+    exportToPdf(`Estado_Cuenta_${debtor.name.replace(/\s+/g, "_")}.pdf`, title, headers, rows);
+    showSuccess("Estado de cuenta exportado en PDF.");
+  };
+
   if (isLoading) return <LoadingSpinner />;
   if (!debtor) return null;
 
   return (
     <div className="flex flex-col gap-6 p-2 sm:p-4 md:p-6 pb-24 max-w-5xl mx-auto">
-      {/* Header con botón volver */}
+      {/* Header con botón volver y exportación */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="icon" className="rounded-full h-10 w-10 shrink-0" onClick={() => navigate('/debtors')}>
@@ -303,15 +345,34 @@ const DebtorDetailsPage: React.FC = () => {
           </div>
         </div>
 
-        {debtor.phone && (
-          <Button 
-            variant="outline" 
-            onClick={handleWhatsApp}
-            className="rounded-2xl h-11 px-4 font-bold border-emerald-200 text-emerald-700 hover:bg-emerald-50 gap-2 w-full sm:w-auto"
-          >
-            <MessageSquare className="h-4 w-4 text-emerald-600" /> Cobrar por WhatsApp
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          {/* Menú de exportación */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="rounded-2xl h-11 px-4 font-bold border-slate-200 gap-2">
+                <FileDown className="h-4 w-4 text-primary" /> Exportar Estado de Cuenta
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="rounded-2xl p-2 w-48 shadow-lg">
+              <DropdownMenuItem onClick={handleExportPdf} className="rounded-xl cursor-pointer font-medium text-xs gap-2 py-2.5">
+                <FileDown className="h-4 w-4 text-rose-500" /> Exportar en PDF (.pdf)
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleExportCsv} className="rounded-xl cursor-pointer font-medium text-xs gap-2 py-2.5">
+                <FileSpreadsheet className="h-4 w-4 text-emerald-500" /> Exportar en Excel / CSV (.csv)
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {debtor.phone && (
+            <Button 
+              variant="outline" 
+              onClick={handleWhatsApp}
+              className="rounded-2xl h-11 px-4 font-bold border-emerald-200 text-emerald-700 hover:bg-emerald-50 gap-2 shrink-0"
+            >
+              <MessageSquare className="h-4 w-4 text-emerald-600" /> WhatsApp
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Tarjetas de Resumen Financiero */}
