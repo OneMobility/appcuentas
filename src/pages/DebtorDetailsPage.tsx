@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { 
   DollarSign, 
   Trash2, 
@@ -17,7 +18,6 @@ import {
   Search, 
   ChevronLeft, 
   ChevronRight, 
-  Coins, 
   Plus, 
   History, 
   MessageSquare,
@@ -28,8 +28,6 @@ import {
   TrendingUp,
   TrendingDown,
   Building2,
-  Calendar,
-  Eye,
   RefreshCw
 } from "lucide-react";
 import { 
@@ -97,7 +95,6 @@ const DebtorDetailsPage: React.FC = () => {
   const [isTransactionDialogOpen, setIsTransactionDialogOpen] = useState(false);
   const [isStatementPreviewOpen, setIsStatementPreviewOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<any>(null);
-  const [skipLinkedTransaction, setSkipLinkedTransaction] = useState(false);
 
   const [transactionForm, setTransactionForm] = useState({
     type: "payment" as "charge" | "payment",
@@ -105,6 +102,7 @@ const DebtorDetailsPage: React.FC = () => {
     description: "",
     destinationAccountId: "cash",
     selectedIncomeCategoryId: "",
+    affectAccount: true,
   });
 
   const [currency, setCurrency] = useState<"MXN" | "USD">("MXN");
@@ -270,7 +268,7 @@ const DebtorDetailsPage: React.FC = () => {
           date 
         });
 
-        if (!skipLinkedTransaction) {
+        if (transactionForm.affectAccount) {
           if (transactionForm.type === "payment") {
             if (transactionForm.destinationAccountId === "cash") {
               await supabase.from('cash_transactions').insert({ 
@@ -294,6 +292,33 @@ const DebtorDetailsPage: React.FC = () => {
                   description: `Abono de ${debtor.name}: ${desc}`, 
                   date, 
                   income_category_id: transactionForm.selectedIncomeCategoryId || null 
+                });
+              }
+            }
+          } else {
+            // Es un cargo y afecta cuenta -> descontar de cash o card
+            if (transactionForm.destinationAccountId === "cash") {
+              await supabase.from('cash_transactions').insert({ 
+                user_id: user.id, 
+                type: "egreso", 
+                amount: finalAmt, 
+                description: `Préstamo a ${debtor.name}: ${desc}`, 
+                date, 
+                expense_category_id: null 
+              });
+            } else {
+              const card = cards.find(c => c.id === transactionForm.destinationAccountId);
+              if (card) {
+                const newBal = card.type === "credit" ? card.current_balance + finalAmt : card.current_balance - finalAmt;
+                await supabase.from('cards').update({ current_balance: newBal }).eq('id', card.id);
+                await supabase.from('card_transactions').insert({ 
+                  user_id: user.id, 
+                  card_id: card.id, 
+                  type: "charge", 
+                  amount: finalAmt, 
+                  description: `Préstamo a ${debtor.name}: ${desc}`, 
+                  date, 
+                  expense_category_id: null 
                 });
               }
             }
@@ -555,6 +580,7 @@ const DebtorDetailsPage: React.FC = () => {
                       description: "Reapertura de cuenta / Nuevo préstamo",
                       destinationAccountId: "cash",
                       selectedIncomeCategoryId: "",
+                      affectAccount: false,
                     });
                     setIsTransactionDialogOpen(true);
                   }}
@@ -574,6 +600,7 @@ const DebtorDetailsPage: React.FC = () => {
                         description: "Abono recibido",
                         destinationAccountId: "cash",
                         selectedIncomeCategoryId: incomeCategories[0]?.id || "",
+                        affectAccount: true,
                       });
                       setIsTransactionDialogOpen(true);
                     }}
@@ -592,6 +619,7 @@ const DebtorDetailsPage: React.FC = () => {
                         description: "Préstamo / Cargo adicional",
                         destinationAccountId: "cash",
                         selectedIncomeCategoryId: "",
+                        affectAccount: true,
                       });
                       setIsTransactionDialogOpen(true);
                     }}
@@ -731,6 +759,7 @@ const DebtorDetailsPage: React.FC = () => {
                                   description: tx.description,
                                   destinationAccountId: "cash",
                                   selectedIncomeCategoryId: "",
+                                  affectAccount: false,
                                 });
                                 setIsTransactionDialogOpen(true);
                               }}
@@ -940,23 +969,46 @@ const DebtorDetailsPage: React.FC = () => {
             </div>
 
             {!editingTransaction && (
-              <div className="space-y-1.5">
-                <Label className="text-xs font-bold text-slate-600">
-                  {transactionForm.type === "payment" ? "¿A qué cuenta entra el dinero?" : "¿De qué cuenta salió el dinero?"}
-                </Label>
-                <Select value={transactionForm.destinationAccountId} onValueChange={v => setTransactionForm({...transactionForm, destinationAccountId: v})}>
-                  <SelectTrigger className="rounded-xl h-11 bg-slate-50 border-slate-200 font-medium">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="rounded-2xl">
-                    <SelectItem value="cash" className="rounded-xl">Efectivo (${cashBalance.toFixed(2)})</SelectItem>
-                    {cards.map(c => (
-                      <SelectItem key={c.id} value={c.id} className="rounded-xl">
-                        {c.name} ({c.bank_name}) - Saldo: ${c.current_balance.toFixed(2)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200 space-y-3">
+                <div className="flex items-center space-x-2.5">
+                  <Checkbox 
+                    id="affectAccountDetailTx" 
+                    checked={transactionForm.affectAccount}
+                    onCheckedChange={(checked) => setTransactionForm(prev => ({ ...prev, affectAccount: !!checked }))}
+                  />
+                  <label 
+                    htmlFor="affectAccountDetailTx" 
+                    className="text-xs font-bold text-slate-800 cursor-pointer select-none leading-snug"
+                  >
+                    {transactionForm.type === "payment" 
+                      ? "¿Ingresar este dinero a mi efectivo / tarjeta?" 
+                      : "¿Descontar este cargo de mi efectivo / tarjeta?"}
+                  </label>
+                </div>
+
+                {transactionForm.affectAccount && (
+                  <div className="space-y-1.5 pt-1">
+                    <Label className="text-[10px] font-black uppercase tracking-wider text-slate-500">
+                      {transactionForm.type === "payment" ? "¿A qué cuenta entra el dinero?" : "¿De qué cuenta salió el dinero?"}
+                    </Label>
+                    <Select 
+                      value={transactionForm.destinationAccountId} 
+                      onValueChange={v => setTransactionForm({...transactionForm, destinationAccountId: v})}
+                    >
+                      <SelectTrigger className="rounded-xl h-10 bg-white border-slate-200 font-bold text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="rounded-2xl">
+                        <SelectItem value="cash" className="rounded-xl text-xs">Efectivo (${cashBalance.toFixed(2)})</SelectItem>
+                        {cards.map(c => (
+                          <SelectItem key={c.id} value={c.id} className="rounded-xl text-xs">
+                            {c.name} ({c.bank_name}) - Saldo: ${c.current_balance.toFixed(2)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
               </div>
             )}
 
