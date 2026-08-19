@@ -43,6 +43,7 @@ const GIF_COBRANDO = "https://nyzquoiwwywbqbhdowau.supabase.co/storage/v1/object
 interface DebtorTransaction {
   type: "charge" | "payment";
   amount: number;
+  description?: string;
 }
 
 interface Debtor {
@@ -107,14 +108,23 @@ const Debtors = () => {
     
     const { data } = await supabase
       .from('debtors')
-      .select('*, debtor_transactions(type, amount)')
+      .select('*, debtor_transactions(type, amount, description)')
       .eq('user_id', user.id)
       .order('created_at', { ascending: false });
 
     const debtorsWithRealBalance = (data || []).map((d: any) => {
-      const totalCharges = (d.debtor_transactions || []).filter((t: any) => t.type === 'charge').reduce((s: number, t: any) => s + t.amount, 0);
-      const totalPayments = (d.debtor_transactions || []).filter((t: any) => t.type === 'payment').reduce((s: number, t: any) => s + t.amount, 0);
-      const realBalance = d.initial_balance + totalCharges - totalPayments;
+      const txs = d.debtor_transactions || [];
+      const totalCharges = txs.filter((t: any) => t.type === 'charge').reduce((s: number, t: any) => s + t.amount, 0);
+      const totalPayments = txs.filter((t: any) => t.type === 'payment').reduce((s: number, t: any) => s + t.amount, 0);
+      
+      const hasInitialTx = txs.some((t: any) => 
+        (t.description || "").toLowerCase().includes("inicial") || 
+        (t.description || "").toLowerCase().includes("apertura")
+      );
+      
+      const initialBalToAdd = hasInitialTx ? 0 : (d.initial_balance || 0);
+      const realBalance = Math.max(0, initialBalToAdd + totalCharges - totalPayments);
+      
       return { ...d, current_balance: realBalance };
     });
 
@@ -152,7 +162,6 @@ const Debtors = () => {
     if (error) {
       showError(error.message);
     } else {
-      // Guardar también la transacción de apertura si hubo un monto inicial
       if (finalBal > 0 && createdDebtor) {
         await supabase.from('debtor_transactions').insert({
           user_id: user?.id,
@@ -162,7 +171,6 @@ const Debtors = () => {
           description: initialDescription,
           date: getLocalDateString(new Date()),
         });
-        // Como ya registramos el primer cargo en transacciones, ajustamos initial_balance a 0 para no duplicar el cálculo
         await supabase.from('debtors').update({ initial_balance: 0 }).eq('id', createdDebtor.id);
       }
 
@@ -249,7 +257,6 @@ const Debtors = () => {
 
       if (!skipLinkedTransaction) {
         if (newTransaction.type === "payment") {
-          // El deudor me paga -> entra dinero
           if (newTransaction.destinationAccountId === "cash") {
             await supabase.from('cash_transactions').insert({
               user_id: user?.id,
@@ -276,7 +283,6 @@ const Debtors = () => {
             }
           }
         } else {
-          // Es un Cargo / Préstamo adicional -> sale dinero de mi cuenta
           if (newTransaction.destinationAccountId === "cash") {
             await supabase.from('cash_transactions').insert({
               user_id: user?.id,
@@ -345,7 +351,6 @@ const Debtors = () => {
                 </div>
               </div>
 
-              {/* Botones de acción complementarios: WhatsApp, Editar, Eliminar */}
               <div className="flex items-center gap-1 shrink-0">
                 {debtor.phone && (
                   <Button 
@@ -401,7 +406,6 @@ const Debtors = () => {
               <span className="text-2xl font-black text-indigo-600">${debtor.current_balance.toLocaleString()}</span>
             </div>
 
-            {/* ACCIONES RÁPIDAS: ABONAR Y CARGO */}
             <div className="grid grid-cols-2 gap-2 pt-1">
               <Button 
                 variant="default" 

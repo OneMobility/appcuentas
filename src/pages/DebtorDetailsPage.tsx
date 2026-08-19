@@ -39,9 +39,6 @@ import {
   YAxis, 
   Tooltip, 
   CartesianGrid, 
-  BarChart, 
-  Bar, 
-  Legend 
 } from "recharts";
 import { showSuccess, showError } from "@/utils/toast";
 import { cn } from "@/lib/utils";
@@ -153,25 +150,29 @@ const DebtorDetailsPage: React.FC = () => {
 
   useEffect(() => { fetchData(); }, [debtorId, user, incomeCategories]);
 
-  // Construir historial completo incluyendo el primer cargo / apertura con motivo
+  // Construir historial completo sin duplicar saldo inicial
   const allTimelineTransactions = useMemo(() => {
     if (!debtor) return [];
 
     const list: DebtorTransaction[] = [...(debtor.debtor_transactions || [])];
 
-    if (debtor.initial_balance > 0) {
-      const hasInitialTx = list.some(t => t.description.toLowerCase().includes("inicial") || t.description.toLowerCase().includes("apertura"));
-      if (!hasInitialTx) {
-        list.push({
-          id: "initial-balance-record",
-          type: "charge",
-          amount: debtor.initial_balance,
-          description: "Préstamo inicial / Apertura de cuenta",
-          date: debtor.created_at ? getLocalDateString(parseISO(debtor.created_at)) : getLocalDateString(new Date()),
-          created_at: debtor.created_at || new Date().toISOString(),
-          isInitial: true
-        });
-      }
+    // Verificar si ya existe un cargo registrado en transacciones que represente la apertura inicial
+    const hasInitialTx = list.some(t => 
+      t.description.toLowerCase().includes("inicial") || 
+      t.description.toLowerCase().includes("apertura")
+    );
+
+    // Solo agregar el registro virtual si initial_balance > 0 y NO existe en la lista de transacciones
+    if (debtor.initial_balance > 0 && !hasInitialTx) {
+      list.push({
+        id: "initial-balance-record",
+        type: "charge",
+        amount: debtor.initial_balance,
+        description: "Préstamo inicial / Apertura de cuenta",
+        date: debtor.created_at ? getLocalDateString(parseISO(debtor.created_at)) : getLocalDateString(new Date()),
+        created_at: debtor.created_at || new Date().toISOString(),
+        isInitial: true
+      });
     }
 
     const sortedAsc = list.sort((a, b) => {
@@ -205,19 +206,39 @@ const DebtorDetailsPage: React.FC = () => {
     });
   }, [allTimelineTransactions, timeViewMode, filterInterval, searchTerm, filterType]);
 
+  // Cálculo canónico y matemático: Total Cargos, Total Abonos y Saldo Pendiente exacto
   const stats = useMemo(() => {
-    const charges = allTimelineTransactions.filter(t => t.type === 'charge').reduce((s, t) => s + t.amount, 0);
-    const payments = allTimelineTransactions.filter(t => t.type === 'payment').reduce((s, t) => s + t.amount, 0);
+    const charges = allTimelineTransactions
+      .filter(t => t.type === 'charge')
+      .reduce((s, t) => s + t.amount, 0);
+
+    const payments = allTimelineTransactions
+      .filter(t => t.type === 'payment')
+      .reduce((s, t) => s + t.amount, 0);
+
     const pending = Math.max(0, charges - payments);
     return { charges, payments, pending };
   }, [allTimelineTransactions]);
 
-  // Datos para la gráfica bancaria interactiva (Evolución de saldo)
+  // Sincronizar en segundo plano el saldo correcto en la tabla de debtors si difería
+  useEffect(() => {
+    if (debtor && Math.abs(debtor.current_balance - stats.pending) > 0.01) {
+      supabase
+        .from('debtors')
+        .update({ current_balance: stats.pending })
+        .eq('id', debtor.id)
+        .then(() => {
+          setDebtor(prev => prev ? { ...prev, current_balance: stats.pending } : null);
+        });
+    }
+  }, [debtor, stats.pending]);
+
+  // Datos para la gráfica interactiva
   const chartData = useMemo(() => {
     const ascList = [...allTimelineTransactions].reverse();
     if (ascList.length === 0) return [];
 
-    return ascList.map((tx, idx) => ({
+    return ascList.map((tx) => ({
       name: format(parseISO(tx.date), "dd/MM"),
       saldo: tx.runningBalance,
       cargo: tx.type === "charge" ? tx.amount : 0,
@@ -307,7 +328,7 @@ const DebtorDetailsPage: React.FC = () => {
 
   const handleWhatsApp = () => {
     if (!debtor?.phone) return showError("No tiene teléfono registrado");
-    const msg = `Hola ${debtor.name}, ¿cómo estás? Te comparto tu estado de cuenta con un pendiente de $${debtor.current_balance.toFixed(2)}. ¡Saludos! 🐷`;
+    const msg = `Hola ${debtor.name}, ¿cómo estás? Te comparto tu estado de cuenta con un pendiente de $${stats.pending.toFixed(2)}. ¡Saludos! 🐷`;
     window.open(`https://wa.me/${debtor.phone.replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`, '_blank');
   };
 
@@ -340,7 +361,7 @@ const DebtorDetailsPage: React.FC = () => {
       phone: debtor.phone,
       totalCharges: stats.charges,
       totalPayments: stats.payments,
-      pendingBalance: debtor.current_balance,
+      pendingBalance: stats.pending,
       transactions: filteredTransactions.map(tx => ({
         date: format(parseISO(tx.date), "dd/MM/yyyy"),
         type: tx.isInitial ? "Apertura Inicial" : (tx.type === "charge" ? "Cargo" : "Abono"),
@@ -411,15 +432,15 @@ const DebtorDetailsPage: React.FC = () => {
         </div>
       </div>
 
-      {/* 2. Tarjetas de Resumen Financiero Estilo Banco */}
+      {/* 2. Tarjetas de Resumen Financiero Estilo Banco con Totales Reales */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Card className="rounded-3xl border-none shadow-sm bg-slate-900 text-white p-5">
           <div className="flex items-center justify-between">
             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Saldo Pendiente</p>
             <span className="text-[10px] bg-white/10 px-2 py-0.5 rounded-full font-bold">Por cobrar</span>
           </div>
-          <p className="text-3xl font-black mt-2 tracking-tight text-white">${debtor.current_balance.toLocaleString()}</p>
-          <span className="text-[10px] font-medium text-slate-400 mt-1 block">Deuda total acumulada a la fecha</span>
+          <p className="text-3xl font-black mt-2 tracking-tight text-white">${stats.pending.toLocaleString()}</p>
+          <span className="text-[10px] font-medium text-slate-400 mt-1 block">Cargos (${stats.charges.toFixed(0)}) − Abonos (${stats.payments.toFixed(0)})</span>
         </Card>
 
         <Card className="rounded-3xl border border-slate-100 shadow-sm bg-white p-5">
@@ -748,7 +769,7 @@ const DebtorDetailsPage: React.FC = () => {
               </div>
               <div className="bg-indigo-600 text-white p-3 rounded-2xl shadow-md">
                 <span className="text-[9px] font-black uppercase text-indigo-200 block">Saldo Pendiente</span>
-                <span className="text-base font-black text-white">${debtor.current_balance.toFixed(2)}</span>
+                <span className="text-base font-black text-white">${stats.pending.toFixed(2)}</span>
               </div>
             </div>
           </div>
@@ -803,7 +824,7 @@ const DebtorDetailsPage: React.FC = () => {
               </div>
               <div className="p-3 rounded-2xl bg-indigo-50 border border-indigo-100">
                 <span className="text-[9px] font-black uppercase text-indigo-600">Saldo Pendiente</span>
-                <p className="text-lg font-black text-indigo-900">${debtor.current_balance.toFixed(2)}</p>
+                <p className="text-lg font-black text-indigo-900">${stats.pending.toFixed(2)}</p>
               </div>
             </div>
 
