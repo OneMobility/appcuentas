@@ -15,19 +15,34 @@ import {
   Edit, 
   ArrowLeft, 
   Search, 
-  Filter, 
   ChevronLeft, 
   ChevronRight, 
   Coins, 
-  CalendarDays, 
   Plus, 
-  Clock, 
   History, 
   MessageSquare,
   Sparkles,
   FileDown,
-  FileSpreadsheet
+  FileSpreadsheet,
+  ReceiptText,
+  TrendingUp,
+  TrendingDown,
+  Building2,
+  Calendar,
+  Eye
 } from "lucide-react";
+import { 
+  ResponsiveContainer, 
+  AreaChart, 
+  Area, 
+  XAxis, 
+  YAxis, 
+  Tooltip, 
+  CartesianGrid, 
+  BarChart, 
+  Bar, 
+  Legend 
+} from "recharts";
 import { showSuccess, showError } from "@/utils/toast";
 import { cn } from "@/lib/utils";
 import { format, parseISO, isWithinInterval, startOfMonth, endOfMonth, addMonths, subMonths } from "date-fns";
@@ -41,7 +56,7 @@ import { evaluateExpression } from "@/utils/math-helpers";
 import { getLocalDateString } from "@/utils/date-helpers";
 import { Badge } from "@/components/ui/badge";
 import { fetchUsdToMxnRate } from "@/utils/currency-helper";
-import { exportToCsv, exportToPdf } from "@/utils/export";
+import { exportToCsv, exportBankStatementPdf } from "@/utils/export";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
 interface DebtorTransaction {
@@ -76,13 +91,13 @@ const DebtorDetailsPage: React.FC = () => {
   const [cashBalance, setCashBalance] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   
-  // Filtro de tiempo: "all" para ver TODO el historial o "month" para navegar mes a mes
   const [timeViewMode, setTimeViewMode] = useState<"all" | "month">("all");
   const [currentViewDate, setCurrentViewDate] = useState(new Date());
   const [searchTerm, setSearchTerm] = useState("");
   const [filterType, setFilterType] = useState<"all" | "charge" | "payment">("all");
 
   const [isTransactionDialogOpen, setIsTransactionDialogOpen] = useState(false);
+  const [isStatementPreviewOpen, setIsStatementPreviewOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<any>(null);
   const [skipLinkedTransaction, setSkipLinkedTransaction] = useState(false);
 
@@ -144,7 +159,6 @@ const DebtorDetailsPage: React.FC = () => {
 
     const list: DebtorTransaction[] = [...(debtor.debtor_transactions || [])];
 
-    // Si tiene un saldo inicial mayor a 0 y no hay transacciones que lo representen, agregar registro explícito
     if (debtor.initial_balance > 0) {
       const hasInitialTx = list.some(t => t.description.toLowerCase().includes("inicial") || t.description.toLowerCase().includes("apertura"));
       if (!hasInitialTx) {
@@ -160,7 +174,6 @@ const DebtorDetailsPage: React.FC = () => {
       }
     }
 
-    // Ordenar ascendentemente por fecha para computar saldos progresivos
     const sortedAsc = list.sort((a, b) => {
       const dateA = new Date(a.date).getTime();
       const dateB = new Date(b.date).getTime();
@@ -175,7 +188,6 @@ const DebtorDetailsPage: React.FC = () => {
       return { ...tx, runningBalance: running };
     });
 
-    // Invertir para mostrar lo más reciente primero
     return withBalances.reverse();
   }, [debtor]);
 
@@ -198,6 +210,20 @@ const DebtorDetailsPage: React.FC = () => {
     const payments = allTimelineTransactions.filter(t => t.type === 'payment').reduce((s, t) => s + t.amount, 0);
     const pending = Math.max(0, charges - payments);
     return { charges, payments, pending };
+  }, [allTimelineTransactions]);
+
+  // Datos para la gráfica bancaria interactiva (Evolución de saldo)
+  const chartData = useMemo(() => {
+    const ascList = [...allTimelineTransactions].reverse();
+    if (ascList.length === 0) return [];
+
+    return ascList.map((tx, idx) => ({
+      name: format(parseISO(tx.date), "dd/MM"),
+      saldo: tx.runningBalance,
+      cargo: tx.type === "charge" ? tx.amount : 0,
+      abono: tx.type === "payment" ? tx.amount : 0,
+      descripcion: tx.description,
+    }));
   }, [allTimelineTransactions]);
 
   const handleTransactionSubmit = async (e: React.FormEvent) => {
@@ -281,11 +307,10 @@ const DebtorDetailsPage: React.FC = () => {
 
   const handleWhatsApp = () => {
     if (!debtor?.phone) return showError("No tiene teléfono registrado");
-    const msg = `Hola ${debtor.name}, ¿cómo estás? Te escribo para recordarte el pendiente de $${debtor.current_balance.toFixed(2)}. ¡Saludos! 🐷`;
+    const msg = `Hola ${debtor.name}, ¿cómo estás? Te comparto tu estado de cuenta con un pendiente de $${debtor.current_balance.toFixed(2)}. ¡Saludos! 🐷`;
     window.open(`https://wa.me/${debtor.phone.replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`, '_blank');
   };
 
-  // EXPORTACIONES DE ESTADO DE CUENTA
   const handleExportCsv = () => {
     if (!debtor || filteredTransactions.length === 0) {
       showError("No hay transacciones para exportar.");
@@ -310,18 +335,22 @@ const DebtorDetailsPage: React.FC = () => {
       return;
     }
 
-    const headers = ["Fecha", "Tipo", "Concepto / Motivo", "Monto ($)", "Saldo ($)"];
-    const rows = filteredTransactions.map((tx) => [
-      format(parseISO(tx.date), "dd/MM/yyyy"),
-      tx.isInitial ? "Apertura Inicial" : (tx.type === "charge" ? "Cargo" : "Abono"),
-      tx.description,
-      (tx.type === "charge" ? "+" : "-") + `$${tx.amount.toFixed(2)}`,
-      `$${tx.runningBalance.toFixed(2)}`,
-    ]);
+    exportBankStatementPdf({
+      clientName: debtor.name,
+      phone: debtor.phone,
+      totalCharges: stats.charges,
+      totalPayments: stats.payments,
+      pendingBalance: debtor.current_balance,
+      transactions: filteredTransactions.map(tx => ({
+        date: format(parseISO(tx.date), "dd/MM/yyyy"),
+        type: tx.isInitial ? "Apertura Inicial" : (tx.type === "charge" ? "Cargo" : "Abono"),
+        description: tx.description,
+        amount: (tx.type === "charge" ? "+" : "-") + `$${tx.amount.toFixed(2)}`,
+        balance: `$${tx.runningBalance.toFixed(2)}`,
+      }))
+    });
 
-    const title = `Estado de Cuenta - ${debtor.name} (Saldo Pendiente: $${debtor.current_balance.toFixed(2)})`;
-    exportToPdf(`Estado_Cuenta_${debtor.name.replace(/\s+/g, "_")}.pdf`, title, headers, rows);
-    showSuccess("Estado de cuenta exportado en PDF.");
+    showSuccess("Estado de cuenta oficial en PDF generado.");
   };
 
   if (isLoading) return <LoadingSpinner />;
@@ -329,7 +358,7 @@ const DebtorDetailsPage: React.FC = () => {
 
   return (
     <div className="flex flex-col gap-6 p-2 sm:p-4 md:p-6 pb-24 max-w-5xl mx-auto">
-      {/* Header con botón volver y exportación */}
+      {/* 1. Header con botones de acción */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="icon" className="rounded-full h-10 w-10 shrink-0" onClick={() => navigate('/debtors')}>
@@ -340,25 +369,32 @@ const DebtorDetailsPage: React.FC = () => {
               {debtor.name} 🐷
             </h1>
             <p className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5 mt-0.5">
-              <History className="h-3.5 w-3.5" /> Historial de Movimientos
+              <Building2 className="h-3.5 w-3.5" /> Estado de Cuenta Bancario
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Menú de exportación */}
+          <Button 
+            variant="outline" 
+            onClick={() => setIsStatementPreviewOpen(true)}
+            className="rounded-2xl h-11 px-4 font-bold border-indigo-200 text-indigo-700 bg-indigo-50 hover:bg-indigo-100 gap-2 shadow-sm"
+          >
+            <ReceiptText className="h-4 w-4" /> Vista Estado de Cuenta
+          </Button>
+
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" className="rounded-2xl h-11 px-4 font-bold border-slate-200 gap-2">
-                <FileDown className="h-4 w-4 text-primary" /> Exportar Estado de Cuenta
+                <FileDown className="h-4 w-4 text-primary" /> Descargar
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="rounded-2xl p-2 w-48 shadow-lg">
+            <DropdownMenuContent align="end" className="rounded-2xl p-2 w-52 shadow-xl">
               <DropdownMenuItem onClick={handleExportPdf} className="rounded-xl cursor-pointer font-medium text-xs gap-2 py-2.5">
-                <FileDown className="h-4 w-4 text-rose-500" /> Exportar en PDF (.pdf)
+                <FileDown className="h-4 w-4 text-rose-500" /> PDF Oficial Estilo Banco
               </DropdownMenuItem>
               <DropdownMenuItem onClick={handleExportCsv} className="rounded-xl cursor-pointer font-medium text-xs gap-2 py-2.5">
-                <FileSpreadsheet className="h-4 w-4 text-emerald-500" /> Exportar en Excel / CSV (.csv)
+                <FileSpreadsheet className="h-4 w-4 text-emerald-500" /> Archivo Excel / CSV
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -375,28 +411,86 @@ const DebtorDetailsPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Tarjetas de Resumen Financiero */}
+      {/* 2. Tarjetas de Resumen Financiero Estilo Banco */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Card className="rounded-3xl border-none shadow-sm bg-indigo-600 text-white p-5">
-          <p className="text-[10px] font-black uppercase tracking-wider text-indigo-100">Saldo Pendiente Actual</p>
-          <p className="text-3xl font-black mt-1">${debtor.current_balance.toLocaleString()}</p>
-          <span className="text-[10px] font-medium text-indigo-200 mt-1 block">Monto que aún debe liquidar</span>
+        <Card className="rounded-3xl border-none shadow-sm bg-slate-900 text-white p-5">
+          <div className="flex items-center justify-between">
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Saldo Pendiente</p>
+            <span className="text-[10px] bg-white/10 px-2 py-0.5 rounded-full font-bold">Por cobrar</span>
+          </div>
+          <p className="text-3xl font-black mt-2 tracking-tight text-white">${debtor.current_balance.toLocaleString()}</p>
+          <span className="text-[10px] font-medium text-slate-400 mt-1 block">Deuda total acumulada a la fecha</span>
         </Card>
 
         <Card className="rounded-3xl border border-slate-100 shadow-sm bg-white p-5">
-          <p className="text-[10px] font-black uppercase tracking-wider text-rose-500">Total Cargos / Préstamos</p>
-          <p className="text-2xl font-black text-rose-600 mt-1">+${stats.charges.toLocaleString()}</p>
-          <span className="text-[10px] font-medium text-slate-400 mt-1 block">Todo lo que le has prestado</span>
+          <div className="flex items-center justify-between">
+            <p className="text-[10px] font-black uppercase tracking-widest text-rose-500">Total Cargos</p>
+            <TrendingUp className="h-4 w-4 text-rose-500" />
+          </div>
+          <p className="text-2xl font-black text-rose-600 mt-2">+${stats.charges.toLocaleString()}</p>
+          <span className="text-[10px] font-medium text-slate-400 mt-1 block">Total prestado históricamente</span>
         </Card>
 
         <Card className="rounded-3xl border border-slate-100 shadow-sm bg-white p-5">
-          <p className="text-[10px] font-black uppercase tracking-wider text-emerald-600">Total Abonos / Pagos</p>
-          <p className="text-2xl font-black text-emerald-600 mt-1">-${stats.payments.toLocaleString()}</p>
-          <span className="text-[10px] font-medium text-slate-400 mt-1 block">Todo lo que te ha pagado</span>
+          <div className="flex items-center justify-between">
+            <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600">Total Abonos</p>
+            <TrendingDown className="h-4 w-4 text-emerald-600" />
+          </div>
+          <p className="text-2xl font-black text-emerald-600 mt-2">-${stats.payments.toLocaleString()}</p>
+          <span className="text-[10px] font-medium text-slate-400 mt-1 block">Total recuperado históricamente</span>
         </Card>
       </div>
 
-      {/* Barra de Filtros y Controles del Historial */}
+      {/* 3. Gráfica Interactiva de Evolución del Estado de Cuenta */}
+      {chartData.length > 1 && (
+        <Card className="rounded-[2.5rem] border-none shadow-soft bg-white p-6 overflow-hidden">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-6">
+            <div>
+              <CardTitle className="text-sm font-black uppercase tracking-widest text-slate-400 flex items-center gap-2">
+                <TrendingUp className="h-4 w-4 text-indigo-600" /> Evolución de la Deuda
+              </CardTitle>
+              <p className="text-xs text-slate-500 font-medium mt-0.5">Saldo acumulado movimiento tras movimiento</p>
+            </div>
+            <Badge variant="outline" className="w-fit rounded-full text-xs font-bold text-slate-600">
+              {chartData.length} registros
+            </Badge>
+          </div>
+
+          <div className="h-[220px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="colorSaldo" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.4}/>
+                    <stop offset="95%" stopColor="#4f46e5" stopOpacity={0.0}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                <XAxis dataKey="name" tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} tickFormatter={v => `$${v}`} />
+                <Tooltip 
+                  content={({ active, payload }) => {
+                    if (active && payload && payload.length) {
+                      const data = payload[0].payload;
+                      return (
+                        <div className="bg-slate-900 text-white p-3 rounded-2xl shadow-xl text-xs space-y-1">
+                          <p className="font-bold text-slate-300">{data.name}</p>
+                          <p className="text-indigo-300 font-black text-sm">Saldo: ${data.saldo.toFixed(2)}</p>
+                          <p className="text-[10px] text-slate-400 line-clamp-2">{data.descripcion}</p>
+                        </div>
+                      );
+                    }
+                    return null;
+                  }}
+                />
+                <Area type="monotone" dataKey="saldo" stroke="#4f46e5" strokeWidth={3} fillOpacity={1} fill="url(#colorSaldo)" />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </Card>
+      )}
+
+      {/* 4. Tabla de Movimientos Detallada */}
       <Card className="rounded-3xl border-slate-100 shadow-sm bg-white overflow-hidden">
         <CardHeader className="p-4 sm:p-5 bg-slate-50 border-b border-slate-100 flex flex-col gap-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -411,7 +505,7 @@ const DebtorDetailsPage: React.FC = () => {
                     timeViewMode === "all" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-800"
                   )}
                 >
-                  Todo el Historial (Todos los meses)
+                  Historial Completo
                 </button>
                 <button
                   type="button"
@@ -429,7 +523,7 @@ const DebtorDetailsPage: React.FC = () => {
             <div className="flex items-center gap-2">
               <Button 
                 size="sm" 
-                className="h-10 px-4 gap-1.5 rounded-xl font-bold bg-emerald-600 hover:bg-emerald-700 text-white" 
+                className="h-10 px-4 gap-1.5 rounded-xl font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm" 
                 onClick={() => {
                   setEditingTransaction(null);
                   setTransactionForm({
@@ -465,7 +559,6 @@ const DebtorDetailsPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Navegador por mes si está activo */}
           {timeViewMode === "month" && (
             <div className="flex items-center justify-center gap-3 bg-white p-2 rounded-2xl border border-slate-100 max-w-sm mx-auto w-full">
               <Button variant="ghost" size="icon" className="h-8 w-8 rounded-xl" onClick={() => setCurrentViewDate(subMonths(currentViewDate, 1))}>
@@ -480,7 +573,6 @@ const DebtorDetailsPage: React.FC = () => {
             </div>
           )}
 
-          {/* Buscador y filtro por tipo */}
           <div className="flex flex-col sm:flex-row gap-2">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
@@ -565,7 +657,7 @@ const DebtorDetailsPage: React.FC = () => {
                             </Badge>
                             {tx.isInitial && (
                               <span className="text-[10px] text-indigo-600 font-bold flex items-center gap-0.5">
-                                <Sparkles className="h-3 w-3" /> Primer registro
+                                <Sparkles className="h-3 w-3" /> Apertura
                               </span>
                             )}
                           </div>
@@ -619,7 +711,7 @@ const DebtorDetailsPage: React.FC = () => {
                               <AlertDialogHeader>
                                 <AlertDialogTitle>¿Eliminar movimiento?</AlertDialogTitle>
                                 <AlertDialogDescription>
-                                  Se ajustará el saldo del deudor automáticamente.
+                                  Se recalculará el saldo del deudor automáticamente.
                                 </AlertDialogDescription>
                               </AlertDialogHeader>
                               <AlertDialogFooter className="flex-col sm:flex-row gap-2">
@@ -638,8 +730,120 @@ const DebtorDetailsPage: React.FC = () => {
               </TableBody>
             </Table>
           </div>
+
+          {/* 5. Pie de Totales Consolidado Estilo Banco */}
+          <div className="p-4 sm:p-6 bg-slate-50 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase tracking-widest">
+              <Building2 className="h-4 w-4 text-indigo-600" /> Resumen de Cierre de Cuenta
+            </div>
+
+            <div className="grid grid-cols-3 gap-3 sm:gap-6 text-right w-full sm:w-auto">
+              <div className="bg-white p-3 rounded-2xl border border-slate-100 shadow-sm">
+                <span className="text-[9px] font-black uppercase text-slate-400 block">Total Cargos</span>
+                <span className="text-sm font-black text-rose-600">+${stats.charges.toFixed(2)}</span>
+              </div>
+              <div className="bg-white p-3 rounded-2xl border border-slate-100 shadow-sm">
+                <span className="text-[9px] font-black uppercase text-slate-400 block">Total Abonos</span>
+                <span className="text-sm font-black text-emerald-600">-${stats.payments.toFixed(2)}</span>
+              </div>
+              <div className="bg-indigo-600 text-white p-3 rounded-2xl shadow-md">
+                <span className="text-[9px] font-black uppercase text-indigo-200 block">Saldo Pendiente</span>
+                <span className="text-base font-black text-white">${debtor.current_balance.toFixed(2)}</span>
+              </div>
+            </div>
+          </div>
         </CardContent>
       </Card>
+
+      {/* MODAL VISTA ESTADO DE CUENTA ESTILO BANCO */}
+      <Dialog open={isStatementPreviewOpen} onOpenChange={setIsStatementPreviewOpen}>
+        <DialogContent className="w-[95vw] max-w-3xl rounded-[2.5rem] p-6 sm:p-8 max-h-[90vh] overflow-y-auto">
+          <DialogHeader className="border-b pb-4">
+            <div className="flex items-center justify-between">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <div className="h-8 w-8 rounded-xl bg-indigo-600 flex items-center justify-center text-white font-black text-xs">
+                    OK
+                  </div>
+                  <DialogTitle className="text-xl font-black tracking-tight text-slate-900">
+                    OINKASH FINANCIAL
+                  </DialogTitle>
+                </div>
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Estado de Cuenta Oficial</p>
+              </div>
+              <div className="text-right">
+                <p className="text-[10px] font-black uppercase text-slate-400">Fecha de Emisión</p>
+                <p className="text-xs font-bold text-slate-800">{new Date().toLocaleDateString('es-MX', { year: 'numeric', month: 'short', day: 'numeric' })}</p>
+              </div>
+            </div>
+          </DialogHeader>
+
+          <div className="space-y-6 py-4">
+            {/* Datos del Cliente */}
+            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 grid grid-cols-2 gap-4 text-xs">
+              <div>
+                <span className="font-bold text-slate-400 uppercase text-[9px]">Cliente / Titular</span>
+                <p className="text-sm font-black text-slate-900 mt-0.5">{debtor.name}</p>
+              </div>
+              <div>
+                <span className="font-bold text-slate-400 uppercase text-[9px]">Contacto</span>
+                <p className="text-sm font-bold text-slate-700 mt-0.5">{debtor.phone || 'No registrado'}</p>
+              </div>
+            </div>
+
+            {/* Resumen en 3 columnas */}
+            <div className="grid grid-cols-3 gap-3 text-center">
+              <div className="p-3 rounded-2xl bg-rose-50 border border-rose-100">
+                <span className="text-[9px] font-black uppercase text-rose-500">Cargos (+)</span>
+                <p className="text-lg font-black text-rose-600">${stats.charges.toFixed(2)}</p>
+              </div>
+              <div className="p-3 rounded-2xl bg-emerald-50 border border-emerald-100">
+                <span className="text-[9px] font-black uppercase text-emerald-600">Abonos (-)</span>
+                <p className="text-lg font-black text-emerald-600">${stats.payments.toFixed(2)}</p>
+              </div>
+              <div className="p-3 rounded-2xl bg-indigo-50 border border-indigo-100">
+                <span className="text-[9px] font-black uppercase text-indigo-600">Saldo Pendiente</span>
+                <p className="text-lg font-black text-indigo-900">${debtor.current_balance.toFixed(2)}</p>
+              </div>
+            </div>
+
+            {/* Tabla resumen en modal */}
+            <div className="border rounded-2xl overflow-hidden max-h-64 overflow-y-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-slate-50">
+                    <TableHead className="text-[10px]">Fecha</TableHead>
+                    <TableHead className="text-[10px]">Concepto</TableHead>
+                    <TableHead className="text-right text-[10px]">Monto</TableHead>
+                    <TableHead className="text-right text-[10px] pr-4">Saldo</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredTransactions.map((tx, i) => (
+                    <TableRow key={i}>
+                      <TableCell className="text-xs">{format(parseISO(tx.date), "dd/MM/yy")}</TableCell>
+                      <TableCell className="text-xs font-medium max-w-[160px] truncate">{tx.description}</TableCell>
+                      <TableCell className={cn("text-right font-bold text-xs", tx.type === 'charge' ? 'text-rose-600' : 'text-emerald-600')}>
+                        {tx.type === 'charge' ? '+' : '-'}${tx.amount.toFixed(2)}
+                      </TableCell>
+                      <TableCell className="text-right font-black text-xs pr-4">${tx.runningBalance.toFixed(2)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
+
+          <DialogFooter className="flex flex-col sm:flex-row gap-2 pt-2 border-t">
+            <Button variant="outline" onClick={() => setIsStatementPreviewOpen(false)} className="rounded-xl">
+              Cerrar
+            </Button>
+            <Button onClick={handleExportPdf} className="rounded-xl font-bold bg-indigo-600 hover:bg-indigo-700 text-white gap-2">
+              <FileDown className="h-4 w-4" /> Descargar PDF Oficial
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* DIÁLOGO REGISTRAR / EDITAR MOVIMIENTO */}
       <Dialog open={isTransactionDialogOpen} onOpenChange={setIsTransactionDialogOpen}>
